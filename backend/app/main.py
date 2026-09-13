@@ -79,8 +79,16 @@ from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.contracts import MemoryFormationJob
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
 from app.memory.formation.scheduler import MemoryFormationScheduler
+from app.memory.formation.combined_scheduler import CombinedFormationScheduler
+from app.memory.formation.runtime import build_episodic_scheduler
+from app.memory.episodic.privacy import EpisodicPrivacyReviewer
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+from app.memory.episodic.repository import EpisodicRepository
+from app.memory.episodic.management import EpisodicMemoryManagement
+from app.routers.episodic_memories import router as episodic_memories_router
+from app.memory.episodic.sources import ConversationSourceGuard
+from app.memory.episodic.read_repository import CombinedMemoryReadRepository, EpisodicReadRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.memory.persistence.temporary_repository import (
     TemporaryProviderRecordRepository,
@@ -278,6 +286,7 @@ async def _stream_core_reply(
     screen_lineage_observer: Callable[[tuple[ScreenLineage, ...]], None] | None = None,
     tools: ToolService | None = None,
     conversation_id: str | None = None,
+    prompt_observer: Callable[[BuiltPrompt], None] | None = None,
 ) -> AsyncIterator[str]:
     from app.inference.diagnostics import diagnostic
 
@@ -328,6 +337,8 @@ async def _stream_core_reply(
             ):
                 tools.stop(character, conversation_id)
                 raise ScreenPerceptionError("request_cancelled", stage="chat")
+            if prompt_observer is not None:
+                prompt_observer(prompt)
             yield material.direct_text
             return
         prompt = await run_sync(
@@ -340,6 +351,8 @@ async def _stream_core_reply(
             model_settings.chat_context_tokens - max_output_tokens,
         )
         prompt = await run_sync(chat_service.with_life_context, character, prompt)
+    if prompt_observer is not None:
+        prompt_observer(prompt)
     # ツール結果と生活状態を反映した、生成へ渡す最終promptを計測する。
     diagnostic("prompt_preparation_completed")
     diagnostic("prompt_message_count", len(prompt.messages))
@@ -501,6 +514,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             uuid_factory=uuid4,
             outbox_uuid_factory=uuid4,
         )
+        from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
+
+        episodic_repository = EpisodicRepository(runtime_paths.persona_memory_sqlite_path)
+        memory_read_repository = CombinedMemoryReadRepository(
+            approved_memory_repository,
+            EpisodicReadRepository(
+                episodic_repository,
+                ConversationSourceGuard(
+                    conversation_history_config.database_path,
+                    clock=clock, retention=conversation_history_config.retention,
+                ),
+            ),
+        )
+        response_provenance_recorder = ResponseProvenanceRecorder(
+            runtime_paths.persona_memory_sqlite_path, reader=memory_read_repository.episodic,
+        )
         outbox_repository = IndexOutboxRepository(
             database_path=runtime_paths.persona_memory_sqlite_path,
             clock=clock,
@@ -510,7 +539,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             settings=inference_runtime.settings,
         )
         memory_index_sync = MemoryIndexSync(
-            approved_repository=approved_memory_repository,
+            approved_repository=memory_read_repository,
             outbox_repository=outbox_repository,
             chroma_path=runtime_paths.chroma_path,
             runtime_report_dir=runtime_paths.runtime_report_dir,
@@ -538,6 +567,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         inference_router_state_set = False
         inference_router_registered = False
         persona_memory_provider_state_set = False
+        episodic_memory_management_state_set = False
         addon_record_provider_state_set = False
         rag_admission_service_state_set = False
         screen_perception_state_set = False
@@ -626,6 +656,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 clock=clock,
             )
             persona_memory_provider_state_set = True
+            app.state.episodic_memory_management = EpisodicMemoryManagement(
+                reader=memory_read_repository.episodic,
+                reviewer=EpisodicPrivacyReviewer(
+                    scanner=privacy_scanner, classifier=semantic_privacy_classifier, policy=policy.privacy,
+                ),
+                clock=clock, index_sync=memory_index_sync,
+            )
+            episodic_memory_management_state_set = True
             app.state.addon_record_provider = AddonRecordProvider(
                 temporary_record_repository
             )
@@ -680,8 +718,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_candidate_extractor = MemoryCandidateExtractor(
                 client=memory_extractor_client,
                 settings=formation_settings,
+                preferences_only=True,
             )
-            memory_formation_scheduler = MemoryFormationScheduler(
+            preference_formation_scheduler = MemoryFormationScheduler(
                 worker=MemoryFormationWorker(
                     conversation_repository=conversation_history_repository,
                     extractor=memory_candidate_extractor,
@@ -690,6 +729,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ),
                 max_queue_age_seconds=formation_settings.max_queue_age_seconds,
                 queue_maxsize=formation_settings.queue_maxsize,
+            )
+            def episodic_entity_labels(character_id: str) -> dict[str, str]:
+                card = load_character_card(character_id)
+                return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
+
+            memory_formation_scheduler = CombinedFormationScheduler(
+                preference_formation_scheduler,
+                build_episodic_scheduler(
+                    history_path=conversation_history_config.database_path,
+                    repository=episodic_repository, clock=clock,
+                    retention=conversation_history_config.retention, timezone=occurred_timezone,
+                    reviewer=EpisodicPrivacyReviewer(
+                        scanner=privacy_scanner, classifier=semantic_privacy_classifier,
+                        policy=policy.privacy,
+                    ),
+                    client=memory_extractor_client, settings=formation_settings,
+                    runtime=inference_runtime, entity_labels=episodic_entity_labels,
+                ),
             )
             await memory_formation_scheduler.start()
             memory_formation_scheduler_started = True
@@ -816,12 +873,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     input_token_counter=count_llm_input_tokens,
                     privacy_scanner=privacy_scanner,
                     semantic_classifier=semantic_privacy_classifier,
-                    approved_memory_repository=approved_memory_repository,
+                    approved_memory_repository=memory_read_repository,
                     memory_embedder=memory_embedder,
                     memory_formation_submitter=memory_formation_scheduler,
                     clock=clock,
                     tools=app.state.tool_service,
                     life_context=life_context,
+                    response_provenance_recorder=response_provenance_recorder.record,
+                    response_history_filter=response_provenance_recorder.filter_history,
                 ),
             )
             app.state.chat_service = app_chat_service
@@ -855,6 +914,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     screen_lineage_observer: Callable[
                         [tuple[ScreenLineage, ...]], None
                     ],
+                    prompt_observer: Callable[[BuiltPrompt], None] | None,
                 ) -> AsyncIterator[str]:
                     history_access = (
                         await app.state.screen_perception_service.history_access(
@@ -896,6 +956,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         screen_lineage_observer,
                         tools=app.state.tool_service,
                         conversation_id=str(conversation_id),
+                        prompt_observer=prompt_observer,
                     ):
                         yield text
 
@@ -925,6 +986,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     synthesizer=core_synthesizer,
                     history_service=conversation_history_service,
                     completed_turn_observer=submit_completed_core_turn,
+                    response_provenance_recorder=app_chat_service.record_response_provenance,
                     generate_screen_reply_stream=generate_screen_core_reply_stream,
                     on_conversation_interruption=(
                         tool_runtime.service.interrupted
@@ -1039,6 +1101,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         llm_router.clear_inference_router,
                         inference_runtime.router,
                     )
+                if episodic_memory_management_state_set:
+                    cleanup.callback(delattr, app.state, "episodic_memory_management")
                 if persona_memory_provider_state_set:
                     cleanup.callback(delattr, app.state, "persona_memory_provider")
                 if addon_record_provider_state_set:
@@ -1076,6 +1140,7 @@ app.include_router(chat_router)
 app.include_router(character_catalog_router)
 app.include_router(conversations_router)
 app.include_router(memory_management_router)
+app.include_router(episodic_memories_router)
 app.include_router(ui_settings_router)
 app.include_router(livekit_router)
 app.include_router(screen_perception_router)

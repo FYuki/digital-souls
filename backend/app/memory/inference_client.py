@@ -35,6 +35,11 @@ class StructuredMemoryInferenceClient:
     def close(self) -> None:
         return None
 
+    def fits(
+        self, messages: tuple[dict[str, str], ...], json_schema: dict[str, object],
+    ) -> bool:
+        return _conservative_token_count(tuple(_message(message) for message in messages), json_schema) <= self._max_input_tokens
+
     def chat(
         self,
         messages: tuple[dict[str, str], ...],

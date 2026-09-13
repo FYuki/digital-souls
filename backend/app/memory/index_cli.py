@@ -6,6 +6,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from app.conversation_history.config import resolve_conversation_history_config
+from app.memory.episodic.read_repository import CombinedMemoryReadRepository, EpisodicReadRepository
+from app.memory.episodic.repository import EpisodicRepository
+from app.memory.episodic.sources import ConversationSourceGuard
 from app.inference.runtime import create_inference_runtime
 from app.memory.inference_client import MemoryInferenceEmbedder
 from app.memory.index_sync import MemoryIndexSync
@@ -25,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     require_no_restore_intent(runtime_paths.restore_intent_path)
     initialize_persona_memory_schema(runtime_paths, repository_root)
     clock = lambda: datetime.now(UTC)
+    history_config = resolve_conversation_history_config(runtime_paths)
     inference_runtime = create_inference_runtime(os.environ)
     try:
         embedder = MemoryInferenceEmbedder(
@@ -32,11 +37,16 @@ def main(argv: list[str] | None = None) -> int:
             settings=inference_runtime.settings,
         )
         sync = MemoryIndexSync(
-            approved_repository=ApprovedMemoryRepository(
-                database_path=runtime_paths.persona_memory_sqlite_path,
-                clock=clock,
-                uuid_factory=uuid4,
-                outbox_uuid_factory=uuid4,
+            approved_repository=CombinedMemoryReadRepository(
+                ApprovedMemoryRepository(
+                    database_path=runtime_paths.persona_memory_sqlite_path,
+                    clock=clock, uuid_factory=uuid4, outbox_uuid_factory=uuid4,
+                ),
+                EpisodicReadRepository(
+                    EpisodicRepository(runtime_paths.persona_memory_sqlite_path),
+                    ConversationSourceGuard(history_config.database_path, clock=clock,
+                                            retention=history_config.retention),
+                ),
             ),
             outbox_repository=IndexOutboxRepository(
                 database_path=runtime_paths.persona_memory_sqlite_path,

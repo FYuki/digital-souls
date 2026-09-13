@@ -209,7 +209,7 @@ Coreは`chat`、`privacy`、`memory-extraction`、`memory-consolidation`、`embe
 
 ### 会話履歴とRAG長期記憶
 
-現行の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`である。
+既存の非同期形成経路の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`である。
 Episodic subjectは`USER / SHARED`で、SELF、`experienced_at`、派生意味記憶、独立した内省記憶、人格適応は
 採用済みの拡張設計と現在の型を区別する。[admission型](../backend/app/memory/admission/contracts.py)、
 [永続化型](../backend/app/memory/persistence/contracts.py)、[用語集](glossary.md)を参照する。
@@ -260,7 +260,7 @@ RAG admission evaluatorだけが決定論的findingとassessmentから保存可�
 conversationのアーカイブは履歴をSQLiteへ保持したまま通常一覧、prompt注入、追記対象から
 除外する。物理削除はconversationとturnをSQLiteからhard deleteし、RAG長期記憶は暗黙削除しない。
 
-会話履歴DBの現行schema versionは8である。版の正本は[`conversation_history/schema.py`](../backend/app/conversation_history/schema.py)の`SCHEMA_VERSION`を参照する。SQLiteを正本、Chromaを再構築可能な派生indexとし、
+会話履歴DBの版の正本は[`conversation_history/schema.py`](../backend/app/conversation_history/schema.py)の`SCHEMA_VERSION`を参照する。SQLiteを正本、Chromaを再構築可能な派生indexとし、
 backup artifactにはSQLiteと検証用JSONだけを含める。WAL稼働中のbackupはSQLite公式backup APIで
 整合snapshotを作成する。restoreはchecksum、schema、environment identityを切替前に検証し、
 検証済みstaging SQLiteを単一のatomic置換で切り替える。通常の手動restoreでは、切替前の検証・
@@ -329,6 +329,33 @@ RAG privacyの不変条件は`docs/decisions/rag-memory-privacy-policy-2026-07.m
 `docs/decisions/archive/miori-memory-policy-2026-06.md`は初期検討の履歴ADRとして保持する。
 `backend/app/memory/memory_policy.json`は認識語彙・pattern・閾値・追加禁止設定の実行時Source of
 Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除・許可へ反転できない。
+
+### Episode / Factの保存・登録・管理基盤
+
+`memory/episodic/`はEpisode（所有キャラクターの経験）とFact（話題の情報）を、
+`persona-memory.db`の`episodic_records`へ独立したIDで保存する。
+`episodic_versions`に内容版と根拠、`episodic_links`にEpisode–Fact参照、
+`episodic_merges`にFact間の版付き統合関係を保持する。既存の`approved_memories`とは別の正本である。
+内容版の識別子・出典・形成設定はDB制約で不変とし、本文の消去とその再試行だけを許可する。
+Persona Memory schema v5への移行では既存の版を保全し、v3・v4のバックアップも検証・復元対象として保持する。
+
+登録サービスは元発言ID・source revision・引用範囲とprivacyを検証し、同じcharacter・threadでの
+Fact照合、明確な補足訂正、取得経緯の追加、冪等登録を扱う。曖昧な対象は推測更新しない。
+Episodeの経験と話題のFactの5Wを分け、後日の語り直しをFactの内容更新と混同しない。
+別threadのFact統合、派生Semantic / Reflectionへの昇格は行わない。
+
+検索用投影はChromaへ同期し、検索時にはEpisode / Factの版・有効な出典・参照・統合先を
+SQLiteで再確認する。回答が参照したID・版の記録を使い、管理訂正・削除で旧版からの派生を無効化する。
+`routers/episodic_memories.py`と`EpisodicMemoryManagement.svelte`は監査とFact単位の訂正・削除を提供する。
+
+会話スレッド全体の新モデルへの抽出は、永続予約を処理する非同期workerへ接続する。
+反復18を採用したv13-compact18がFact操作・Episode境界・内容確認を段階的に判断し、
+ID・引用・参照リンクはコードで組み立てて通常の登録検証へ渡す。入力予算超過時は分割・全catalog照合を行う。
+HTTP/旧WebSocketとSpeech/LiveKitはいずれも、最終promptが参照した記憶の版を履歴確定前に記録する。
+中断応答の記録を次の応答へ流用せず、参照記録が失敗した応答は完了履歴にしない。
+この接続実装・固定品質評価と、実LLMを含む全経路受入は区別する。
+契約は[Episode / Fact境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md)、
+条件は[要件・受入](epic-340-episodic-memory-requirements.md)と#291 / #344を参照する。
 
 ## LiveKitトランスポート
 
