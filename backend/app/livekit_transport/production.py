@@ -27,6 +27,7 @@ from app.conversation_core.adapters import (
     VoicevoxTtsAdapter,
     WhisperSttAdapter,
     ScreenLineageResponseState,
+    ResponsePromptState,
 )
 from app.conversation_core.ports import DeliveryPort
 from app.conversation_core.models import Response, ResponseStopResult
@@ -58,6 +59,7 @@ from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 from app.voice_metrics import JsonlTraceRecorder, MeasurementKind, TraceEvent
 from app.voice_session_metrics import SessionMetrics
 from app.screen_perception.provenance import ScreenLineage
+from app.prompting.models import BuiltPrompt
 
 if TYPE_CHECKING:
     import livekit.api as livekit_api
@@ -303,6 +305,7 @@ class ProductionConversationCoreSessionFactory:
         synthesizer: SpeakerSynthesizer,
         history_service: _HistoryService,
         completed_turn_observer: Callable[[object], None] | None = None,
+        response_provenance_recorder: Callable[[object, BuiltPrompt], None] | None = None,
         generate_reply: Callable[[str, object, str], str] | None = None,
         generate_reply_stream: Callable[
             [str, object, str], AsyncIterator[str]
@@ -311,6 +314,7 @@ class ProductionConversationCoreSessionFactory:
             [
                 str, UUID | None, str, UUID, object, str,
                 Callable[[tuple[ScreenLineage, ...]], None],
+                Callable[[BuiltPrompt], None] | None,
             ],
             AsyncIterator[str],
         ] | None = None,
@@ -323,6 +327,7 @@ class ProductionConversationCoreSessionFactory:
         self._synthesizer = synthesizer
         self._history_service = history_service
         self._completed_turn_observer = completed_turn_observer
+        self._response_provenance_recorder = response_provenance_recorder
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
         self._generate_screen_reply_stream = generate_screen_reply_stream
@@ -363,6 +368,7 @@ class ProductionConversationCoreSessionFactory:
             delivery.attach_measurement(measurement)
         speaker_id = load_tts_config(character_id).speaker_id
         screen_lineage_state = ScreenLineageResponseState()
+        prompt_state = ResponsePromptState() if self._response_provenance_recorder is not None else None
         return ConversationCoreSession(
             session_id=session_id,
             response_id_factory=lambda: str(uuid4()),
@@ -374,6 +380,8 @@ class ProductionConversationCoreSessionFactory:
                 history_session=history_session,  # type: ignore[arg-type]
                 completed_turn_observer=self._completed_turn_observer,
                 screen_lineage_state=screen_lineage_state,
+                response_prompt_state=prompt_state,
+                response_provenance_recorder=self._response_provenance_recorder,
             ),
             observation=measurement,
             stt=self._stt,
@@ -387,6 +395,7 @@ class ProductionConversationCoreSessionFactory:
                         history_session,
                         transcript,
                         screen_lineage_state.record,
+                        prompt_state.observer() if prompt_state is not None else None,
                     )
                 )
                 if self._generate_screen_reply_stream is not None
@@ -430,6 +439,7 @@ class ProductionConversationCoreSessionFactory:
         [
             str, UUID | None, str, UUID, object, str,
             Callable[[tuple[ScreenLineage, ...]], None],
+            Callable[[BuiltPrompt], None] | None,
         ],
         AsyncIterator[str],
     ]:

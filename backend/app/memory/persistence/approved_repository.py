@@ -102,6 +102,7 @@ class ApprovedMemoryRepository:
         memory_id = self._new_uuid(self._uuid_factory)
         now = self._now()
         with self._database.transaction() as connection:
+            _require_available_conversation_sources(connection, character_id, context)
             existing = _select_memory_by_write_key(
                 connection,
                 character_id,
@@ -163,6 +164,7 @@ class ApprovedMemoryRepository:
             candidate
         )
         with self._database.transaction() as connection:
+            _require_available_conversation_sources(connection, character_id, context)
             current = _select_memory(connection, character_id, memory_id)
             existing = _select_memory_by_write_key(
                 connection,
@@ -266,8 +268,12 @@ class ApprovedMemoryRepository:
                 _select_memory_detail(connection, character_id, item.memory_id)
                 for item in inputs
             )
+            from app.memory.episodic.repository import EpisodicTransaction
+
+            invalid_sources = EpisodicTransaction(connection, now).invalid_legacy_ids(character_id)
             for snapshot, detail in zip(inputs, current, strict=True):
                 if (
+                    snapshot.memory_id in invalid_sources or
                     detail.memory.provider_id != "core"
                     or detail.memory.status is not MemoryStatus.ACTIVE
                     or detail.memory.content_version != snapshot.content_version
@@ -1066,3 +1072,23 @@ def _require_core_provider(provider_id: str) -> None:
 def _require_uuid4(value: UUID) -> None:
     if not isinstance(value, UUID) or value.version != 4:
         raise ValueError("identifier must be a UUID4")
+
+
+def _require_available_conversation_sources(
+    connection: sqlite3.Connection, character_id: str, context: MemoryWriteContext,
+) -> None:
+    from app.memory.episodic.repository import EpisodicTransaction
+    from app.memory.episodic.response_provenance import conversation_source_id
+
+    source_ids = {
+        source_id for source in context.sources
+        if source.source_type is MemorySourceType.CONVERSATION_TURN
+        and (source_id := conversation_source_id(source.source_ref)) is not None
+    }
+    if not source_ids:
+        return
+    tx = EpisodicTransaction(connection, context.stated_at)
+    invalid = {source.source_id for source in tx.source_masks(character_id)}
+    invalid.update(tx.invalid_response_ids(character_id))
+    if source_ids & invalid:
+        raise ValueError("conversation source depends on removed memory content")

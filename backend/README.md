@@ -51,13 +51,21 @@ UI設定はローカル単一ユーザー`local`へ紐付ける。SNSログイ�
 ## 長期記憶
 
 保存済み会話履歴から非同期に候補を形成し、privacyとpositive allowlistを通過した記憶だけをSQLiteへ保存する。
-現行の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`である。
+既存の非同期形成経路の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`である。
 SQLiteの変更とindex outboxを同じtransactionに記録し、Chromaへ同期する。検索結果はSQLite正本で所有character・状態・期限・policy等を再検証する。
 
 **長期記憶・暫定記録の閲覧、訂正、物理削除は実装済み**である。
 長期記憶の物理削除はSQLite commit後にChroma削除を同期試行し、失敗時はoutboxの再試行で回復する。スレッド削除とは別操作である。
 既存記憶のconsolidationも、複数Episodeからの意味抽象化・Reflection形成・人格適応とは区別する。
 設計と受入は[Wave 2 ADR](../docs/decisions/wave2-memory-formation-retrieval-2026-08.md)、[受入記録](../docs/wave2-acceptance-2026-08.md)、現行型は[`admission/contracts.py`](app/memory/admission/contracts.py)を参照する。
+
+Episode / Factは`app/memory/episodic/`の独立レコード・版・出典・参照で保存する。
+`EpisodicRegistrationService`は同threadのFact照合・補足訂正・冪等登録を扱う。
+`/characters/{character_id}/episodic-memories`のGETで監査し、PATCH / DELETEでは版と冪等keyを指定してFactを訂正・削除する。
+新モデルへの会話自動抽出workerは、永続予約・lease回復・入力分割を介して接続する。
+通常経路と評価の既定は同じv13-compact18を使う。Speech/LiveKitも最終promptの参照版を履歴確定前に記録する。
+実LLMの固定評価と全経路の受入は区別する。
+[保存・登録・検索の境界](../docs/system-architecture.md#episode--factの保存登録管理基盤)を参照する。
 
 ## セットアップ・起動
 

@@ -47,6 +47,7 @@ def turn_messages(turn: MaskedHistoryTurn) -> tuple[PromptMessage, ...]:
                 PromptRole.ASSISTANT,
                 turn.assistant_content,
                 screen_lineages=turn.screen_lineages,
+                history_turn_id=turn.turn_id,
             ),
         )
     )
@@ -285,6 +286,7 @@ def _masked_turn(source_turn: SavedHistoryTurn) -> MaskedHistoryTurn:
         source_turn.assistant_content,
         source_turn.is_completed,
         getattr(source_turn, "screen_lineages", ()),
+        getattr(source_turn, "turn_id", None),
     )
 
 

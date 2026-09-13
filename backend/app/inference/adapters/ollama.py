@@ -336,7 +336,13 @@ class OllamaAdapter:
             return digest
         return None
 
-    def resolve_model_digest(self, model_id: str, *, timeout_seconds: float) -> str:
+    def resolve_model_digest(
+        self, model_id: str, *, timeout_seconds: float, refresh: bool = False,
+    ) -> str:
+        if refresh:
+            # 可変タグの抽出前後検証では、起動時に取得したdigestを再利用しない。
+            self._model_digests.pop(model_id, None)
+            self._model_details.pop(model_id, None)
         cached = self._model_digests.get(model_id)
         if cached is not None:
             return cached

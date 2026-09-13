@@ -56,12 +56,28 @@ MVPで判明した多ターン会話、RAG本稼働、応答遅延等の課題�
 
 ### Wave 2: 「覚えている」（RAG本稼働）
 
-設計上の正本は[Wave 2 ADR](decisions/wave2-memory-formation-retrieval-2026-08.md)。記憶・人格の拡張設計との優先関係は[ADR案内](decisions/README.md)を参照する。
+基盤の設計判断: [Wave 2記憶形成・検索方針](decisions/wave2-memory-formation-retrieval-2026-08.md)。
+後続の記憶責務再編は次節と[Episode・Fact・Semantic境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md)を参照する。
 
 - 文脈依存の機微情報判定とpositive allowlistによる保存判断。
 - SQLite正本／Chroma派生index、保存済み会話履歴からの非同期形成、機微なqueryで検索を抑止する境界。
 - 検索品質評価、時系列照合、人格記憶・暫定記録の閲覧・訂正・物理削除。
 - idle時の既存記憶consolidation、devとdogfoodのruntime data・service・backup・deploy分離。
+
+### 記憶モデルの拡張: 正本と認知処理を分離する
+
+2026-09の採用設計。Wave 2の基盤完成やADR更新を、新モデルの実装・運用完了とは扱わない。
+
+| Epic | 実現する機能 |
+|---|---|
+| #340 | 日常経験・仮定/創作の文脈を含むEpisodeとFactを形成・管理する。同thread照合とFact補足・訂正を行い、devで通常会話への利用まで受け入れる。[要件・受入](epic-340-episodic-memory-requirements.md) |
+| #341 | 明示知識の直接抽出と、経験から派生した意味記憶を共通管理する |
+| #100 | 保存済み経験から意味知識を一般化し、内省・再内省・派生結果を形成する |
+| #354（後続） | 同一キャラクターの別スレッド間Factを、保存後の独立した非同期処理で整理・統合する |
+
+#354は上記3 EpicのMVP必須依存・完了条件にしない。UI・受入は各Epicで確認する。
+人格更新#101、Skill学習#102、Life State・会話外活動#249の責務は維持する。
+詳細な契約と依存は[記憶境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md)と各Issueを参照する。
 
 ### Wave 3: 「自然に話せる」（LiveKitによる双方向音声会話）
 

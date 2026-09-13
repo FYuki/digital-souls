@@ -30,6 +30,7 @@ from app.memory.providers import (
     PersonaMemoryProvider,
 )
 from app.memory.persistence.sqlite import format_datetime
+from app.memory.episodic.repository import RecordConflict
 from app.routers.validation import CanonicalUuid4, SafeValidationRoute
 
 
@@ -47,6 +48,8 @@ class MemoryManagementRoute(SafeValidationRoute):
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     content={"reason_code": error.reason_code},
                 )
+            except RecordConflict as error:
+                raise HTTPException(status_code=409, detail="memory changed; reload before retrying") from error
             except LookupError as error:
                 raise HTTPException(status_code=404, detail="record was not found") from error
             except (TypeError, ValueError) as error:

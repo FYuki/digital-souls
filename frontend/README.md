@@ -37,6 +37,8 @@ PCでは立ち絵を履歴の右側または背面へ配置できる。タブレ
 画面確認手順は[Epic #151受入](../docs/epic-151-acceptance.md)を参照する。
 
 記憶管理は`src/lib/MemoryManagement.svelte`、Addon管理は`src/lib/AddonManagement.svelte`を入口とする。
+`src/lib/EpisodicMemoryManagement.svelte`でEpisode / FactのID・5W・出典・参照を監査し、Fact単位で訂正・削除できる。
+API呼出しは`src/lib/memory/episodic-client.ts`にまとめる。新モデルの会話自動抽出とは別の管理基盤である。
 スレッド削除と長期記憶削除は別操作である。接続の有効化、操作の許可、今回の実行確認も同じ状態として扱わない。
 管理の操作・制約は[Addon管理](../docs/addon-admin.md)と[操作承認・回復契約](../docs/decisions/addon-action-approval-recovery-2026-09.md)を参照する。
 

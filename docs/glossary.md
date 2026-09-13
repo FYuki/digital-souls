@@ -50,8 +50,12 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 | Working Memory / 作業記憶 | 現在の入力・目的・処理コンテキスト等。会話履歴や長期記憶の別名ではない | 概念契約：[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
 | Conversation History / 会話履歴 | 同一スレッドの連続性を保つ保存済みuser/assistant履歴。長期のpersona memoryとは別 | 実装：[conversation_history](../backend/app/conversation_history/) |
 | Long-term Memory / 長期記憶 | 会話Sessionを超えて保持する記憶の総称。概念上はepisodic・semantic・reflective・proceduralを含むが、同じDB・tableを意味しない | 一部実装：[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
-| Persona Memory / 人格記憶 | キャラクターが保持する承認済み長期記憶。現行の`approved_memories`を中心とする。変動人格の数値や正確な業務記録ではない | 実装：[永続化モデル](../backend/app/memory/persistence/contracts.py)、[providers](../backend/app/memory/providers.py) |
-| Episodic Memory / エピソード記憶、`EPISODIC_EVENT` | 具体的な出来事の記憶。現行のsubjectは`USER / SHARED`、event typeは`SHARED_MILESTONE / ACHIEVEMENT / DECISION / OUTCOME / CHANGE` | 実装：[admission型](../backend/app/memory/admission/contracts.py) |
+| Persona Memory / 人格記憶 | キャラクターが保持する承認済み長期記憶。既存の`approved_memories`と独立したEpisode / Factの正本がある。変動人格の数値や正確な業務記録ではない | 実装：[永続化モデル](../backend/app/memory/persistence/contracts.py)、[providers](../backend/app/memory/providers.py) |
+| 既存の`EPISODIC_EVENT` | 具体的な出来事の記憶。現行のsubjectは`USER / SHARED`、event typeは`SHARED_MILESTONE / ACHIEVEMENT / DECISION / OUTCOME / CHANGE` | 実装：[admission型](../backend/app/memory/admission/contracts.py) |
+| Episode / エピソード記憶 | 所有キャラクターが経験したことを5Wで保持する独立レコード。話題の情報はFact IDで参照し、後日の語り直しは新しい経験として扱う | 保存・登録・管理・スレッド単位の非同期抽出を実装：[契約](../backend/app/memory/episodic/contracts.py)、[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
+| Fact / 話題の情報 | 経験で取得した情報・申告内容の5W。安定IDと内容版を持つ。Semanticの正本や外部の事実確認結果とは異なり、明確な補足・訂正では内容版を更新する | 実装：[登録](../backend/app/memory/episodic/registration.py)、[管理](../backend/app/memory/episodic/management.py) |
+| 内容版 | Episode / Factの内容と出典・形成設定を対応づけた履歴。識別子・版番号・出典・設定は変更せず、削除時は本文だけを消去できる。消去の再試行は許可する | 実装：[版の保存制約](../backend/app/memory/episodic/schema.py)、[移行](../backend/app/memory/persistence/schema.py) |
+| Episode–Fact参照 / Fact統合関係 | 経験から情報への取得経緯と、同一Factを指すID間の関係。双方の版・根拠・有効状態を保持し、訂正・削除で無効化する | 実装：[schema](../backend/app/memory/episodic/schema.py)、[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
 | SELF Episode / 本人経験 | キャラクター自身の会話外活動・観測の記憶。活動handoffや実行ログを保存しただけではSELF Episode形成済みとはしない | 設計・未接続：[共通契約](decisions/character-life-memory-personality-autonomy-2026-09.md)、[Life運用](character-life-operations.md) |
 | Semantic Memory / 意味記憶 | 特定の一出来事ではなく、事実・安定した好み等。現行の直接形成型は`USER_PREFERENCE / INTERACTION_PREFERENCE` | 一部実装：[admission型](../backend/app/memory/admission/contracts.py)、[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
 | Derived Semantic Memory / 派生意味記憶 | 複数Episodeから根拠付きで一般化した記憶。元Episodeの削除・置換ではない | 設計：[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
@@ -75,7 +79,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 | Transactional Outbox / 記憶index outbox | SQLiteの記憶変更とindex同期要求を同じtransactionで記録し、Chromaへの反映を再試行する仕組み。音声transportの送信待ちoutboxとは別物 | 実装：[index outbox](../backend/app/memory/persistence/index_outbox_repository.py)、[index sync](../backend/app/memory/index_sync.py) |
 | Provenance / 出典、Lineage / 派生関係 | 出典は元turn・記録等の由来。lineageは記憶間の統合・置換等の関係。画面由来turnのlineageは別領域の追跡情報 | 実装：[永続化型](../backend/app/memory/persistence/contracts.py)、[画面provenance](../backend/app/screen_perception/provenance.py) |
 | `occurred_at / stated_at / created_at` | 出来事の発生時刻／根拠発言の時刻／登録時刻。過去の出来事を今聞いた場合も同じ時刻へまとめない | 実装：[永続化型](../backend/app/memory/persistence/contracts.py) |
-| `experienced_at` | キャラクター本人が経験を得た時刻。発生時刻とは別の設計概念で、現行のApprovedMemory型には未追加 | 設計：[共通契約](decisions/character-life-memory-personality-autonomy-2026-09.md) |
+| `experienced_at` | キャラクター本人が経験を得た時刻。発生時刻とは別の設計概念。既存ApprovedMemory型には未追加で、新Episodeでは経験の5Wと話題のFactの5Wを分離する | 設計：[共通契約](decisions/character-life-memory-personality-autonomy-2026-09.md) |
 | Archive / Hard Delete / 失効 | Archiveはスレッドを通常利用から外す操作、Hard Deleteは対象の物理削除、失効は状態・期限による取得除外。スレッド削除で長期記憶は暗黙削除しない | 実装：[履歴](../backend/app/conversation_history/)、[記憶管理](../backend/app/routers/memory_management.py) |
 | Addon Record / 業務記録 | 農業日誌等の正確なdomain record。Persona Memoryと分離し、暫定providerまたはaddon側が所有する | 基盤実装：[providers](../backend/app/memory/providers.py)、[Wave 2契約](decisions/wave2-memory-formation-retrieval-2026-08.md) |
 

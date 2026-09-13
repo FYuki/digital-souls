@@ -54,6 +54,7 @@ def test_voice_diagnostics_describe_final_tool_and_life_prompt(monkeypatch):
         (),
     )
     seen = []
+    captured = []
 
     def life_context(_character, prompt):
         return replace(
@@ -83,10 +84,12 @@ def test_voice_diagnostics_describe_final_tool_and_life_prompt(monkeypatch):
             chunks = [chunk async for chunk in main._stream_core_reply(
                 service, SimpleNamespace(chat_context_tokens=4000), "miori", None,
                 "質問", tools=Tools(), conversation_id="conversation",
+                prompt_observer=captured.append,
             )]
         assert chunks == ["応答"]
         events = {event.name: event for event in collector.finish()}
         assert len(seen) == 1 and len(seen[0].messages) > len(initial.messages)
+        assert captured == seen
         assert events["prompt_message_count"].value == len(seen[0].messages)
         assert events["prompt_input_tokens"].value == seen[0].usage.total
 

@@ -4,11 +4,15 @@ import sqlite3
 from pathlib import Path
 
 from app.memory.persistence.sqlite import PersonaMemorySqlite
+from app.memory.episodic.schema import (
+    EPISODIC_TABLES, initialize_episodic_schema, initialize_version_guards, validate_episodic_schema,
+)
+from app.memory.episodic import response_provenance
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import RuntimePaths
 
 
-PERSONA_MEMORY_TABLES = frozenset(
+LEGACY_PERSONA_MEMORY_TABLES = frozenset(
     {
         "approved_memories",
         "memory_sources",
@@ -18,7 +22,9 @@ PERSONA_MEMORY_TABLES = frozenset(
         "temporary_provider_records",
     }
 )
-SCHEMA_VERSION = 2
+VERSION_THREE_PERSONA_MEMORY_TABLES = LEGACY_PERSONA_MEMORY_TABLES | EPISODIC_TABLES
+PERSONA_MEMORY_TABLES = VERSION_THREE_PERSONA_MEMORY_TABLES | response_provenance.TABLES
+SCHEMA_VERSION = 5
 
 APPROVED_MEMORIES_SQL = """
 CREATE TABLE approved_memories (
@@ -198,21 +204,35 @@ def initialize_persona_memory_schema(
     database = PersonaMemorySqlite(paths.persona_memory_sqlite_path, sqlite3.connect)
     with database.transaction() as connection:
         tables = _user_tables(connection)
-        if tables and tables != PERSONA_MEMORY_TABLES:
-            raise ValueError("existing persona memory database has an unknown schema")
-        if tables:
-            version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-            if version != SCHEMA_VERSION:
-                raise ValueError("existing persona memory database has an unknown schema")
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        if tables == LEGACY_PERSONA_MEMORY_TABLES and version == 2:
             _ensure_consolidation_source_type(connection)
-        else:
+            initialize_episodic_schema(connection)
+        elif tables == VERSION_THREE_PERSONA_MEMORY_TABLES and version == 3:
+            validate_episodic_schema(connection, version_guards=False)
+            _ensure_consolidation_source_type(connection)
+        elif tables == PERSONA_MEMORY_TABLES and version == 4:
+            validate_episodic_schema(connection, version_guards=False)
+            _ensure_consolidation_source_type(connection)
+        elif tables == PERSONA_MEMORY_TABLES and version == SCHEMA_VERSION:
+            _ensure_consolidation_source_type(connection)
+        elif not tables and version == 0:
             connection.execute(APPROVED_MEMORIES_SQL)
             connection.execute(MEMORY_SOURCES_SQL)
             connection.execute(MEMORY_LINEAGE_SQL)
             connection.execute(MEMORY_WRITE_RECEIPTS_SQL)
             connection.execute(MEMORY_INDEX_OUTBOX_SQL)
             connection.execute(TEMPORARY_PROVIDER_RECORDS_SQL)
-            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            initialize_episodic_schema(connection)
+        else:
+            raise ValueError("existing persona memory database has an unknown schema")
+        if version < 4:
+            response_provenance.initialize_schema(connection)
+        if version in {3, 4}:
+            initialize_version_guards(connection)
+        response_provenance.validate_schema(connection)
+        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        validate_episodic_schema(connection)
         _ensure_indexes(connection)
     database.truncate_wal()
 

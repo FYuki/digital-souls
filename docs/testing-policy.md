@@ -108,6 +108,18 @@ main向けPRはCI成功に加え、最新差分へのCodeRabbitレビューと�
 自動レビューがskipされた場合は`@coderabbitai full review`で依頼する。skip時の成功statusを
 実レビュー済みと扱わない。子PRのEpic統合はCI成功を条件とし、mainのマージはユーザーが行う。
 
+## Episode / Factの実接続受入（#340 / #344）
+
+#344はdev環境の専用テストdata rootと合成シナリオを使い、実LLMによる会話由来の抽出から、
+実SQLiteへの保存、実Chroma/Embeddingでの検索、通常会話の応答への利用まで検証する。
+#343の管理UIによるFact単位の訂正・削除と、その後の検索・会話への反映も確認する。
+直近会話履歴だけで答えられる条件や、DBへの候補直接投入、mock、readinessをこの受入の代用にしない。
+実行commit・model/設定・実接続先の環境区分・scenario・期待値・結果・未検証事項を記録する。
+履歴由来の応答と記憶利用を区別する根拠は、既存metadata-only policy内の参照ID・版等で追跡する。
+
+詳細なシナリオは[実行指示書](epic-340-episodic-memory-requirements.md)を参照する。
+本節は受入要件であり、検証済みの宣言ではない。dogfoodとの分離・共有推論サービスの所有権は本書の「dogfood環境との分離」に従う。
+
 ## LLM classifier conformance
 
 意味分類器とpersona memory抽出器の品質評価は、通常のpytest unit testと分離したpromptfoo suiteで行う。抽出器はenum一致を決定論的に評価し、topic妥当性とhallucination非発生を独立したローカルOllama judgeで評価する。
