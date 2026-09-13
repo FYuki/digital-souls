@@ -43,6 +43,7 @@ serviceは音声volumeをread-onlyでmountし、HTTPによる上書き・削除�
 
 ```bash
 docker build -f irodori_service/Dockerfile -t digital-souls/irodori:dev .
+docker image inspect --format '{{.Id}}' digital-souls/irodori:dev
 ```
 
 同じserver/code revisionを検証済みのローカルimageを再利用する場合のみ、
@@ -60,6 +61,10 @@ containerはUID/GID `10001:10001`で動作する。所有者が専用cache direc
 dogfood所有者はComposeを `/opt/digital-souls-irodori/compose.yaml`、
 envを `/etc/digital-souls/irodori.env` へ配置する。
 既存envは上書きせず、音声・cache directoryはリポジトリと会話data rootの外に置く。
+ローカルbuildを使う場合は、上のinspectが出力した内容固定のimage ID
+（sha256:に続く64桁）を、このenvファイルのDOGFOOD_IRODORI_IMAGEへ設定する。
+可変tagのdigital-souls/irodori:devを設定値にしない。
+この設定を終えてから、下記の起動前検証とsystemd／手動起動を実行する。
 [起動前検証](validate-deployment.py)も `/opt/digital-souls-irodori/` へ配置する。
 [systemd unit](digital-souls-irodori.service)を `/etc/systemd/system/` へ配置し、
 `systemctl daemon-reload` 後に `systemctl enable --now digital-souls-irodori.service` を実行する。
