@@ -229,6 +229,9 @@ whatを変更する場合だけ新しいpredicate/objectを記入する。
 訂正前の値と訂正後の値を二件にせず、同じFactのUPDATE一件にする。
 内容の変わらない再言及はREFERENCE、target=index、predicate/object=null、changes=[]。
 同じtargetへの出力は一件。
+eligible_fact_targetsは既存の一件と対応すると確認できた番号だけ。UPDATE/REFERENCEはその番号に限定する。
+known_factsは文脈として読めるが、許可番号にない記録を更新・参照対象に選ばない。
+許可番号が空ならNEWだけを使い、今回明言された情報を保持する。
 どの既存記録か不明なら、補足したいという意図があってもUPDATEはできない。
 その場合はNEW、target=null、changes=[]とし、今明言された情報だけを述語と対象へ記す。
 例:「前の二件のどちらかわからないが、場所は駅」なら既存を選ばず、新しい場所情報として保持する。
@@ -325,12 +328,19 @@ class ScopedClient:
         schema = (constrained_ground_schema(json_schema, payload)
                   if json_schema.get("title") == "GroundedContent" else deepcopy(json_schema))
         definitions = schema.get("$defs", {})
+        if (schema.get("title") == "GroundedContent"
+                and payload.get("candidate", {}).get("kind") == "EPISODE"):
+            topic = payload["candidate"]["five_w"]["what"]["object"]
+            if topic is not None:
+                definitions["What"]["properties"]["object"] = {"const": topic}
         quotes = payload.get("quote_options", payload.get("fragments", []))
         for name in ("Quote",):
             if name in definitions and quotes:
                 definitions[name]["properties"]["fragment"]["enum"] = list(range(len(quotes)))
         if "known_facts" in payload:
-            indices = list(range(len(payload["known_facts"])))
+            indices = payload.get("eligible_fact_targets", list(range(len(payload["known_facts"]))))
+            if any(type(i) is not int or i < 0 or i >= len(payload["known_facts"]) for i in indices):
+                raise InvalidExtraction("unknown eligible target")
             if indices:
                 for name in ("UpdateFact", "ReferenceFact"):
                     if name in definitions:
@@ -359,6 +369,50 @@ class ScopedClient:
 class CompactExtractor(ThreadEpisodeExtractor):
     def __init__(self, *, client, settings):
         super().__init__(client=ScopedClient(client), settings=settings)
+
+    def _eligible_fact_targets(self, payload, should_stop):
+        """既存の一件と確認できる対象だけを後段の更新・参照へ提示する。"""
+        compact = compact_payload(payload)
+        known = compact["known_facts"]
+        originals = [r for r in payload["known_records"] if r["kind"] == "FACT"]
+        eligible = []
+        topic = "\n".join(f["text"] for f in payload["fragments"] if f["ownership"] == "primary")
+        conversation = [{k: f[k] for k in ("text", "ownership", "role", "speaker", "addressee")}
+                        for f in payload["fragments"]]
+        quotes = [{"index": i, **{k: f[k] for k in ("text", "ownership", "start", "end")}}
+                  for i, f in enumerate(evidence_units(payload))]
+        for index, focus in enumerate(known):
+            if focus["status"] == "DELETED" or focus["five_w"] is None:
+                continue
+            decision = super()._infer(
+                self._messages(PAIR_PROMPT + "\n今回のtopicはprimaryの追加発言全体。"
+                    "context_beforeだけの一致ではYESにしない。"
+                    "primaryに同じ既存出来事の明確な再言及があればYES。"
+                    "二つの既存記録のどちらか不明という発言なら、候補各々はUNSUREでありYESではない。", {
+                    "conversation": conversation, "quote_options": quotes,
+                    "topic_kind": "FACT", "topic": topic, "focus": focus,
+                    "other_records": known,
+                }, generation_schema(PairDecision)), PairDecision, should_stop)
+            if decision.same_event == "YES":
+                if decision.evidence is None:
+                    raise InvalidExtraction("eligible target requires evidence")
+                # 生成側の制限とは別に、引用は元発言の通常検証へ通す。
+                q = decision.evidence
+                units = evidence_units(payload)
+                if q.fragment >= len(units):
+                    raise InvalidExtraction("unknown eligibility evidence")
+                unit = units[q.fragment]
+                evidence = SourceQuote(source_id=unit["source_id"], revision=unit["revision"],
+                                       role=unit["role"], quote=q.text, start=q.start)
+                # payloadのprimary範囲と原文一致は通常のanchor検証と同じ経路で確認する。
+                probe = ExtractionBatch(records=(ExtractedRecord(
+                    key="eligibility", kind="FACT", operation="REFERENCE",
+                    target=ExistingTarget(id=originals[index]["id"],
+                                          version=originals[index]["content_version"]),
+                    anchor=evidence, sources=(evidence,)),))
+                # 検証は呼び出し元のcanonical validatorでまとめて行う。
+                eligible.append((index, probe))
+        return eligible
 
     def _catalog_pairs(self, payload, should_stop):
         known = payload["known_records"]
@@ -402,7 +456,47 @@ class CompactExtractor(ThreadEpisodeExtractor):
         return CatalogMatches(complete=True,matches=tuple(matches))
 
     def _ground_content(self, batch, payload, known, entity_labels, should_stop):
-        result = super()._ground_content(batch, payload, known, entity_labels, should_stop)
+        # Factを確定してから、その参照内容でEpisodeの話題を組み立てる。
+        fact_batch = ExtractionBatch(records=tuple(r for r in batch.records if r.kind.value == "FACT"))
+        facts = (super()._ground_content(fact_batch, payload, known, entity_labels, should_stop)
+                 if fact_batch.records else fact_batch)
+        by_key = {r.key: r for r in facts.records}
+        episodes = []
+        for record in batch.records:
+            if record.kind.value != "EPISODE":
+                continue
+            topics = []
+            for link in batch.links:
+                if link.episode != record.key:
+                    continue
+                fact = by_key[link.fact]
+                content = fact.five_w
+                if content is None and fact.target is not None:
+                    prior = next(r for r in known if r["id"] == str(fact.target.id))
+                    content = FiveW.model_validate(prior["five_w"])
+                if content is not None:
+                    topic = content.what.predicate + ("：" + content.what.object if content.what.object else "")
+                    if content.what.polarity == "NEGATED":
+                        topic = "否定された内容：" + topic
+                    if content.what.actuality == "PLANNED":
+                        topic = "予定：" + topic
+                    if content.what.actuality == "CONDITIONAL":
+                        topic = "条件付き：" + topic
+                    if content.context == "FICTIONAL":
+                        topic = "創作：" + topic
+                    if content.context == "HYPOTHETICAL":
+                        topic = "仮定：" + topic
+                    topics.append(topic)
+            if topics:
+                topic = (record.five_w.what.object or "") + "。話題：" + "／".join(dict.fromkeys(topics))
+                record = record.model_copy(update={"five_w": record.five_w.model_copy(update={
+                    "what": record.five_w.what.model_copy(update={"object": topic})})})
+            episodes.append(record)
+        episode_batch = ExtractionBatch(records=tuple(episodes))
+        grounded_episodes = (super()._ground_content(episode_batch, payload, known, entity_labels, should_stop)
+                             if episode_batch.records else episode_batch)
+        result = ExtractionBatch(records=facts.records + grounded_episodes.records,
+                                 links=batch.links, merges=batch.merges)
         records = []
         for record in result.records:
             temporal = record.five_w.when if record.five_w is not None else None
@@ -480,6 +574,8 @@ class CompactExtractor(ThreadEpisodeExtractor):
                 marker = "Factは話題の人物の行為・出来事に関する申告です。"
                 if marker in original:
                     system += "\n" + original[original.index(marker):]
+            else:
+                system += "\nEPISODEのwhat.objectは確定済みFactから組み立てた話題なので、全体をそのまま保持する。"
         if schema is None:
             return ThreadEpisodeExtractor._messages(system, payload)
         return ThreadEpisodeExtractor._messages(system, payload, schema)
@@ -491,12 +587,20 @@ class CompactExtractor(ThreadEpisodeExtractor):
             return super()._infer(messages, output, should_stop, validate)
         payload = json.loads(messages[1]["content"])
         compact = compact_payload(payload)
+        eligible = self._eligible_fact_targets(payload, should_stop)
+        for _, probe in eligible:
+            if validate:
+                validate(probe)
+        eligible_indices = [index for index, _ in eligible]
         def check_facts(facts):
+            if any(f.target is not None and f.target not in eligible_indices for f in facts.facts):
+                raise InvalidExtraction("target identity is not confirmed")
             if not facts.has_unprocessed_input and validate:
                 validate(expand(Plan(complete=True, facts=facts.facts, episodes=(), merges=()), payload))
         facts = super()._infer(
             self._messages(FACT_PROMPT, {"fragments": compact["fragments"],
-                "known_facts": compact["known_facts"]}, generation_schema(FactPlan)),
+                "known_facts": compact["known_facts"],
+                "eligible_fact_targets": eligible_indices}, generation_schema(FactPlan)),
             FactPlan, should_stop, check_facts)
         if facts.has_unprocessed_input:
             return ExtractionBatch(complete=False, records=())

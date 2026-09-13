@@ -163,3 +163,55 @@ def test_continued_experience_requires_existing_episode():
     plan["episodes"][0]["continues_existing_experience"] = True
     with pytest.raises(ValidationError):
         Plan.model_validate(plan)
+
+
+@pytest.mark.parametrize("certainty", ["NO", "UNSURE"])
+def test_unconfirmed_existing_events_are_not_update_targets(monkeypatch, certainty):
+    from app.memory.formation.episodic_extractor import ThreadEpisodeExtractor
+    from evals.episodic_quality.compact import CompactExtractor, PairDecision
+    from pathlib import Path
+    cases = [json.loads(line) for line in
+             (Path(__file__).parents[2] / "evals/episodic_quality/cases.jsonl").read_text().splitlines()]
+    case = next(c for c in cases if c["id"] == "fact_operation-09")
+    _, _, payload = build_input(case["vars"]["input_json"])
+    monkeypatch.setattr(ThreadEpisodeExtractor, "_infer",
+                        lambda *args: PairDecision(same_event=certainty, adds_information=True, evidence=None))
+    extractor = CompactExtractor(client=object(), settings=None)
+    assert extractor._eligible_fact_targets(payload, lambda: False) == []
+
+
+def test_empty_eligible_targets_offer_only_new_even_with_known_context():
+    from evals.episodic_quality.compact import ScopedClient, FactPlan
+    from app.memory.formation.episodic_extractor import generation_schema
+    class Client:
+        def chat(self, messages, *, json_schema, **kwargs):
+            self.schema = json_schema
+            return "{}"
+    delegate = Client()
+    payload = {"known_facts": [{"index": 0}, {"index": 1}],
+               "eligible_fact_targets": [], "fragments": [{}]}
+    schema = generation_schema(FactPlan)
+    messages = ({"role": "system", "content": "指示"},
+                {"role": "user", "content": json.dumps(payload)})
+    ScopedClient(delegate).chat(messages, json_schema=schema, timeout_seconds=1, max_output_tokens=10)
+    assert delegate.schema["properties"]["facts"]["items"] == {"$ref": "#/$defs/NewFact"}
+    assert "anyOf" in schema["properties"]["facts"]["items"]
+
+
+def test_episode_keeps_every_linked_grounded_fact(monkeypatch):
+    from app.memory.formation.episodic_extractor import ThreadEpisodeExtractor
+    from evals.episodic_quality.compact import CompactExtractor
+    payload, plan = fixture()
+    plan["facts"].append({"operation": "NEW", "target": None, "changes": [],
+                          "predicate": "届けた", "object": "財布",
+                          "anchor": {"fragment": 1, "text": "次に財布を届けた。", "start": None}})
+    plan["episodes"][0]["facts"] = [0, 1]
+    batch = expand(Plan.model_validate(plan), payload)
+    monkeypatch.setattr(ThreadEpisodeExtractor, "_ground_content", lambda self, value, *args: value)
+    result = CompactExtractor(client=object(), settings=None)._ground_content(
+        batch, payload, [], {}, lambda: False)
+    episode = next(r for r in result.records if r.kind.value == "EPISODE")
+    assert "鍵" in episode.five_w.what.object
+    assert "財布" in episode.five_w.what.object
+    assert result.links == batch.links
+    anchor_validator(payload)(result)
