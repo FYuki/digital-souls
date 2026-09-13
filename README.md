@@ -19,9 +19,14 @@
 | 外部ツール・管理 | 登録済みMCPへの接続、会話からのTool／Resource利用、接続管理、操作承認・確認・結果回復。実行前の権限・引数・送信内容の検証を共通化 |
 | Character Life | DBOSによる会話外活動、Life State、許可・実行履歴の基盤。**既定無効・dev/test対象**。SELF Episode、Reflection、人格適応、Skill等との全体接続は未完了 |
 
-現在の長期記憶の許可型は`EPISODIC_EVENT`、`USER_PREFERENCE`、`INTERACTION_PREFERENCE`です。複数Episodeからの意味抽象化、独立した内省記憶、経験に基づく人格適応は、既存の記憶統合と区別します。[用語集](docs/glossary.md)に、設計上の概念と現在の実装名の対応をまとめています。
+既存の非同期形成経路の許可型は`EPISODIC_EVENT`、`USER_PREFERENCE`、`INTERACTION_PREFERENCE`です。複数Episodeからの意味抽象化、独立した内省記憶、経験に基づく人格適応は、既存の記憶統合と区別します。[用語集](docs/glossary.md)に、設計上の概念と現在の実装名の対応をまとめています。
 
 LiveKitへの移行・音声／テキスト併用の実装があることと、遅延・回復・連続運用の課題が解消したことは別です。[混在Session受入](docs/conversation-session-acceptance.md)、[dev回復記録](docs/conversation-session-dev-recovery.md)、[連続操作試験](docs/conversation-session-dev-operations.md)に既知の制約と証跡を残しています。無期限に同じ実行Sessionを維持できる保証はありません。
+
+Episode / Factの独立した保存・同thread登録・版付き参照・検索投影・管理UIも実装しています。
+会話全体からEpisode / Factを自動抽出するworkerを、永続予約と非同期実行で接続しています。
+採用抽出器はv13-compact18です。固定評価の残る未達とdev総合受入は[検討記録](docs/episodic-quality-iterations-2026-09.md)で区別します。
+詳細は[アーキテクチャ](docs/system-architecture.md#episode--factの保存登録管理基盤)を参照してください。
 
 ## 構成とデータの扱い
 

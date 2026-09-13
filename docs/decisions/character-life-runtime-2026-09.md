@@ -9,6 +9,10 @@
 人格・Memory・Reflection・Life State・Autonomyの意味契約は
 `character-life-memory-personality-autonomy-2026-09.md`を正本とする。本ADRはそれらの意味を変更せず、会話外処理をいつ・どのように継続実行するかだけを決める。
 
+2026-09-12の#352により、Episode / Fact / Semanticの正本と形成責務は
+[Episode・Fact・Semantic境界ADR](episode-fact-semantic-boundaries-2026-09.md)を優先する。
+本更新は以下の関連Epic・依存関係を整合させるものであり、DBOS採用判断や外部実行の安全境界を変更しない。
+
 ## 背景
 
 Character Life Runtimeへ任せたい責務は次である。
@@ -73,7 +77,7 @@ DBOS
 └─ workflow identity / status
 
 Digital Souls domain
-├─ Episode / Reflection / Life State
+├─ Episode / Fact / Semantic / Reflection / Life State
 ├─ Personality / Relationship
 ├─ privacy / Egress
 ├─ Tool Catalog / Execution Gate
@@ -139,14 +143,21 @@ Lettaのmemory-centric Agent設計は目的自体には近いが、digital-souls
 
 framework非依存の共通契約を維持し、DBOSの保存方式をpersona memory schemaへ持ち込まない。
 
-- #249: runtime result、Life State、Autonomy Target、実行制御と関連serviceへの接続境界
-- #100: Episode schema / SELF / experienced_at / source、Semantic / Reflectionの形成・永続化
+- #249: runtime result、Life State、Autonomy Target、会話外活動ログからのEpisode生成、実行制御と関連serviceへの接続
+- #340: Episode / Fact / ID参照の共通schema・保存契約、会話由来の非同期抽出と同thread登録時Fact照合
+- #341: Semantic共通Store・lifecycle・retrievalとDIRECT_EXTRACTION
+- #100: 保存済みEpisodeからのEXPERIENCE_DERIVED Semantic / Reflection形成、Reflection正本と再内省
+- #354: 同一character・別threadの保存済みFactを独立した非同期処理で整理する後続Epic
 - #101: Personality / Relationshipの更新
 - #102: Procedural / Interpersonal Skill
 - #185: High Impact / ActionRecovery / 通常writeの安全な実行
 
+#291の同thread抽出・登録、#295の夜間派生形成、#354の別thread整理は別の処理入口とする。
+同thread照合をDBOS上の別の夜間整理完了待ちにしない。#354を#340 / #341 / #100のMVP依存にしない。
+
 関連Epicが未実装の間は、接続先の不足をDEFERRED等の明示的な結果として扱う。
-仮のReflection・SELF Episode・Personality更新を本実装の成功として返さない。
+仮のReflection・Episode・Personality更新を本実装の成功として返さない。
+旧SELF subjectや#289の未リリースschemaを新しいEpisode契約の前提にしない。
 最初の自律活動シナリオは、許可されたELYTH MCPを通じた話題探索とする。
 
 ## production統合の境界
@@ -156,14 +167,18 @@ backup対象、health checkを併せて定義する。LangGraph / Lettaは本実
 
 ## 次の実装順
 
-1. #100: Episode SQLite schema v3 / `SELF` / `experienced_at` / Reflection persistence
-2. #249: DBOS bootstrap / Character Life queue / scheduler
-3. #100: Episode bundle → Semantic / Reflection background pipeline
-4. #249: Life State persistence / formation
-5. #101: Personality / Relationship
-6. read-only Autonomous Activity
-7. #185完了後に通常writeを含むAutonomous Activity
-8. #102 Procedural / Interpersonal Skill
+記憶の共通前提は#352のADRとし、具体進捗は各Issueで管理する。
+
+1. #340 / #342のEpisode・Fact・ID参照基盤、#341 / #345のSemantic基盤、#100 / #292のReflection正本を責務ごとに整える。
+2. #340 / #290 / #291で会話履歴からの非同期抽出・同thread登録時照合を接続する。
+3. #100で保存済みEpisodeからの一般化・Reflection・夜間形成を実装し、#249はその処理入口を再利用する。
+4. #249でDBOS bootstrap / Character Life queue / schedulerとLife State運用・会話外ログからの経験形成を接続する。各記憶Epicの内部処理をruntime内へ複製しない。
+5. #101でPersonality / Relationship更新を接続する。
+6. read-only Autonomous Activityを受け入れる。
+7. #185完了後に通常writeを含むAutonomous Activityを受け入れる。
+8. #102でProcedural / Interpersonal Skillを接続する。
+
+#354の別thread Fact整理は上記のMVP完了条件に含めず、後続として詳細化・受け入れる。
 
 ## 参考
 
@@ -177,5 +192,3 @@ backup対象、health checkを併せて定義する。LangGraph / Lettaは本実
 ## 結果
 
 **DBOSをCharacter Lifeのtop-level durable runtimeとして採用する。**
-
-LangGraphは必要になった場合の認知フロー内部実装候補、LettaはMVP非採用とする。

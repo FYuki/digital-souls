@@ -1,0 +1,120 @@
+{
+  "scope": "compile_diagnostic_fixed_voice",
+  "versions": {
+    "torch": "2.10.0+cu128",
+    "sympy": "1.14.0",
+    "triton": "3.6.0"
+  },
+  "voiceId": "miori-b3-4221",
+  "steps": 40,
+  "seed": 4221,
+  "speed": 1.0,
+  "compileDynamic": true,
+  "compileThreads": 1,
+  "attempts": [
+    {
+      "scope": "user_approved_compile_diagnostic",
+      "startedAtUtc": "2026-09-13T22:00:39.987695+00:00",
+      "diagnosticTimeoutSeconds": 720,
+      "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+      "diagnosticExitCode": 1,
+      "restoreExitCode": 0,
+      "serviceInterruptionSeconds": 147.2244926779531,
+      "restoredReady": true,
+      "restoredSynthesis": {
+        "httpStatus": 200,
+        "seconds": 0.936883177026175,
+        "durationSeconds": 4.88,
+        "sha256": "dd50e907a48057c12cbf1d9efbbed6f0c8ec7b5edb2e09139ab581b9628c1e8a"
+      },
+      "events": [
+        {
+          "phase": "configured",
+          "compile_model": "true",
+          "compile_dynamic": "true",
+          "model_revision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b"
+        },
+        {
+          "phase": "synthesis_start",
+          "case": "warmup"
+        },
+        {
+          "phase": "synthesis_failure",
+          "case": "warmup",
+          "seconds": 123.24075465701753,
+          "type": "InductorError",
+          "detail": "AssertionError: -4315790495104581/2500000000000000\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n"
+        }
+      ],
+      "rawLogSha256": "37f2cc2ed8832f68d3878401a7d4fa97342c18b19550bba100c7b53c45da85c0",
+      "diagnosticScriptSha256": "d6c1d4172384a79b6f7fdf241d17956656a40b3094fb8b5cfee5c2566e429346"
+    },
+    {
+      "scope": "user_approved_compile_diagnostic_limited_workaround",
+      "startedAtUtc": "2026-09-13T22:05:17.534334+00:00",
+      "diagnosticTimeoutSeconds": 540,
+      "coalesceTilingAnalysis": false,
+      "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+      "diagnosticExitCode": 0,
+      "restoreExitCode": 0,
+      "serviceInterruptionSeconds": 404.2379649289651,
+      "restoredReady": true,
+      "restoredSynthesis": {
+        "httpStatus": 200,
+        "seconds": 0.9322943349834532,
+        "durationSeconds": 4.88,
+        "sha256": "dd50e907a48057c12cbf1d9efbbed6f0c8ec7b5edb2e09139ab581b9628c1e8a"
+      },
+      "events": [
+        {
+          "phase": "configured",
+          "coalesce_tiling_analysis": "0",
+          "compile_model": "true",
+          "compile_dynamic": "true",
+          "model_revision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b"
+        },
+        {
+          "phase": "synthesis_start",
+          "case": "warmup"
+        },
+        {
+          "phase": "synthesis_success",
+          "case": "warmup",
+          "seconds": 266.87517472502077,
+          "frames": 211200,
+          "sha256": "df593ffd7554c7b5926f1cae4ee94d50598ccfd3d38282e794ac4c1d4958da78"
+        },
+        {
+          "phase": "synthesis_start",
+          "case": "new_short"
+        },
+        {
+          "phase": "synthesis_success",
+          "case": "new_short",
+          "seconds": 112.88398486300139,
+          "frames": 232320,
+          "sha256": "980c6ba103b5e4cb3e5d547cfc08fca7c8e52ef665940426de153e43e6e3ce1c"
+        },
+        {
+          "phase": "synthesis_start",
+          "case": "repeat_short"
+        },
+        {
+          "phase": "synthesis_success",
+          "case": "repeat_short",
+          "seconds": 0.53873155801557,
+          "frames": 232320,
+          "sha256": "980c6ba103b5e4cb3e5d547cfc08fca7c8e52ef665940426de153e43e6e3ce1c"
+        }
+      ],
+      "rawLogSha256": "604c1330f297640fad89278bfac039fed3360ffc63de03ec5221e7d94b64fed1",
+      "diagnosticScriptSha256": "04e7c95c90dbe62227b89158e6f88776605c4c8bc7bb6649104bd7db0080e64d"
+    }
+  ],
+  "totalServiceInterruptionSeconds": 551.4624576069182,
+  "finalCompileEnabled": false,
+  "workaroundAdopted": false,
+  "firstNewTextExceededNormalInferenceDeadline": true,
+  "formalTtfaMeasured": false,
+  "compiledVoiceQualityAccepted": false
+}

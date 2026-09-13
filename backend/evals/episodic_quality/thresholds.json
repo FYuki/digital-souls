@@ -1,0 +1,18 @@
+{
+  "case_count": 170,
+  "accuracy": 0.9,
+  "categories": {
+    "selection": 10,
+    "episode_boundary": 10,
+    "fact_operation": 10,
+    "what_where_why": 10,
+    "temporal": 10,
+    "context": 10,
+    "links": 10,
+    "evidence": 10,
+    "catalog": 10,
+    "same_event": 10,
+    "privacy": 60,
+    "merge_proposal": 10
+  }
+}

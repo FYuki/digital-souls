@@ -156,6 +156,8 @@ test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHT
   const [conversationIdA] = liveKit.readBindings('miori')
 
   await page.getByRole('button', { name: '新規スレッド（キャラクターB）' }).click()
+  // 接続中にもマイクは無効になるため、その状態だけではBへの表示切替を確認できない。
+  await expect(page.getByRole('heading', { name: CONVERSATION_IDS['mock-character-b'], exact: true })).toBeVisible()
   // Aを維持したままBへの通常textを送る。表示切替は音声sessionを終了しない。
   await expect(page.getByRole('button', { name: 'マイクをオンにする' })).toBeDisabled()
   await page.getByLabel('メッセージ').fill('Bへの質問')
@@ -171,6 +173,7 @@ test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHT
   await page.getByRole('button', { name: '音声会話を終了' }).click()
 
   await page.getByRole('button', { name: CONVERSATION_IDS.miori, exact: true }).click()
+  await expect(page.getByRole('heading', { name: CONVERSATION_IDS.miori, exact: true })).toBeVisible()
   await page.getByLabel('メッセージ').fill('Aへの再質問')
   await page.getByRole('button', { name: '送信' }).click()
   await expect(page.getByText('応答4')).toBeVisible()

@@ -1,0 +1,541 @@
+"""実SQLiteの永続予約から、構造化推論境界・登録・回復までを結合する。推論のみfake。"""
+
+import asyncio
+import json
+
+import pytest
+
+from app.memory.episodic.contracts import ExtractionIdentity
+from app.memory.episodic.extraction_contracts import ExtractionBatch, SourceQuote, GroundedContent
+from app.memory.episodic.quotes import InvalidExtraction
+from app.memory.formation.config import MemoryFormationSettings
+from app.memory.formation.durable_scheduler import DurableMemoryFormationScheduler
+from app.memory.formation.episodic_extractor import ThreadEpisodeExtractor, ExtractionInputTooLarge
+from app.memory.formation.episodic_worker import EpisodicFormationWorker
+from app.memory.formation.thread_chunks import split_thread
+from tests.module.test_episodic_registration import harness, episode, fact, batch  # noqa: F401
+
+SETTINGS = MemoryFormationSettings(5, 2, 15, 300, 100, 4096)
+
+
+class Client:
+    def __init__(self, callback=None, fits=None):
+        self.callback = callback or self.valid_response
+        self.fit_callback = fits
+        self.requests = []
+        self.ground_requests = []
+        self.ground_callback = None
+
+    def fits(self, messages, json_schema):
+        return True if self.fit_callback is None else self.fit_callback(messages, json_schema)
+
+    def chat(self, messages, *, json_schema, timeout_seconds, max_output_tokens):
+        value = json.loads(messages[1]["content"])
+        if value.get("phase") == "ground_content":
+            self.ground_requests.append(value)
+            if self.ground_callback is not None:
+                return self.ground_callback(value, len(self.ground_requests))
+            candidate = value["candidate"]
+            return GroundedContent.model_validate({
+                "five_w": candidate["five_w"], "time_source": candidate["time_source"],
+            }).model_dump_json()
+        self.requests.append(value)
+        return self.callback(value, len(self.requests))
+
+    @staticmethod
+    def valid_response(value, index):
+        part = next((p for p in value["fragments"] if p["role"] == "user" and p["ownership"] == "primary"), None)
+        if part is None:
+            return ExtractionBatch(records=()).model_dump_json()
+        q = SourceQuote(source_id=part["source_id"], revision=part["revision"], role="user",
+                        quote=part["text"], start=part["start"])
+        return batch(episode(q), fact(q), q).model_dump_json()
+
+
+def worker(harness, client, *, budget=4000):
+    return EpisodicFormationWorker(
+        queue=harness.queue, extractor=ThreadEpisodeExtractor(client=client, settings=SETTINGS),
+        registration=harness.service, entity_labels=lambda _: {"speaker:user": "ユーザー", "character:miori": "光織"},
+        extraction_identity=lambda: ExtractionIdentity(
+            provider_id="fake", model_id="test", model_digest="test-digest", prompt_version="test-v1"),
+        chunk_characters=budget, context_characters=0,
+    )
+
+
+def test_persisted_job_runs_without_an_in_memory_submit_and_saves_provenance(harness):
+    harness.turn("うどんを食べた")
+    client = Client()
+    assert worker(harness, client).process_next()
+    assert len(harness.records()) == 2
+    assert not harness.queue.has_pending()
+    assert client.requests[0]["character_id"] == "miori"
+    assert client.requests[0]["fragments"][0]["revision"] == 2
+    assert client.requests[0]["known_records"] == []
+
+
+def test_invalid_model_output_is_failure_and_never_completed_as_empty(harness):
+    harness.turn("うどんを食べた")
+    client = Client(callback=lambda *_: '{"records": "invalid"}')
+    with pytest.raises(InvalidExtraction):
+        worker(harness, client).process_next()
+    assert len(client.requests) == 2
+    assert harness.queue.has_pending()
+    assert harness.queue.claim() is None
+    assert harness.records() == ()
+
+
+def test_partial_chunk_success_survives_restart_without_duplicating_prefix(harness):
+    from datetime import timedelta
+    first = harness.turn("うどんを食べた")
+    harness.turn("そばを食べた")
+    budget = len(first.user_content) + len(first.assistant_content)
+    def fail_second(value, index):
+        return Client.valid_response(value, index) if index == 1 else "invalid"
+    with pytest.raises(InvalidExtraction):
+        worker(harness, Client(callback=fail_second), budget=budget).process_next()
+    first_ids = {record.id for record in harness.records()}
+    assert len(first_ids) == 2
+    assert harness.queue.has_pending()
+    harness.now[0] += timedelta(seconds=6)
+    restored_client = Client()
+    worker(harness, restored_client, budget=budget).process_next()
+    assert len(harness.records()) == 4
+    assert first_ids <= {record.id for record in harness.records()}
+    assert not harness.queue.has_pending()
+    assert any(part["processed_ranges"] for part in restored_client.requests[0]["fragments"])
+
+
+def test_input_budget_bisection_covers_every_source_character(harness):
+    harness.turn("あいうえおかきくけこさしすせそたちつてと")
+    def fits(messages, _):
+        value = json.loads(messages[1]["content"])
+        return sum(len(p["text"]) for p in value["fragments"]) <= 8
+    client = Client(callback=lambda *_: ExtractionBatch(records=()).model_dump_json(), fits=fits)
+    worker(harness, client).process_next()
+    assert not harness.queue.has_pending()
+    spans = {}
+    for request in client.requests:
+        for part in request["fragments"]:
+            if part["ownership"] == "primary":
+                key = (part["source_id"], part["role"])
+                spans.setdefault(key, []).extend(range(part["start"], part["end"]))
+    assert spans
+    for positions in spans.values():
+        assert len(positions) == len(set(positions))
+        assert set(positions) == set(range(max(positions) + 1))
+
+
+def test_model_declared_incomplete_output_requests_smaller_chunks(harness):
+    turn = harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    client = Client(callback=lambda *_: '{"complete": false, "records":[]}')
+    with pytest.raises(ExtractionInputTooLarge):
+        ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
+            snapshot=snapshot, chunk=split_thread(snapshot)[0], catalog=(), provenance={},
+            progress={}, entity_labels={"speaker:user": "ユーザー"})
+    assert turn.turn_id
+    assert harness.records() == ()
+
+
+def test_shutdown_retains_unprocessed_reservation(harness):
+    harness.turn("うどんを食べた")
+    stopped = worker(harness, Client()).process_next(should_stop=lambda: True)
+    assert stopped
+    assert harness.queue.has_pending()
+    assert harness.queue.claim() is not None
+    assert harness.records() == ()
+
+
+@pytest.mark.anyio
+async def test_durable_scheduler_recovers_existing_reservations_on_start(harness):
+    harness.turn("うどんを食べた")
+    scheduler = DurableMemoryFormationScheduler(worker=worker(harness, Client()), queue=harness.queue,
+                                                 poll_seconds=0.01)
+    await scheduler.start()
+    try:
+        async def complete():
+            while harness.queue.has_pending():
+                await asyncio.sleep(0.01)
+        await asyncio.wait_for(complete(), timeout=5)
+        assert len(harness.records()) == 2
+    finally:
+        await scheduler.stop()
+
+
+def test_extractor_masks_context_and_primary_without_changing_quote_offsets(harness):
+    from app.memory.episodic.contracts import SourceSpan
+    from tests.module.test_episodic_registration import quote, initial
+    ep, fa, turn = initial(harness)
+    harness.turn("次の話をする")
+    snapshot = harness.snapshot()
+    chunks = split_thread(snapshot, max_characters=3, context_characters=30)
+    old = quote(snapshot, turn)
+    masks = (SourceSpan(source_id=turn.turn_id, revision=old.revision, role="user",
+                        start=1, end=5, stated_at=harness.now[0]),)
+    client = Client(callback=lambda *_: ExtractionBatch(records=()).model_dump_json())
+    extractor = ThreadEpisodeExtractor(client=client, settings=SETTINGS)
+    for chunk in chunks:
+        catalog, provenance, progress = harness.service.extraction_context(snapshot, chunk)
+        extractor.extract(snapshot=snapshot, chunk=chunk, catalog=catalog, provenance=provenance,
+                          progress=progress, entity_labels={}, source_masks=masks)
+    assert client.requests
+    for request in client.requests:
+        for record in request["known_records"]:
+            if record["id"] in {str(ep.id), str(fa.id)}:
+                assert record["five_w"] is None
+        for part in request["fragments"]:
+            if part["source_id"] == str(turn.turn_id):
+                assert part["role"] == "user"
+                assert part["end"] <= 1 or part["start"] >= 5
+                assert part["text"] == turn.user_content[part["start"]:part["end"]]
+
+
+def test_fully_masked_primary_finishes_without_inference(harness):
+    from app.memory.episodic.quotes import fragment_span
+    harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    chunk = split_thread(snapshot)[0]
+    client = Client()
+    result = ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
+        snapshot=snapshot, chunk=chunk, catalog=(), provenance={}, progress={}, entity_labels={},
+        source_masks=tuple(fragment_span(part) for part in chunk.primary))
+    assert result.complete and result.records == ()
+    assert client.requests == []
+
+
+def test_grounding_rechecks_content_without_reselecting_record_identity(harness):
+    harness.turn("今日うどんを食べた")
+    client = Client()
+    def grounded(value, index):
+        candidate = value["candidate"]
+        content = candidate["five_w"]
+        if candidate["kind"] == "EPISODE":
+            content["what"]["predicate"] = "語った"
+            content["where"] = {"name": "話題に出ただけの店"}
+        else:
+            content["when"] = {"relative_unit": "DAY", "relative_offset": 0}
+        return GroundedContent.model_validate({
+            "five_w": content, "time_source": candidate["anchor"] if candidate["kind"] == "FACT" else None,
+        }).model_dump_json()
+    client.ground_callback = grounded
+    worker(harness, client).process_next()
+    from app.memory.episodic.contracts import RecordKind
+    episodes = harness.records(RecordKind.EPISODE)
+    facts = harness.records(RecordKind.FACT)
+    assert len(episodes) == len(facts) == 1
+    assert episodes[0].five_w.what.predicate == "聞いた"
+    assert episodes[0].five_w.where is None
+    assert [(p.entity_id, p.role.value) for p in episodes[0].five_w.who] == [
+        ("character:miori", "LISTENER"), ("speaker:user", "SPEAKER"),
+    ]
+    assert facts[0].five_w.when.parts.day == harness.now[0].day
+    assert len(client.ground_requests) == 2
+    assert all(request["known_records"] == [] for request in client.ground_requests)
+    assert not harness.queue.has_pending()
+
+
+def test_grounding_failure_after_first_record_does_not_partially_register(harness):
+    harness.turn("うどんを食べた")
+    client = Client()
+    def grounded(value, index):
+        if index > 1:
+            return "invalid"
+        return GroundedContent.model_validate({
+            "five_w": value["candidate"]["five_w"],
+        }).model_dump_json()
+    client.ground_callback = grounded
+    with pytest.raises(InvalidExtraction):
+        worker(harness, client).process_next()
+    assert len(client.ground_requests) == 3
+    assert harness.records() == ()
+    assert harness.queue.has_pending()
+
+
+@pytest.mark.parametrize(("role", "predicate", "owner_role"), [
+    ("user", "聞いた", "LISTENER"), ("assistant", "語った", "SPEAKER"),
+])
+def test_conversation_episode_participants_follow_source_role(harness, role, predicate, owner_role):
+    harness.turn("昼食について話す")
+    def proposed(value, _):
+        part = next(p for p in value["fragments"] if p["role"] == role and p["ownership"] == "primary")
+        q = SourceQuote(source_id=part["source_id"], revision=part["revision"], role=role,
+                        quote=part["text"], start=part["start"])
+        return ExtractionBatch(records=(episode(q),)).model_dump_json()
+    worker(harness, Client(callback=proposed)).process_next()
+    record, = harness.records()
+    assert record.five_w.what.predicate == predicate
+    assert next(p for p in record.five_w.who if p.entity_id == "character:miori").role.value == owner_role
+    assert record.five_w.where is None
+
+
+def test_continuing_heard_episode_from_a_reply_preserves_original_perspective(harness):
+    from app.memory.episodic.contracts import RecordKind
+    harness.turn("昼食について話す")
+    worker(harness, Client()).process_next()
+    old, = harness.records(RecordKind.EPISODE)
+    new = harness.turn("その昼食について補足する")
+    def continued(value, _):
+        part = next(p for p in value["fragments"]
+                    if p["role"] == "assistant" and p["source_id"] == str(new.turn_id))
+        q = SourceQuote(source_id=part["source_id"], revision=part["revision"], role="assistant",
+                        quote=part["text"], start=part["start"])
+        return ExtractionBatch(records=(episode(q, existing=old),)).model_dump_json()
+    worker(harness, Client(callback=continued)).process_next()
+    current, = harness.records(RecordKind.EPISODE)
+    assert current.id == old.id
+    assert current.content_version == 2
+    assert current.five_w.when == old.five_w.when
+    assert current.five_w.what.predicate == "聞いた"
+    assert next(p for p in current.five_w.who if p.entity_id == "character:miori").role.value == "LISTENER"
+
+
+@pytest.mark.anyio
+async def test_scheduler_failure_diagnostic_excludes_exception_content(harness, caplog):
+    import asyncio
+
+    class FailingWorker:
+        def process_next(self, *, should_stop):
+            raise ValueError("PRIVATE_SYNTHETIC_CONVERSATION")
+
+    scheduler = DurableMemoryFormationScheduler(
+        worker=FailingWorker(), queue=harness.queue, poll_seconds=0.01,
+    )
+    await scheduler.start()
+    try:
+        async with asyncio.timeout(2):
+            while "episodic formation failed" not in caplog.text:
+                await asyncio.sleep(0.01)
+    finally:
+        await scheduler.stop()
+    assert "error_type=ValueError" in caplog.text
+    assert "error_site=test_episodic_formation.py:process_next:" in caplog.text
+    assert "PRIVATE_SYNTHETIC_CONVERSATION" not in caplog.text
+
+
+def test_transient_fact_privacy_failure_keeps_whole_chunk_pending_then_recovers(harness, monkeypatch):
+    from datetime import timedelta
+    from app.memory.episodic.contracts import RecordKind
+    from app.memory.episodic.privacy import PrivacyReview, PrivacyAssessmentUnavailable
+
+    harness.turn("うどんを食べた")
+    original_review = harness.reviewer.review
+
+    def unavailable_fact(**kwargs):
+        if kwargs["kind"] is RecordKind.FACT:
+            return PrivacyReview(False, "SEMANTIC_PRIVACY_UNAVAILABLE", retryable=True)
+        return original_review(**kwargs)
+
+    monkeypatch.setattr(harness.reviewer, "review", unavailable_fact)
+    with pytest.raises(PrivacyAssessmentUnavailable):
+        worker(harness, Client()).process_next()
+    assert harness.records() == ()
+    assert harness.queue.has_pending()
+    assert harness.queue.claim() is None
+    monkeypatch.setattr(harness.reviewer, "review", original_review)
+    harness.now[0] += timedelta(seconds=6)
+    assert worker(harness, Client()).process_next()
+    assert {record.kind for record in harness.records()} == {RecordKind.EPISODE, RecordKind.FACT}
+    with harness.repository.read() as tx:
+        episode_record = next(r for r in harness.records() if r.kind is RecordKind.EPISODE)
+        assert len(tx.references("miori", episode_record.id)) == 1
+    assert not harness.queue.has_pending()
+
+
+def test_schema_retry_includes_validation_feedback_without_relaxing_contract(harness, caplog):
+    class RepairClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.messages = []
+
+        def chat(self, messages, **kwargs):
+            self.messages.append(messages)
+            if len(self.messages) == 1:
+                return '{"records":"PRIVATE_INVALID_OUTPUT"}'
+            return super().chat(messages, **kwargs)
+
+    harness.turn("うどんを食べた")
+    client = RepairClient()
+    assert worker(harness, client).process_next()
+    assert len(harness.records()) == 2
+    repaired = client.messages[1]
+    assert repaired[:2] == client.messages[0]
+    assert repaired[-2] == {"role": "assistant", "content": '{"records":"PRIVATE_INVALID_OUTPUT"}'}
+    assert "records" in repaired[-1]["content"] and "tuple_type" in repaired[-1]["content"]
+    assert "schema=ExtractionBatch" in caplog.text
+    assert "PRIVATE_INVALID_OUTPUT" not in caplog.text
+
+
+def test_schema_repair_checks_expanded_input_budget(harness):
+    harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    client = Client(callback=lambda *_: '{"records":"invalid"}',
+                    fits=lambda messages, _: len(messages) == 2)
+    with pytest.raises(ExtractionInputTooLarge, match="schema repair"):
+        ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
+            snapshot=snapshot, chunk=split_thread(snapshot)[0], catalog=(), provenance={},
+            progress={}, entity_labels={"speaker:user": "ユーザー", "character:miori": "光織"})
+    assert len(client.requests) == 1
+    assert harness.records() == ()
+
+
+def test_generation_schema_limits_source_ids_to_visible_history(harness):
+    from app.memory.formation.episodic_extractor import EXTRACTION_SCHEMA
+
+    class ConstrainedClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.schemas = []
+
+        def chat(self, messages, *, json_schema, **kwargs):
+            self.schemas.append(json_schema)
+            return super().chat(messages, json_schema=json_schema, **kwargs)
+
+    turn = harness.turn("うどんを食べた")
+    client = ConstrainedClient()
+    assert worker(harness, client).process_next()
+    assert client.schemas
+    for schema in client.schemas:
+        if "SourceQuote" in schema.get("$defs", {}):
+            assert schema["$defs"]["SourceQuote"]["properties"]["source_id"]["enum"] == [str(turn.turn_id)]
+    assert "enum" not in EXTRACTION_SCHEMA["$defs"]["SourceQuote"]["properties"]["source_id"]
+
+
+def test_schema_retry_explains_model_validator_constraint(harness):
+    class SemanticRepairClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.messages = []
+
+        def chat(self, messages, **kwargs):
+            self.messages.append(messages)
+            if len(self.messages) == 1:
+                valid = json.loads(self.valid_response(json.loads(messages[1]["content"]), 1))
+                valid["records"][1]["key"] = valid["records"][0]["key"]
+                return json.dumps(valid)
+            return super().chat(messages, **kwargs)
+
+    harness.turn("うどんを食べた")
+    client = SemanticRepairClient()
+    worker(harness, client).process_next()
+    assert "duplicate local record key" in client.messages[1][-1]["content"]
+    assert len(harness.records()) == 2
+
+
+@pytest.mark.parametrize("paged", [False, True])
+@pytest.mark.parametrize("second_start", [None, 1])
+def test_canonical_anchor_collision_is_repaired_before_grounding_or_privacy(harness, caplog, paged, second_start):
+    from app.memory.episodic.contracts import RecordKind
+    from app.memory.episodic.extraction_contracts import ExtractedLink
+
+    class AnchorRepairClient(Client):
+        def __init__(self):
+            super().__init__(fits=lambda messages, _: not paged or
+                             json.loads(messages[1]["content"]).get("phase") is not None)
+            self.attempts = []
+
+        def chat(self, messages, **kwargs):
+            value = json.loads(messages[1]["content"])
+            if value.get("phase") == "ground_content":
+                return super().chat(messages, **kwargs)
+            if value.get("phase") == "catalog_match":
+                return '{"complete":true,"matches":[]}'
+            self.attempts.append(messages)
+            assert harness.reviewer.calls == []
+            assert self.ground_requests == []
+            part = next(p for p in value["fragments"] if p["role"] == "user")
+            q = SourceQuote(source_id=part["source_id"], revision=part["revision"],
+                            role="user", quote=part["text"], start=0)
+            # null/誤った位置でも同じ原文一致へ解決される。生のstart比較では検出できない。
+            q2 = q.model_copy(update={"start": second_start}) if len(self.attempts) == 1 else (
+                q.model_copy(update={"quote": "そばを食べた", "start": None}))
+            records = (episode(q), fact(q), fact(q2, object="そば").model_copy(update={"key": "second"}))
+            return ExtractionBatch(records=records, links=(
+                ExtractedLink(episode="episode", fact="fact", sources=(q,)),
+                ExtractedLink(episode="episode", fact="second", sources=(q2,)),
+            )).model_dump_json()
+
+    harness.turn("うどんを食べた。そばを食べた")
+    client = AnchorRepairClient()
+    assert worker(harness, client).process_next()
+    assert len(client.attempts) == 2
+    assert client.attempts[1][:2] == client.attempts[0]
+    assert "multiple records share the same kind and evidence anchor" in client.attempts[1][-1]["content"]
+    assert "evidence_anchor" in caplog.text and "うどん" not in caplog.text
+    assert not harness.queue.has_pending()
+    assert len(harness.records()) == 3
+    facts = harness.records(RecordKind.FACT)
+    assert {f.five_w.what.object for f in facts} == {"うどん", "そば"}
+    with harness.repository.read() as tx:
+        ep = harness.records(RecordKind.EPISODE)[0]
+        assert len(tx.references("miori", ep.id)) == 2
+        assert {tx.versions("miori", f.id)[-1].sources[0].start for f in facts} == {0, len("うどんを食べた。")}
+
+
+def test_exhausted_anchor_repair_keeps_job_pending_without_partial_writes(harness):
+    def duplicate(value, index):
+        valid = ExtractionBatch.model_validate_json(Client.valid_response(value, index))
+        return valid.model_copy(update={
+            "records": valid.records + (valid.records[-1].model_copy(update={"key": "duplicate"}),),
+        }).model_dump_json()
+
+    harness.turn("うどんを食べた")
+    client = Client(callback=duplicate)
+    with pytest.raises(InvalidExtraction):
+        worker(harness, client).process_next()
+    assert len(client.requests) == SETTINGS.max_attempts
+    assert client.ground_requests == []
+    assert harness.reviewer.calls == []
+    assert harness.records() == ()
+    assert harness.queue.has_pending()
+
+
+@pytest.mark.parametrize("who", [
+    [{"name": "ユーザー", "entity_id": "speaker:user", "role": "ACTOR"}],
+    [{"name": "光織", "entity_id": "character:miori", "role": "ACTOR"}],
+    [{"name": "友人", "entity_id": None, "role": "ACTOR"}],
+    [],
+])
+def test_fact_grounding_binds_participants_without_overwriting_actual_subject(harness, who):
+    from app.memory.episodic.contracts import RecordKind
+
+    harness.turn("昼食の話をした")
+    client = Client()
+    def grounded(value, _):
+        user = next(p for p in value["fragments"] if p["role"] == "user")
+        assistant = next(p for p in value["fragments"] if p["role"] == "assistant")
+        assert user["speaker"] == assistant["addressee"] == {
+            "entity_id": "speaker:user", "name": "ユーザー"}
+        assert assistant["speaker"] == user["addressee"] == {
+            "entity_id": "character:miori", "name": "光織"}
+        if value["candidate"]["kind"] == "FACT":
+            assert "memory_owner" not in value
+        else:
+            assert value["memory_owner"] == assistant["speaker"]
+        return GroundedContent.model_validate({
+            "five_w": value["candidate"]["five_w"] | {"who": who},
+        }).model_dump_json()
+    client.ground_callback = grounded
+    assert worker(harness, client).process_next()
+    actual = harness.records(RecordKind.FACT)[0].five_w.who
+    assert [(p.name, p.role.value) for p in actual] == [(p["name"], p["role"]) for p in who]
+    for person, expected in zip(actual, who, strict=True):
+        if expected["entity_id"] is not None:
+            assert person.entity_id == expected["entity_id"]
+
+
+def test_incomplete_batch_splits_before_repairing_partial_anchor_collisions(harness):
+    harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    def incomplete(value, index):
+        valid = ExtractionBatch.model_validate_json(Client.valid_response(value, index))
+        return valid.model_copy(update={
+            "complete": False,
+            "records": valid.records + (valid.records[-1].model_copy(update={"key": "partial"}),),
+        }).model_dump_json()
+    client = Client(callback=incomplete)
+    with pytest.raises(ExtractionInputTooLarge):
+        ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
+            snapshot=snapshot, chunk=split_thread(snapshot)[0], catalog=(), provenance={},
+            progress={}, entity_labels={"speaker:user": "ユーザー", "character:miori": "光織"})
+    assert len(client.requests) == 1
+    assert client.ground_requests == []

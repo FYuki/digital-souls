@@ -574,3 +574,15 @@ def test_latency_request_rejects_non_boolean_flags(invalid):
     from dataclasses import replace
     with pytest.raises(TypeError, match='latency_sensitive'):
         replace(_text_request(), latency_sensitive=invalid)
+
+
+def test_explicit_digest_refresh_detects_mutable_model_tag_change():
+    client = MagicMock(spec=httpx.Client)
+    first, second = "sha256:" + "a" * 64, "sha256:" + "b" * 64
+    client.post.side_effect = [_response({"digest": first}), _response({"digest": second})]
+    adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+    assert adapter.resolve_model_digest("gemma4:e4b", timeout_seconds=3) == first
+    assert adapter.resolve_model_digest("gemma4:e4b", timeout_seconds=3) == first
+    assert client.post.call_count == 1
+    assert adapter.resolve_model_digest("gemma4:e4b", timeout_seconds=3, refresh=True) == second
+    assert client.post.call_count == 2

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
+  import EpisodicMemoryManagement from './EpisodicMemoryManagement.svelte'
 
   import {
     MemoryCorrectionRejected,
@@ -226,6 +227,8 @@
     </div>
     <button type="button" on:click={onClose}>チャットに戻る</button>
   </header>
+
+  {#key character}<EpisodicMemoryManagement {character} />{/key}
 
   {#if loading}
     <p>読み込み中</p>
