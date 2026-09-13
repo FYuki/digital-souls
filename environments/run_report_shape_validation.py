@@ -165,7 +165,7 @@ def _validate_service(name: str, value: object) -> None:
         raise RunReportError(f"services.{name} requires container identity")
     if name == "ollama" and value["containerIdentity"] is not None:
         raise RunReportError(f"services.{name} requires process identity")
-    if name in {"whisper", "chroma"} and any(identity is not None for identity in identities):
+    if name in {"whisper", "chroma", "irodori"} and any(identity is not None for identity in identities):
         raise RunReportError(f"services.{name} cannot have a runtime identity")
     _validate_identity(name, value)
     _validate_readiness(name, value["readiness"])
@@ -239,6 +239,14 @@ def _validate_services(report: Mapping[str, object]) -> None:
         raise RunReportError("livekit must be external and unowned")
     if "livekit" in sequence:
         raise RunReportError("startSequence must not contain external livekit")
+    irodori = services.get("irodori")
+    if isinstance(irodori, dict) and (
+        irodori.get("owned") is not False
+        or (irodori.get("mode") == "real" and irodori.get("source") != "external")
+    ):
+        raise RunReportError("irodori must be external and unowned")
+    if "irodori" in sequence:
+        raise RunReportError("startSequence must not contain external irodori")
     owned_services = {
         name for name, service in services.items()
         if isinstance(service, dict) and service["owned"] is True

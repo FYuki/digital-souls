@@ -16,6 +16,7 @@ READINESS_SERVICE_CONTRACTS = {
     "ollama": ("real", "external"),
     "voicevox": ("real", "external"),
     "whisper": ("real", "external"),
+    "irodori": ("real", "external"),
     "livekit": ("real", "external"),
 }
 READINESS_SERVICE_NAMES = tuple(READINESS_SERVICE_CONTRACTS)

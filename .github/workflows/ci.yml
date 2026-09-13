@@ -28,6 +28,8 @@ jobs:
             docker compose --env-file infra/application/env.example --file infra/application/compose.yaml --file infra/application/compose.dogfood.yaml config --quiet
       - name: Validate Whisper Compose
         run: docker compose --env-file infra/whisper/env.example --file infra/whisper/compose.yaml config --quiet
+      - name: Validate Irodori Compose
+        run: docker compose --env-file infra/irodori/env.example --file infra/irodori/compose.yaml config --quiet
       - name: Build application images
         run: docker compose --env-file infra/application/env.example --file infra/application/compose.yaml build backend frontend
 
@@ -58,7 +60,7 @@ jobs:
       - name: Install dependencies
         run: python3 -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
       - name: Static checks
-        run: python3 -m mypy --config-file backend/mypy.ini backend/app environments whisper_service
+        run: python3 -m mypy --config-file backend/mypy.ini backend/app environments whisper_service irodori_service
       - name: Unit tests
         run: python3 -m pytest backend/tests/unit
       - name: Module tests

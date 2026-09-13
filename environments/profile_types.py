@@ -5,7 +5,7 @@ from typing import Literal, NotRequired, TypedDict
 
 DependencyMode = Literal["real", "mock", "disabled"]
 DependencySource = Literal["managed", "external", "in_process", "browser"] | None
-DependencyName = Literal["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit"]
+DependencyName = Literal["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit", "irodori"]
 Capability = Literal["mocked-e2e", "text-chat-real", "voice-chat-real", "rag-real"]
 
 
@@ -44,6 +44,7 @@ class Dependencies(TypedDict):
     whisper: Dependency
     chroma: Dependency
     livekit: NotRequired[Dependency]
+    irodori: NotRequired[Dependency]
 
 
 class ResolvedDependencies(TypedDict):
@@ -54,6 +55,7 @@ class ResolvedDependencies(TypedDict):
     whisper: ResolvedDependency
     chroma: ResolvedDependency
     livekit: NotRequired[ResolvedDependency]
+    irodori: NotRequired[ResolvedDependency]
 
 
 class Profile(TypedDict):

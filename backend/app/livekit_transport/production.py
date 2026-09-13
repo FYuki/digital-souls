@@ -17,7 +17,8 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI
 
 from app.characters.loader import load_character_card
-from app.characters.loader import load_tts_config
+from app.characters.loader import IrodoriTtsConfig, TtsConfig, load_tts_config
+from app.tts.irodori_client import IrodoriClient, IrodoriRuntimeConfig, IrodoriTtsAdapter
 from app.conversation_core import ConversationCoreSession, CoreEvent
 from app.conversation_core.adapters import (
     ConversationHistoryPersistenceAdapter,
@@ -28,7 +29,7 @@ from app.conversation_core.adapters import (
     WhisperSttAdapter,
     ScreenLineageResponseState,
 )
-from app.conversation_core.ports import DeliveryPort
+from app.conversation_core.ports import DeliveryPort, TtsPort
 from app.conversation_core.models import Response, ResponseStopResult
 from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
@@ -302,6 +303,7 @@ class ProductionConversationCoreSessionFactory:
         transcriber: SyncTranscriber,
         synthesizer: SpeakerSynthesizer,
         history_service: _HistoryService,
+        irodori_client: IrodoriClient | None = None,
         completed_turn_observer: Callable[[object], None] | None = None,
         generate_reply: Callable[[str, object, str], str] | None = None,
         generate_reply_stream: Callable[
@@ -321,6 +323,7 @@ class ProductionConversationCoreSessionFactory:
     ) -> None:
         self._stt = WhisperSttAdapter(transcriber=transcriber)
         self._synthesizer = synthesizer
+        self._irodori_client = irodori_client
         self._history_service = history_service
         self._completed_turn_observer = completed_turn_observer
         self._generate_reply = generate_reply
@@ -349,6 +352,47 @@ class ProductionConversationCoreSessionFactory:
         delivery: DeliveryPort,
         client_session_id: UUID | None = None,
     ) -> ConversationCoreSession:
+        config = load_tts_config(character_id)
+        if isinstance(config, IrodoriTtsConfig):
+            raise RuntimeError("Irodori requires create_ready before starting a conversation")
+        return self._create(
+            session_id=session_id, character_id=character_id,
+            conversation_id=conversation_id, delivery=delivery,
+            client_session_id=client_session_id, tts=self._tts_adapter(config),
+        )
+
+    async def create_ready(
+        self, *, session_id: str, character_id: str, conversation_id: UUID,
+        delivery: DeliveryPort, client_session_id: UUID | None = None,
+    ) -> ConversationCoreSession:
+        # CCVを一度だけ読み、準備中の編集やtransport再接続で差し替わらないよう固定する。
+        tts = self._tts_adapter(load_tts_config(character_id))
+        if isinstance(tts, IrodoriTtsAdapter):
+            await tts.prepare()
+        return self._create(
+            session_id=session_id, character_id=character_id,
+            conversation_id=conversation_id, delivery=delivery,
+            client_session_id=client_session_id, tts=tts,
+        )
+
+    def _tts_adapter(self, config: TtsConfig) -> TtsPort:
+        if isinstance(config, IrodoriTtsConfig):
+            return IrodoriTtsAdapter(
+                client=self._irodori_client or IrodoriClient(IrodoriRuntimeConfig.from_env()),
+                voice=config,
+            )
+        return VoicevoxTtsAdapter(
+            client=self._synthesizer,
+            output_sample_rate=PCM_SAMPLE_RATE,
+            output_channels=PCM_CHANNELS,
+            output_sample_width=PCM_SAMPLE_WIDTH_BYTES,
+            speaker_id=config.speaker_id,
+        )
+
+    def _create(
+        self, *, session_id: str, character_id: str, conversation_id: UUID,
+        delivery: DeliveryPort, client_session_id: UUID | None, tts: TtsPort,
+    ) -> ConversationCoreSession:
         history_session = self._history_service.open_session(
             character_id, conversation_id
         )
@@ -361,7 +405,6 @@ class ProductionConversationCoreSessionFactory:
         )
         if isinstance(delivery, _ConversationCoreDelivery):
             delivery.attach_measurement(measurement)
-        speaker_id = load_tts_config(character_id).speaker_id
         screen_lineage_state = ScreenLineageResponseState()
         return ConversationCoreSession(
             session_id=session_id,
@@ -403,13 +446,7 @@ class ProductionConversationCoreSessionFactory:
                     )
                 )
             ),
-            tts=VoicevoxTtsAdapter(
-                client=self._synthesizer,
-                output_sample_rate=PCM_SAMPLE_RATE,
-                output_channels=PCM_CHANNELS,
-                output_sample_width=PCM_SAMPLE_WIDTH_BYTES,
-                speaker_id=speaker_id,
-            ),
+            tts=tts,
         )
 
     def _required_generate_reply(self) -> Callable[[str, object, str], str]:
@@ -1771,7 +1808,10 @@ class ProductionRuntimeManager:
             character_id=str(request["character_id"]),
             user_participant_id=str(request["core_participant_id"]),
         )
-        core_session = self._core_session_factory.create(
+        create_session = getattr(
+            self._core_session_factory, "create_ready", self._core_session_factory.create,
+        )
+        created_session = create_session(
             session_id=session_id,
             character_id=str(request["character_id"]),
             conversation_id=UUID(str(request["conversation_id"])),
@@ -1781,6 +1821,10 @@ class ProductionRuntimeManager:
                 if request.get("screen_client_session_id") is not None
                 else None
             ),
+        )
+
+        core_session = (
+            await created_session if inspect.isawaitable(created_session) else created_session
         )
 
         def schedule_core_operation(operation: Awaitable[None]) -> None:

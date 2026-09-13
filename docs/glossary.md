@@ -39,11 +39,11 @@
 | Barge-in / 割り込み | キャラクターの応答中に新しい入力を優先し、旧応答を止めること。古い生成・音声結果の不採用も必要 | 実装：[Core](../backend/app/conversation_core/)、[音声契約](decisions/voice-session-contract-2026-08.md) |
 | Input suppression / 入力抑止 | 入力欄focus等により音声入力の採用を一時的に抑えること。利用者のmute、応答中断、Session終了とは区別する | 実装：[混在入力契約](decisions/conversation-session-text-input-2026-09.md) |
 | AudioTransport / LiveKit | 音声・control eventの送受信境界と現行の通信実装。Room／Participant／Trackはtransport側の概念で、会話スレッドの正本ではない | 実装：[transport契約](decisions/livekit-transport-2026-08.md)、[実装](../backend/app/livekit_transport/) |
-| STT / TTS | STTは共有Whisper HTTP serviceによる認識、TTSはVOICEVOXによる合成。現行BackendはWhisperのGPUモデルを所有しない | 実装：[remote client](../backend/app/stt/remote_whisper_client.py)、[TTS](../backend/app/tts/) |
-| Irodori-TTS / Irodori-TTS-Server | 追加予定のTTSモデル／共通GPU推論サービス。現行VOICEVOXと設定で選択する。モデルの最終採用と本採用する声の選定は別 | 設計・未実装：[要件](irodori-tts-requirements.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
+| STT / TTS | STTは共有Whisper HTTP serviceによる認識、TTSはCCVで選ぶVOICEVOX／Irodoriによる合成。現行BackendはWhisperのGPUモデルを所有しない | 実装：[remote client](../backend/app/stt/remote_whisper_client.py)、[TTS](../backend/app/tts/) |
+| Irodori-TTS / Irodori-TTS-Server | 追加のTTSモデル／共通GPU推論サービス。VOICEVOXとCCV設定で選択する。モデルの最終採用と本採用する声の選定は別 | epic実装、実受入・本採用未完了：[サービス](../infra/irodori/README.md)、[要件](irodori-tts-requirements.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
 | Voice Design / 声の設計 | Caption（声質・話し方の説明文）から音声候補を合成し、ユーザーが声を選ぶ工程。モデル最終採用やTTS接続とは別 | 選定済み：[光織の音声](../characters/miori/voice.md)、[選定記録](miori-voice-selection-2026-09-13.md) |
-| Reference voice / 参照音声、voice ID | Irodoriで声の参照に使う固定音声と、その登録先の安定した識別子。VOICEVOXの整数speaker IDやキャラクターIDとは別。登録後のIDと音声の対応は固定する | 光織の資産・dev登録済み、CCV・共有サービス接続は#329：[光織の音声](../characters/miori/voice.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
-| Irodoriの準備完了 | 起動時のモデル読み込みとウォームアップ合成が成功した状態。health応答だけやモデルの本採用を意味しない | 設計・未実装：[利用開始条件](irodori-tts-requirements.md) |
+| Reference voice / 参照音声、voice ID | Irodoriで声の参照に使う固定音声と、その登録先の安定した識別子。VOICEVOXの整数speaker IDやキャラクターIDとは別。登録後のIDと音声の対応は固定する | 光織の資産統合済み、CCV・登録契約はepic実装、実接続受入は#329：[光織の音声](../characters/miori/voice.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
+| Irodoriの準備完了 | 起動時のモデル読み込みとウォームアップ合成が成功した状態。health応答だけやモデルの本採用を意味しない | epic実装、実GPU検証は別：[利用開始条件](irodori-tts-requirements.md) |
 
 Sessionの再送・重複検知履歴は有限です。スレッドを永続化できることは、接続を無期限維持できる保証ではありません。[連続操作試験](conversation-session-dev-operations.md)を参照してください。
 
