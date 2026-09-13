@@ -340,9 +340,12 @@ Episodeの経験と話題のFactの5Wを分け、後日の語り直しをFactの
 SQLiteで再確認する。回答が参照したID・版の記録を使い、管理訂正・削除で旧版からの派生を無効化する。
 `routers/episodic_memories.py`と`EpisodicMemoryManagement.svelte`は監査とFact単位の訂正・削除を提供する。
 
-この基盤の実装と、会話スレッド全体から新モデルへ抽出するworkerの起動接続・実LLM全受入は別である。
-通常の自動形成は前節の既存経路を使用する。新しい抽出workerとSpeech/LiveKitの回答参照版記録の
-接続・受入は後続作業として追跡する。
+会話スレッド全体の新モデルへの抽出は、永続予約を処理する非同期workerへ接続する。
+反復18を採用したv13-compact18がFact操作・Episode境界・内容確認を段階的に判断し、
+ID・引用・参照リンクはコードで組み立てて通常の登録検証へ渡す。入力予算超過時は分割・全catalog照合を行う。
+HTTP/旧WebSocketとSpeech/LiveKitはいずれも、最終promptが参照した記憶の版を履歴確定前に記録する。
+中断応答の記録を次の応答へ流用せず、参照記録が失敗した応答は完了履歴にしない。
+この接続実装・固定品質評価と、実LLMを含む全経路受入は区別する。
 契約は[Episode / Fact境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md)、
 条件は[要件・受入](epic-340-episodic-memory-requirements.md)と#291 / #344を参照する。
 

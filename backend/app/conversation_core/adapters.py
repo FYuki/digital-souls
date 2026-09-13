@@ -19,6 +19,7 @@ from app.conversation_core.models import (
     TextDelta,
 )
 from app.screen_perception.provenance import ScreenLineage
+from app.prompting.models import BuiltPrompt
 
 
 class SyncTranscriber(Protocol):
@@ -337,6 +338,36 @@ class ScreenLineageResponseState:
         return lineages
 
 
+class ResponsePromptState:
+    """生成へ渡した最終promptをresponse単位で保持し、履歴確定前に参照版を記録する。"""
+
+    def __init__(self) -> None:
+        self._active: str | None = None
+        self._prompts: dict[str, BuiltPrompt | None] = {}
+
+    def begin(self, response_id: str) -> None:
+        self._active = response_id
+        self._prompts[response_id] = None
+
+    def observer(self) -> Callable[[BuiltPrompt], None]:
+        response_id = self._active
+        if response_id is None:
+            raise RuntimeError("response prompt has not started")
+
+        def record(prompt: BuiltPrompt) -> None:
+            if response_id not in self._prompts:
+                raise RuntimeError("response prompt has already finished")
+            self._prompts[response_id] = prompt
+
+        return record
+
+    def finish(self, response_id: str) -> BuiltPrompt | None:
+        prompt = self._prompts.pop(response_id, None)
+        if self._active == response_id:
+            self._active = None
+        return prompt
+
+
 class ConversationHistoryPersistenceAdapter:
     def __init__(
         self,
@@ -344,10 +375,16 @@ class ConversationHistoryPersistenceAdapter:
         history_session: HistorySession,
         completed_turn_observer: Callable[[object], None] | None = None,
         screen_lineage_state: ScreenLineageResponseState | None = None,
+        response_prompt_state: ResponsePromptState | None = None,
+        response_provenance_recorder: Callable[[object, BuiltPrompt], None] | None = None,
     ) -> None:
         self._history_session = history_session
         self._completed_turn_observer = completed_turn_observer
         self._screen_lineage_state = screen_lineage_state
+        if (response_prompt_state is None) != (response_provenance_recorder is None):
+            raise ValueError("response prompt state and recorder must be supplied together")
+        self._response_prompt_state = response_prompt_state
+        self._response_provenance_recorder = response_provenance_recorder
         self._history_turns: dict[str, object] = {}
         self._persisted_response_ids: set[str] = set()
 
@@ -365,6 +402,8 @@ class ConversationHistoryPersistenceAdapter:
             self._history_turns[response_id] = _HISTORY_START_FAILED
             raise
         self._history_turns[response_id] = started_turn
+        if self._response_prompt_state is not None:
+            self._response_prompt_state.begin(response_id)
         if self._screen_lineage_state is not None:
             self._screen_lineage_state.begin(response_id)
         content_skipped = getattr(started_turn, "content_skipped", None)
@@ -395,6 +434,19 @@ class ConversationHistoryPersistenceAdapter:
             if self._screen_lineage_state is None
             else self._screen_lineage_state.finish(outcome.response_id)
         )
+        prompt = (self._response_prompt_state.finish(outcome.response_id)
+                  if self._response_prompt_state is not None else None)
+        if self._response_provenance_recorder is not None and outcome.state in {
+            ResponseState.COMPLETED, ResponseState.CANCELLED,
+        }:
+            try:
+                if prompt is None and outcome.state is ResponseState.COMPLETED:
+                    raise ValueError("completed response has no captured prompt")
+                if prompt is not None:
+                    await run_sync(self._response_provenance_recorder, started_turn, prompt)
+            except BaseException:
+                await run_sync(self._history_session.fail_turn, started_turn)
+                raise
         if lineages and outcome.state in {
             ResponseState.COMPLETED,
             ResponseState.CANCELLED,

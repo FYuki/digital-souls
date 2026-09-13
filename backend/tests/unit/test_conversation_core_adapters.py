@@ -755,3 +755,115 @@ def test_adapter_without_optional_preparation_remains_usable() -> None:
         assert transcriber.calls == [b"original"]
 
     asyncio.run(exercise())
+
+
+def _reference_prompt():
+    from app.prompting.models import BuiltPrompt, PromptUsage
+    return BuiltPrompt((), PromptUsage(*([0] * 10)), ())
+
+
+def test_response_prompt_observer_cannot_contaminate_next_response() -> None:
+    _public, adapters = _modules()
+    state = adapters.ResponsePromptState()
+    first, second = _reference_prompt(), _reference_prompt()
+    state.begin("first")
+    old_observer = state.observer()
+    old_observer(first)
+    state.begin("second")
+    state.observer()(second)
+    assert state.finish("first") is first
+    with pytest.raises(RuntimeError, match="already finished"):
+        old_observer(first)
+    assert state.finish("second") is second
+
+
+@pytest.mark.parametrize("terminal_state", ["COMPLETED", "CANCELLED"])
+def test_response_provenance_is_recorded_before_history_and_only_once(terminal_state) -> None:
+    async def exercise() -> None:
+        public, adapters = _modules()
+        history = FakeHistorySession()
+        state = adapters.ResponsePromptState()
+        prompt = _reference_prompt()
+        recorded = []
+
+        def record(started, captured):
+            assert history.completed == []
+            assert history.interrupted == []
+            assert started is history.handle
+            assert captured is prompt
+            recorded.append(captured)
+
+        adapter = adapters.ConversationHistoryPersistenceAdapter(
+            history_session=history, response_prompt_state=state,
+            response_provenance_recorder=record,
+        )
+        await adapter.start_response(response_id="reference", user_content="前の話の続き")
+        state.observer()(prompt)
+        outcome = public.TerminalOutcome(
+            response_id="reference", generation=1,
+            state=getattr(public.ResponseState, terminal_state), reason=None,
+            generated_text="回答", audio_segments=(), last_played_audio_sequence=0,
+        )
+        await adapter.persist(outcome)
+        await adapter.persist(outcome)
+        assert recorded == [prompt]
+        assert len(history.completed) + len(history.interrupted) == 1
+        assert state.finish("reference") is None
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("capture_prompt", [False, True])
+def test_response_with_missing_or_invalid_provenance_is_not_completed(capture_prompt) -> None:
+    async def exercise() -> None:
+        public, adapters = _modules()
+        history = FakeHistorySession()
+        state = adapters.ResponsePromptState()
+        formation_candidates = []
+
+        def record(_started, _prompt):
+            raise ValueError("referenced memory was invalidated")
+
+        adapter = adapters.ConversationHistoryPersistenceAdapter(
+            history_session=history, response_prompt_state=state,
+            response_provenance_recorder=record,
+            completed_turn_observer=formation_candidates.append,
+        )
+        await adapter.start_response(response_id="invalid", user_content="続き")
+        if capture_prompt:
+            state.observer()(_reference_prompt())
+        outcome = public.TerminalOutcome(
+            response_id="invalid", generation=1,
+            state=public.ResponseState.COMPLETED, reason=None,
+            generated_text="回答", audio_segments=(), last_played_audio_sequence=0,
+        )
+        with pytest.raises(ValueError):
+            await adapter.persist(outcome)
+        assert history.failed == [history.handle]
+        assert history.completed == []
+        assert formation_candidates == []
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("terminal_state", ["FAILED", "PRIVACY_SKIPPED", "CANCELLED"])
+def test_response_without_generation_can_terminate_without_provenance(terminal_state) -> None:
+    async def exercise() -> None:
+        public, adapters = _modules()
+        history = FakeHistorySession()
+        state = adapters.ResponsePromptState()
+        recorded = []
+        adapter = adapters.ConversationHistoryPersistenceAdapter(
+            history_session=history, response_prompt_state=state,
+            response_provenance_recorder=lambda *args: recorded.append(args),
+        )
+        await adapter.start_response(response_id="no-prompt", user_content="続き")
+        await adapter.persist(public.TerminalOutcome(
+            response_id="no-prompt", generation=1,
+            state=getattr(public.ResponseState, terminal_state), reason=None,
+            generated_text="", audio_segments=(), last_played_audio_sequence=0,
+        ))
+        assert recorded == []
+        assert state.finish("no-prompt") is None
+
+    asyncio.run(exercise())

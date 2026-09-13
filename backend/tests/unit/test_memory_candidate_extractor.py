@@ -538,3 +538,22 @@ def test_extractor_uses_json_schema_output_limit_and_declared_version() -> None:
     assert client.calls[0]["max_output_tokens"] == 321
     assert isinstance(EXTRACTOR_VERSION, str)
     assert EXTRACTOR_VERSION.strip()
+
+
+def test_preference_only_runtime_rejects_episode_output_and_keeps_preference():
+    from app.memory.formation.extractor import MemoryCandidateExtractor
+    client = FakeExtractorClient([_response(
+        {"memory_type": "EPISODIC_EVENT",
+         "structured_value": {"event_type": "ACHIEVEMENT", "subject": "USER", "topic": "合格"}},
+        {"memory_type": "USER_PREFERENCE",
+         "structured_value": {"polarity": "LIKE", "object": "紅茶"}},
+    )])
+    extractor = MemoryCandidateExtractor(client=client, settings=_settings(), preferences_only=True)
+    output = extractor.extract(current_turn=_turn(
+        TURN_ID, user_content=CURRENT_USER, assistant_content=CURRENT_ASSISTANT,
+    ), previous_turn=None)
+    assert [item.candidate.memory_type for item in output] == [MemoryType.USER_PREFERENCE]
+    variants = client.calls[0]["json_schema"]["properties"]["candidates"]["items"]["oneOf"]
+    assert {item["properties"]["memory_type"]["const"] for item in variants} == {
+        "USER_PREFERENCE", "INTERACTION_PREFERENCE",
+    }

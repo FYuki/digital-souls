@@ -1,0 +1,16 @@
+description: EpisodeとFactのLLM判断を項目別90パーセントで評価
+prompts:
+  - "{{input_json}}"
+providers:
+  - id: file://provider.py
+    label: EPISODIC_QUALITY
+evaluateOptions:
+  maxConcurrency: 1
+defaultTest:
+  assert:
+    - type: python
+      metric: decision_accuracy
+      value: |
+        from evals.episodic_quality.score import get_assert
+        return get_assert(output, context)
+tests: cases.jsonl

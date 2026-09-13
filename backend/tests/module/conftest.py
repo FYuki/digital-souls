@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 import pytest
@@ -83,3 +84,44 @@ def unknown_chat_conversation(
             "DELETE FROM conversations WHERE character_id = ?",
             ("miori",),
         )
+
+
+@pytest.fixture
+def episodic_model_output() -> None:
+    """このfixtureを指定したテストはEpisodeの構造化推論境界も自身で検証する。"""
+    return None
+
+
+@pytest.fixture(autouse=True)
+def isolate_episodic_inference(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    from app.memory.episodic.contracts import ExtractionIdentity
+    from app.memory.formation import runtime as episodic_runtime
+    from app.memory.formation.compact_extractor import COMPACT_EXTRACTOR_VERSION
+    # Module既定では外部LLMへ接続しない。予約・起動・停止は実装を通す。
+    monkeypatch.setattr(episodic_runtime, "extraction_identity", lambda *args, **kwargs: ExtractionIdentity(
+        provider_id="ollama", model_id="gemma4:e4b", model_digest=_MODEL_DIGEST,
+        prompt_version=COMPACT_EXTRACTOR_VERSION,
+    ))
+    if "episodic_model_output" not in request.fixturenames:
+        from app import main
+
+        class EmptyEpisodeClient:
+            def fits(self, *args, **kwargs):
+                return True
+
+            def chat(self, *args, **kwargs):
+                properties = kwargs["json_schema"].get("properties", {})
+                key = "facts" if "facts" in properties else "episodes"
+                return json.dumps({"has_unprocessed_input": False, key: []})
+
+        build = episodic_runtime.build_episodic_scheduler
+
+        def build_without_external_episode_llm(**kwargs):
+            return build(**{
+                **kwargs, "client": EmptyEpisodeClient(),
+                "entity_labels": lambda character: {
+                    "speaker:user": "ユーザー", f"character:{character}": "合成キャラクター",
+                },
+            })
+
+        monkeypatch.setattr(main, "build_episodic_scheduler", build_without_external_episode_llm)

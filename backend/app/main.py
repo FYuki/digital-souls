@@ -79,6 +79,8 @@ from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.contracts import MemoryFormationJob
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
 from app.memory.formation.scheduler import MemoryFormationScheduler
+from app.memory.formation.combined_scheduler import CombinedFormationScheduler
+from app.memory.formation.runtime import build_episodic_scheduler
 from app.memory.episodic.privacy import EpisodicPrivacyReviewer
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
@@ -284,6 +286,7 @@ async def _stream_core_reply(
     screen_lineage_observer: Callable[[tuple[ScreenLineage, ...]], None] | None = None,
     tools: ToolService | None = None,
     conversation_id: str | None = None,
+    prompt_observer: Callable[[BuiltPrompt], None] | None = None,
 ) -> AsyncIterator[str]:
     from app.inference.diagnostics import diagnostic
 
@@ -334,6 +337,8 @@ async def _stream_core_reply(
             ):
                 tools.stop(character, conversation_id)
                 raise ScreenPerceptionError("request_cancelled", stage="chat")
+            if prompt_observer is not None:
+                prompt_observer(prompt)
             yield material.direct_text
             return
         prompt = await run_sync(
@@ -346,6 +351,8 @@ async def _stream_core_reply(
             model_settings.chat_context_tokens - max_output_tokens,
         )
         prompt = await run_sync(chat_service.with_life_context, character, prompt)
+    if prompt_observer is not None:
+        prompt_observer(prompt)
     # ツール結果と生活状態を反映した、生成へ渡す最終promptを計測する。
     diagnostic("prompt_preparation_completed")
     diagnostic("prompt_message_count", len(prompt.messages))
@@ -711,8 +718,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_candidate_extractor = MemoryCandidateExtractor(
                 client=memory_extractor_client,
                 settings=formation_settings,
+                preferences_only=True,
             )
-            memory_formation_scheduler = MemoryFormationScheduler(
+            preference_formation_scheduler = MemoryFormationScheduler(
                 worker=MemoryFormationWorker(
                     conversation_repository=conversation_history_repository,
                     extractor=memory_candidate_extractor,
@@ -721,6 +729,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ),
                 max_queue_age_seconds=formation_settings.max_queue_age_seconds,
                 queue_maxsize=formation_settings.queue_maxsize,
+            )
+            def episodic_entity_labels(character_id: str) -> dict[str, str]:
+                card = load_character_card(character_id)
+                return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
+
+            memory_formation_scheduler = CombinedFormationScheduler(
+                preference_formation_scheduler,
+                build_episodic_scheduler(
+                    history_path=conversation_history_config.database_path,
+                    repository=episodic_repository, clock=clock,
+                    retention=conversation_history_config.retention, timezone=occurred_timezone,
+                    reviewer=EpisodicPrivacyReviewer(
+                        scanner=privacy_scanner, classifier=semantic_privacy_classifier,
+                        policy=policy.privacy,
+                    ),
+                    client=memory_extractor_client, settings=formation_settings,
+                    runtime=inference_runtime, entity_labels=episodic_entity_labels,
+                ),
             )
             await memory_formation_scheduler.start()
             memory_formation_scheduler_started = True
@@ -888,6 +914,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     screen_lineage_observer: Callable[
                         [tuple[ScreenLineage, ...]], None
                     ],
+                    prompt_observer: Callable[[BuiltPrompt], None] | None,
                 ) -> AsyncIterator[str]:
                     history_access = (
                         await app.state.screen_perception_service.history_access(
@@ -929,6 +956,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         screen_lineage_observer,
                         tools=app.state.tool_service,
                         conversation_id=str(conversation_id),
+                        prompt_observer=prompt_observer,
                     ):
                         yield text
 
@@ -958,6 +986,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     synthesizer=core_synthesizer,
                     history_service=conversation_history_service,
                     completed_turn_observer=submit_completed_core_turn,
+                    response_provenance_recorder=app_chat_service.record_response_provenance,
                     generate_screen_reply_stream=generate_screen_core_reply_stream,
                     on_conversation_interruption=(
                         tool_runtime.service.interrupted

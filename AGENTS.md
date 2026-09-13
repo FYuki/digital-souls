@@ -30,8 +30,8 @@ Ollamaの開発用モデル等は`backend/.env.example`と[推論運用](docs/in
 既存の非同期形成経路の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`であり、
 SELF経験、意味抽象化、独立した内省記憶、人格適応を実装済みの記憶統合と混同しない。
 
-Episode / Factには独立した保存・登録・参照・管理基盤がある。会話からの新しい自動抽出workerの
-起動接続は後続作業であり、既存の形成経路や保存APIの実装と区別する。
+Episode / Factの保存・登録・参照・管理基盤へ、会話スレッド単位の永続予約と非同期抽出workerを接続する。
+通常抽出は反復18を採用したv13-compact18を使う。実装・固定評価と、devでの総合受入を区別する。
 
 Live2D、VRM、Desktop／Discord等の追加クライアント、複数キャラクターのグループ会話、
 Mac mini等への常時稼働環境移行は拡張方針である。現行のブラウザ・静止画UIと区別する。

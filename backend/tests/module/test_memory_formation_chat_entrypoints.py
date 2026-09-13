@@ -194,6 +194,7 @@ def _route_ollama_post(extractor_request):
 def _character_card() -> MagicMock:
     card = MagicMock()
     card.data.character_book = None
+    card.data.name = "光織"
     card.to_character_prompt.return_value = CharacterPrompt(
         description="",
         personality="",
@@ -418,7 +419,7 @@ def _valid_preference_response() -> str:
                     "topic": "資格試験への合格",
                 },
             },
-            "EPISODIC_EVENT",
+            None,
         ),
         (
             {
@@ -441,7 +442,7 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
     monkeypatch: pytest.MonkeyPatch,
     runtime_paths,
     candidate: dict[str, object],
-    expected_memory_type: str,
+    expected_memory_type: str | None,
 ) -> None:
     extractor_response = json.dumps(
         {"candidates": [{**candidate, "date_expressions": []}]},
@@ -455,6 +456,8 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
             "reason_code": "NO_SENSITIVE_CONTENT",
         }
     )
+
+    extraction_requested = threading.Event()
 
     def ollama_post(
         _client: httpx.Client,
@@ -470,6 +473,8 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
                 json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
                 request=httpx.Request("POST", url),
             )
+        if _is_extractor_request(json):
+            extraction_requested.set()
         content = extractor_response if _is_extractor_request(json) else privacy_response
         return httpx.Response(
             200,
@@ -492,14 +497,16 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
                     },
                 )
                 assert response.status_code == 200
+                assert extraction_requested.wait(timeout=2)
                 _wait_for_approved_memory(
                     runtime_paths.persona_memory_sqlite_path,
-                    1,
+                    0 if expected_memory_type is None else 1,
                 )
 
-    assert _approved_memory_types(runtime_paths.persona_memory_sqlite_path) == [
-        expected_memory_type
-    ]
+    # 出来事は新Episode/Fact経路が担当し、旧approved_memoriesへ重複保存しない。
+    assert _approved_memory_types(runtime_paths.persona_memory_sqlite_path) == (
+        [] if expected_memory_type is None else [expected_memory_type]
+    )
 
 
 def test_noop_domain_dispatch_preserves_automatic_persona_admission(
