@@ -1,0 +1,16 @@
+description: 本番Fact再検証の行為者判定（合成100件・90%以上）
+prompts:
+  - "{{input_json}}"
+providers:
+  - id: file://provider.py
+    label: EPISODIC_ACTOR
+evaluateOptions:
+  maxConcurrency: 1
+defaultTest:
+  assert:
+    - type: python
+      metric: actor_exact_match_rate
+      value: |
+        from evals.episodic_actor.score import get_assert
+        return get_assert(output, context)
+tests: cases.jsonl
