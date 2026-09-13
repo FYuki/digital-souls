@@ -233,7 +233,9 @@ class ThreadEpisodeExtractor:
             "fragments": fragments, "known_records": known, "entity_labels": dict(entity_labels),
         }
         def validate(batch: ExtractionBatch) -> None:
-            validate_record_anchors(batch.records, snapshot, chunk)
+            # 件数上限などで未完了なら、部分候補を修復する前に所有範囲を分割する。
+            if batch.complete:
+                validate_record_anchors(batch.records, snapshot, chunk)
 
         messages = self._messages(SYSTEM_PROMPT, payload)
         if self._client.fits(messages, EXTRACTION_SCHEMA):

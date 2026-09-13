@@ -521,3 +521,21 @@ def test_fact_grounding_binds_participants_without_overwriting_actual_subject(ha
     for person, expected in zip(actual, who, strict=True):
         if expected["entity_id"] is not None:
             assert person.entity_id == expected["entity_id"]
+
+
+def test_incomplete_batch_splits_before_repairing_partial_anchor_collisions(harness):
+    harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    def incomplete(value, index):
+        valid = ExtractionBatch.model_validate_json(Client.valid_response(value, index))
+        return valid.model_copy(update={
+            "complete": False,
+            "records": valid.records + (valid.records[-1].model_copy(update={"key": "partial"}),),
+        }).model_dump_json()
+    client = Client(callback=incomplete)
+    with pytest.raises(ExtractionInputTooLarge):
+        ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
+            snapshot=snapshot, chunk=split_thread(snapshot)[0], catalog=(), provenance={},
+            progress={}, entity_labels={"speaker:user": "ユーザー", "character:miori": "光織"})
+    assert len(client.requests) == 1
+    assert client.ground_requests == []
