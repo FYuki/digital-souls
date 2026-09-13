@@ -10,8 +10,8 @@ from tests.environment_test_support import resolved_runtime_paths
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-PROFILE_NAMES = ("dev", "integration-text", "integration-voice")
-VOICEVOX_PROFILE_NAMES = ("dev", "integration-voice", "dogfood")
+PROFILE_NAMES = ("dev", "dev-voice", "integration-text", "integration-voice")
+VOICEVOX_PROFILE_NAMES = ("dev", "dev-voice", "integration-voice", "dogfood")
 
 
 def _resolve(profile_name: str, tmp_path: Path):
@@ -139,3 +139,13 @@ def test_should_use_an_ip_loopback_host_for_the_shared_voicevox_endpoint(
     dependency = _resolve(profile_name, tmp_path)["dependencies"]["voicevox"]
 
     assert urlsplit(dependency["baseUrl"]).hostname == "127.0.0.1"
+
+
+def test_dev_voice_profile_disables_rag_at_runtime(tmp_path: Path) -> None:
+    from profile_resolution import resolve_profile
+    report = resolve_profile(
+        {"DS_PROFILE": "dev-voice", "RAG_ENABLED": "true"}, None, resolved_runtime_paths(tmp_path)
+    )
+    assert report["dependencies"]["chroma"] == {"mode": "disabled", "source": None}
+    assert report["derivedEnvironment"]["RAG_ENABLED"] == "false"
+    assert "voice-chat-real" in report["capabilities"]

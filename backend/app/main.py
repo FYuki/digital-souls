@@ -512,7 +512,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
 
         episodic_repository = EpisodicRepository(runtime_paths.persona_memory_sqlite_path)
-        response_provenance_recorder = ResponseProvenanceRecorder(runtime_paths.persona_memory_sqlite_path)
         memory_read_repository = CombinedMemoryReadRepository(
             approved_memory_repository,
             EpisodicReadRepository(
@@ -522,6 +521,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     clock=clock, retention=conversation_history_config.retention,
                 ),
             ),
+        )
+        response_provenance_recorder = ResponseProvenanceRecorder(
+            runtime_paths.persona_memory_sqlite_path, reader=memory_read_repository.episodic,
         )
         outbox_repository = IndexOutboxRepository(
             database_path=runtime_paths.persona_memory_sqlite_path,

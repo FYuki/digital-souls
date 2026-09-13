@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "measurement_scope": "livekit_fault_recovery_cohort_report",
+  "audio_availability_method": "fresh_rtc_probe_and_followup",
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "measurement_revision": "af906381c6f1827c942f56e5434dcbf5dd804069",
+  "counts": {
+    "expected": 100,
+    "recorded": 100,
+    "independent_sessions": 100,
+    "independent_conversations": 94,
+    "verified_faults": 94,
+    "complete_output_trials": 94,
+    "recovered_within_ten_seconds": 94,
+    "not_recovered": 6,
+    "session_end_confirmed": 100,
+    "fault_children_closed": 100,
+    "successful_followup_conversations": 94
+  },
+  "missing_reasons": {
+    "fault_operation_unverified": 6
+  },
+  "duplicate_packet_output_intervals": 0,
+  "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+  "latency_ms": {
+    "control": {
+      "count": 94,
+      "p50": 2263.997302979231,
+      "p95": 2511.6171959385274
+    },
+    "audio": {
+      "count": 94,
+      "p50": 2423.513350171129,
+      "p95": 2679.985436026159
+    },
+    "both": {
+      "count": 94,
+      "p50": 2423.513350171129,
+      "p95": 2679.985436026159
+    }
+  },
+  "evaluation": {
+    "coverage_complete": false,
+    "rate_passed": false,
+    "latency_passed": true,
+    "passed": false
+  },
+  "native_sdk_build": {
+    "cuda_video_codecs_enabled": false,
+    "ffi_version": "0.12.73",
+    "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+    "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+    "python_sdk_version": "1.1.16",
+    "reconnect_policy": "short-outage-v1",
+    "schema_version": 1,
+    "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+    "target": "x86_64-unknown-linux-gnu"
+  }
+}

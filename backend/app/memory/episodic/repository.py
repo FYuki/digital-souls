@@ -244,14 +244,18 @@ class EpisodicTransaction:
             (str(uuid4()), str(memory_id), character_id, self._now, self._now),
         )
 
-    def invalid_response_ids(self, character_id: str) -> set[UUID]:
+    def invalid_response_ids(
+        self, character_id: str, *, source_validator: response_provenance.SourceValidator | None = None,
+    ) -> set[UUID]:
         return response_provenance.invalid_responses(
-            self._connection, character_id, masks=self.source_masks(character_id),
+            self._connection, character_id, masks=self.source_masks(character_id), source_validator=source_validator,
         )
 
-    def invalid_legacy_ids(self, character_id: str) -> set[UUID]:
+    def invalid_legacy_ids(
+        self, character_id: str, *, source_validator: response_provenance.SourceValidator | None = None,
+    ) -> set[UUID]:
         return response_provenance.invalid_provenance(
-            self._connection, character_id, masks=self.source_masks(character_id),
+            self._connection, character_id, masks=self.source_masks(character_id), source_validator=source_validator,
         )[1]
 
     def response_sources_valid(self, character_id: str, sources: tuple[SourceSpan, ...]) -> bool:

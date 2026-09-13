@@ -375,7 +375,8 @@ def test_removed_input_also_blocks_fact_derived_from_assistant_paraphrase(h):
 
 
 
-def test_prior_recall_answer_cannot_reintroduce_manually_corrected_fact(h):
+@pytest.mark.parametrize("change", ["correct", "edit", "delete", "screen"])
+def test_prior_recall_answer_cannot_reintroduce_invalid_fact(h, change):
     from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
     from app.memory.episodic.management import EpisodicMemoryManagement
     from app.prompting import PromptMemoryReference, RagContext, RagItem
@@ -392,7 +393,7 @@ def test_prior_recall_answer_cannot_reintroduce_manually_corrected_fact(h):
             str(original.id), None, None, "SEMANTIC", original.content_version,
         )),
     ))))
-    recorder = ResponseProvenanceRecorder(h.paths.persona_memory_sqlite_path)
+    recorder = ResponseProvenanceRecorder(h.paths.persona_memory_sqlite_path, reader=h.read.episodic)
     recorder.record(started, prompt)
     response = h.history.complete_turn(
         "miori", conversation, started.turn_id, sanitized_assistant_content="月を想像した旅行でした",
@@ -404,6 +405,7 @@ def test_prior_recall_answer_cannot_reintroduce_manually_corrected_fact(h):
             character_id="miori", conversation_id=conversation, kind=RecordKind.FACT,
             five_w=h.value(), sources=(source,), stamp=STAMP, receipt_id=uuid4(),
         ).record
+    preference, _ = legacy_from_source(h, response.turn_id)
     h.index.run_worker_once()
     assert str(recalled.id) in {result.memory_id for result in h.retrieve().memories}
     reviewer = Mock()
@@ -411,15 +413,38 @@ def test_prior_recall_answer_cannot_reintroduce_manually_corrected_fact(h):
     service = EpisodicMemoryManagement(
         reader=h.read.episodic, reviewer=reviewer, clock=lambda: NOW, index_sync=h.index,
     )
-    service.correct(character_id="miori", record_id=original.id, expected_version=1,
-                    five_w=h.value(predicate="訂正済みの旅行"), idempotency_key=uuid4())
+    if change == "correct":
+        service.correct(character_id="miori", record_id=original.id, expected_version=1,
+                        five_w=h.value(predicate="訂正済みの旅行"), idempotency_key=uuid4())
+    else:
+        # 抽出workerのreconcileを起動せず、変更直後の出典を読み直す。
+        with sqlite3.connect(h.paths.sqlite_path) as connection:
+            if change == "edit":
+                connection.execute("UPDATE conversation_turns SET user_content='訂正' WHERE turn_id=?",
+                                   (str(h.span.source_id),))
+            elif change == "delete":
+                connection.execute("DELETE FROM conversation_turns WHERE turn_id=?", (str(h.span.source_id),))
+            else:
+                connection.execute(
+                    "INSERT INTO screen_turn_provenance VALUES(?, ?, ?, 1, 'route', 'explicit_ui', 'window', 'direct_observation')",
+                    (str(h.span.source_id), str(uuid4()), str(uuid4())),
+                )
+    from app.conversation_history.prompt_history import restore_prompt_turn
+    assert recorder.filter_history("miori", restore_prompt_turn(response)).assistant_content is None
+    assert h.read.get(character_id="miori", memory_id=preference.id) is None
+    another = h.history.create_processing_turn("miori", conversation, ProcessingTurnInput("もう一度"))
+    with pytest.raises(ValueError, match="invalid memory version"):
+        recorder.record(another, prompt)
     # 派生Factの古いChroma行が残っていてもSQLiteの出典検証で即座に除外する。
     view = h.read.get(character_id="miori", memory_id=recalled.id)
     assert view.status is MemoryStatus.INACTIVE and view.normalized_text == ""
     h.index.run_worker_once()
     results = h.retrieve()
     assert str(recalled.id) not in {result.memory_id for result in results.memories}
-    assert any(result.memory_id == str(original.id) and result.content_version == 2 for result in results.memories)
+    if change == "correct":
+        assert any(result.memory_id == str(original.id) and result.content_version == 2 for result in results.memories)
+    else:
+        assert not results.memories
 
 
 def test_generated_reply_using_concurrently_corrected_memory_is_not_committed(h):

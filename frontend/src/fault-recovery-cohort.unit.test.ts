@@ -158,6 +158,38 @@ test('新規RTC probeの全出力を再集計し、旧応答の時刻を復旧�
   expect(() => summarizeFaultRecoveryCohort([probeTrial(), trial(2)], 2)).toThrow('audio availability methods')
 })
 
+function beforeFaultFailure(i: number) {
+  return {measurement_revision: 'a'.repeat(40), measurement_scope: 'livekit_fault_recovery_session_diagnostic',
+    fixture_sha256: 'a'.repeat(64), session_id: id(i, 1), session_end_confirmed: true,
+    fault_clock_process_closed: true, outcome: 'failure', failure_stage: 'first_playback'}
+}
+
+test('初回再生の失敗をRTC probeと集計しても方式混在にせず、失敗分母を保持する', () => {
+  const failed = beforeFaultFailure(2)
+  const report = summarizeFaultRecoveryCohort([probeTrial(), failed], 2)
+  expect(report.audio_availability_method).toBe('fresh_rtc_probe_and_followup')
+  expect(report.counts).toMatchObject({expected: 2, recorded: 2, independent_sessions: 2,
+    recovered_within_ten_seconds: 1, not_recovered: 1, verified_faults: 1, session_end_confirmed: 2})
+  expect(report.missing_reasons).toEqual({fault_operation_unverified: 1})
+  expect(report.evaluation).toMatchObject({coverage_complete: false, rate_passed: false, passed: false})
+  expect(() => summarizeFaultRecoveryCohort([{...failed, audio_availability_method: 'invalid'}], 1))
+    .toThrow('unknown audio availability method')
+})
+
+test('全件が障害注入前に失敗しても匿名reportを作り、方式とp95を未計測で残す', async () => {
+  const {readFile} = await import('node:fs/promises')
+  const {default: Ajv} = await import('ajv')
+  const schema = JSON.parse(await readFile(new URL('../../docs/schemas/voice-quality-reconnect-report-v1.schema.json', import.meta.url), 'utf8'))
+  const report = summarizeFaultRecoveryCohort(Array.from({length: 100}, (_, i) => beforeFaultFailure(i)), 100)
+  expect(report.audio_availability_method).toBeNull()
+  expect(report.counts).toMatchObject({expected: 100, recorded: 100, independent_sessions: 100,
+    recovered_within_ten_seconds: 0, not_recovered: 100, verified_faults: 0})
+  expect(report.latency_ms.both).toEqual({count: 0, p50: null, p95: null})
+  expect(report.missing_reasons).toEqual({fault_operation_unverified: 100})
+  expect(report.evaluation).toEqual({coverage_complete: false, rate_passed: false, latency_passed: false, passed: false})
+  expect(new Ajv({strict: true}).compile(schema)(report)).toBe(true)
+})
+
 test.each(['nonce', 'generation', 'track', 'pre_restore', 'control_after_completion', 'packet_missing', 'packet_duplicate',
   'sample_count', 'source_changed', 'cleanup', 'status', 'silent', 'timestamp_invalid'])('probeの不一致・欠測を成功で補完しない: %s', mode => {
   const record = probeTrial(), probe = record.audio_probe

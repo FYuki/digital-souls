@@ -1,7 +1,7 @@
 {
   "event": {
     "type": "response_delta",
-    "protocol_version": "1.0",
+    "protocol_version": "1.1",
     "event_id": "10000000-0000-4000-8000-000000000001",
     "session_id": "10000000-0000-4000-8000-000000000002",
     "response_id": "10000000-0000-4000-8000-000000000003",

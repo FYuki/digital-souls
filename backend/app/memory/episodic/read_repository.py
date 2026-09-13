@@ -45,22 +45,40 @@ class EpisodicReadRepository:
         self, history: sqlite3.Connection, cutoff: datetime, record: Record,
         sources: tuple[SourceSpan, ...],
     ) -> bool:
+        return self._conversation_sources_valid(
+            history, cutoff, record.character_id, record.conversation_id, sources,
+        )
+
+    def _conversation_sources_valid(
+        self, history: sqlite3.Connection, cutoff: datetime, character_id: str,
+        conversation_id: UUID | None, sources: tuple[SourceSpan, ...],
+    ) -> bool:
         if not sources or any(source.role == "activity" for source in sources):
             # Activity由来の実抽出は#249。出典検証入口なしに会話出典として扱わない。
             return False
         conversation_sources = tuple(s for s in sources if s.role in {"user", "assistant"})
         if not conversation_sources:
             return all(s.role == "manual" for s in sources)
-        if record.conversation_id is None:
+        if conversation_id is None:
             return False
         try:
             validate_conversation_sources(
-                history, character_id=record.character_id, conversation_id=record.conversation_id,
+                history, character_id=character_id, conversation_id=conversation_id,
                 sources=conversation_sources, cutoff=cutoff,
             )
         except InvalidConversationSource:
             return False
         return True
+
+    def invalid_response_ids(self, character_id: str) -> set[UUID]:
+        """出典更新の非同期処理を待たず、現在の履歴で回答の依存先を検証する。"""
+        with self.source_guard.snapshot() as (history, cutoff), self.repository.read() as tx:
+            return tx.invalid_response_ids(
+                character_id,
+                source_validator=lambda conversation_id, sources: self._conversation_sources_valid(
+                    history, cutoff, character_id, conversation_id, sources,
+                ),
+            )
 
     def _current(
         self, tx: EpisodicTransaction, history: sqlite3.Connection, cutoff: datetime, record: Record,
@@ -71,7 +89,13 @@ class EpisodicReadRepository:
         version = next((v for v in versions if v.content_version == record.content_version), None)
         if version is None or not self._sources_valid(history, cutoff, record, version.sources):
             return None
-        if not tx.response_sources_valid(record.character_id, version.sources):
+        invalid = tx.invalid_response_ids(
+            record.character_id,
+            source_validator=lambda conversation_id, sources: self._conversation_sources_valid(
+                history, cutoff, record.character_id, conversation_id, sources,
+            ),
+        )
+        if any(s.role == "assistant" and s.source_id in invalid for s in version.sources):
             return None
         masks = tx.source_masks(record.character_id, record.conversation_id)
         if any(overlaps_mask(source, masks) for source in version.sources):
@@ -192,5 +216,10 @@ class CombinedMemoryReadRepository:
         return [*(memory for memory in legacy if memory.id not in invalid), *episodic]
 
     def _invalid_legacy_ids(self, character_id: str) -> set[UUID]:
-        with self.episodic.repository.read() as tx:
-            return tx.invalid_legacy_ids(character_id)
+        with self.episodic.source_guard.snapshot() as (history, cutoff), self.episodic.repository.read() as tx:
+            return tx.invalid_legacy_ids(
+                character_id,
+                source_validator=lambda conversation_id, sources: self.episodic._conversation_sources_valid(
+                    history, cutoff, character_id, conversation_id, sources,
+                ),
+            )

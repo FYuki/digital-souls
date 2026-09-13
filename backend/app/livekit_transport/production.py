@@ -45,10 +45,11 @@ from app.livekit_transport.coordinator import (
     ProductionSessionCoordinator,
     SessionCoordinatorDependencies,
 )
-from app.livekit_transport.delivery import CoreNotificationPort
+from app.livekit_transport.delivery import CoreNotificationPort, TerminalProtocolError
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
+from app.livekit_transport.text_input import TextInputReceiver
 from app.livekit_transport.stt_audio import (
     PcmCaptureSpan, SttSignalSpan, prepare_stt_audio, stt_preparation_statistics,
 )
@@ -494,6 +495,7 @@ class _ConversationCoreDelivery:
             self._measurement.bind_response(
                 response_id=event.response_id,
                 source_utterance_ids=event.source_utterance_ids,
+                source_inputs=event.source_inputs,
             )
         if event.type == "response_started":
             if event.response_id is None or event.source_utterance_ids is None:
@@ -504,6 +506,7 @@ class _ConversationCoreDelivery:
                 self._measurement.bind_response(
                     response_id=event.response_id,
                     source_utterance_ids=event.source_utterance_ids,
+                    source_inputs=event.source_inputs,
                 )
                 self._measurement.record_response_event(
                     response_id=event.response_id,
@@ -624,7 +627,7 @@ class _ConversationCoreDelivery:
         if event.type == "response_completed" and event.response_id is not None:
             if event.response_id not in self._completed_output_responses:
                 await self._finish_audio(event.response_id)
-        if event.type in {"response_cancelled", "response_failed"}:
+        if event.type in {"response_cancelled", "response_failed", "response_privacy_skipped"}:
             self._audio_source.clear(event.response_id)
         if event.type == "response_privacy_skipped":
             if event.source_utterance_ids is None:
@@ -633,7 +636,6 @@ class _ConversationCoreDelivery:
                 await self._coordinator.send_core(
                     self._voice_payload(event, utterance_id=utterance_id)
                 )
-            return
         await self._coordinator.send_core(self._voice_payload(event))
 
     async def stop_response(self, response: Response) -> ResponseStopResult:
@@ -700,7 +702,7 @@ class _ConversationCoreDelivery:
                 response_id=response_id, name="first_audio_out", stage="transport", timestamp=timestamp_ns,
             )
         await self._coordinator.send_core(json.dumps({
-            "type": "observation", "protocol_version": "1.0", "event_id": str(uuid4()),
+            "type": "observation", "protocol_version": "1.1", "event_id": str(uuid4()),
             "session_id": self._session_id, "response_id": response_id,
             "measurement": "first_audio_out", "timestamp": str(timestamp_ns),
             "clock_domain": "server_monotonic", "unit": "nanosecond",
@@ -710,7 +712,7 @@ class _ConversationCoreDelivery:
         self, event: CoreEvent, *, utterance_id: str | None = None
     ) -> bytes:
         payload: dict[str, object] = {
-            "protocol_version": "1.0",
+            "protocol_version": "1.1",
             "event_id": str(uuid4()),
             "session_id": event.session_id,
             "monotonic_timestamp_ms": int(time.monotonic() * 1000),
@@ -723,6 +725,13 @@ class _ConversationCoreDelivery:
                 response_id=event.response_id,
                 speaker=self._character_speaker,
                 source_utterance_ids=list(event.source_utterance_ids),
+                source_inputs=[
+                    {"input_id": item.input_id, "source": item.source}
+                    for item in event.source_inputs
+                ] if event.source_inputs is not None else [
+                    {"input_id": item, "source": "speech"}
+                    for item in event.source_utterance_ids
+                ],
             )
             if event.history_turn_id is not None:
                 payload["history_turn_id"] = event.history_turn_id
@@ -830,11 +839,17 @@ class _ConversationCoreDelivery:
                 recoverable=True,
             )
         elif event.type == "response_privacy_skipped":
-            payload.update(
-                type="utterance_discarded",
-                utterance_id=utterance_id,
-                reason="privacy",
-            )
+            if utterance_id is not None:
+                # 既存の音声入力破棄通知を維持する。
+                payload.update(type="utterance_discarded", utterance_id=utterance_id, reason="privacy")
+            else:
+                sources = event.source_inputs
+                if not sources:
+                    raise ValueError("privacy event requires source inputs")
+                payload.update(
+                    type=event.type, response_id=event.response_id,
+                    source_inputs=[{"input_id": item.input_id, "source": item.source} for item in sources],
+                )
         else:
             raise ValueError(f"unsupported Core event type: {event.type}")
         return json.dumps(payload, separators=(",", ":")).encode()
@@ -868,8 +883,10 @@ class _ConversationCoreBridge:
         media_tail_seconds: float = 0.15,
         measurement: LiveKitMeasurementSession | None = None,
         session_metrics: SessionMetrics | None = None,
+        text_input: TextInputReceiver | None = None,
     ) -> None:
         self._session = session
+        self._text_input = text_input
         self._schedule = schedule
         self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
@@ -880,13 +897,32 @@ class _ConversationCoreBridge:
         self._pending_transcriptions: deque[tuple[str, bytes, str | None]] = deque()
         self._pending_transcription_bytes = 0
         self._transcription_active = False
+        self._transcription_epoch = 0
         self._microphone_preroll = bytearray()
         self._microphone_received_bytes = 0
         self._control_lock = asyncio.Lock()
+        self._text_focus_suppressed = False
+        self._manual_input_muted = False
 
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
+        if event["type"] == "audio_input_suppression_changed":
+            self._text_focus_suppressed = bool(event["suppressed"])
+            self._apply_audio_input_gate()
+            return
+        if event["type"] in {"session_muted", "session_resumed"}:
+            self._manual_input_muted = event["type"] == "session_muted"
+            self._apply_audio_input_gate()
+            return
+        if event["type"] in {"user_text_submitted", "user_input_result_requested"}:
+            if self._text_input is None:
+                raise TerminalProtocolError("text input receiver is not connected")
+            # 受付が非同期処理中でも照合要求はprocessingの結果へ到達できる。
+            self._schedule(self._text_input.receive(event))
+            return
         if event["type"] == "speech_started" and self._is_user_event(event):
+            if self._audio_input_suppressed:
+                return
             utterance_id = str(event["utterance_id"])
             if self._measurement is not None:
                 interrupted_response_id = event.get("response_id")
@@ -922,7 +958,7 @@ class _ConversationCoreBridge:
                 )
                 self._user_audio_captures.remove(oldest_open)
                 self._schedule(
-                    self._discard_capture_for_capacity(oldest_open.utterance_id)
+                    self._discard_capture(oldest_open.utterance_id)
                 )
             capture = _UserAudioCapture(
                 utterance_id=utterance_id,
@@ -961,10 +997,42 @@ class _ConversationCoreBridge:
             return
         self._schedule(self._receive_serialized(event))
 
-    async def _discard_capture_for_capacity(self, utterance_id: str) -> None:
+    @property
+    def _audio_input_suppressed(self) -> bool:
+        return self._text_focus_suppressed or self._manual_input_muted
+
+    def invalidate_unfinalized_audio(self) -> tuple[str, ...]:
+        """新しいtext受付時に、未確定capture/待機STTを次の入力世代から切り離す。"""
+        discarded = tuple(dict.fromkeys([
+            *(capture.utterance_id for capture in self._user_audio_captures),
+            *(utterance_id for utterance_id, _, _ in self._pending_transcriptions),
+        ]))
+        self._transcription_epoch += 1
+        self._transcription_active = False
+        self._user_audio_captures.clear()
+        self._pending_transcriptions.clear()
+        self._pending_transcription_bytes = 0
+        self._microphone_preroll.clear()
+        return discarded
+
+    def _apply_audio_input_gate(self) -> None:
+        if not self._audio_input_suppressed:
+            return
+        # mediaとcontrolの到着順は異なる。抑止中のframe/prerollを復帰後へ渡さない。
+        self._microphone_preroll.clear()
+        for capture in tuple(self._user_audio_captures):
+            if not capture.finalized:
+                self._user_audio_captures.remove(capture)
+                self._schedule(self._discard_capture(
+                    utterance_id=capture.utterance_id, reason="input_suppressed",
+                ))
+
+    async def _discard_capture(
+        self, utterance_id: str, reason: str = "input_capacity_exceeded",
+    ) -> None:
         await self._session.discard_utterance(
             utterance_id=utterance_id,
-            reason="input_capacity_exceeded",
+            reason=reason,
         )
 
     async def _receive_serialized(self, event: dict[str, object]) -> None:
@@ -974,6 +1042,8 @@ class _ConversationCoreBridge:
     def receive_microphone(self, pcm: bytes) -> None:
         received_start_byte = self._microphone_received_bytes
         self._microphone_received_bytes += len(pcm)
+        if self._audio_input_suppressed:
+            return
         if not self._user_audio_captures:
             self._microphone_preroll.extend(pcm)
             excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
@@ -1030,6 +1100,7 @@ class _ConversationCoreBridge:
             utterance_id=capture.utterance_id,
             interrupted_response_id=capture.interrupted_response_id,
             microphone_pcm=bytes(capture.pcm), capture=capture,
+            epoch=self._transcription_epoch,
         ))
 
     def _consider_stt_preparation(self, capture: _UserAudioCapture, pcm: bytes) -> None:
@@ -1085,10 +1156,13 @@ class _ConversationCoreBridge:
         interrupted_response_id: str,
         microphone_pcm: bytes,
         capture: _UserAudioCapture | None = None,
+        epoch: int | None = None,
     ) -> None:
+        if epoch is None:
+            epoch = self._transcription_epoch
         attempt = capture.preview_attempts if capture is not None else 1
         try:
-            if not getattr(self._session, "accepting_input", True):
+            if epoch != self._transcription_epoch or not getattr(self._session, "accepting_input", True):
                 return
             if self._measurement is not None:
                 self._measurement.record_utterance_event(
@@ -1105,6 +1179,9 @@ class _ConversationCoreBridge:
                 utterance_id=utterance_id,
                 audio=prepared_audio,
                 interrupted_response_id=interrupted_response_id,
+                input_is_current=lambda: epoch == self._transcription_epoch and not self._audio_input_suppressed and (
+                    capture is None or any(item is capture for item in self._user_audio_captures)
+                ),
             )
             if capture is not None:
                 capture.preview_complete = decision == "take_turn"
@@ -1120,10 +1197,11 @@ class _ConversationCoreBridge:
             # 先行認識の失敗時も発話全体のSTTで確定できる。
             logger.exception("Turn preview failed: utterance_id=%s", utterance_id)
         finally:
-            self._transcription_active = False
-            self._start_next_transcription()
-            if capture is not None:
-                self._consider_turn_preview(capture)
+            if epoch == self._transcription_epoch:
+                self._transcription_active = False
+                self._start_next_transcription()
+                if capture is not None:
+                    self._consider_turn_preview(capture)
 
     def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
         if (
@@ -1297,14 +1375,19 @@ class _ConversationCoreBridge:
                 self._transcription_active = False
                 return
             raise
-        task.add_done_callback(self._transcription_done)
+        epoch = self._transcription_epoch
+        task.add_done_callback(lambda task: self._transcription_done(task, epoch))
 
-    def _transcription_done(self, task: asyncio.Task[object]) -> None:
+    def _transcription_done(self, task: asyncio.Task[object], epoch: int) -> None:
         self._consume_task(task)
+        if epoch != self._transcription_epoch:
+            return
         self._transcription_active = False
         self._start_next_transcription()
 
     def _start_next_transcription(self) -> None:
+        if self._transcription_active:
+            return
         if not getattr(self._session, "accepting_input", True):
             self._pending_transcriptions.clear()
             self._pending_transcription_bytes = 0
@@ -1703,6 +1786,16 @@ class ProductionRuntimeManager:
         def schedule_core_operation(operation: Awaitable[None]) -> None:
             self._schedule_task(session_id, operation)
 
+        async def submit_text(input_id: str, text: str) -> str | None:
+            discarded = bridge.invalidate_unfinalized_audio()
+            response = await core_session.submit_text(
+                input_id=input_id, text=text, discard_speech_ids=discarded,
+            )
+            return response.response_id if response is not None else None
+
+        async def publish_input_result(event: dict[str, object]) -> None:
+            await coordinator.send_core(json.dumps(event, ensure_ascii=False).encode())
+
         bridge = _ConversationCoreBridge(
             core_session,
             schedule_core_operation,
@@ -1710,6 +1803,11 @@ class ProductionRuntimeManager:
             confirm_response_playback=delivery.confirm_response_playback,
             measurement=delivery.measurement,
             session_metrics=session_metrics,
+            text_input=TextInputReceiver(
+                session_id=session_id, participant_id=str(request["core_participant_id"]),
+                submit=submit_text, publish=publish_input_result,
+                accepting_input=lambda: core_session.accepting_input,
+            ),
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session

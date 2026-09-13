@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 import json
 import sqlite3
 from uuid import UUID
@@ -33,6 +33,7 @@ DEFINITIONS = (
        ON memory_response_dependencies(character_id,memory_id,content_version)""",
 )
 MemoryVersion = tuple[str, int]
+SourceValidator = Callable[[UUID | None, tuple[SourceSpan, ...]], bool]
 
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
@@ -110,7 +111,7 @@ def record_response(
 
 def invalid_provenance(
     connection: sqlite3.Connection, character_id: str, *,
-    masks: tuple[SourceSpan, ...] = (),
+    masks: tuple[SourceSpan, ...] = (), source_validator: SourceValidator | None = None,
 ) -> tuple[set[UUID], set[UUID]]:
     """版付き依存をたどり、無効な回答と旧preferenceを求める。"""
     by_turn: dict[str, set[MemoryVersion]] = defaultdict(set)
@@ -125,8 +126,8 @@ def invalid_provenance(
         "SELECT source_id,revision FROM episodic_invalid_sources WHERE character_id=?",
         (character_id,),
     )}
-    for record_id, version, status, current, content, sources_json in connection.execute(
-        """SELECT v.record_id,v.content_version,r.status,r.content_version,v.content,v.sources
+    for record_id, version, status, current, content, sources_json, conversation_id in connection.execute(
+        """SELECT v.record_id,v.content_version,r.status,r.content_version,v.content,v.sources,r.conversation_id
            FROM episodic_versions v JOIN episodic_records r
            ON r.character_id=v.character_id AND r.id=v.record_id WHERE v.character_id=?""",
         (character_id,),
@@ -137,7 +138,10 @@ def invalid_provenance(
             (str(s.source_id), s.revision) in invalid_sources or overlaps_mask(s, masks)
             for s in sources
         ):
-            eligible.add(node)
+            if source_validator is None or source_validator(
+                UUID(conversation_id) if conversation_id else None, sources,
+            ):
+                eligible.add(node)
         for source in sources:
             if source.role == "assistant":
                 dependencies[node].update(by_turn[str(source.source_id)])
@@ -194,8 +198,9 @@ def invalid_provenance(
 
 def invalid_responses(
     connection: sqlite3.Connection, character_id: str, *, masks: tuple[SourceSpan, ...] = (),
+    source_validator: SourceValidator | None = None,
 ) -> set[UUID]:
-    return invalid_provenance(connection, character_id, masks=masks)[0]
+    return invalid_provenance(connection, character_id, masks=masks, source_validator=source_validator)[0]
 
 
 def legacy_source_turns(
