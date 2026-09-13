@@ -263,6 +263,8 @@ class AudioPipelineService:
         except ValueError as exc:
             raise AudioPipelineConfigError(str(exc)) from exc
 
+        if not isinstance(tts_config, VoicevoxTtsConfig):
+            raise AudioPipelineConfigError("Irodori requires the LiveKit conversation path")
         return AudioPipelineSession(
             tts_config=tts_config,
             transcriber=self._transcriber,

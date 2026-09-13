@@ -30,6 +30,7 @@
         "ollama": { "$ref": "#/$defs/ollamaDependency" },
         "voicevox": { "$ref": "#/$defs/voicevoxDependency" },
         "livekit": { "$ref": "#/$defs/livekitDependency" },
+        "irodori": { "$ref": "#/$defs/irodoriDependency" },
         "whisper": { "$ref": "#/$defs/whisperDependency" },
         "chroma": { "$ref": "#/$defs/inProcessDependency" }
       },
@@ -49,6 +50,7 @@
               "ollama": { "$ref": "#/$defs/disabledDependency" },
               "voicevox": { "$ref": "#/$defs/disabledDependency" },
               "livekit": { "$ref": "#/$defs/disabledDependency" },
+              "irodori": { "$ref": "#/$defs/disabledDependency" },
               "whisper": { "$ref": "#/$defs/disabledDependency" },
               "chroma": { "$ref": "#/$defs/disabledDependency" }
             }
@@ -127,6 +129,27 @@
       "oneOf": [
         { "$ref": "#/$defs/voicevoxHttpDependency" },
         { "$ref": "#/$defs/disabledDependency" }
+      ]
+    },
+    "irodoriDependency": {
+      "oneOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/httpExternalDependency"
+            },
+            {
+              "properties": {
+                "readinessPath": {
+                  "const": "/health/ready"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "$ref": "#/$defs/disabledDependency"
+        }
       ]
     },
     "livekitDependency": {

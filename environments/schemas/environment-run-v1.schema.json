@@ -39,7 +39,8 @@
         "voicevox": { "$ref": "#/$defs/containerService" },
         "whisper": { "$ref": "#/$defs/noIdentityService" },
         "chroma": { "$ref": "#/$defs/noIdentityService" },
-        "livekit": { "$ref": "#/$defs/noIdentityService" }
+        "livekit": { "$ref": "#/$defs/noIdentityService" },
+        "irodori": { "$ref": "#/$defs/noIdentityService" }
       }
     },
     "testResult": {
@@ -101,6 +102,7 @@
     { "$ref": "#/$defs/whisperSequenceInvariant" },
     { "$ref": "#/$defs/chromaSequenceInvariant" },
     { "$ref": "#/$defs/livekitSequenceInvariant" },
+    { "$ref": "#/$defs/irodoriSequenceInvariant" },
     { "$ref": "#/$defs/lifecycleInvariant" }
   ],
   "$defs": {
@@ -123,8 +125,8 @@
         "cachePath": { "type": "string", "minLength": 1 }
       }
     },
-    "serviceName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit"] },
-    "cleanupTargetName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit", "ready_gate", "run_report"] },
+    "serviceName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit", "irodori"] },
+    "cleanupTargetName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit", "irodori", "ready_gate", "run_report"] },
     "processIdentity": {
       "type": "object",
       "additionalProperties": false,
@@ -278,6 +280,45 @@
     "voicevoxSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/voicevox" },
     "whisperSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/whisper" },
     "chromaSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/chroma" },
+    "irodoriSequenceInvariant": {
+      "if": {
+        "properties": {
+          "services": {
+            "required": [
+              "irodori"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "services": {
+            "properties": {
+              "irodori": {
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "external",
+                      null
+                    ]
+                  },
+                  "owned": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          },
+          "startSequence": {
+            "not": {
+              "contains": {
+                "const": "irodori"
+              }
+            }
+          }
+        }
+      }
+    },
     "livekitSequenceInvariant": {
       "if": {
         "properties": {

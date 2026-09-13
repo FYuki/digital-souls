@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
-OPTIONAL_DEPENDENCY_NAMES = ("livekit",)
+OPTIONAL_DEPENDENCY_NAMES = ("livekit", "irodori")
 READY_GATE_CLEANUP_TARGET = "ready_gate"
 RUN_REPORT_CLEANUP_TARGET = "run_report"
 CLEANUP_TARGET_NAMES = (
@@ -16,6 +16,7 @@ HTTP_SERVICE_NAMES = (
     "voicevox",
     "whisper",
     "livekit",
+    "irodori",
 )
 RUN_REPORT_ENV = "DS_ENVIRONMENT_RUN_REPORT"
 PROFILE_REPORT_ENV = "DS_PROFILE_REPORT"

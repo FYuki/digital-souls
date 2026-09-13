@@ -1,7 +1,9 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from app.characters.models import (
     CharacterBook,
@@ -108,6 +110,28 @@ class VoicevoxTtsConfig:
     speaker_id: int
 
 
+class IrodoriTtsConfig(BaseModel):
+    """CCVに保存する音声設定。接続先やローカルpathは含めない。"""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    engine: Literal["irodori"] = "irodori"
+    voice_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")
+    caption: str = Field(max_length=4096)
+    seed: int = Field(ge=0, le=2**32 - 1)
+    speed: float = Field(default=1.0, ge=0.25, le=4.0, allow_inf_nan=False)
+    num_steps: int = Field(default=40, ge=1, le=100)
+
+    @field_validator("voice_id")
+    @classmethod
+    def registered_voice_required(cls, value: str) -> str:
+        if value.lower() in {"none", "no_ref", "no-ref", "null", "text-only"}:
+            raise ValueError("registered voice ID is required")
+        return value
+
+
+TtsConfig = VoicevoxTtsConfig | IrodoriTtsConfig
+
+
 @dataclass(frozen=True, repr=False)
 class CharacterCardData:
     name: str
@@ -201,7 +225,7 @@ def _parse_character_card(document: JsonObject) -> CharacterCard:
     )
 
 
-def load_tts_config(character: str) -> VoicevoxTtsConfig:
+def load_tts_config(character: str) -> TtsConfig:
     card = load_character_card(character)
     extensions = card.data.extensions
     if DIGITAL_SOULS_EXTENSION not in extensions:
@@ -220,8 +244,13 @@ def load_tts_config(character: str) -> VoicevoxTtsConfig:
     tts_config = digital_souls[TTS_CONFIG_FIELD]
     if not isinstance(tts_config, dict):
         raise TtsConfigValidationError("tts_config must be an object")
+    if tts_config.get(TTS_ENGINE_FIELD) == "irodori":
+        try:
+            return IrodoriTtsConfig.model_validate(tts_config)
+        except ValidationError as error:
+            raise TtsConfigValidationError("invalid Irodori tts_config") from error
     if tts_config.get(TTS_ENGINE_FIELD) != VOICEVOX_ENGINE:
-        raise TtsConfigValidationError("tts_config.engine must be 'voicevox'")
+        raise TtsConfigValidationError("tts_config.engine must be 'voicevox' or 'irodori'")
     speaker_id = tts_config.get(TTS_SPEAKER_ID_FIELD)
     if type(speaker_id) is not int:
         raise TtsConfigValidationError(

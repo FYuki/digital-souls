@@ -175,7 +175,10 @@ def derive_capabilities(dependencies: ResolvedDependencies) -> list[Capability]:
         (
             "voice-chat-real",
             text_real
-            and dependencies["voicevox"]["mode"] == "real"
+            and (
+                dependencies["voicevox"]["mode"] == "real"
+                or dependency_map.get("irodori", {"mode": "disabled"})["mode"] == "real"
+            )
             and dependencies["whisper"]["mode"] == "real"
             and dependency_map.get("livekit", {"mode": "disabled"})["mode"] == "real",
         ),
@@ -195,10 +198,11 @@ def derive_environment(
         for dependency_name, environment_name in (
             ("ollama", OLLAMA_BASE_URL_ENV),
             ("voicevox", VOICEVOX_BASE_URL_ENV),
+            ("irodori", "IRODORI_BASE_URL"),
             ("whisper", WHISPER_BASE_URL_ENV),
             ("backend", BACKEND_DERIVED_ORIGIN_ENV),
         )
-        if dependency_map[dependency_name]["mode"] == "real"
+        if dependency_name in dependency_map and dependency_map[dependency_name]["mode"] == "real"
         and "baseUrl" in dependency_map[dependency_name]
     }
     if (

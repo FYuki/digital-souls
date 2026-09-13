@@ -2,8 +2,9 @@
 
 ## 状態・目的
 
-2026-09-13の要件整理で合意した実行用指示書。**設計・未実装**であり、サービス導入、
-実音声受入、モデルの本採用を完了した記録ではない。
+2026-09-13の要件整理で合意した実行用指示書。epic上で共有サービス、CCV選択、
+LiveKit接続を実装中。実音声受入、モデルの本採用を完了した記録ではない。
+実装の運用・設定は[共有Irodoriサービス](../infra/irodori/README.md)を参照する。
 進捗・依存・完了条件は[Epic #329](https://github.com/FYuki/digital-souls/issues/329)、
 設計理由は[TTSと参照音声のADR](decisions/tts-engine-reference-voice-2026-09.md)、
 用語は[用語集](glossary.md)を参照する。
@@ -106,7 +107,9 @@ p95の既存上限2000msを自動的に緩和しない。
 - 非量子化版の最終採用は実測結果を提示してユーザーが判断し、判断で必要になった対応を完了する。
   量子化版への変更は必要性と比較結果を示して別途判断する。未達・未実測を明記する。
 
-#330の本採用音声選定が未完了でも、固定の検証用音声で#329の差し替え・実測・受入を完了できる。
+検証には#330で選定されepicへ統合された `miori-b3-4221` を使用する。
+[光織の音声設定](../characters/miori/voice.md)と参照合成用metadataを正本にする。
+2026-09-13のユーザー指示により#330は単独で閉じず、#329と同時にクローズする。
 モデルの最終判断は#329の完了条件に含める。
 
 ## 実行側への委任と検証事項
@@ -124,7 +127,7 @@ p95の既存上限2000msを自動的に緩和しない。
 [Conversation Core](../backend/app/conversation_core/session.py)、
 [区間分割](../backend/app/conversation_core/segmentation.py)、
 [LiveKit接続](../backend/app/livekit_transport/production.py)。
-現行のVOICEVOX前提をIrodori対応済みと読み替えない。外部API仕様は採用revisionで再確認する。
+上記commitの確認結果と、後続のepic実装の状態を区別する。外部API仕様は採用revisionで再確認する。
 
 ## スコープ外・引き継ぎ
 
