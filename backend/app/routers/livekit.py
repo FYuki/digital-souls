@@ -17,7 +17,7 @@ from app.livekit_transport.bootstrap import (
 from app.routers.screen_perception import _require_owner
 
 
-SUPPORTED_PROTOCOL_VERSION = "1.0"
+SUPPORTED_PROTOCOL_VERSION = "1.1"
 MAX_RECONNECT_GRACE_MS = 60_000
 
 router = APIRouter(prefix="/voice/livekit", tags=["livekit"])

@@ -59,7 +59,7 @@ describe('LiveKit experimental page client flow', () => {
     expect(url).toBe('/api/voice/livekit/token')
     expect(init?.method).toBe('POST')
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-    expect(body.protocol_version).toBe('1.0')
+    expect(body.protocol_version).toBe('1.1')
     expect(body.requested_reconnect_grace_ms).toBe(60_000)
     expect(body.request_id).toMatch(/^[0-9a-f-]{36}$/)
     expect(body.conversation_id).toBe(conversationResponse.conversation_id)

@@ -100,6 +100,27 @@ def _rag_memory(content: str) -> MemorySearchResult:
     )
 
 
+def _saved_rag_memory(content: str, paths) -> MemorySearchResult:
+    from dataclasses import replace
+    from datetime import UTC, datetime
+    from pathlib import Path
+    from uuid import uuid4
+    from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+    from tests.unit.test_approved_memory_repository import _candidate, _context
+
+    initialize_persona_memory_schema(paths, Path.cwd())
+    repository = ApprovedMemoryRepository(
+        database_path=paths.persona_memory_sqlite_path, clock=lambda: datetime.now(UTC),
+        uuid_factory=uuid4, outbox_uuid_factory=uuid4,
+    )
+    saved = repository.save(
+        character_id="miori", candidate=_candidate(content),
+        context=replace(_context(), idempotency_key=str(uuid4())),
+    )
+    return replace(_rag_memory(content), memory_id=str(saved.id), content_version=saved.content_version)
+
+
 def _rag_outcome(*memories: MemorySearchResult):
     from app.memory.rag_service import RetrievalOutcome
 
@@ -310,7 +331,7 @@ class TestChatEndpoint:
                 with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                     with patch(
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                        return_value=_rag_outcome(_rag_memory("前回は畑の話をした")),
+                        return_value=_rag_outcome(_saved_rag_memory("前回は畑の話をした", runtime_paths)),
                     ) as mock_build:
                         with patch(
                             _GENERATE_RESPONSE, return_value=_LLM_REPLY
@@ -692,8 +713,8 @@ class TestChatFlow:
             with patch(
                 "app._chat_runtime._rag_service.retrieve_prompt_memories",
                 return_value=_rag_outcome(
-                    _rag_memory("順位1の記憶"),
-                    _rag_memory("順位2の記憶"),
+                    _saved_rag_memory("順位1の記憶", runtime_paths),
+                    _saved_rag_memory("順位2の記憶", runtime_paths),
                 ),
             ) as mock_build:
                 with patch(

@@ -1,0 +1,46 @@
+{
+  "status": "unresolved",
+  "user_history_evidence": {
+    "input_accepted": true,
+    "terminal_state": "interrupted",
+    "generated_characters": 0,
+    "seconds_until_terminal": 1.065452
+  },
+  "runs": [
+    {
+      "file": "ending-text-before.json",
+      "sha256": "e8fa2026642391f6661cfcb1b01a9d89dcab71dd16e0f589ffe9d3e79cfd8510",
+      "passed": true,
+      "operations": 3,
+      "events": {
+        "response_started": 4,
+        "user_input_result": 4,
+        "response_delta": 29,
+        "response_audio_segment": 6,
+        "observation": 4,
+        "response_cancelled": 1,
+        "response_completed": 2
+      },
+      "failures": [],
+      "error": null
+    },
+    {
+      "file": "ending-mixed-before.json",
+      "sha256": "f3f04c3d25159374d8eb4750e356bc02ff8fd6bfe20ea5c720496cbbeae581f8",
+      "passed": false,
+      "operations": 2,
+      "events": {
+        "response_started": 3,
+        "user_input_result": 3,
+        "response_delta": 14,
+        "response_audio_segment": 2,
+        "response_cancelled": 2,
+        "observation": 1,
+        "response_failed": 1
+      },
+      "failures": [],
+      "error": "page.waitForFunction: Timeout 90000ms exceeded."
+    }
+  ],
+  "diagnostic_commit": "0e7a3a2"
+}

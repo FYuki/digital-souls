@@ -17,9 +17,10 @@ from app.memory.chroma_store import (
     query_memories,
 )
 from app.memory.memory_policy import MemoryPolicy, rag_service_policy
-from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+from app.memory.read_contracts import EpisodicMemoryView, MemoryReadRepository, ReadableMemory
+from app.memory.episodic.temporal import render_time
+from app.memory.episodic.time_search import matches_time
 from app.memory.persistence.contracts import (
-    ApprovedMemory,
     MemoryStatus,
     TemporalPrecision,
 )
@@ -53,7 +54,7 @@ RAG_OPERATION_ERRORS = (
 @dataclass(frozen=True)
 class _VerifiedCandidate:
     candidate: MemorySearchCandidate
-    memory: ApprovedMemory
+    memory: ReadableMemory
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,7 @@ def retrieve_prompt_memories(
     *,
     scanner: PrivacyScanner,
     classifier: SemanticPrivacyClassifier,
-    approved_repository: ApprovedMemoryRepository,
+    approved_repository: MemoryReadRepository,
     embedder: Callable[[str], list[float]] | None = None,
     chroma_path: Path,
     now: datetime,
@@ -108,14 +109,14 @@ def retrieve_prompt_memories(
         period_memories = (
             []
             if temporal_query is None
-            else approved_repository.search_by_occurred_range(
+            else list(approved_repository.search_by_occurred_range(
                 character_id=character,
                 start=temporal_query.start,
                 end=temporal_query.end,
                 compatible_policy_versions=(
                     frozenset(policy.retrieval_compatible_policy_versions)
                 ),
-            )
+            ))
         )
         resolved_embedder = embed_text if embedder is None else embedder
         embedding = resolved_embedder(user_message)
@@ -152,6 +153,7 @@ def retrieve_prompt_memories(
             character=character,
             policy=policy,
             scanner=scanner,
+            approved_repository=approved_repository,
             now=now.astimezone(UTC),
         )
         period_memories = _filter_period_memories(period_memories, temporal_query)
@@ -205,7 +207,7 @@ def _verified_candidates(
     character: str,
     policy: MemoryPolicy,
     scanner: PrivacyScanner,
-    approved_repository: ApprovedMemoryRepository,
+    approved_repository: MemoryReadRepository,
     now: datetime,
 ) -> tuple[_VerifiedCandidate, ...]:
     verified: list[_VerifiedCandidate] = []
@@ -264,10 +266,16 @@ def _rank_candidates(
 
 
 def _filter_period_memories(
-    memories: list[ApprovedMemory], query: TemporalQuery
-) -> list[ApprovedMemory]:
+    memories: list[ReadableMemory], query: TemporalQuery
+) -> list[ReadableMemory]:
+    episodic = [
+        memory for memory in memories if isinstance(memory, EpisodicMemoryView)
+        and memory.five_w is not None
+        and matches_time(memory.five_w.when, query.start, query.end)
+    ]
+    memories = [memory for memory in memories if not isinstance(memory, EpisodicMemoryView)]
     if query.kind is TemporalQueryKind.SEASON:
-        return [
+        return episodic + [
             memory
             for memory in memories
             if match_season(
@@ -297,7 +305,7 @@ def _filter_period_memories(
             }
         )
     )
-    return [
+    return episodic + [
         memory
         for memory in memories
         if memory.occurred_precision in allowed_precisions
@@ -305,16 +313,19 @@ def _filter_period_memories(
 
 
 def _verified_period_memories(
-    memories: list[ApprovedMemory],
+    memories: list[ReadableMemory],
     *,
     character: str,
     policy: MemoryPolicy,
     scanner: PrivacyScanner,
+    approved_repository: MemoryReadRepository,
     now: datetime,
-) -> list[ApprovedMemory]:
-    verified: list[ApprovedMemory] = []
-    for memory in memories:
-        if not _is_retrieval_compatible(memory, character, policy, now):
+) -> list[ReadableMemory]:
+    verified: list[ReadableMemory] = []
+    for snapshot in memories:
+        # 期間候補の取得後にEmbeddingを待つため、本文・出典を返却直前に再検証する。
+        memory = approved_repository.get(character_id=character, memory_id=snapshot.id)
+        if memory is None or not _is_retrieval_compatible(memory, character, policy, now):
             continue
         body_scan = scanner.scan(memory.normalized_text)
         if not isinstance(body_scan, (ScanFailure, ScanSuccess)):
@@ -326,7 +337,7 @@ def _verified_period_memories(
 
 def _rank_temporal_candidates(
     semantic: tuple[_VerifiedCandidate, ...],
-    period: list[ApprovedMemory],
+    period: list[ReadableMemory],
 ) -> tuple[tuple[_VerifiedCandidate, RetrievalMatchKind], ...]:
     semantic_by_id = {candidate.memory.id: candidate for candidate in semantic}
     period_by_id = {memory.id: memory for memory in period}
@@ -378,10 +389,13 @@ def _search_result(
         match_kind=match_kind,
         memory_type=memory.memory_type.value,
         raw_distance=candidate.candidate.raw_distance,
+        temporal_text=(render_time(memory.five_w.when)
+                       if isinstance(memory, EpisodicMemoryView) and memory.five_w else None),
+        content_version=memory.content_version,
     )
 
 
-def _format_occurred_at(memory: ApprovedMemory) -> str | None:
+def _format_occurred_at(memory: ReadableMemory) -> str | None:
     if memory.occurred_at is None or memory.occurred_timezone is None:
         return None
     try:
@@ -392,7 +406,7 @@ def _format_occurred_at(memory: ApprovedMemory) -> str | None:
 
 
 def _is_retrieval_compatible(
-    memory: ApprovedMemory | None,
+    memory: ReadableMemory | None,
     character: str,
     policy: MemoryPolicy,
     now: datetime,

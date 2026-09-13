@@ -115,7 +115,7 @@ def test_trace_import_rejects_inconsistent_native_snapshot(damage):
 
 @pytest.mark.parametrize('change', [None, 'private', 'response', 'measurement', 'clock'])
 def test_network_summary_protocol_is_numeric_and_client_response_bound(change):
-    event = {'type':'observation', 'protocol_version':'1.0', 'event_id':str(uuid4()), 'session_id':str(uuid4()),
+    event = {'type':'observation', 'protocol_version':'1.1', 'event_id':str(uuid4()), 'session_id':str(uuid4()),
              'response_id':str(uuid4()), 'measurement':'network_summary', 'timestamp':1000,
              'clock_domain':'client_monotonic', 'unit':'millisecond', 'network_summary':summary()}
     if change == 'private': event['network_summary']['prompt']='private'
@@ -150,7 +150,7 @@ def test_cancelled_network_snapshot_requires_native_cancel_and_preserves_partial
 
 
 def test_cancelled_network_boundary_roundtrips_protocol_without_loosening_normal_completion():
-    event = {'type':'observation', 'protocol_version':'1.0', 'event_id':str(uuid4()), 'session_id':str(uuid4()),
+    event = {'type':'observation', 'protocol_version':'1.1', 'event_id':str(uuid4()), 'session_id':str(uuid4()),
              'response_id':str(uuid4()), 'measurement':'network_summary', 'timestamp':1000,
              'clock_domain':'client_monotonic', 'unit':'millisecond',
              'network_summary':{**summary(), 'boundary':'response_cancelled'}}

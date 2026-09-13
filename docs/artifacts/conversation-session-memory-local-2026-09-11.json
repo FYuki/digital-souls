@@ -1,0 +1,47 @@
+{
+  "scope": "local_dependency_compatibility_check",
+  "measured_at": "2026-09-11",
+  "conversation_revision": "b416b363b1dc2a4ecc6cb49a1d7a108058b598bb",
+  "memory_dependency_revision": "6aee764cd702c5b947f5f7b4613f7e4c4c75c7cc",
+  "public_dependency_integrated": false,
+  "worktree": "/tmp/digital-souls-319-memory-integration",
+  "test_source_sha256": "78c4c71c2dd3f214b9158ac4aba8d176fad813366ab181e690c3fce45281cdcc",
+  "test_mode": "実SQLite、STT/LLM/TTSはmodule内の記録用provider",
+  "tests": [
+    {
+      "command": "PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/module/test_conversation_text_history.py -q",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "command": "PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/module/test_memory_formation_chat_entrypoints.py backend/tests/unit/test_memory_thread_queue.py -q",
+      "passed": 38,
+      "failed": 0
+    }
+  ],
+  "observations": {
+    "input_sources": [
+      "speech",
+      "text",
+      "speech"
+    ],
+    "duplicate_text_submitted": true,
+    "saved_turns": 3,
+    "thread_job_rows": 1,
+    "thread_revision": 6,
+    "completed_revision_before_worker": 0,
+    "turn_revisions": [
+      2,
+      2,
+      2
+    ],
+    "new_queue_claim_revision": 6,
+    "snapshot_sources": 3
+  },
+  "limitations": [
+    "公開Epicへの依存取り込みと最終runtime接続受入は未完了",
+    "抽出LLM・実音声品質の受入証跡ではない",
+    "検証用worktreeにSQL/queueの照合assertionを追加して実行"
+  ],
+  "local_integration_commit": "7ee42f9f1150c1980346d08e516bafc9c99c9dfb"
+}

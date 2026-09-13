@@ -9,7 +9,7 @@ const validateVoiceSessionEvent = ajv.compile(voiceSessionSchema)
 
 export function parseVoiceSessionEvent(value: unknown): VoiceSessionEvent {
   if (!validateVoiceSessionEvent(value)) {
-    throw new Error('voice session event does not match protocol 1.0')
+    throw new Error('voice session event does not match protocol 1.1')
   }
   const event = value as VoiceSessionEvent
   if (

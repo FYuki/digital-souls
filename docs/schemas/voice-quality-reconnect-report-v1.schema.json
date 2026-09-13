@@ -254,7 +254,8 @@
     "audio_availability_method": {
       "enum": [
         "response_packets",
-        "fresh_rtc_probe_and_followup"
+        "fresh_rtc_probe_and_followup",
+        null
       ]
     },
     "native_sdk_build": {

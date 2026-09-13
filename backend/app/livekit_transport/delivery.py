@@ -31,8 +31,9 @@ class DeduplicationResult:
 
 
 class EventDeduplicator:
+    # ACK済みも保持する重複検知履歴。送信待ちoutboxの容量とは分ける。
     def __init__(
-        self, *, max_events: int = 256, max_bytes: int = 1024 * 1024
+        self, *, max_events: int = 16_384, max_bytes: int = 16 * 1024 * 1024
     ) -> None:
         if max_events < 1 or max_bytes < 1:
             raise ValueError("deduplication limits must be positive")

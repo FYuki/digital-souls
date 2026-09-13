@@ -344,7 +344,7 @@ describe('voice session shared contract', () => {
     const { parseVoiceSessionEvent } = await loadValidationModule()
     const event = {
       type: 'turn_decision',
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: '10000000-0000-4000-8000-000000000090',
       session_id: '20000000-0000-4000-8000-000000000001',
       utterance_id: '30000000-0000-4000-8000-000000000090',
@@ -390,7 +390,7 @@ it('response_startedの履歴turn IDを検証する', async () => {
 
 it.each(['valid', 'missing', 'private', 'wrong_clock'])('RTP観測契約の数値と欠測理由を検証する: %s', async mode => {
   const {parseVoiceSessionEvent} = await loadValidationModule()
-  const event = {type:'observation', protocol_version:'1.0', event_id:crypto.randomUUID(), session_id:crypto.randomUUID(),
+  const event = {type:'observation', protocol_version:'1.1', event_id:crypto.randomUUID(), session_id:crypto.randomUUID(),
     response_id:crypto.randomUUID(), measurement:'network_summary', timestamp:1000, clock_domain:'client_monotonic', unit:'millisecond',
     network_summary:{method:'browser_audio_rtp_counters_v1',
       uplink: mode === 'missing' ? {status:'missing', reason:'stats_timeout'} : {status:'measured', bytes:100, packets:8},

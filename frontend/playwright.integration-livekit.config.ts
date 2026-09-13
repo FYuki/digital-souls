@@ -10,6 +10,8 @@ if (baseURL === undefined || baseURL.trim() === '') {
 
 export default defineConfig({
   testDir: './integration/livekit',
+  // 既定のtest-results全体を掃除すると、同居する専用runtime data rootも消える。
+  outputDir: './test-results/playwright-artifacts/integration-livekit',
   fullyParallel: false,
   timeout: 30_000,
   use: {
