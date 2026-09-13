@@ -60,3 +60,10 @@ privacyは本番ADMISSION profileのtimeout・再試行も適用される。
 manifestにはcommit、corpusと評価コードのhash、model digest、設定を記録する。
 結果全文はローカルに保持し、privacyの既存方針に従って外部へ共有しない。
 共有記録は件数・分類別成績・設定・失敗種別などの集計に限定する。
+
+## 分類だけの再測定
+
+npm run eval:episodic-quality -- --categories catalog same_event のように分類を指定できる。
+選んだ分類の全件を測定し、その分類ごとに90%を要求する。全項目の合格とは扱わない。
+manifestには実行したcase IDを記録し、corpus全体のhashも維持する。
+引用位置の一意な原文一致による補正は本番resolve_quoteと同じ条件で採点する。

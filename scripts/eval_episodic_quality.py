@@ -17,6 +17,7 @@ SUITE = ROOT / "backend/evals/episodic_quality"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--categories", nargs="+")
     args = parser.parse_args()
     if os.environ.get("PRIVACY_EVAL_STUB") == "1":
         raise RuntimeError("quality evaluation requires real privacy inference")
@@ -72,6 +73,19 @@ def main():
         }
     finally:
         inference.close()
+    cases = [json.loads(line) for line in (SUITE / "cases.jsonl").read_text().splitlines()]
+    config_path = SUITE / "conformance.yaml"
+    if args.categories:
+        import yaml
+        categories = {c["vars"]["category"] for c in cases}
+        if not set(args.categories) <= categories:
+            raise ValueError("unknown category")
+        cases = [c for c in cases if c["vars"]["category"] in args.categories]
+        config = yaml.safe_load(config_path.read_text())
+        config["tests"] = cases
+        config["providers"][0]["id"] = "file://" + str(SUITE / "provider.py")
+        config_path = output / "selected-config.json"
+        config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2))
     manifest = {
         "evaluation_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                               for p in sorted(SUITE.iterdir()) if p.is_file()},
@@ -82,22 +96,24 @@ def main():
         "model_id": reference.model_id, "model_digest": digest,
         "privacy_model_id": privacy_target.reference.model_id, "privacy_model_digest": privacy_digest,
         "target_settings": target_settings,
-        "cache": False, "max_concurrency": 1, "threshold": .9, "case_count": 160,
+        "cache": False, "max_concurrency": 1, "threshold": .9, "case_count": len(cases),
+        "case_ids": [c["id"] for c in cases],
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"評価証跡: {output}", flush=True)
     with (output / "promptfoo.log").open("w") as log:
         evaluation = subprocess.run([
-            cli, "eval", "--config", str(SUITE / "conformance.yaml"), "--no-cache",
+            cli, "eval", "--config", str(config_path), "--no-cache",
             "--max-concurrency", "1", "--no-table", "--output", str(output / "results.json"),
         ], cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT, check=False)
     # 個別の不正解は90% gateで判定する。CLI障害や結果欠落は合格にしない。
     if evaluation.returncode != 0 or not (output / "results.json").exists():
         print(f"promptfoo実行失敗: exit={evaluation.returncode}; {output / 'promptfoo.log'}")
         return evaluation.returncode or 1
+    category_args = ["--categories", *args.categories] if args.categories else []
     return subprocess.run([
         sys.executable, str(SUITE / "gate.py"), str(output / "results.json"),
-        "--summary", str(output / "summary.json"),
+        "--summary", str(output / "summary.json"), *category_args,
     ], cwd=ROOT, env=environment, check=False).returncode
 
 

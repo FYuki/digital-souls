@@ -1,7 +1,9 @@
 """固定正解と構造化出力を照合する。モデルによる採点・実行後の正解変更は行わない。"""
 import json
 
-from evals.episodic_quality.provider import build_input
+from app.memory.episodic.extraction_contracts import SourceQuote
+from app.memory.episodic.quotes import InvalidExtraction, resolve_quote, owns_anchor
+from evals.episodic_quality.provider import build_input, source_context
 
 
 def at(value, path):
@@ -28,22 +30,13 @@ def matches(value, spec):
 
 def quotes_valid(batch, payload):
     """引用の表記だけでなく、提示出典・版・role・位置・所有範囲も検証する。"""
+    snapshot, chunk = source_context(payload)
     def valid(quote, primary=False):
-        for p in payload["fragments"]:
-            if (quote["source_id"], quote["revision"], quote["role"]) != (
-                    p["source_id"], p["revision"], p["role"]):
-                continue
-            if primary and p["ownership"] != "primary":
-                continue
-            text, q, start = p["text"], quote["quote"], quote.get("start")
-            if not q:
-                return False
-            if start is None:
-                if text.count(q) == 1:
-                    return True
-            elif text.startswith(q, start - p["start"]):
-                return True
-        return False
+        try:
+            resolved = resolve_quote(SourceQuote.model_validate(quote), snapshot, chunk)
+            return not primary or owns_anchor(chunk, resolved)
+        except (InvalidExtraction, ValueError, TypeError):
+            return False
     for r in batch.get("records", []):
         if not valid(r["anchor"], True) or not all(valid(q) for q in r["sources"]):
             return False
@@ -65,7 +58,7 @@ def evaluate(output, variables):
     _, _, payload = build_input(variables["input_json"])
     if data["stage"] == "catalog":
         result = output.get("catalog", {})
-        if not result.get("complete"):
+        if not result.get("complete") or any(m["key"] != "fact" for m in result.get("matches", [])):
             return False
         got = sorted((m["target"]["id"], m["target"]["version"], m["operation"], m["certainty"])
                      for m in result.get("matches", []))

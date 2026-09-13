@@ -16,7 +16,7 @@ from app.memory.episodic.extraction_contracts import ExtractionBatch
 from app.memory.formation.catalog_scan import CATALOG_SCAN_PROMPT, CatalogMatches
 from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.episodic_extractor import (
-    EPISODIC_EXTRACTOR_VERSION, SYSTEM_PROMPT, ThreadEpisodeExtractor,
+    EPISODIC_EXTRACTOR_VERSION, SYSTEM_PROMPT, ThreadEpisodeExtractor, generation_schema,
 )
 from app.memory.inference_client import StructuredMemoryInferenceClient
 from evals.episodic_actor.provider import LABELS, build_request, runtime
@@ -38,7 +38,7 @@ def build_input(prompt):
     return data, batch, payload
 
 
-def anchor_validator(payload):
+def source_context(payload):
     """本番と同じanchor検証・修復を行うため、提示断片に対応する一時snapshotを作る。"""
     now = datetime(2026, 9, 13, 0, 0, tzinfo=UTC)
     conversation = UUID(payload["conversation_id"])
@@ -60,6 +60,11 @@ def anchor_validator(payload):
     snapshot = ThreadSnapshot(
         ThreadLease("miori", conversation, 2, conversation), tuple(sources), now)
     chunk = ThreadChunk(0, tuple(primary), tuple(before), ())
+    return snapshot, chunk
+
+
+def anchor_validator(payload):
+    snapshot, chunk = source_context(payload)
     def validate(batch):
         if batch.complete:
             validate_record_anchors(batch.records, snapshot, chunk)
@@ -105,7 +110,8 @@ def call_api(prompt, options, context):
                 payload.update({"phase": "catalog_match",
                                 "candidates": [r.model_dump(mode="json") for r in batch.records]})
                 result = extractor._infer(
-                    extractor._messages(CATALOG_SCAN_PROMPT, payload), CatalogMatches, lambda: False)
+                    extractor._messages(CATALOG_SCAN_PROMPT, payload, generation_schema(CatalogMatches)),
+                    CatalogMatches, lambda: False)
                 output["catalog"] = result.model_dump(mode="json")
             elif data["stage"] == "extract":
                 # 本番と同じく操作選定後に5Wを再検証し、確定した抽出結果を測る。

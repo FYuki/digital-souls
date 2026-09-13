@@ -110,3 +110,48 @@ def test_privacy_existing_false_negative_limit_is_preserved():
     report = summarize(payload, cases, thresholds)
     assert report["categories"]["privacy"]["passed"]
     assert not report["passed"] and not report["privacy"]["existing_limits_passed"]
+
+
+def test_canonical_quote_offset_repair_matches_production():
+    output, variables = selection_output()
+    output["batch"]["records"][0]["anchor"]["start"] = 100
+    # 一意な引用は本番が位置を解決するため、文字位置のずれだけを不正解にしない。
+    assert evaluate(output, variables)
+
+
+def test_catalog_uses_catalog_schema_and_rejects_unoffered_candidate(monkeypatch):
+    from types import SimpleNamespace
+    from evals.episodic_quality import provider
+    from app.memory.formation.episodic_extractor import ThreadEpisodeExtractor
+    from app.memory.formation.catalog_scan import CatalogMatches
+    sample = next(c["vars"] for c in CASES if c["id"] == "catalog-09")
+    class Extractor:
+        _messages = staticmethod(ThreadEpisodeExtractor._messages)
+        def __init__(self, **kwargs):
+            pass
+        def _infer(self, messages, contract, should_stop):
+            schema = json.loads(messages[0]["content"].split("出力のJSON Schema:\n")[1])
+            assert schema["title"] == contract.model_json_schema()["title"] == "CatalogMatches"
+            return CatalogMatches(complete=True, matches=())
+    fake = SimpleNamespace(
+        settings=SimpleNamespace(target=lambda _: SimpleNamespace(
+            reference=SimpleNamespace(model_id="model"))),
+        ollama_adapter=SimpleNamespace(resolve_model_digest=lambda *a, **k: "digest"),
+        router=None)
+    monkeypatch.setattr(provider, "runtime", lambda: fake)
+    monkeypatch.setattr(provider, "ThreadEpisodeExtractor", Extractor)
+    monkeypatch.setattr(provider, "StructuredMemoryInferenceClient", lambda **k: None)
+    monkeypatch.setattr(provider, "resolve_memory_formation_settings", lambda _: None)
+    monkeypatch.delenv("EPISODIC_QUALITY_EVAL_PROGRESS", raising=False)
+    output = json.loads(provider.call_api(sample["input_json"], {}, {"vars": sample})["output"])
+    assert "error_type" not in output and evaluate(output, sample)
+    # スコープ外の候補keyはtargetが正しくても通さない。
+    catalog_case = next(c["vars"] for c in CASES if c["id"] == "catalog-01")
+    _, batch, _ = build_input(catalog_case["input_json"])
+    truth = json.loads(catalog_case["expected_json"])["matches"][0]
+    result = {"catalog": {"complete": True, "matches": [{
+        "key": "invented", "target": {"id": truth[0], "version": truth[1]},
+        "operation": truth[2], "certainty": truth[3],
+        "evidence": [batch.records[0].anchor.model_dump(mode="json")],
+    }]}}
+    assert not evaluate(result, catalog_case)
