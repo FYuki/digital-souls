@@ -140,7 +140,7 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_
             raise ProfileError(f"{path}.readinessPath is required for real/{source}")
     if mode == "real" and name in FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS:
         fixed_base_urls, fixed_readiness_path = FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS[name]
-        if name == "livekit" and profile_name == "integration-voice-fault":
+        if name == "livekit" and profile_name in {"integration-voice-fault", "integration-irodori-fault"}:
             # 通常dev/dogfoodの許可先は拡張せず、専用Profileだけを障害注入先へ固定する。
             fixed_base_urls = {"http://127.0.0.1:19880", "http://127.0.0.1:19880/"}
         if name == "whisper" and profile_name == "integration-voice-pcm":

@@ -719,3 +719,7 @@ manifestにはsessionの識別子、発話・応答件数、明示終了要求�
 `--controlled`、連続発話、相槌／割り込み／VAD／PCM／供給診断、専用network障害、thinking上書きとは同時指定できない。通常runへ戻ると、この診断用の環境変数を引き継がない。
 
 無応答診断の初回では、SFUによる切断検知がbrowserのpage終了より遅れ、page終了から再接続猶予＋20秒という待機では猶予満了前にテスト環境を停止してしまった。失敗runは`livekit-zero-response-session-2026-09-08-01-failed.json`に保持する。診断の待機上限は、明示終了10秒、page切断では再接続猶予＋60秒とする。これは検知・cleanupを観測するためのテスト上限であり、再接続成功率や復旧latencyの受け入れ基準を変更しない。page側の操作からnative終了を観測するまでの時間は同じNode monotonic時計で別記録し、server内部の猶予時間と読み替えない。
+
+### Irodoriの実ネットワーク障害診断
+
+run_pilot.py に --profile integration-irodori --control-probe --fault-bridge --network-fault --scheduled-fixture --trials 1 を指定すると integration-irodori-fault を使う。通常測定と同じ専用アプリポート（Frontend 18573、Backend 18500、ready gate 18574）と共有Irodori 50024を維持し、LiveKitだけを所有確認済みの専用bridge 19880へ切り替える。--run-id、--inference-env、専用bridgeの --livekit-env も指定する。bridgeの準備は infra/voice-quality/README.md に従う。共有TTSの起動・停止をテストから行わない。通常の100試行集計には混在させない。

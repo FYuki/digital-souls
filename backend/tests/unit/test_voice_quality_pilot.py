@@ -365,3 +365,18 @@ def test_irodori_measurement_selects_matching_profile_and_http_settings(tmp_path
                     {"profile": "integration-irodori", "fault_bridge": True}):
         with pytest.raises(ValueError):
             pilot.pilot_environment(*args, **options)
+
+
+def test_irodori_fault_probe_keeps_shared_tts_and_selects_dedicated_bridge(tmp_path):
+    inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
+    inference.write_text("IRODORI_BASE_URL=http://127.0.0.1:50024\n")
+    livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
+    env = pilot.pilot_environment(
+        inference, livekit, "irodori-fault-test", 1, False, scheduled_fixture=True,
+        profile="integration-irodori", control_probe=True, fault_bridge=True, network_fault=True,
+    )
+    assert env["DS_PROFILE"] == "integration-irodori-fault"
+    assert env["VOICE_QUALITY_PROFILE"] == "integration-irodori"
+    assert env["IRODORI_BASE_URL"] == "http://127.0.0.1:50024"
+    assert env["LIVEKIT_URL"] == "ws://127.0.0.1:19880"
+    assert env["VOICE_QUALITY_NETWORK_FAULT"] == "1"

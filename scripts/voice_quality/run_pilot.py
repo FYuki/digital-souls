@@ -119,8 +119,8 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     run_root(run_id)
     if profile not in {"integration-voice", "integration-irodori"}:
         raise ValueError("unsupported measurement profile")
-    if profile == "integration-irodori" and (observe_stt_pcm or fault_bridge):
-        raise ValueError("Irodori profile cannot use PCM or fault bridge profiles")
+    if profile == "integration-irodori" and observe_stt_pcm:
+        raise ValueError("Irodori profile cannot use the PCM observer profile")
     if type(session_lifecycle) is not bool or (session_lifecycle and (
         trials != 2 or not scheduled_fixture or controlled or continuous_turns
         or interruption_cohort or control_probe or fault_bridge or network_fault
@@ -202,7 +202,7 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         env["VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY"] = "1"
     if observe_stt_pcm:
         env["VOICE_QUALITY_OBSERVE_STT_PCM"] = "1"
-    env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else ("integration-voice-fault" if fault_bridge else profile)
+    env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else (f"{profile}-fault" if fault_bridge else profile)
     env["VOICE_QUALITY_PROFILE"] = profile
     if fault_bridge:
         env["VOICE_QUALITY_FAULT_BRIDGE"] = "1"

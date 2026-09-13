@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-const keys = ['VOICE_QUALITY_NETWORK_FAULT', 'VOICE_QUALITY_FAULT_BRIDGE', 'VOICE_QUALITY_CONTROL_PROBE', 'VOICE_QUALITY_RUN_ID',
+const keys = ['VOICE_QUALITY_PROFILE', 'VOICE_QUALITY_NETWORK_FAULT', 'VOICE_QUALITY_FAULT_BRIDGE', 'VOICE_QUALITY_CONTROL_PROBE', 'VOICE_QUALITY_RUN_ID',
   'DS_PROFILE', 'DS_DATA_DIR', 'DS_ENVIRONMENT_ID', 'DS_ENVIRONMENT_RUN_REPORT', 'DS_PROFILE_REPORT',
   'VOICE_MEASUREMENT_KIND', 'VOICE_CONTROLLED_TRACE_PATH', 'VOICE_QUALITY_MANIFEST_PATH']
 let previous: Record<string, string | undefined>
@@ -46,4 +46,17 @@ test('不正な選択値を通常環境へ暗黙fallbackしない', async () => 
 test.each(['1', 'invalid'])('専用bridgeなしでnetwork faultを選択できない: %s', async value => {
   process.env.VOICE_QUALITY_NETWORK_FAULT = value
   await expect(import('../playwright.livekit-quality.config')).rejects.toThrow('dedicated bridge')
+})
+
+test('Irodoriの障害診断も専用ポートと共有TTSを維持する', async () => {
+  process.env.VOICE_QUALITY_RUN_ID = 'irodori-fault-test'
+  process.env.VOICE_QUALITY_PROFILE = 'integration-irodori'
+  process.env.VOICE_QUALITY_FAULT_BRIDGE = '1'
+  process.env.VOICE_QUALITY_CONTROL_PROBE = '1'
+  process.env.VOICE_QUALITY_NETWORK_FAULT = '1'
+  const {default: config} = await import('../playwright.livekit-quality.config')
+  const server = config.webServer as {env: Record<string, string>; url: string}
+  expect(server.env.DS_PROFILE).toBe('integration-irodori-fault')
+  expect(process.env.DS_PROFILE).toBe('integration-irodori-fault')
+  expect(server.url).toBe('http://127.0.0.1:18574/ready')
 })
