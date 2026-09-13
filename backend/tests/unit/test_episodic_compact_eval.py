@@ -180,7 +180,7 @@ def test_unconfirmed_existing_events_are_not_update_targets(monkeypatch, certain
     assert extractor._eligible_fact_targets(payload, lambda: False) == []
 
 
-def test_empty_eligible_targets_offer_only_new_even_with_known_context():
+def test_empty_eligible_targets_offer_new_or_nonfact_with_known_context():
     from evals.episodic_quality.compact import ScopedClient, FactPlan
     from app.memory.formation.episodic_extractor import generation_schema
     class Client:
@@ -194,7 +194,8 @@ def test_empty_eligible_targets_offer_only_new_even_with_known_context():
     messages = ({"role": "system", "content": "指示"},
                 {"role": "user", "content": json.dumps(payload)})
     ScopedClient(delegate).chat(messages, json_schema=schema, timeout_seconds=1, max_output_tokens=10)
-    assert delegate.schema["properties"]["facts"]["items"] == {"$ref": "#/$defs/NewFact"}
+    assert delegate.schema["properties"]["facts"]["items"] == {"anyOf": [
+        {"$ref": "#/$defs/NewFact"}, {"type": "null"}]}
     assert "anyOf" in schema["properties"]["facts"]["items"]
 
 
@@ -215,3 +216,41 @@ def test_episode_keeps_every_linked_grounded_fact(monkeypatch):
     assert "財布" in episode.five_w.what.object
     assert result.links == batch.links
     anchor_validator(payload)(result)
+
+
+def test_nonfact_markers_are_removed_before_episode_link_numbering(monkeypatch):
+    from app.memory.formation.episodic_extractor import ThreadEpisodeExtractor, generation_schema
+    from app.memory.episodic.extraction_contracts import ExtractionBatch
+    from evals.episodic_quality.compact import CompactExtractor, FactPlan, EpisodePlan
+    payload, plan = fixture()
+    seen = {}
+    def fake_infer(self, messages, output, should_stop, validate=None):
+        if output is FactPlan:
+            value = FactPlan.model_validate({"has_unprocessed_input": False,
+                                            "facts": [None, plan["facts"][0], None]})
+        elif output is EpisodePlan:
+            seen["episode_input"] = json.loads(messages[1]["content"])
+            value = EpisodePlan.model_validate({"has_unprocessed_input": False,
+                                               "episodes": plan["episodes"]})
+        else:
+            raise AssertionError(output)
+        if validate is not None:
+            validate(value)
+        return value
+    monkeypatch.setattr(ThreadEpisodeExtractor, "_infer", fake_infer)
+    extractor = CompactExtractor(client=object(), settings=None)
+    result = extractor._infer(
+        ThreadEpisodeExtractor._messages("抽出", payload, generation_schema(ExtractionBatch)),
+        ExtractionBatch, lambda: False, anchor_validator(payload))
+    assert [f["index"] for f in seen["episode_input"]["facts"]] == [0]
+    assert len([r for r in result.records if r.kind.value == "FACT"]) == 1
+    assert result.links[0].fact == "f0"
+    anchor_validator(payload)(result)
+
+
+def test_empty_predicate_is_not_silently_treated_as_nonfact():
+    from evals.episodic_quality.compact import FactPlan
+    _, plan = fixture()
+    invalid = plan["facts"][0] | {"predicate": ""}
+    with pytest.raises(ValidationError):
+        FactPlan.model_validate({"has_unprocessed_input": False, "facts": [None, invalid]})

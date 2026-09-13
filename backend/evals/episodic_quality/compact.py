@@ -209,7 +209,12 @@ JSONのみ。説明・Markdown囲みは付けない。
 
 class FactPlan(Contract):
     has_unprocessed_input: bool
-    facts: Annotated[tuple[Fact, ...], Field(max_length=32)]
+    facts: Annotated[tuple[Fact | None, ...], Field(max_length=32)]
+
+    @property
+    def selected_facts(self) -> tuple[Fact, ...]:
+        # 明示された「独立したFactなし」だけを外す。不正なFactは通常どおり拒否する。
+        return tuple(fact for fact in self.facts if fact is not None)
 
 class EpisodePlan(Contract):
     has_unprocessed_input: bool
@@ -239,13 +244,18 @@ known_factsは文脈として読めるが、許可番号にない記録を更新
 対象が曖昧だという但し書きは、その出来事の特定状況の説明であり、別の出来事ではない。
 例:「乗車時の切符は青色。ただしどの回の乗車か不明」は、一件の乗車の補足。
 乗車の情報と「どの回か不明」を二つのNEW Factへ分割しない。
+独立したFactがない部分はfacts配列のnullで明示できる。空のpredicateのFactを作らない。
+挨拶・導入・対象特定の但し書き・締めくくりにはnullを使うか、その要素を省略する。
+例:一件の出来事とその対象が曖昧だという但し書きなら、出来事のFact一件とnull一つを返せる。
+nullは「その部分を独立したFactとして採用しない」という判定であり、未処理入力ではない。
+一文ごとにFactを増やさず、出来事は従来どおり一件にまとめる。
 別回の出来事はNEW。仮定・創作・予定を過去の実体験と同一視しない。
 anchor.fragmentは対象内容を含むfragmentのindex。textはその一件を裏付ける短い原文の引用。
 startは原文のUnicode位置、不明ならnull。独立した複数Factには別の引用位置を選ぶ。
 出力上限のため処理できない入力が残ればhas_unprocessed_input=true、全入力を扱えたらfalse。無候補はfacts=[]。JSONだけ返す。
 形式例: fragments 0「こんばんは。」1「私は傘を買った。」2「以上だよ。」、known_facts=[]なら
-{"has_unprocessed_input":false,"facts":[{"operation":"NEW","target":null,"predicate":"買った",
-"object":"傘","anchor":{"fragment":1,"text":"私は傘を買った。","start":null},"changes":[]}]}
+{"has_unprocessed_input":false,"facts":[null,{"operation":"NEW","target":null,"predicate":"買った",
+"object":"傘","anchor":{"fragment":1,"text":"私は傘を買った。","start":null},"changes":[]},null]}
 挨拶と締めくくりのFactは追加しない。例の内容を回答へコピーせず入力会話を読んで抽出する。
 部分更新の形式例（known_facts[0]の出来事の場所だけを駅と補足）:
 {"has_unprocessed_input":false,"facts":[{"operation":"UPDATE","target":0,"changes":["where"],
@@ -349,7 +359,8 @@ class ScopedClient:
                     if name in definitions:
                         definitions[name]["properties"]["target"]["enum"] = indices
             elif "facts" in schema.get("properties", {}):
-                schema["properties"]["facts"]["items"] = {"$ref": "#/$defs/NewFact"}
+                schema["properties"]["facts"]["items"] = {"anyOf": [
+                    {"$ref": "#/$defs/NewFact"}, {"type": "null"}]}
         if "known_episodes" in payload:
             indices = list(range(len(payload["known_episodes"])))
             if indices and "ContinuedEpisode" in definitions:
@@ -596,10 +607,11 @@ class CompactExtractor(ThreadEpisodeExtractor):
                 validate(probe)
         eligible_indices = [index for index, _ in eligible]
         def check_facts(facts):
-            if any(f.target is not None and f.target not in eligible_indices for f in facts.facts):
+            selected = facts.selected_facts
+            if any(f.target is not None and f.target not in eligible_indices for f in selected):
                 raise InvalidExtraction("target identity is not confirmed")
             if not facts.has_unprocessed_input and validate:
-                validate(expand(Plan(complete=True, facts=facts.facts, episodes=(), merges=()), payload))
+                validate(expand(Plan(complete=True, facts=selected, episodes=(), merges=()), payload))
         facts = super()._infer(
             self._messages(FACT_PROMPT, {"fragments": compact["fragments"],
                 "known_facts": compact["known_facts"],
@@ -607,6 +619,8 @@ class CompactExtractor(ThreadEpisodeExtractor):
             FactPlan, should_stop, check_facts)
         if facts.has_unprocessed_input:
             return ExtractionBatch(complete=False, records=())
+        # Episodeへ提示する前に番号を振り直す。nullの位置を参照先番号へ混ぜない。
+        facts = facts.model_copy(update={"facts": facts.selected_facts})
         episodes = super()._infer(
             self._messages(EPISODE_PROMPT, {"character_id": payload["character_id"],
                 "fragments": compact["fragments"], "known_episodes": compact["known_episodes"],
