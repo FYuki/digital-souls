@@ -15,7 +15,7 @@ def fixture():
         "complete": True,
         "facts": [{"operation": "NEW", "target": None, "predicate": "拾った", "object": "鍵",
                    "anchor": {"fragment": 0, "text": "私は鍵を拾った。", "start": None}, "changes": []}],
-        "episodes": [{"target": None, "topic": "鍵を拾った話",
+        "episodes": [{"continues_existing_experience": False, "target": None, "topic": "鍵を拾った話",
                       "anchor": {"fragment": 0, "text": "私は鍵を拾った。", "start": None}, "facts": [0]}],
         "merges": [],
     }
@@ -58,7 +58,7 @@ def test_targets_use_kind_specific_positions_without_inventing_ids():
         "complete": True,
         "facts": [{"operation": "REFERENCE", "target": 0, "predicate": None,
                    "object": None, "anchor": q, "changes": []}],
-        "episodes": [{"target": 0, "topic": "体験の続き", "anchor": q, "facts": [0]}],
+        "episodes": [{"continues_existing_experience": True, "target": 0, "topic": "体験の続き", "anchor": q, "facts": [0]}],
         "merges": [],
     })
     batch = expand(plan, payload)
@@ -83,7 +83,7 @@ def test_reference_and_single_update_preserve_sources_and_links():
             {"operation": "UPDATE", "target": 0, "predicate": "食べた", "object": "そば",
              "anchor": quotes[1], "changes": ["what"]},
         ],
-        "episodes": [{"target": None, "topic": "訂正", "anchor": quotes[0], "facts": [0,1]}],
+        "episodes": [{"continues_existing_experience": False, "target": None, "topic": "訂正", "anchor": quotes[0], "facts": [0,1]}],
         "merges": [],
     })
     batch = expand(plan, payload)
@@ -149,3 +149,17 @@ def test_partial_update_keeps_unchanged_what_from_selected_record():
     record = expand(plan, payload).records[0]
     assert record.changes == ("where",)
     assert record.five_w.what.model_dump(mode="json") == payload["known_records"][0]["five_w"]["what"]
+
+
+def test_new_experience_cannot_select_existing_episode():
+    payload, plan = fixture()
+    plan["episodes"][0]["target"] = 0
+    with pytest.raises(ValidationError):
+        Plan.model_validate(plan)
+
+
+def test_continued_experience_requires_existing_episode():
+    payload, plan = fixture()
+    plan["episodes"][0]["continues_existing_experience"] = True
+    with pytest.raises(ValidationError):
+        Plan.model_validate(plan)
