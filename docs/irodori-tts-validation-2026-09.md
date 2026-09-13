@@ -87,10 +87,34 @@ VOICEVOXは既存のTTFA p95 2000ms目標を満たす。Irodoriは未達で、p9
 
 ## compile追加実験
 
-同じモデル・声・40 stepsのままIRODORI_COMPILE_MODEL=true、IRODORI_COMPILE_DYNAMIC=true、compile thread 1、専用cacheで試した。初回warmupがtts_preparation_failedとなり、実合成・性能評価には到達していない。準備上限はこの実験だけ900秒とした。通常のcompile無効設定へ復帰済み。詳細診断は共有サービスの最長15分停止を伴うため自動承認が拒否し、ユーザー確認待ち。高速化成功・正式採用として扱わない。
+同じモデル・声・40 stepsのままIRODORI_COMPILE_MODEL=true、IRODORI_COMPILE_DYNAMIC=true、compile thread 1、専用cacheで試した。初回warmupがtts_preparation_failedとなり、実合成・性能評価には到達していない。準備上限はこの実験だけ900秒とした。通常のcompile無効設定へ復帰済み。当初は共有サービスの最長15分停止について自動承認が拒否したが、2026-09-14 JSTにユーザーが高速化診断を許可し、以下の追加診断を実施した。高速化成功・正式採用として扱わない。
 
 記録: [compile初回準備失敗](validation/irodori-329/compile-dynamic-startup-failure.json)。
 
+## コンパイル失敗の詳細診断（2026-09-14 JST）
+
+同じimage・モデルrevision・参照声・40 steps・CUDA/BF16を使い、共有サービスを一時停止して上流の通常合成関数へ固定文を渡した。会話データは使用せず、通常workerが抑制する詳細例外を診断専用ログに記録した。PyTorch 2.10.0+cu128、Triton 3.6.0、SymPy 1.14.0。
+
+初回診断ではwarmup開始から123.241秒でInductorErrorとなった。失敗経路はforward_with_encoded_conditions → CUDAコード生成 → extract_normalized_read_writes → SymPy Expr.is_constant → torch.utils._sympy.functions.Mod.eval。定数判定が負数を代入し、非負値を前提とするMod.evalのassertionに到達した。同じ経路の報告が[PyTorch #170550](https://github.com/pytorch/pytorch/issues/170550)にある。OOMやコンパイラ実行ファイル不足を原因とする例外ではない。
+
+この診断のサービス停止から通常設定の復帰まで147.224秒。復帰後、dogfood側から固定文を要求し、HTTP 200、非無音の48kHz mono WAV（4.88秒、要求から受取0.937秒）を確認した。WAV SHA256はdd50e907a48057c12cbf1d9efbbed6f0c8ec7b5edb2e09139ab581b9628c1e8aで、以前の通常合成と一致した。
+
+同じ診断内の追試では、PyTorchに存在する環境変数TORCHINDUCTOR_COALESCE_TILING_ANALYSIS=0だけを追加し、compile自体とdynamic指定は維持した。ライブラリの更新やソースへのパッチは行っていない。この設定は失敗したメモリアクセス解析を無効化するためのもので、通常サービスへの採用設定ではない。
+
+| 固定文の条件 | 上流通常API関数の所要時間 | 結果 |
+|---|---:|---|
+| モデル読込とcompileを含むwarmup | 266.875秒 | 非無音WAV、4.40秒 |
+| 初めての別文 | 112.884秒 | 非無音WAV、4.84秒 |
+| 上と同じ文の繰り返し | 0.539秒 | 同じWAV SHA256、4.84秒 |
+
+別文は「おかえりなさい。今日は、どんな一日でしたか。」。2回のWAV SHA256は980c6ba103b5e4cb3e5d547cfc08fca7c8e52ef665940426de153e43e6e3ce1cで一致した。通常設定の4.88秒WAVとはhash・長さが異なるため、同じ音声品質が保証されたとは扱わない。
+
+直接関数呼び出しによる診断であり、共有workerの30秒期限・STT/LLM/LiveKit/ブラウザを通る正式TTFAではない。初めての別文112.884秒は通常workerの30秒期限を超える。同じ文の単発0.539秒だけを根拠に採用せず、compileは無効のままとする。異なる入力での遅延は再コンパイル等の可能性があるが、guard/recompileログは今回取得しておらず、具体的な再コンパイル条件は未確定。今後はその条件と入力長への依存を確認し、固定文だけの事前準備を任意の会話への保証にしない。
+
+追試後も通常設定へ復帰し、dogfoodから4.88秒のWAVを0.932秒で実合成した。hashは追試前の通常設定と一致。2回の停止時間は147.224秒＋404.238秒＝551.462秒（約9分11秒）で、合計15分以内。診断コンテナを終了し、元のimage・設定へ戻した。
+
+[固定条件の詳細診断と復帰記録](validation/irodori-329/compile-approved-diagnostic.json)に、2回の結果・生ログと診断スクリプトのSHA256を記録した。生ログは診断所有ディレクトリに保持し、会話本文や設定ファイル全体をリポジトリへ追加していない。
+
 ## 未完了
 
-性能目標未達、compile準備失敗の原因確認、区間間の試聴とユーザーのモデル最終判断を残す。小規模の実接続診断を既存の100試行品質受入の代用にはしない。閾値の自動緩和、mainマージ、#329/#330のクローズは行っていない。
+性能目標未達、compile回避条件での未知入力の準備遅延と実会話性能・品質確認、区間間の試聴とユーザーのモデル最終判断を残す。小規模の実接続診断を既存の100試行品質受入の代用にはしない。閾値の自動緩和、mainマージ、#329/#330のクローズは行っていない。
