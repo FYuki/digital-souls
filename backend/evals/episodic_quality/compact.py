@@ -13,6 +13,7 @@ from app.memory.episodic.extraction_contracts import (
 )
 from app.memory.episodic.quotes import InvalidExtraction
 from app.memory.episodic.matching import same_five_w
+from evals.episodic_quality.ground_schema import constrained_ground_schema
 from app.memory.formation.catalog_scan import CatalogMatches, CatalogMatch
 from app.memory.formation.episodic_extractor import ThreadEpisodeExtractor, generation_schema
 
@@ -281,7 +282,8 @@ class ScopedClient:
 
     def chat(self, messages, *, json_schema, **kwargs):
         payload = json.loads(messages[1]["content"])
-        schema = deepcopy(json_schema)
+        schema = (constrained_ground_schema(json_schema, payload)
+                  if json_schema.get("title") == "GroundedContent" else deepcopy(json_schema))
         definitions = schema.get("$defs", {})
         for name in ("Quote",):
             if name in definitions and payload.get("quote_options"):
@@ -403,7 +405,13 @@ class CompactExtractor(ThreadEpisodeExtractor):
                 if key in {"predicate", "object"}
             }}
             payload = payload | {"candidate": candidate}
+            original = system
             system = GROUND_PROMPT
+            if candidate.get("kind") == "FACT":
+                # 人物の引用・先行詞と日時の具体的説明は、短縮せず本番v12の指示を保持する。
+                marker = "Factは話題の人物の行為・出来事に関する申告です。"
+                if marker in original:
+                    system += "\n" + original[original.index(marker):]
         if schema is None:
             return ThreadEpisodeExtractor._messages(system, payload)
         return ThreadEpisodeExtractor._messages(system, payload, schema)
