@@ -102,17 +102,51 @@
     "sha256": "49e1767600a2bd16bf8527902457f79d507c3dde178c2247efe1f74ce5cba5d3"
   },
   "human_listening": {
-    "status": "pending",
+    "status": "issues_reported",
+    "reported_on": "2026-09-13",
+    "issue": "分割して連結した音声は境界に間がなく、不自然。",
+    "full_audio_status": "個別の受入判断は未確認",
     "checks": [
-      "全文と区間合成の声の同一性",
-      "分割境界の自然さ",
-      "日本語の読み"
-    ]
+      "声の同一性",
+      "日本語の読み",
+      "句点境界の間"
+    ],
+    "next_check": "元の区間音声に0.2秒・0.3秒の無音を加えた試聴素材を比較。",
+    "scope": "実会話への適用位置と、元音声が持つ無音を考慮する処理は#329で確認する。"
   },
   "not_verified": [
     "共有推論サービスへの配備と再起動",
     "CCV接続",
     "実会話の音質と発話開始までの遅延",
     "モデル最終採用"
-  ]
+  ],
+  "gap_previews": {
+    "created_at": "2026-09-13T20:16:23.491101+09:00",
+    "variants": [
+      {
+        "file": "segmented-gap-200ms.wav",
+        "source_files": [
+          "segment-01.wav",
+          "segment-02.wav"
+        ],
+        "inserted_gap_ms": 200,
+        "inserted_silence_frames": 9600,
+        "method": "既存の区間PCMを変更せず、区間境界に指定長のゼロPCMを挿入した試聴素材。",
+        "sha256": "900eabb26d6b3a1be562b7957cdf822093dc67de7abd335e67523c9077beab90",
+        "human_listening_status": "pending"
+      },
+      {
+        "file": "segmented-gap-300ms.wav",
+        "source_files": [
+          "segment-01.wav",
+          "segment-02.wav"
+        ],
+        "inserted_gap_ms": 300,
+        "inserted_silence_frames": 14400,
+        "method": "既存の区間PCMを変更せず、区間境界に指定長のゼロPCMを挿入した試聴素材。",
+        "sha256": "b9637dd330fdbbd63ce272fafe2f62e8e0d375bce95b8ff6d6193f7e5f950574",
+        "human_listening_status": "pending"
+      }
+    ]
+  }
 }
