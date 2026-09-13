@@ -27,9 +27,19 @@ assistant自身の体験、名前付き第三者、第三者への指示語、�
 
 リポジトリルートの `npm ci` で導入したpromptfooを使う。Pythonはbackend依存を導入したvenvをPATHへ通す。
 ローカルOllamaのgemma4:e4bを事前に導入しておき、開発環境で実行する。
+共通Inference設定に必要な未指定Targetだけローカル値を補う。実行前に設定とモデルdigestを検証し、
+準備失敗を100件のモデル精度に混ぜない。評価中の推論失敗は不正解として数える。
 
 ```bash
-PATH="$PWD/backend/.venv/bin:$PATH" INFERENCE_TARGET_MEMORY_EXTRACTION=ollama/gemma4:e4b INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS=32768 INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS=4096 INFERENCE_TARGET_MEMORY_EXTRACTION_TIMEOUT_SECONDS=180 INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON='{"temperature":0,"think":false}' MEMORY_FORMATION_LLM_TIMEOUT_SECONDS=180 MEMORY_FORMATION_TOTAL_TIMEOUT_SECONDS=400 npm run eval:episodic-actor
+PATH="$PWD/backend/.venv/bin:$PATH" \
+INFERENCE_TARGET_MEMORY_EXTRACTION=ollama/gemma4:e4b \
+INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS=32768 \
+INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS=4096 \
+INFERENCE_TARGET_MEMORY_EXTRACTION_TIMEOUT_SECONDS=180 \
+INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON='{"temperature":0,"think":false}' \
+MEMORY_FORMATION_LLM_TIMEOUT_SECONDS=180 \
+MEMORY_FORMATION_TOTAL_TIMEOUT_SECONDS=400 \
+npm run eval:episodic-actor
 ```
 
 既存devとのモデル競合を避けて測定する。アプリ・dogfoodの停止やデータ更新はこのコマンドでは行わない。

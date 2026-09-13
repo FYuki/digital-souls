@@ -37,11 +37,32 @@ def main():
         "EPISODIC_ACTOR_EVAL_PROGRESS": str(output / "progress.jsonl"),
         "PYTHONPATH": str(ROOT / "backend"),
     })
+    # 共通Inference設定は未使用Targetも必須。評価で未指定の分だけローカル値を補う。
+    for name, output_tokens in (("CHAT", 1024), ("PRIVACY", 512),
+                                ("MEMORY_EXTRACTION", 4096), ("MEMORY_CONSOLIDATION", 512)):
+        environment.setdefault(f"INFERENCE_TARGET_{name}", "ollama/gemma4:e4b")
+        environment.setdefault(f"INFERENCE_TARGET_{name}_MAX_INPUT_TOKENS", str(36864 - output_tokens))
+        environment.setdefault(f"INFERENCE_TARGET_{name}_MAX_OUTPUT_TOKENS", str(output_tokens))
+    environment.setdefault("INFERENCE_TARGET_EMBEDDING", "ollama/nomic-embed-text:latest")
+    environment.setdefault("INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS", "8192")
+    # 設定・モデル準備の失敗を100件のモデル精度へ混ぜない。
+    sys.path.insert(0, str(ROOT / "backend"))
+    from app.inference import InferenceTarget
+    from app.inference.runtime import create_inference_runtime
+    inference = create_inference_runtime(environment)
+    try:
+        reference = inference.settings.target(InferenceTarget.MEMORY_EXTRACTION).reference
+        if reference.provider_id != "ollama":
+            raise ValueError("actor evaluation requires the local Ollama target")
+        digest = inference.ollama_adapter.resolve_model_digest(reference.model_id, timeout_seconds=30)
+    finally:
+        inference.close()
     manifest = {
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "scope": "production Fact grounding actor accuracy; no extraction selection or privacy persistence",
         "cases_sha256": hashlib.sha256((SUITE / "cases.jsonl").read_bytes()).hexdigest(),
         "extractor_sha256": hashlib.sha256((ROOT / "backend/app/memory/formation/episodic_extractor.py").read_bytes()).hexdigest(),
+        "model_id": reference.model_id, "model_digest": digest,
         "cache": False, "max_concurrency": 1, "threshold": .9, "case_count": 100,
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
