@@ -48,10 +48,19 @@ docker build -f irodori_service/Dockerfile -t digital-souls/irodori:dev .
 同じserver/code revisionを検証済みのローカルimageを再利用する場合のみ、
 `--build-arg IRODORI_UPSTREAM_IMAGE=<検証済みimage>` を指定できる。
 固定model/codec revisionのcacheは既存のものをコピーして再利用できる。元cacheは削除しない。
+containerはUID/GID `10001:10001`で動作する。所有者が専用cache directoryをこのUID/GIDの
+所有にし、コピー済みのcacheも書込み可能な所有権へ揃える。元cacheや会話data rootは対象にしない。
+参照音声は全利用者が読めるdirectory・read-onlyファイルとして配置し、書込み権限を付けない。
+
+`DOGFOOD_IRODORI_IMAGE`は必須で、`repository@sha256:<64桁>`を使う。
+ローカル検証でloadしたものは内容固定の`sha256:<64桁>` image IDも許可する。
+`:dev`等の可変tagは起動前検証で拒否する。`env.example`は誤配備を防ぐため空欄で、
+コメントの形式例は対象commitに置き換える。
 
 dogfood所有者はComposeを `/opt/digital-souls-irodori/compose.yaml`、
 envを `/etc/digital-souls/irodori.env` へ配置する。
 既存envは上書きせず、音声・cache directoryはリポジトリと会話data rootの外に置く。
+[起動前検証](validate-deployment.py)も `/opt/digital-souls-irodori/` へ配置する。
 [systemd unit](digital-souls-irodori.service)を `/etc/systemd/system/` へ配置し、
 `systemctl daemon-reload` 後に `systemctl enable --now digital-souls-irodori.service` を実行する。
 これはdogfood側だけの導入操作であり、devのEnvironment CLIやテストfixtureから実行しない。
@@ -62,6 +71,8 @@ GPU空き不足などで起動できない場合は未配備・未準備とし�
 所有者が設定したenvファイルを指定して実行する。
 
 ```bash
+python3 infra/irodori/validate-deployment.py \
+  --env-file /etc/digital-souls/irodori.env --compose-file infra/irodori/compose.yaml
 docker compose --env-file /etc/digital-souls/irodori.env \
   -f infra/irodori/compose.yaml up -d --wait --wait-timeout 600
 curl --fail http://127.0.0.1:50024/health/ready
@@ -83,6 +94,8 @@ dev/testのcleanupへ登録しない。volume、元WAV、既存モデルcacheを
 区間合成では `irodori.chunking_enabled=false` を指定し、
 `X-DS-Environment: dev` / `test` / `dogfood` をBackendの実行環境から設定する。
 このheaderは公開クライアント用の認証方式ではなく、loopback上の信頼するBackend間の区分である。
+同一ホストの悪意ある利用者間を隔離する境界は提供せず、ブラウザの指定headerを転送しない。
+LAN公開や非信頼clientの受付を行う場合は、この配備をそのまま流用しない。
 
 成功は48 kHz・mono・PCM16 WAV。
 不正設定は422、参照音声欠落は404、既存音声の変更検出は409、
@@ -110,6 +123,7 @@ dev/testのcleanupへ登録しない。volume、元WAV、既存モデルcacheを
 Backend設定は `IRODORI_BASE_URL=http://127.0.0.1:50024`、
 `IRODORI_REQUEST_TIMEOUT_SECONDS=45`、
 `IRODORI_READINESS_TIMEOUT_SECONDS=5`。
+dogfoodの非loopback接続はHTTPSを要求し、HTTPはloopbackだけに制限する。redirectは追跡しない。
 50023は既存のWhisper PCM計測Profileで使うため、共有TTSには50024を割り当てる。
 `DS_ENVIRONMENT_ID`はBackendの実環境IDを要求headerへ送る。利用者入力から優先度を選ばせない。
 `integration-irodori` Profileは外部Irodoriを検査するが、起動・停止・GPUモデル管理は行わない。
@@ -126,6 +140,9 @@ VOICEVOXへ戻す場合は従来の `{"engine":"voicevox","speaker_id":14}` を�
 出荷済み光織CCVの既定値はVOICEVOXのままとし、Irodoriの本採用判断と区別する。
 
 ## 検証状態
+
+参照音声の検証・一覧取得は専用executorで同時2件（`DS_IRODORI_MAX_VOICE_CHECKS`）に制限し、
+超過は429とする。HTTP取消後も実ファイル検証が終わるまで枠を保持し、推論・再準備を妨げない。
 
 サービスの単体テストでは、待機dogfood優先、実行中要求の非preempt、待機上限・timeout、
 取消後の枠保持、worker processの強制停止・再準備、参照IDの上書き拒否を検証する。

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import ipaddress
 import math
 import os
 import wave
@@ -46,6 +47,13 @@ class IrodoriRuntimeConfig:
             or parsed.query or parsed.fragment or parsed.path not in {"", "/"}
         ):
             raise ValueError("IRODORI_BASE_URL must be an HTTP service origin")
+        if self.environment == "dogfood" and parsed.scheme == "http":
+            try:
+                loopback = ipaddress.ip_address(parsed.hostname or "").is_loopback
+            except ValueError:
+                loopback = parsed.hostname == "localhost"
+            if not loopback:
+                raise ValueError("dogfood IRODORI_BASE_URL requires HTTPS or a loopback host")
         if self.environment not in {"dev", "test", "dogfood"}:
             raise ValueError("DS_ENVIRONMENT_ID must be dev, test or dogfood")
         if any(not math.isfinite(value) or value <= 0 for value in (

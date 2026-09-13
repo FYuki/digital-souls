@@ -19,6 +19,7 @@ class ServiceConfig:
     model_cache: Path
     warmup_voice: str = "miori-b3-4221"
     max_pending: int = 8
+    max_voice_checks: int = 2
     queue_timeout: float = 10.0
     inference_timeout: float = 30.0
     startup_timeout: float = 300.0
@@ -26,6 +27,8 @@ class ServiceConfig:
     def __post_init__(self) -> None:
         if type(self.max_pending) is not int or self.max_pending < 1:
             raise ValueError("max_pending must be positive")
+        if type(self.max_voice_checks) is not int or self.max_voice_checks < 1:
+            raise ValueError("max_voice_checks must be positive")
         for value in (self.queue_timeout, self.inference_timeout, self.startup_timeout):
             if not math.isfinite(value) or value <= 0:
                 raise ValueError("timeouts must be finite and positive")
@@ -37,6 +40,7 @@ def load_config() -> ServiceConfig:
         model_cache=Path(os.environ.get("DS_IRODORI_MODEL_CACHE", "/models/huggingface")),
         warmup_voice=os.environ.get("DS_IRODORI_WARMUP_VOICE", "miori-b3-4221"),
         max_pending=int(os.environ.get("DS_IRODORI_MAX_PENDING", "8")),
+        max_voice_checks=int(os.environ.get("DS_IRODORI_MAX_VOICE_CHECKS", "2")),
         queue_timeout=float(os.environ.get("DS_IRODORI_QUEUE_TIMEOUT_SECONDS", "10")),
         inference_timeout=float(os.environ.get("DS_IRODORI_INFERENCE_TIMEOUT_SECONDS", "30")),
         startup_timeout=float(os.environ.get("DS_IRODORI_STARTUP_TIMEOUT_SECONDS", "300")),

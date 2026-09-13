@@ -8,6 +8,7 @@ PartOf=digital-souls-inference.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/digital-souls-irodori
+ExecStartPre=/usr/bin/python3 /opt/digital-souls-irodori/validate-deployment.py --env-file /etc/digital-souls/irodori.env --compose-file compose.yaml
 ExecStart=/usr/bin/docker compose --env-file /etc/digital-souls/irodori.env --file compose.yaml up -d --no-build --wait --wait-timeout 600
 ExecStop=/usr/bin/docker compose --env-file /etc/digital-souls/irodori.env --file compose.yaml stop
 TimeoutStartSec=660
