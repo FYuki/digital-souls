@@ -398,3 +398,24 @@ def test_generation_schema_limits_source_ids_to_visible_history(harness):
         if "SourceQuote" in schema.get("$defs", {}):
             assert schema["$defs"]["SourceQuote"]["properties"]["source_id"]["enum"] == [str(turn.turn_id)]
     assert "enum" not in EXTRACTION_SCHEMA["$defs"]["SourceQuote"]["properties"]["source_id"]
+
+
+def test_schema_retry_explains_model_validator_constraint(harness):
+    class SemanticRepairClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.messages = []
+
+        def chat(self, messages, **kwargs):
+            self.messages.append(messages)
+            if len(self.messages) == 1:
+                valid = json.loads(self.valid_response(json.loads(messages[1]["content"]), 1))
+                valid["records"][1]["key"] = valid["records"][0]["key"]
+                return json.dumps(valid)
+            return super().chat(messages, **kwargs)
+
+    harness.turn("うどんを食べた")
+    client = SemanticRepairClient()
+    worker(harness, client).process_next()
+    assert "duplicate local record key" in client.messages[1][-1]["content"]
+    assert len(harness.records()) == 2
