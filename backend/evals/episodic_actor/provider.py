@@ -82,7 +82,13 @@ def call_api(prompt, options, context):
             router=inference.router, caller=InferenceCaller.MEMORY_EXTRACTION,
             target=InferenceTarget.MEMORY_EXTRACTION, settings=inference.settings,
         )
-        extractor = ThreadEpisodeExtractor(client=client, settings=resolve_memory_formation_settings(os.environ))
+        extractor_class = ThreadEpisodeExtractor
+        if os.environ.get("EPISODIC_EVAL_DESIGN") == "compact":
+            from evals.episodic_quality.compact import CompactExtractor
+            extractor_class = CompactExtractor
+            design_path = Path(__file__).parents[1] / "episodic_quality/compact.py"
+            output["prompt_version"] += "-compact-" + hashlib.sha256(design_path.read_bytes()).hexdigest()[:12]
+        extractor = extractor_class(client=client, settings=resolve_memory_formation_settings(os.environ))
         batch, payload = build_request(prompt)
         result = extractor._ground_content(batch, payload, [], LABELS, lambda: False)
         output["who"] = [person.model_dump(mode="json") for person in result.records[0].five_w.who]

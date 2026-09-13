@@ -18,6 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--categories", nargs="+")
+    parser.add_argument("--design", choices=["production", "compact"], default="production")
     args = parser.parse_args()
     if os.environ.get("PRIVACY_EVAL_STUB") == "1":
         raise RuntimeError("quality evaluation requires real privacy inference")
@@ -33,6 +34,7 @@ def main():
         raise RuntimeError("promptfoo is unavailable; run npm ci at repository root")
     environment = os.environ.copy()
     environment.update({
+        "EPISODIC_EVAL_DESIGN": args.design,
         "PYTHON_DOTENV_DISABLED": "1", "DS_ENVIRONMENT_ID": "test",
         "PROMPTFOO_DISABLE_TELEMETRY": "1", "PROMPTFOO_DISABLE_WAL_MODE": "1",
         "PROMPTFOO_PASS_RATE_THRESHOLD": "0", "PROMPTFOO_PYTHON": sys.executable,
@@ -90,7 +92,8 @@ def main():
         "evaluation_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                               for p in sorted(SUITE.iterdir()) if p.is_file()},
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-        "scope": "production extraction decisions, grounding, catalog and privacy; no DB or retrieval",
+        "design": args.design,
+        "scope": "extraction decisions, grounding, catalog and privacy; no DB or retrieval; compact is experimental",
         "cases_sha256": hashlib.sha256((SUITE / "cases.jsonl").read_bytes()).hexdigest(),
         "extractor_sha256": hashlib.sha256((ROOT / "backend/app/memory/formation/episodic_extractor.py").read_bytes()).hexdigest(),
         "model_id": reference.model_id, "model_digest": digest,

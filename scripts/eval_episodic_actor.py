@@ -17,6 +17,7 @@ SUITE = ROOT / "backend/evals/episodic_actor"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--design", choices=["production", "compact"], default="production")
     args = parser.parse_args()
     if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
         raise RuntimeError("actor evaluation requires a dev/test environment")
@@ -30,6 +31,7 @@ def main():
         raise RuntimeError("promptfoo is unavailable; run npm ci at repository root")
     environment = os.environ.copy()
     environment.update({
+        "EPISODIC_EVAL_DESIGN": args.design,
         "PYTHON_DOTENV_DISABLED": "1", "DS_ENVIRONMENT_ID": "test",
         "PROMPTFOO_DISABLE_TELEMETRY": "1", "PROMPTFOO_DISABLE_WAL_MODE": "1",
         "PROMPTFOO_PASS_RATE_THRESHOLD": "0", "PROMPTFOO_PYTHON": sys.executable,
@@ -59,7 +61,9 @@ def main():
         inference.close()
     manifest = {
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-        "scope": "production Fact grounding actor accuracy; no extraction selection or privacy persistence",
+        "design": args.design,
+        "design_sha256": hashlib.sha256((ROOT / "backend/evals/episodic_quality/compact.py").read_bytes()).hexdigest() if args.design == "compact" else None,
+        "scope": "Fact grounding actor accuracy; compact is experimental; no extraction selection or privacy persistence",
         "cases_sha256": hashlib.sha256((SUITE / "cases.jsonl").read_bytes()).hexdigest(),
         "extractor_sha256": hashlib.sha256((ROOT / "backend/app/memory/formation/episodic_extractor.py").read_bytes()).hexdigest(),
         "model_id": reference.model_id, "model_digest": digest,
