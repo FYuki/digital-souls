@@ -737,3 +737,53 @@ def test_cancelled_session_end_waiter_does_not_cancel_shared_cleanup(
     assert rooms.delete_calls == [room_name]
     assert recording_sessions.delete_calls == [session_id]
     assert recording_sessions.contains(session_id) is False
+
+
+@pytest.mark.parametrize(
+    "kind, code",
+    [
+        ("missing", "tts_config_missing"),
+        ("invalid", "tts_config_invalid"),
+        ("unsupported", "tts_engine_unsupported"),
+        ("not_ready", "tts_not_ready"),
+        ("voice_missing", "tts_voice_missing"),
+    ],
+)
+def test_tts_preparation_failure_returns_code_and_releases_session(
+    client, monkeypatch, kind: str, code: str,
+) -> None:
+    from app.characters.loader import (
+        TtsConfigMissingError,
+        TtsConfigValidationError,
+        UnsupportedTtsEngineError,
+    )
+    from app.tts.irodori_client import IrodoriTtsError
+
+    resources = _install_livekit_resource_ports(client, monkeypatch)
+    failures = {
+        "missing": TtsConfigMissingError("PRIVATE_CONFIG_SENTINEL"),
+        "invalid": TtsConfigValidationError("PRIVATE_CONFIG_SENTINEL"),
+        "unsupported": UnsupportedTtsEngineError("PRIVATE_CONFIG_SENTINEL"),
+        "not_ready": IrodoriTtsError("tts_not_ready"),
+        "voice_missing": IrodoriTtsError("tts_voice_missing"),
+    }
+
+    async def fail_preparation(session_id: str) -> None:
+        raise failures[kind]
+
+    monkeypatch.setattr(resources.runtime_manager, "wait_until_ready", fail_preparation)
+    response = client.post("/voice/livekit/token", json=_bootstrap_request())
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": {"code": code}}
+    assert "PRIVATE_CONFIG_SENTINEL" not in response.text
+    assert resources.token_signer.token_issues == []
+    assert not resources.session_repository.contains("20000000-0000-4000-8000-000000000001")
+
+    # 同じ会話の新規開始を妨げる予約を残さない。
+    async def ready(session_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(resources.runtime_manager, "wait_until_ready", ready)
+    retry = client.post("/voice/livekit/token", json=_bootstrap_request())
+    assert retry.status_code == 200

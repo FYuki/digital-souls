@@ -98,11 +98,15 @@ class UnsupportedCharacterCardError(CharacterCardValidationError):
 
 
 class TtsConfigMissingError(KeyError):
-    pass
+    error_code = "tts_config_missing"
 
 
 class TtsConfigValidationError(ValueError):
-    pass
+    error_code = "tts_config_invalid"
+
+
+class UnsupportedTtsEngineError(TtsConfigValidationError):
+    error_code = "tts_engine_unsupported"
 
 
 @dataclass(frozen=True)
@@ -250,7 +254,7 @@ def load_tts_config(character: str) -> TtsConfig:
         except ValidationError as error:
             raise TtsConfigValidationError("invalid Irodori tts_config") from error
     if tts_config.get(TTS_ENGINE_FIELD) != VOICEVOX_ENGINE:
-        raise TtsConfigValidationError("tts_config.engine must be 'voicevox' or 'irodori'")
+        raise UnsupportedTtsEngineError("tts_config.engine must be 'voicevox' or 'irodori'")
     speaker_id = tts_config.get(TTS_SPEAKER_ID_FIELD)
     if type(speaker_id) is not int:
         raise TtsConfigValidationError(

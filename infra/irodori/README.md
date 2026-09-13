@@ -112,9 +112,13 @@ Backend設定は `IRODORI_BASE_URL=http://127.0.0.1:50024`、
 50023は既存のWhisper PCM計測Profileで使うため、共有TTSには50024を割り当てる。
 `DS_ENVIRONMENT_ID`はBackendの実環境IDを要求headerへ送る。利用者入力から優先度を選ばせない。
 `integration-irodori` Profileは外部Irodoriを検査するが、起動・停止・GPUモデル管理は行わない。
+計測用ProfileはFrontend 18573、Backend 18500、ready gate 18574を使い、既存devと分離する。
 Irodoriを必須としない既存ProfileでもCCVで選んだSessionには準備確認が適用される。
 
 URL・timeout・pathをCCVに入れない。未知engine、不正voice ID、参照音声欠落を失敗として扱う。
+会話開始APIは準備失敗をHTTP 503と原因code（`tts_config_missing`、`tts_config_invalid`、
+`tts_engine_unsupported`、`tts_not_ready`、`tts_voice_missing`）で返す。
+設定本文を応答へ含めず、失敗した予約を解放して再試行を許可する。
 Session作成前にreadyと登録音声を確認し、既存Session／一時再接続で設定を読み直さない。
 VOICEVOXへ戻す場合は従来の `{"engine":"voicevox","speaker_id":14}` を設定して新しいSessionを開始する。
 旧WebSocket baselineではIrodori設定を明示エラーにし、自動fallbackしない。
@@ -130,3 +134,24 @@ Session中／再接続時の設定固定を検証する。これらは実GPU・�
 実GPUではモデル準備時間、区間合成、再起動・取消の影響、共有負荷を測り、
 実Backend/STT/LLM/LiveKit/ブラウザによるTTFA p95 2000ms以下と試聴を別途検証する。
 #329と#330はこの受入およびユーザーのモデル判断を終えて同時に閉じる。
+
+
+## GPU空き待ちの間に用意する計測条件
+
+実計測は共有サービスの準備合成成功後に行う。Image2PSD等の別作業を停止してGPUを奪わない。
+計測用worktreeに、選定metadataから作成したIrodori CCVを独立したfixture commitとして保存する。
+出荷CCV、dogfoodの会話data root、選定WAV原本を変更しない。
+計測runnerはclean commitを要求し、実行ごとのdata rootとイメージtagを分離する。
+
+`scripts/voice_quality/run_pilot.py --profile integration-irodori`で専用Profileを選ぶ。
+`--inference-env`には実LLM/STTと`IRODORI_*`の接続設定を、
+`--livekit-env`には対象LiveKitの設定を明示する。
+最初は`--scheduled-fixture --trials 3 --run-id <独立したID>`で実経路を診断し、
+問題解消後に同じ条件の`--controlled`（準備5回＋独立100試行）を実行する。
+このProfile選択は声やengineを変更しない。Irodori設定のfixture commitとVOICEVOX設定の
+fixture commitを同じProfile・入力・LLM条件で比較し、CCVと実行revisionを記録する。
+PCM観測用／障害bridge用Profileとの同時指定は拒否する。
+
+冷状態のモデル準備時間は通常TTFAから分離する。p50/p95、件数、失敗・欠測、
+GPU共有条件、応答区間の音質・間合いを記録し、実ブラウザ再生開始まで測る。
+GPUなしのテスト成功、image build、cache確認を実会話・音質・遅延の受入として扱わない。
