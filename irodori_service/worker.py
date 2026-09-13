@@ -9,6 +9,8 @@ import os
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future
+from concurrent.futures import TimeoutError as ReceiveTimeoutError
 from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Any
@@ -160,10 +162,22 @@ class ProcessWorker:
             raise
 
     def _receive(self, connection: Connection, timeout: float, code: str) -> object:
+        # pollの期限だけでは、header受信後に本文転送が止まるとrecvが無期限に待つ。
+        # 返信全体の受信を別threadで待ち、期限切れは呼出元で所有processごと終了する。
+        # processとConnectionの終了により、部分frameを待つthreadも解放される。
+        received: Future[object] = Future()
+
+        def receive() -> None:
+            try:
+                received.set_result(connection.recv())
+            except Exception as error:  # noqa: BLE001 - 呼出元へ元の受信失敗を渡す
+                received.set_exception(error)
+
+        threading.Thread(target=receive, name="irodori-worker-reply", daemon=True).start()
         try:
-            if not connection.poll(timeout):
-                raise ServiceError(code, 504)
-            return connection.recv()
+            return received.result(timeout=timeout)
+        except ReceiveTimeoutError as error:
+            raise ServiceError(code, 504) from error
         except (EOFError, OSError) as error:
             raise ServiceError("tts_worker_failed") from error
 

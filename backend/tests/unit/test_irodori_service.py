@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import threading
 import time
 import wave
@@ -144,6 +145,10 @@ def fake_process_worker(connection: Connection, _config: ServiceConfig) -> None:
             request = connection.recv()
             if request["input"] == "停止しない推論":
                 time.sleep(30)
+            if request["input"] == "返信途中で停止":
+                # Connection frameのheaderと本文の先頭だけを送り、残りの転送を停止する。
+                os.write(connection.fileno(), b"\x00\x00\x04\x00part")
+                time.sleep(30)
             connection.send(("ok", wav_bytes()))
     except (EOFError, OSError):
         pass
@@ -250,3 +255,37 @@ def test_idle_worker_death_is_recovered_before_next_request(tmp_path: Path) -> N
         await scheduler.close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Unix socketの部分frameを再現する")
+def test_partial_worker_reply_obeys_inference_deadline_and_allows_restart(tmp_path: Path) -> None:
+    worker = ProcessWorker(config(tmp_path, inference_timeout=0.05), target=fake_process_worker)
+    outcome: list[BaseException | bytes] = []
+
+    def synthesize() -> None:
+        try:
+            outcome.append(worker.synthesize(payload("返信途中で停止")))
+        except BaseException as error:
+            outcome.append(error)
+
+    operation = threading.Thread(target=synthesize, daemon=True)
+    try:
+        worker.start()
+        old_pid = worker._worker.pid
+        operation.start()
+        operation.join(timeout=6)
+        assert not operation.is_alive(), "部分返信を受信した後も推論期限で終了する"
+        assert len(outcome) == 1 and isinstance(outcome[0], ServiceError)
+        assert outcome[0].code == "tts_inference_timeout"
+        assert not worker.ready and worker._worker is None
+        for reply in threading.enumerate():
+            if reply.name == "irodori-worker-reply":
+                reply.join(timeout=1)
+                assert not reply.is_alive()
+        worker.start()
+        assert worker._worker.pid != old_pid
+        assert worker.synthesize(payload()) == wav_bytes()
+    finally:
+        worker.close()
+        if operation.ident is not None:
+            operation.join(timeout=2)
