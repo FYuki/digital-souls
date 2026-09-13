@@ -1,0 +1,62 @@
+{
+  "scope": "real_gpu_worker_deadline_and_recovery",
+  "initial_version": {
+    "serviceVersion": "1.0",
+    "model": "Aratako/Irodori-TTS-v4.1-Small",
+    "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+    "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+    "device": "cuda",
+    "precision": "bf16",
+    "quantized": false,
+    "globalInflight": 1,
+    "maxPending": 8,
+    "maxVoiceChecks": 2,
+    "queueTimeoutSeconds": 10.0,
+    "inferenceTimeoutSeconds": 30.0,
+    "preparationSeconds": 20.01714145799633,
+    "active": 0,
+    "pending": 0
+  },
+  "fault": "SIGSTOP only owned GPU worker after active=1",
+  "normal_inference_timeout_seconds": 30,
+  "deadline_response": {
+    "status": 504,
+    "seconds": 30.670371299958788,
+    "body": {
+      "error": {
+        "code": "tts_inference_timeout"
+      }
+    }
+  },
+  "old_worker_exited": true,
+  "observed_not_ready_after_failure": true,
+  "recovery_after_failure_seconds": 13.0,
+  "next_synthesis": {
+    "status": 200,
+    "seconds": 0.9028947000042535,
+    "frames": 167040,
+    "sha256": "a84ba9d391c3161f5859e57c6d260be357bd82da39f9284c27990530e83d6a3f"
+  },
+  "final_version": {
+    "serviceVersion": "1.0",
+    "model": "Aratako/Irodori-TTS-v4.1-Small",
+    "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+    "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+    "device": "cuda",
+    "precision": "bf16",
+    "quantized": false,
+    "globalInflight": 1,
+    "maxPending": 8,
+    "maxVoiceChecks": 2,
+    "queueTimeoutSeconds": 10.0,
+    "inferenceTimeoutSeconds": 30.0,
+    "preparationSeconds": 13.227895357005764,
+    "active": 0,
+    "pending": 0
+  },
+  "outcome": "success"
+}

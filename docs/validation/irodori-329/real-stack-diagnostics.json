@@ -1,0 +1,78 @@
+{
+  "scope": "irodori_real_stack_diagnostics",
+  "continuous": {
+    "measurement_revision": "9922b9b277cae3d0d7ef088666f1f04e747d90a2",
+    "raw_manifest_sha256": "0ca8e91a2760a76da170b26747176fb1269eec875ce64571a093998d1d120adf",
+    "turns": 3,
+    "success": 3,
+    "same_session": true,
+    "all_track_response_matches": true,
+    "all_transcript_matches": true,
+    "session_end_confirmed": true
+  },
+  "zero_response_lifecycle": {
+    "measurement_revision": "9922b9b277cae3d0d7ef088666f1f04e747d90a2",
+    "raw_manifest_sha256": "96217127144d39fffdff9ed4ad87595d5e849a640958c33d58893e745869f901",
+    "supplied_utterances": 0,
+    "cases": [
+      {
+        "kind": "explicit_end",
+        "outcome": "success",
+        "reconnect_grace_ms": 60000,
+        "before_end": {
+          "completed_cycles": 0,
+          "started_responses": 0,
+          "playback_completions": 0,
+          "fixture_finished": false
+        },
+        "native_end_reason": "explicit",
+        "explicit_delete_requests": 1,
+        "native_completed_responses": 0,
+        "native_end_confirmed": true,
+        "end_observation_elapsed_ms": 94.24868700000025,
+        "final_operation_window_observed": true
+      },
+      {
+        "kind": "browser_disconnect",
+        "outcome": "success",
+        "reconnect_grace_ms": 60000,
+        "before_end": {
+          "completed_cycles": 0,
+          "started_responses": 0,
+          "playback_completions": 0,
+          "fixture_finished": false
+        },
+        "native_end_reason": "reconnect_timeout",
+        "explicit_delete_requests": 0,
+        "native_completed_responses": 0,
+        "native_end_confirmed": true,
+        "end_observation_elapsed_ms": 80848.297259,
+        "final_operation_window_observed": false
+      }
+    ]
+  },
+  "network_fault": {
+    "measurement_revision": "dbc620e3c1eb4b0b44067321cbee96b2cb3ced23",
+    "raw_manifest_sha256": "a26ea9880a978721aec67adbd65cedf098ad00ed3d3bb53bd1e0a2197e2d151c",
+    "outcome": "success",
+    "fault_duration_ms": 2000,
+    "network_fault_affected_control": true,
+    "recovery": {
+      "control_recovery_upper_ms": 360.2035139799118,
+      "audio_recovery_upper_ms": 2553.647013979913,
+      "recovery_upper_ms": 2553.647013979913,
+      "duplicate_packet_output_intervals": 0,
+      "packet_evidence_missing": 0,
+      "output_path_failures": 0,
+      "output_evidence_complete": true,
+      "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+      "audio_missing_reason": null
+    },
+    "fault_recovery_passed": true,
+    "post_fault_followup": "success",
+    "fault_clock_process_closed": true,
+    "session_end_confirmed": true,
+    "independent_fault_sessions": 1,
+    "reconnect_success_rate_not_established": true
+  }
+}
