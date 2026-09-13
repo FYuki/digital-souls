@@ -18,9 +18,10 @@ privacyには同一モデル・promptでの既存3回受入記録があるが、
 | evidence | 10 | 本文に存在する根拠引用、出典ID・版・role・位置・primary範囲 |
 | catalog | 10 | 同一threadの既存記録の対象・操作・確実/曖昧判定 |
 | same_event | 10 | 同じ出来事の再言及と、別回・仮定・創作・予定の照合見送り |
+| merge_proposal | 10 | 同一と明示された重複Factの統合提案と、同日同条件の別回の見送り |
 | privacy | 60 | 既存日英合成corpusの保存前意味分類 |
 
-各分類の正解率90%以上を要求する。100件側は分類ごとに9/10以上、privacyは54/60以上。
+各分類の正解率90%以上を要求する。110件側は分類ごとに9/10以上、privacyは54/60以上。
 全体平均で低い分類を相殺しない。privacyには既存の棄権率10%未満・偽陰性率5%未満・
 偽陽性率20%未満も追加で要求する。ABSTAINや推論エラーは正解にせず分母に残す。
 case欠落・重複・未知IDやモデル/provenance混在は実行不成立。キャッシュを使った結果は不正解。
@@ -35,7 +36,8 @@ case欠落・重複・未知IDやモデル/provenance混在は実行不成立。
   操作選定後の5W再推論も本番と同様に呼び、確定した抽出結果を採点する。
 - ground: 対象行為だけを固定し、本番_ground_contentで5Wと文脈を読み直す。
 - catalog: 本番CATALOG_SCAN_PROMPTとCatalogMatchesを呼ぶ。同一性の意味判断もここで測る。
-  大量catalogの全ページ走査やmerges提案の最終採用・DB統合実行はこの正解率に含めない。
+  大量catalogの全ページ走査とDB統合実行はこの正解率に含めない。
+  mergesの提案そのものはmerge_proposal分類で抽出出力から別途採点する。
 - privacy: 既存production providerとADMISSIONのtimeout・再試行をそのまま使う。
   QUERY_GATEや複数出典/生成slotをまとめた保存処理全体はこの再測定の対象外。
 

@@ -87,6 +87,15 @@ def evaluate(output, variables):
             return False
     if "fields" in truth and (len(selected) != 1 or not matches(selected[0], truth["fields"])):
         return False
+    if truth.get("nonempty_fact") and not selected:
+        return False
+    if "merge_targets" in truth:
+        required = set(truth["merge_targets"])
+        by_key = {r["key"]: r for r in selected}
+        pairs = [{(by_key[m["source"]].get("target") or {}).get("id"),
+                  (by_key[m["target"]].get("target") or {}).get("id")} for m in batch["merges"]]
+        if len(pairs) != 1 or pairs[0] != required:
+            return False
     if truth.get("linked"):
         facts = {r["key"] for r in records if r["kind"] == "FACT"}
         if not facts or {link["fact"] for link in batch["links"]} != facts:
@@ -96,9 +105,13 @@ def evaluate(output, variables):
             fact = next(r for r in records if r["key"] == link["fact"])
             topic = fact["five_w"]["what"].get("object") or ""
             # 誤った経験への関連付けを、単にリンクがあるだけで合格にしない。
-            if truth.get("link_topics") and not any(
-                token in json.dumps(episode["five_w"], ensure_ascii=False)
-                and token in topic for token in truth["link_topics"]
+            tokens = truth.get("link_topics") or [
+                token for spec in truth.get("records", [])
+                for token in spec.get("five_w.what.object", {}).get("contains_any", [])
+            ]
+            if tokens and not any(
+                token in (episode["five_w"]["what"].get("object") or "")
+                and token in topic for token in tokens
             ):
                 return False
     for r in selected:

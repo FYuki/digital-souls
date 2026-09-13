@@ -12,7 +12,7 @@ CASES = [json.loads(l) for l in (ROOT / "cases.jsonl").read_text().splitlines()]
 
 
 def test_corpus_and_input_separation():
-    assert len(CASES) == len({c["id"] for c in CASES}) == 160
+    assert len(CASES) == len({c["id"] for c in CASES}) == 170
     from app.memory.episodic.contracts import Record
     for c in CASES:
         data = json.loads(c["vars"]["input_json"])
@@ -155,3 +155,31 @@ def test_catalog_uses_catalog_schema_and_rejects_unoffered_candidate(monkeypatch
         "evidence": [batch.records[0].anchor.model_dump(mode="json")],
     }]}}
     assert not evaluate(result, catalog_case)
+
+
+def test_merge_proposal_must_identify_both_existing_facts():
+    variables = next(c["vars"] for c in CASES if c["id"] == "merge_proposal-01")
+    _, batch, _ = build_input(variables["input_json"])
+    output = {"batch": batch.model_dump(mode="json")}
+    assert not evaluate(output, variables)  # 常にmerges=[]では正例を通さない。
+
+
+def test_link_to_wrong_episode_is_not_accepted():
+    import copy
+    variables = next(c["vars"] for c in CASES if c["id"] == "links-01")
+    _, batch, payload = build_input(variables["input_json"])
+    records, links = [], []
+    for index, topic in enumerate(["本", "雑誌"]):
+        fact = copy.deepcopy(batch.records[0].model_dump(mode="json"))
+        fact["key"] = f"fact_{index}"
+        fact["five_w"]["what"]["object"] = topic
+        quote = fact["anchor"] | {"quote": topic, "start": payload["fragments"][0]["text"].index(topic)}
+        fact["anchor"], fact["sources"] = quote, [quote]
+        episode = copy.deepcopy(fact)
+        episode["key"], episode["kind"] = f"episode_{index}", "EPISODE"
+        records.extend([fact, episode])
+        links.append({"episode": episode["key"], "fact": fact["key"], "sources": [quote]})
+    output = {"batch": {"complete": True, "records": records, "links": links, "merges": []}}
+    assert evaluate(output, variables)
+    links[0]["episode"], links[1]["episode"] = links[1]["episode"], links[0]["episode"]
+    assert not evaluate(output, variables)

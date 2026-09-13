@@ -48,7 +48,7 @@ def main():
         environment.setdefault(f"INFERENCE_TARGET_{name}_MAX_OUTPUT_TOKENS", str(output_tokens))
     environment.setdefault("INFERENCE_TARGET_EMBEDDING", "ollama/nomic-embed-text:latest")
     environment.setdefault("INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS", "8192")
-    # 設定・モデル準備の失敗を160件のモデル精度へ混ぜない。
+    # 設定・モデル準備の失敗を170件のモデル精度へ混ぜない。
     sys.path.insert(0, str(ROOT / "backend"))
     from app.inference import InferenceTarget
     from app.inference.runtime import create_inference_runtime
