@@ -18,7 +18,7 @@ from app.memory.episodic.extraction_contracts import ExtractionBatch, ExtractedR
 from app.memory.episodic.matching import same_five_w
 from app.memory.episodic.privacy import PrivacyReview, PrivacyAssessmentUnavailable
 from app.memory.episodic.quotes import (
-    InvalidExtraction, distinct_sources, fragment_span, owns_anchor, resolve_quote,
+    InvalidExtraction, distinct_sources, fragment_span, resolve_quote, validate_record_anchors,
 )
 from app.memory.episodic.repository import EpisodicRepository, RecordConflict
 from app.memory.episodic.sources import validate_conversation_sources
@@ -145,6 +145,7 @@ class EpisodicRegistrationService:
     ) -> PreparedBatch:
         if not batch.complete:
             raise InvalidExtraction("incomplete extraction cannot be registered")
+        anchors = validate_record_anchors(batch.records, snapshot, chunk)
         character_id = snapshot.lease.character_id
         conversation_id = snapshot.lease.conversation_id
         known = {r.id: r for r in catalog if r.character_id == character_id and r.conversation_id == conversation_id}
@@ -166,16 +167,7 @@ class EpisodicRegistrationService:
             for key in (relation.source, relation.target):
                 related_sources[key] = related_sources.get(key, ()) + evidence
         prepared: list[PreparedRecord] = []
-        anchor_keys: set[tuple[RecordKind, str, UUID | None, UUID, int, str, int]] = set()
-        for proposal in batch.records:
-            anchor = resolve_quote(proposal.anchor, snapshot, chunk)
-            if not owns_anchor(chunk, anchor):
-                raise InvalidExtraction("record anchor is outside its owned range")
-            anchor_key = (proposal.kind, proposal.operation, proposal.target.id if proposal.target else None,
-                          anchor.source_id, anchor.revision, anchor.role, anchor.start)
-            if anchor_key in anchor_keys:
-                raise InvalidExtraction("multiple records share the same kind and evidence anchor")
-            anchor_keys.add(anchor_key)
+        for proposal, anchor in zip(batch.records, anchors, strict=True):
             previous = None
             if proposal.target is not None:
                 previous = known.get(proposal.target.id)

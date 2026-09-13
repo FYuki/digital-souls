@@ -419,3 +419,105 @@ def test_schema_retry_explains_model_validator_constraint(harness):
     worker(harness, client).process_next()
     assert "duplicate local record key" in client.messages[1][-1]["content"]
     assert len(harness.records()) == 2
+
+
+@pytest.mark.parametrize("paged", [False, True])
+@pytest.mark.parametrize("second_start", [None, 1])
+def test_canonical_anchor_collision_is_repaired_before_grounding_or_privacy(harness, caplog, paged, second_start):
+    from app.memory.episodic.contracts import RecordKind
+    from app.memory.episodic.extraction_contracts import ExtractedLink
+
+    class AnchorRepairClient(Client):
+        def __init__(self):
+            super().__init__(fits=lambda messages, _: not paged or
+                             json.loads(messages[1]["content"]).get("phase") is not None)
+            self.attempts = []
+
+        def chat(self, messages, **kwargs):
+            value = json.loads(messages[1]["content"])
+            if value.get("phase") == "ground_content":
+                return super().chat(messages, **kwargs)
+            if value.get("phase") == "catalog_match":
+                return '{"complete":true,"matches":[]}'
+            self.attempts.append(messages)
+            assert harness.reviewer.calls == []
+            assert self.ground_requests == []
+            part = next(p for p in value["fragments"] if p["role"] == "user")
+            q = SourceQuote(source_id=part["source_id"], revision=part["revision"],
+                            role="user", quote=part["text"], start=0)
+            # null/誤った位置でも同じ原文一致へ解決される。生のstart比較では検出できない。
+            q2 = q.model_copy(update={"start": second_start}) if len(self.attempts) == 1 else (
+                q.model_copy(update={"quote": "そばを食べた", "start": None}))
+            records = (episode(q), fact(q), fact(q2, object="そば").model_copy(update={"key": "second"}))
+            return ExtractionBatch(records=records, links=(
+                ExtractedLink(episode="episode", fact="fact", sources=(q,)),
+                ExtractedLink(episode="episode", fact="second", sources=(q2,)),
+            )).model_dump_json()
+
+    harness.turn("うどんを食べた。そばを食べた")
+    client = AnchorRepairClient()
+    assert worker(harness, client).process_next()
+    assert len(client.attempts) == 2
+    assert client.attempts[1][:2] == client.attempts[0]
+    assert "multiple records share the same kind and evidence anchor" in client.attempts[1][-1]["content"]
+    assert "evidence_anchor" in caplog.text and "うどん" not in caplog.text
+    assert not harness.queue.has_pending()
+    assert len(harness.records()) == 3
+    facts = harness.records(RecordKind.FACT)
+    assert {f.five_w.what.object for f in facts} == {"うどん", "そば"}
+    with harness.repository.read() as tx:
+        ep = harness.records(RecordKind.EPISODE)[0]
+        assert len(tx.references("miori", ep.id)) == 2
+        assert {tx.versions("miori", f.id)[-1].sources[0].start for f in facts} == {0, len("うどんを食べた。")}
+
+
+def test_exhausted_anchor_repair_keeps_job_pending_without_partial_writes(harness):
+    def duplicate(value, index):
+        valid = ExtractionBatch.model_validate_json(Client.valid_response(value, index))
+        return valid.model_copy(update={
+            "records": valid.records + (valid.records[-1].model_copy(update={"key": "duplicate"}),),
+        }).model_dump_json()
+
+    harness.turn("うどんを食べた")
+    client = Client(callback=duplicate)
+    with pytest.raises(InvalidExtraction):
+        worker(harness, client).process_next()
+    assert len(client.requests) == SETTINGS.max_attempts
+    assert client.ground_requests == []
+    assert harness.reviewer.calls == []
+    assert harness.records() == ()
+    assert harness.queue.has_pending()
+
+
+@pytest.mark.parametrize("who", [
+    [{"name": "ユーザー", "entity_id": "speaker:user", "role": "ACTOR"}],
+    [{"name": "光織", "entity_id": "character:miori", "role": "ACTOR"}],
+    [{"name": "友人", "entity_id": None, "role": "ACTOR"}],
+    [],
+])
+def test_fact_grounding_binds_participants_without_overwriting_actual_subject(harness, who):
+    from app.memory.episodic.contracts import RecordKind
+
+    harness.turn("昼食の話をした")
+    client = Client()
+    def grounded(value, _):
+        user = next(p for p in value["fragments"] if p["role"] == "user")
+        assistant = next(p for p in value["fragments"] if p["role"] == "assistant")
+        assert user["speaker"] == assistant["addressee"] == {
+            "entity_id": "speaker:user", "name": "ユーザー"}
+        assert assistant["speaker"] == user["addressee"] == {
+            "entity_id": "character:miori", "name": "光織"}
+        if value["candidate"]["kind"] == "FACT":
+            assert "memory_owner" not in value
+        else:
+            assert value["memory_owner"] == assistant["speaker"]
+        return GroundedContent.model_validate({
+            "five_w": value["candidate"]["five_w"] | {"who": who},
+        }).model_dump_json()
+    client.ground_callback = grounded
+    assert worker(harness, client).process_next()
+    actual = harness.records(RecordKind.FACT)[0].five_w.who
+    assert [(p.name, p.role.value) for p in actual] == [(p["name"], p["role"]) for p in who]
+    for person, expected in zip(actual, who, strict=True):
+        if expected["entity_id"] is not None:
+            assert person.entity_id == expected["entity_id"]

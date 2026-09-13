@@ -1,7 +1,7 @@
 """引用を元発言の版とUnicode文字範囲へ結び付ける。"""
 
 from app.memory.episodic.contracts import SourceSpan
-from app.memory.episodic.extraction_contracts import SourceQuote
+from app.memory.episodic.extraction_contracts import ExtractedRecord, SourceQuote
 from app.memory.formation.thread_chunks import ThreadChunk, ThreadFragment
 from app.memory.formation.thread_queue import ThreadSnapshot
 
@@ -61,3 +61,20 @@ def owns_anchor(chunk: ThreadChunk, anchor: SourceSpan) -> bool:
 
 def distinct_sources(sources: tuple[SourceSpan, ...]) -> tuple[SourceSpan, ...]:
     return tuple({source.identity: source for source in sources}.values())
+
+
+def validate_record_anchors(
+    records: tuple[ExtractedRecord, ...], snapshot: ThreadSnapshot, chunk: ThreadChunk,
+) -> tuple[SourceSpan, ...]:
+    """元発言で解決した位置を使い、登録receiptの衝突を推論の修復段階でも検出する。"""
+    anchors = tuple(resolve_quote(record.anchor, snapshot, chunk) for record in records)
+    keys = set()
+    for record, anchor in zip(records, anchors, strict=True):
+        if not owns_anchor(chunk, anchor):
+            raise InvalidExtraction("record anchor is outside its owned range")
+        key = (record.kind, record.operation, record.target.id if record.target else None,
+               anchor.source_id, anchor.revision, anchor.role, anchor.start)
+        if key in keys:
+            raise InvalidExtraction("multiple records share the same kind and evidence anchor")
+        keys.add(key)
+    return anchors
