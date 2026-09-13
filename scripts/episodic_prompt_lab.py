@@ -11,13 +11,14 @@ parser.add_argument("--model",default="gemma4:e4b")
 parser.add_argument("--cases",nargs="+",required=True)
 args=parser.parse_args()
 os.environ["EXPERIMENT_DESIGN"]=args.design
+os.environ["EPISODIC_EVAL_DESIGN"]=args.design
 os.environ["EXPERIMENT_FORMAT"]=args.format
 os.environ["EXPERIMENT_MODEL"]=args.model
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'backend'))
 os.environ.update({"DS_ENVIRONMENT_ID":"test","PYTHON_DOTENV_DISABLED":"1","OLLAMA_BASE_URL":"http://127.0.0.1:11434","MEMORY_FORMATION_LLM_TIMEOUT_SECONDS":"180","MEMORY_FORMATION_TOTAL_TIMEOUT_SECONDS":"400"})
 for name,out in [("CHAT",1024),("PRIVACY",512),("MEMORY_EXTRACTION",4096),("MEMORY_CONSOLIDATION",512)]:
- os.environ.setdefault("INFERENCE_TARGET_"+name,"ollama/"+os.environ.get("EXPERIMENT_MODEL","gemma4:e4b"))
+ os.environ["INFERENCE_TARGET_"+name]="ollama/"+args.model
  os.environ.setdefault("INFERENCE_TARGET_"+name+"_MAX_INPUT_TOKENS",str(36864-out))
  os.environ.setdefault("INFERENCE_TARGET_"+name+"_MAX_OUTPUT_TOKENS",str(out))
  os.environ.setdefault("INFERENCE_TARGET_"+name+"_TIMEOUT_SECONDS","180")
@@ -64,7 +65,8 @@ if not set(wanted)<=offered:
 manifest={"iteration":args.iteration,"commit":subprocess.check_output(["git","rev-parse","HEAD"],cwd=root,text=True).strip(),
 "corpus_sha256":hashlib.sha256((root/"backend/evals/episodic_quality/cases.jsonl").read_bytes()).hexdigest(),
 "design":os.environ.get("EXPERIMENT_DESIGN","production"),"format":os.environ.get("EXPERIMENT_FORMAT","schema"),"cases":[c["id"] for c in cases],"model":os.environ.get("EXPERIMENT_MODEL","gemma4:e4b"),"files":{str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in (root/"backend/app/memory/formation").glob("*.py")},"scope":"diagnostic direct production-provider calls; fixed truth; no cache"}
-for source in [root/"backend/app/memory/formation/episodic_extractor.py",root/"backend/evals/episodic_quality/compact.py"]:
+for source in [root/"backend/app/memory/formation/episodic_extractor.py",root/"backend/evals/episodic_quality/compact.py",root/"backend/evals/episodic_quality/ground_schema.py"]:
+ if not source.exists(): continue
  (dest/source.name).write_bytes(source.read_bytes())
 (dest/"manifest.json").write_text(json.dumps(manifest,indent=2))
 results=[]

@@ -14,9 +14,9 @@ def fixture():
     return payload, {
         "complete": True,
         "facts": [{"operation": "NEW", "target": None, "predicate": "拾った", "object": "鍵",
-                   "anchor": {"fragment": 0, "text": "私は鍵を拾った。", "start": None}, "changes": []}],
+                   "anchor": {"quote_index": 0, "text": "私は鍵を拾った。", "start": None}, "changes": []}],
         "episodes": [{"target": None, "topic": "鍵を拾った話",
-                      "anchor": {"fragment": 0, "text": "私は鍵を拾った。", "start": None}, "facts": [0]}],
+                      "anchor": {"quote_index": 0, "text": "私は鍵を拾った。", "start": None}, "topic_indices": [0]}],
         "merges": [],
     }
 
@@ -27,15 +27,15 @@ def test_index_mapping_keeps_authoritative_source_identity():
     assert str(batch.records[0].anchor.source_id) == payload["fragments"][0]["source_id"]
     assert batch.records[0].anchor.revision == 2
     assert batch.links[0].fact == "f0"
-    assert "source_id" not in compact_payload(payload)["fragments"][0]
+    assert "source_id" not in compact_payload(payload)["quote_options"][0]
 
 @pytest.mark.parametrize("change", ["source", "link", "operation", "quote", "duplicate"])
 def test_invalid_proposals_fail_closed(change):
     payload, plan = fixture()
     if change == "source":
-        plan["facts"][0]["anchor"]["fragment"] = 9
+        plan["facts"][0]["anchor"]["quote_index"] = 9
     elif change == "link":
-        plan["episodes"][0]["facts"] = [9]
+        plan["episodes"][0]["topic_indices"] = [9]
     elif change == "operation":
         plan["facts"][0]["operation"] = "UPDATE"
     elif change == "quote":
@@ -53,12 +53,12 @@ def test_targets_use_kind_specific_positions_without_inventing_ids():
     case = next(c for c in cases if c["id"] == "episode_boundary-01")
     _, _, payload = build_input(case["vars"]["input_json"])
     source = payload["fragments"][0]
-    q = {"fragment": 0, "text": source["text"], "start": None}
+    q = {"quote_index": 0, "text": source["text"], "start": None}
     plan = Plan.model_validate({
         "complete": True,
         "facts": [{"operation": "REFERENCE", "target": 0, "predicate": None,
                    "object": None, "anchor": q, "changes": []}],
-        "episodes": [{"target": 0, "topic": "体験の続き", "anchor": q, "facts": [0]}],
+        "episodes": [{"target": 0, "topic": "体験の続き", "anchor": q, "topic_indices": [0]}],
         "merges": [],
     })
     batch = expand(plan, payload)
@@ -74,7 +74,7 @@ def test_reference_and_single_update_preserve_sources_and_links():
     _, _, payload = build_input(case["vars"]["input_json"])
     from evals.episodic_quality.compact import evidence_units
     units = evidence_units(payload)
-    quotes = [{"fragment": i, "text": unit["text"], "start": None} for i,unit in enumerate(units)]
+    quotes = [{"quote_index": i, "text": unit["text"], "start": None} for i,unit in enumerate(units)]
     plan = Plan.model_validate({
         "complete": True,
         "facts": [
@@ -83,7 +83,7 @@ def test_reference_and_single_update_preserve_sources_and_links():
             {"operation": "UPDATE", "target": 0, "predicate": "食べた", "object": "そば",
              "anchor": quotes[1], "changes": ["what"]},
         ],
-        "episodes": [{"target": None, "topic": "訂正", "anchor": quotes[0], "facts": [0,1]}],
+        "episodes": [{"target": None, "topic": "訂正", "anchor": quotes[0], "topic_indices": [0,1]}],
         "merges": [],
     })
     batch = expand(plan, payload)
@@ -101,12 +101,12 @@ def test_generation_scope_matches_textual_schema_and_offered_targets():
             self.messages, self.schema = messages, json_schema
             return "{}"
     delegate = Client()
-    payload = {"known_facts": [{"index": 0}], "fragments": [{}, {}]}
+    payload = {"known_facts": [{"index": 0}], "quote_options": [{}, {}]}
     schema = generation_schema(FactPlan)
     messages = ({"role": "system", "content": "指示\n出力のJSON Schema:\n{}"},
                 {"role": "user", "content": json.dumps(payload)})
     ScopedClient(delegate).chat(messages, json_schema=schema, timeout_seconds=1, max_output_tokens=10)
     assert delegate.schema["$defs"]["ReferenceFact"]["properties"]["target"]["enum"] == [0]
-    assert delegate.schema["$defs"]["Quote"]["properties"]["fragment"]["enum"] == [0,1]
+    assert delegate.schema["$defs"]["Quote"]["properties"]["quote_index"]["enum"] == [0,1]
     assert json.loads(delegate.messages[0]["content"].split("出力のJSON Schema:\n")[1]) == delegate.schema
     assert "enum" not in schema["$defs"]["ReferenceFact"]["properties"]["target"]

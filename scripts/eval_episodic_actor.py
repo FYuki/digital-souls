@@ -62,7 +62,9 @@ def main():
     manifest = {
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "design": args.design,
-        "design_sha256": hashlib.sha256((ROOT / "backend/evals/episodic_quality/compact.py").read_bytes()).hexdigest() if args.design == "compact" else None,
+        "design_sha256": {name: hashlib.sha256((ROOT / "backend/evals/episodic_quality" / name).read_bytes()).hexdigest()
+                          for name in ("compact.py", "ground_schema.py")
+                          if (ROOT / "backend/evals/episodic_quality" / name).exists()} if args.design == "compact" else None,
         "scope": "Fact grounding actor accuracy; compact is experimental; no extraction selection or privacy persistence",
         "cases_sha256": hashlib.sha256((SUITE / "cases.jsonl").read_bytes()).hexdigest(),
         "extractor_sha256": hashlib.sha256((ROOT / "backend/app/memory/formation/episodic_extractor.py").read_bytes()).hexdigest(),

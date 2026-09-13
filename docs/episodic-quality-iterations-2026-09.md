@@ -84,3 +84,24 @@ npm run eval:episodic-actor -- --design compact --output-dir /tmp/unique-actor-o
 compactは評価専用の設計試作であり、アプリの実行経路を切り替える設定ではない。
 出典定位・所有範囲・通常のExtractionBatch契約を通すが、
 productionの大規模catalog分割・SQLite登録・検索・privacy保存までの受入は別途必要。
+
+## 反復12の全件結果
+
+品質170件は139/170。selection・what_where_why・context・links・evidenceは各10/10、
+privacyは60/60。未達はEpisode境界5/10、Fact操作6/10、日時4/10、
+catalog1/10、同一出来事照合5/10、統合提案8/10。
+行為者は68/100へ後退し、特に引用内一人称2/10、引用内二人称0/10。
+未知の行為者を空配列にする判断は10/10へ改善した。
+この短い5W指示をそのままproductionへ適用しない。
+
+正式証跡: /tmp/ds340-iteration-12-full-quality、
+/tmp/ds340-iteration-12-full-actor。commit b90423919adb1dba97f0b5ad35d023193eb61096。
+固定corpusは変更なし。promptfooのno-cache・並列1・同一モデルと予算で実測した。
+CI: https://github.com/FYuki/digital-souls/actions/runs/34748549670 （全4項目成功）。
+
+## 反復13の候補
+
+会話本文を分割せずconversationとして提示し、引用候補はquote_optionsへ分離する。
+引用候補の数を出来事数と誤認させない。引用番号と話題番号の名称を分ける。
+catalogは一件のfocusの判定に分け、他候補も曖昧さを判断する文脈として提示する。
+人物・日時の追加schemaは準備のみで、この候補では有効化しない。
