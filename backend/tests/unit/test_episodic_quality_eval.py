@@ -139,7 +139,9 @@ def test_catalog_uses_catalog_schema_and_rejects_unoffered_candidate(monkeypatch
         ollama_adapter=SimpleNamespace(resolve_model_digest=lambda *a, **k: "digest"),
         router=None)
     monkeypatch.setattr(provider, "runtime", lambda: fake)
-    monkeypatch.setattr(provider, "ThreadEpisodeExtractor", Extractor)
+    from evals.episodic_quality import compact
+    monkeypatch.setattr(compact, "CompactExtractor", Extractor)
+    monkeypatch.delenv("EPISODIC_EVAL_DESIGN", raising=False)
     monkeypatch.setattr(provider, "StructuredMemoryInferenceClient", lambda **k: None)
     monkeypatch.setattr(provider, "resolve_memory_formation_settings", lambda _: None)
     monkeypatch.delenv("EPISODIC_QUALITY_EVAL_PROGRESS", raising=False)

@@ -24,7 +24,8 @@
 LiveKitへの移行・音声／テキスト併用の実装があることと、遅延・回復・連続運用の課題が解消したことは別です。[混在Session受入](docs/conversation-session-acceptance.md)、[dev回復記録](docs/conversation-session-dev-recovery.md)、[連続操作試験](docs/conversation-session-dev-operations.md)に既知の制約と証跡を残しています。無期限に同じ実行Sessionを維持できる保証はありません。
 
 Episode / Factの独立した保存・同thread登録・版付き参照・検索投影・管理UIも実装しています。
-会話全体から新モデルへ自動抽出するworkerの起動接続は、この保存・管理基盤とは別の後続作業です。
+会話全体からEpisode / Factを自動抽出するworkerを、永続予約と非同期実行で接続しています。
+採用抽出器はv13-compact18です。固定評価の残る未達とdev総合受入は[検討記録](docs/episodic-quality-iterations-2026-09.md)で区別します。
 詳細は[アーキテクチャ](docs/system-architecture.md#episode--factの保存登録管理基盤)を参照してください。
 
 ## 構成とデータの扱い

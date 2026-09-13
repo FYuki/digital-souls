@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 import pytest
@@ -95,11 +96,11 @@ def episodic_model_output() -> None:
 def isolate_episodic_inference(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
     from app.memory.episodic.contracts import ExtractionIdentity
     from app.memory.formation import runtime as episodic_runtime
-    from app.memory.formation.episodic_extractor import EPISODIC_EXTRACTOR_VERSION
+    from app.memory.formation.compact_extractor import COMPACT_EXTRACTOR_VERSION
     # Module既定では外部LLMへ接続しない。予約・起動・停止は実装を通す。
     monkeypatch.setattr(episodic_runtime, "extraction_identity", lambda *args, **kwargs: ExtractionIdentity(
         provider_id="ollama", model_id="gemma4:e4b", model_digest=_MODEL_DIGEST,
-        prompt_version=EPISODIC_EXTRACTOR_VERSION,
+        prompt_version=COMPACT_EXTRACTOR_VERSION,
     ))
     if "episodic_model_output" not in request.fixturenames:
         from app import main
@@ -109,7 +110,9 @@ def isolate_episodic_inference(monkeypatch: pytest.MonkeyPatch, request: pytest.
                 return True
 
             def chat(self, *args, **kwargs):
-                return '{"complete":true,"records":[]}'
+                properties = kwargs["json_schema"].get("properties", {})
+                key = "facts" if "facts" in properties else "episodes"
+                return json.dumps({"has_unprocessed_input": False, key: []})
 
         build = episodic_runtime.build_episodic_scheduler
 

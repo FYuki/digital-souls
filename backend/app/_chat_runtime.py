@@ -512,6 +512,11 @@ class ChatService:
     def with_life_context(self, character: str, prompt: BuiltPrompt) -> BuiltPrompt:
         return _with_life_context(character, prompt, self._dependencies)
 
+    def record_response_provenance(self, started: object, prompt: BuiltPrompt) -> None:
+        if not isinstance(started, StartedHistoryTurn):
+            raise TypeError("response provenance requires a started history turn")
+        _record_response_provenance(self._dependencies, started, prompt)
+
     def record_successful_prompt_references(self, prompt: BuiltPrompt) -> None:
         _log_prompt_references(prompt)
 

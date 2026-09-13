@@ -221,3 +221,70 @@ def test_worker_cancellation_releases_lease_and_retry_commits_once(harness):
     assert len(harness.records(RecordKind.FACT)) == len(setup[2])
     assert len(harness.records(RecordKind.EPISODE)) == 1
     assert not worker(harness, retry).process_next()
+
+
+class CompactPagedClient(Client):
+    """モデルだけを置換し、採用抽出器の計画・全件照合・登録経路を通す。"""
+    def __init__(self, *, stop_after=None):
+        super().__init__(callback=self.respond, fits=self.fits_page)
+        self.scan_objects = []
+        self.stopped = False
+        self.stop_after = stop_after
+
+    @staticmethod
+    def fits_page(messages, schema):
+        value = json.loads(messages[1]["content"])
+        return len(value.get("known_records", [])) <= 3
+
+    def respond(self, value, index):
+        if "focus" in value:
+            obj = value["focus"]["five_w"]["what"]["object"]
+            self.scan_objects.append(obj)
+            if self.stop_after and len(self.scan_objects) >= self.stop_after:
+                self.stopped = True
+            return json.dumps({"same_event": "NO", "adds_information": False, "evidence": None})
+        if value.get("phase") == "refine_target":
+            raise AssertionError("unmatched candidate must remain new")
+        part = next(p for p in value["fragments"] if p["ownership"] == "primary" and p["role"] == "user")
+        q = {"fragment": part["index"], "text": part["text"], "start": part["start"]}
+        if "facts" in value:
+            return json.dumps({"has_unprocessed_input": False, "episodes": [
+                {"continues_existing_experience": False, "target": None,
+                 "topic": "旅行先の訂正を聞いた", "anchor": q, "facts": [0]}]})
+        return json.dumps({"has_unprocessed_input": False, "facts": [
+            {"operation": "NEW", "target": None, "changes": [],
+             "predicate": "訪れた", "object": "場所18", "anchor": q}]})
+
+
+def compact_worker(harness, client):
+    from app.memory.formation.compact_extractor import CompactExtractor
+    result = worker(harness, client)
+    result._extractor = CompactExtractor(client=client, settings=SETTINGS)
+    return result
+
+
+def test_compact_runtime_scans_full_catalog_and_registers_once(harness):
+    setup = seeded(harness)
+    harness.queue.release(setup[0].lease, failed=False)
+    client = CompactPagedClient()
+    actual = compact_worker(harness, client)
+    assert actual.process_next()
+    assert set(client.scan_objects) == {f"場所{i}" for i in range(18)}
+    assert len(harness.records(RecordKind.FACT)) == 19
+    assert len(harness.records(RecordKind.EPISODE)) == 1
+    assert not harness.queue.has_pending()
+    assert not actual.process_next()
+
+
+def test_compact_runtime_interrupted_catalog_recovers_without_partial_save(harness):
+    setup = seeded(harness)
+    harness.queue.release(setup[0].lease, failed=False)
+    client = CompactPagedClient(stop_after=4)
+    assert compact_worker(harness, client).process_next(should_stop=lambda: client.stopped)
+    assert harness.records(RecordKind.FACT) == setup[2]
+    assert harness.records(RecordKind.EPISODE) == ()
+    assert harness.queue.has_pending()
+    recovered = CompactPagedClient()
+    assert compact_worker(harness, recovered).process_next()
+    assert not harness.queue.has_pending()
+    assert len(harness.records(RecordKind.FACT)) == 19

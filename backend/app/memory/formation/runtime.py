@@ -12,7 +12,7 @@ from app.memory.episodic.registration import EpisodicRegistrationService
 from app.memory.episodic.repository import EpisodicRepository
 from app.memory.formation.config import MemoryFormationSettings
 from app.memory.formation.durable_scheduler import DurableMemoryFormationScheduler
-from app.memory.formation.episodic_extractor import EPISODIC_EXTRACTOR_VERSION, ThreadEpisodeExtractor
+from app.memory.formation.compact_extractor import COMPACT_EXTRACTOR_VERSION, CompactExtractor
 from app.memory.formation.episodic_worker import EpisodicFormationWorker
 from app.memory.formation.thread_queue import ThreadFormationQueue
 from app.memory.inference_client import StructuredMemoryInferenceClient
@@ -30,7 +30,7 @@ def extraction_identity(
         model_digest=runtime.ollama_adapter.resolve_model_digest(
             reference.model_id, timeout_seconds=timeout_seconds, refresh=True,
         ),
-        prompt_version=EPISODIC_EXTRACTOR_VERSION,
+        prompt_version=COMPACT_EXTRACTOR_VERSION,
     )
 
 
@@ -48,7 +48,7 @@ def build_episodic_scheduler(
     return DurableMemoryFormationScheduler(
         queue=queue,
         worker=EpisodicFormationWorker(
-            queue=queue, extractor=ThreadEpisodeExtractor(client=client, settings=settings),
+            queue=queue, extractor=CompactExtractor(client=client, settings=settings),
             registration=registration, entity_labels=entity_labels,
             extraction_identity=lambda: extraction_identity(
                 runtime, timeout_seconds=settings.llm_timeout_seconds,

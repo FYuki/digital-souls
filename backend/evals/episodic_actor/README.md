@@ -53,7 +53,7 @@ npm run eval:episodic-actor
 
 ## 出力設計の比較
 
-既定はproduction。評価専用の改善案は次のコマンドで測定する。
+既定のproductionは通常経路と同じv13-compact18を使う。compactは同じ実装の互換名である。
 
 ~~~bash
 npm run eval:episodic-actor -- --design compact --output-dir /tmp/unique-compact-actor
@@ -62,6 +62,6 @@ npm run eval:episodic-actor -- --design compact --output-dir /tmp/unique-compact
 行為者の固定正解と90%の基準は共通。設計hashを記録し、異なる設計のrunを混ぜて合格にしない。
 compactの人物schemaは名前と既知IDの対応、FactのACTOR役割を制約する。
 誰が行為者かはLLMが本文から判断し、人物を特定できない場合の空配列も許す。
-アプリの実行経路は変更しない。
+旧v12の比較は--design legacyで明示する。評価コマンドは常用データへ保存しない。
 
 [比較結果・反復確認・検証境界](../../../docs/episodic-quality-iterations-2026-09.md)を参照する。

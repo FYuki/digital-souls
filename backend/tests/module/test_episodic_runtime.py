@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from app.memory.episodic.extraction_contracts import ExtractionBatch, GroundedContent
+from app.memory.episodic.extraction_contracts import GroundedContent
 from tests.conversation_history_test_support import CONVERSATION_ID, create_repository
 from tests.module.test_memory_formation_chat_entrypoints import _character_card
 
@@ -34,17 +34,28 @@ class Model:
             payload = {"embeddings": [[0.25, 0.5, 0.75] for _ in json["input"]]}
         else:
             properties = json.get("format", {}).get("properties", {})
-            if "records" in properties:
+            if "facts" in properties:
                 self.entered.set()
                 assert self.release.wait(timeout=5)
                 request = __import__("json").loads(json["messages"][-1]["content"])
                 self.calls.append(request)
-                content = self.batch(request)
+                source = next(f for f in request["fragments"] if f["ownership"] == "primary" and f["role"] == "user")
+                content = {"has_unprocessed_input": False, "facts": [{
+                    "operation": "NEW", "target": None, "changes": [], "predicate": "食べた", "object": "うどん",
+                    "anchor": {"fragment": source["index"], "text": source["text"], "start": source["start"]},
+                }]}
+            elif "episodes" in properties:
+                request = __import__("json").loads(json["messages"][-1]["content"])
+                source = next(f for f in request["fragments"] if f["ownership"] == "primary" and f["role"] == "user")
+                content = {"has_unprocessed_input": False, "episodes": [{
+                    "continues_existing_experience": False, "target": None, "topic": "うどんの昼食", "facts": [0],
+                    "anchor": {"fragment": source["index"], "text": source["text"], "start": source["start"]},
+                }]}
             elif "five_w" in properties:
                 request = __import__("json").loads(json["messages"][-1]["content"])
                 candidate = request["candidate"]
                 content = GroundedContent.model_validate({
-                    "five_w": candidate["five_w"], "time_source": candidate["time_source"],
+                    "five_w": candidate["five_w"], "time_source": None,
                 }).model_dump(mode="json")
             elif "candidates" in properties:
                 content = {"candidates": []}
@@ -55,20 +66,6 @@ class Model:
                        "prompt_eval_count": 1000, "eval_count": 100, "done": True}
         return httpx.Response(200, json=payload, request=httpx.Request("POST", url))
 
-    def batch(self, request):
-        source = next(f for f in request["fragments"] if f["ownership"] == "primary" and f["role"] == "user")
-        quote = dict(source_id=source["source_id"], revision=source["revision"], role="user",
-                     quote=source["text"], start=source["start"])
-        return ExtractionBatch.model_validate({
-            "complete": True,
-            "records": [
-                dict(key="episode", kind="EPISODE", operation="NEW", anchor=quote, sources=[quote],
-                     five_w={"what": {"predicate": "昼食の話を聞いた"}, "context": "REPORTED"}),
-                dict(key="fact", kind="FACT", operation="NEW", anchor=quote, sources=[quote],
-                     five_w={"what": {"predicate": "食べた", "object": "うどん"}, "context": "REPORTED"}),
-            ],
-            "links": [dict(episode="episode", fact="fact", sources=[quote])],
-        }).model_dump(mode="json")
 
 
 @pytest.fixture
@@ -134,8 +131,8 @@ def test_reply_does_not_wait_and_lifespan_forms_episode_fact_link(model, runtime
             assert connection.execute("SELECT COUNT(*) FROM episodic_links WHERE valid=1").fetchone()[0] == 1
             assert connection.execute("SELECT COUNT(*) FROM approved_memories").fetchone()[0] == 0
             stamp = json.loads(connection.execute("SELECT stamp FROM episodic_versions LIMIT 1").fetchone()[0])
-        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v12"
-        assert model.calls[0]["entity_labels"]["character:miori"] == "光織"
+        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v13-compact18"
+        assert model.calls[0]["fragments"][0]["addressee"]["name"] == "光織"
 
 
 def test_startup_recovers_persisted_reservation_without_submit_and_restart_does_not_duplicate(

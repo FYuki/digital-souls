@@ -286,6 +286,7 @@ async def _stream_core_reply(
     screen_lineage_observer: Callable[[tuple[ScreenLineage, ...]], None] | None = None,
     tools: ToolService | None = None,
     conversation_id: str | None = None,
+    prompt_observer: Callable[[BuiltPrompt], None] | None = None,
 ) -> AsyncIterator[str]:
     from app.inference.diagnostics import diagnostic
 
@@ -336,6 +337,8 @@ async def _stream_core_reply(
             ):
                 tools.stop(character, conversation_id)
                 raise ScreenPerceptionError("request_cancelled", stage="chat")
+            if prompt_observer is not None:
+                prompt_observer(prompt)
             yield material.direct_text
             return
         prompt = await run_sync(
@@ -348,6 +351,8 @@ async def _stream_core_reply(
             model_settings.chat_context_tokens - max_output_tokens,
         )
         prompt = await run_sync(chat_service.with_life_context, character, prompt)
+    if prompt_observer is not None:
+        prompt_observer(prompt)
     # ツール結果と生活状態を反映した、生成へ渡す最終promptを計測する。
     diagnostic("prompt_preparation_completed")
     diagnostic("prompt_message_count", len(prompt.messages))
@@ -909,6 +914,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     screen_lineage_observer: Callable[
                         [tuple[ScreenLineage, ...]], None
                     ],
+                    prompt_observer: Callable[[BuiltPrompt], None] | None,
                 ) -> AsyncIterator[str]:
                     history_access = (
                         await app.state.screen_perception_service.history_access(
@@ -950,6 +956,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         screen_lineage_observer,
                         tools=app.state.tool_service,
                         conversation_id=str(conversation_id),
+                        prompt_observer=prompt_observer,
                     ):
                         yield text
 
@@ -979,6 +986,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     synthesizer=core_synthesizer,
                     history_service=conversation_history_service,
                     completed_turn_observer=submit_completed_core_turn,
+                    response_provenance_recorder=app_chat_service.record_response_provenance,
                     generate_screen_reply_stream=generate_screen_core_reply_stream,
                     on_conversation_interruption=(
                         tool_runtime.service.interrupted

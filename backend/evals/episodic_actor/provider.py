@@ -83,10 +83,11 @@ def call_api(prompt, options, context):
             target=InferenceTarget.MEMORY_EXTRACTION, settings=inference.settings,
         )
         extractor_class = ThreadEpisodeExtractor
-        if os.environ.get("EPISODIC_EVAL_DESIGN") == "compact":
+        if os.environ.get("EPISODIC_EVAL_DESIGN") != "legacy":
             from evals.episodic_quality.compact import CompactExtractor, design_fingerprint
             extractor_class = CompactExtractor
-            output["prompt_version"] += "-compact-" + design_fingerprint()[:12]
+            from app.memory.formation.compact_extractor import COMPACT_EXTRACTOR_VERSION
+            output["prompt_version"] = COMPACT_EXTRACTOR_VERSION + "-" + design_fingerprint()[:12]
         extractor = extractor_class(client=client, settings=resolve_memory_formation_settings(os.environ))
         batch, payload = build_request(prompt)
         result = extractor._ground_content(batch, payload, [], LABELS, lambda: False)

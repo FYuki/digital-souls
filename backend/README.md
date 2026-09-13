@@ -62,7 +62,9 @@ SQLiteの変更とindex outboxを同じtransactionに記録し、Chromaへ同期
 Episode / Factは`app/memory/episodic/`の独立レコード・版・出典・参照で保存する。
 `EpisodicRegistrationService`は同threadのFact照合・補足訂正・冪等登録を扱う。
 `/characters/{character_id}/episodic-memories`のGETで監査し、PATCH / DELETEでは版と冪等keyを指定してFactを訂正・削除する。
-新モデルへの会話自動抽出workerの起動接続は後続作業である。
+新モデルへの会話自動抽出workerは、永続予約・lease回復・入力分割を介して接続する。
+通常経路と評価の既定は同じv13-compact18を使う。Speech/LiveKitも最終promptの参照版を履歴確定前に記録する。
+実LLMの固定評価と全経路の受入は区別する。
 [保存・登録・検索の境界](../docs/system-architecture.md#episode--factの保存登録管理基盤)を参照する。
 
 ## セットアップ・起動

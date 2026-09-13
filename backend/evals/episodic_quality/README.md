@@ -73,14 +73,14 @@ manifestには実行したcase IDを記録し、corpus全体のhashも維持す�
 
 ## 指示文・出力設計の比較
 
-既定はproduction。評価専用の改善案を測る場合だけ、次のように指定する。
+既定のproductionは通常経路と同じv13-compact18を使う。compactは同じ実装の互換名である。
 
 ~~~bash
 npm run eval:episodic-quality -- --design compact --output-dir /tmp/unique-compact-quality
 ~~~
 
-compactは、意味判断を段階に分け、ID・参照関係・Episodeの話題をコードで組み立てる設計の比較案。
-アプリの実行経路やdev設定を切り替える機能ではない。通常の出典・所有範囲・構造の検証を維持する。
+compactは、意味判断を段階に分け、ID・参照関係・Episodeの話題をコードで組み立てる採用設計。
+旧v12の比較は--design legacyで明示する。評価コマンドは常用データへ保存しない。通常の出典・所有範囲・構造の検証を維持する。
 同じ正解・閾値で採点し、manifestと出力のprompt_versionには設計hashも記録する。
 
 個別の失敗を診断するscripts/episodic_prompt_lab.pyは、登録済みの合成ケースに限定して

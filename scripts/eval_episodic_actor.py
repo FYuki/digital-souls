@@ -17,7 +17,7 @@ SUITE = ROOT / "backend/evals/episodic_actor"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path)
-    parser.add_argument("--design", choices=["production", "compact"], default="production")
+    parser.add_argument("--design", choices=["production", "compact", "legacy"], default="production")
     args = parser.parse_args()
     if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
         raise RuntimeError("actor evaluation requires a dev/test environment")
@@ -62,10 +62,11 @@ def main():
     manifest = {
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "design": args.design,
-        "design_sha256": {name: hashlib.sha256((ROOT / "backend/evals/episodic_quality" / name).read_bytes()).hexdigest()
-                          for name in ("compact.py", "ground_schema.py")
-                          if (ROOT / "backend/evals/episodic_quality" / name).exists()} if args.design == "compact" else None,
-        "scope": "Fact grounding actor accuracy; compact is experimental; no extraction selection or privacy persistence",
+        "implementation_sha256": {
+            name: hashlib.sha256((ROOT / "backend/app/memory/formation" / name).read_bytes()).hexdigest()
+            for name in ("episodic_extractor.py", "compact_extractor.py", "ground_schema.py")
+        },
+        "scope": "Fact grounding actor accuracy; no extraction selection or privacy persistence",
         "cases_sha256": hashlib.sha256((SUITE / "cases.jsonl").read_bytes()).hexdigest(),
         "extractor_sha256": hashlib.sha256((ROOT / "backend/app/memory/formation/episodic_extractor.py").read_bytes()).hexdigest(),
         "model_id": reference.model_id, "model_digest": digest,
