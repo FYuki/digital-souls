@@ -9,9 +9,13 @@ const validateVoiceSessionEvent = ajv.compile(voiceSessionSchema)
 
 export function parseVoiceSessionEvent(value: unknown): VoiceSessionEvent {
   if (!validateVoiceSessionEvent(value)) {
-    throw new Error('voice session event does not match protocol 1.1')
+    throw new Error('voice session event does not match protocol 2.0')
   }
   const event = value as VoiceSessionEvent
+  if ((event.type === 'speech_started' || event.type === 'speech_stopped')
+    && !(event.start_sample! <= event.active_end_sample! && event.active_end_sample! <= event.detected_sample!)) {
+    throw new Error('voice session event has invalid media positions')
+  }
   if (
     event.text_range !== undefined &&
     event.text_range.start > event.text_range.end

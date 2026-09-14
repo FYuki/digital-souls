@@ -32,6 +32,10 @@ class MicrophoneFrameClock(FrameProcessor[AudioFrame]):
         self._closed = False
 
     @property
+    def samples_seen(self) -> int:
+        return self._next_sample
+
+    @property
     def enabled(self) -> bool:
         return self._enabled and not self._closed
 

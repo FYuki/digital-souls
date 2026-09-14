@@ -102,23 +102,31 @@ class PlaybackSummary(BaseModel):
 
 
 class ProtocolVersion(Enum):
-    THE_11 = "1.1"
+    THE_20 = "2.0"
 
 
 class VoiceSessionEventReason(Enum):
+    AUDIO_GAP = "audio_gap"
+    AUDIO_INTEGRITY_UNAVAILABLE = "audio_integrity_unavailable"
     BARGE_IN = "barge_in"
     DECODE_FAILURE = "decode_failure"
     DISCONNECT = "disconnect"
     INPUT_CAPACITY_EXCEEDED = "input_capacity_exceeded"
+    INPUT_CLOSED = "input_closed"
+    INPUT_REPLACED = "input_replaced"
     INPUT_SUPPRESSED = "input_suppressed"
     INVALID_AUDIO = "invalid_audio"
+    MICROPHONE_TRACK_UNAVAILABLE = "microphone_track_unavailable"
+    NEW_MICROPHONE_TRACK_REQUIRED = "new_microphone_track_required"
     PRIVACY = "privacy"
     RECONNECT_TIMEOUT = "reconnect_timeout"
     SESSION_ENDED = "session_ended"
+    STALE_INPUT_REQUEST = "stale_input_request"
     TERMINAL_ERROR = "terminal_error"
     TEXT_FOCUS = "text_focus"
     TEXT_PRIORITY = "text_priority"
     USER_REQUEST = "user_request"
+    VAD_UNAVAILABLE = "vad_unavailable"
 
 
 class SessionSummary(BaseModel):
@@ -166,6 +174,9 @@ class TextRange(BaseModel):
 
 
 class TypeEnum(Enum):
+    AUDIO_INPUT_OPENED = "audio_input_opened"
+    AUDIO_INPUT_OPEN_REQUESTED = "audio_input_open_requested"
+    AUDIO_INPUT_REJECTED = "audio_input_rejected"
     AUDIO_INPUT_SUPPRESSION_CHANGED = "audio_input_suppression_changed"
     ERROR = "error"
     OBSERVATION = "observation"
@@ -221,16 +232,25 @@ class VoiceSessionEvent(BaseModel):
     session_id: UUID
     type: TypeEnum
     monotonic_timestamp_ms: Optional[int] = None
+    reason: Optional[VoiceSessionEventReason] = None
+    request_event_id: Optional[UUID] = None
+    input_generation: Optional[int] = None
+    input_revision: Optional[int] = None
+    track_sid: Optional[str] = None
     speaker: Optional[Speaker] = None
     text: Optional[str] = None
     input_event_id: Optional[UUID] = None
     error_code: Optional[str] = None
     response_id: Optional[UUID] = None
     status: Optional[VoiceSessionEventStatus] = None
-    reason: Optional[VoiceSessionEventReason] = None
     suppressed: Optional[bool] = None
     requested_reconnect_grace_ms: Optional[int] = None
     reconnect_grace_ms: Optional[int] = None
+    active_end_sample: Optional[int] = None
+    clock_domain: Optional[ClockDomain] = None
+    detected_sample: Optional[int] = None
+    sample_rate: Optional[int] = None
+    start_sample: Optional[int] = None
     utterance_id: Optional[UUID] = None
     decision: Optional[Decision] = None
     final: Optional[bool] = None
@@ -250,7 +270,6 @@ class VoiceSessionEvent(BaseModel):
     response_finished: Optional[bool] = None
     classification: Optional[Classification] = None
     user_state: Optional[UserState] = None
-    clock_domain: Optional[ClockDomain] = None
     measurement: Optional[Measurement] = None
     network_summary: Optional[NetworkSummary] = None
     session_summary: Optional[SessionSummary] = None

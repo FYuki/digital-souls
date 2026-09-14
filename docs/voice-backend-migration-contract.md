@@ -127,3 +127,15 @@ M5で既存計測と横断回帰を整合し、M6で一括切替・切り戻し�
 切替は会話終了 → 対応するFE／BEの版へ更新 → ブラウザ再読み込み → 新Session開始。
 切り戻しも会話を終了してFE／BEをそろえて旧版へ戻し、保存済み履歴は保持する。
 具体的な実行・確認コマンドはM6の運用手順へ記載する。
+
+
+## M3／M4接続中の補足契約
+
+- input_revisionはFEの明示操作・入力再開要求の順序番号。BEのinput_generationとは別で、正式発話や入力世代をFEに採番させない。
+- mute／resume／focus／text submit／openに順序番号を付ける。古い抑止・openは現在のゲートを上書きしない。text本文は古い順序番号だけを理由に配送ACK済みとして捨てず、既存の入力結果契約へ渡す。
+- audio_input_openedは元のrequest event ID、track SID、revision、BE generationを照合する。拒否はaudio_input_rejected、5秒で確認できなければ入力を有効にせず再操作を案内する。
+- Speechイベントはuserの発話を表すBE通知。sample位置のstart ≤ active_end ≤ detectedと16kHzを検証する。検知時刻はserver_monotonicで、FE通知受信時計を発話起点へ代入しない。
+- 欠落確認ではOpusの48kHz受信統計と、16kHz VAD用PCMのsampleを区別する。現在の実装はaudio/opus・clock_rate=48000と必要なcounterの存在を確認し、それ以外は確認不能として扱う。実サービスでのcodec・counter更新頻度・観測範囲の検証は未了。
+- 非無音concealmentはconcealed_samplesからsilent_concealed_samplesを除く。packet lossやjitterの値だけでは破棄しない。意味の根拠は[WebRTC統計仕様](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-concealedsamples)を参照する。
+- 統計のrequest後に届いたPCMまで確認済みにはしない。確認不能は1秒の上限まで保留し、確認できなければSTTへ渡さず、音声の話し直しを案内する。
+- 上記は接続実装の契約補足。新しい局所試験・本番ビルドの成功だけで、既存suiteの移行や実サービス受入を完了としない。

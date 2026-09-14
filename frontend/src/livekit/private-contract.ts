@@ -97,7 +97,7 @@ const validatePrivateFrame = ajv.compile(privateSchema)
 
 export function parsePrivateFrame(value: unknown): PrivateFrame {
   if (!validatePrivateFrame(value)) {
-    throw new Error('LiveKit private frame does not match protocol 1.0')
+    throw new Error('LiveKit private frame does not match protocol 2.0')
   }
   const frame = value as PrivateFrameWire
   switch (frame.type) {

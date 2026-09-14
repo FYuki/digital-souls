@@ -45,7 +45,7 @@ export type VoiceSessionSnapshot = Readonly<{
 
 export type VoiceSessionRoom = {
   connect: (url: string, token: string, sessionId: string) => Promise<void>
-  publishMicrophone: (stream: MediaStream) => Promise<void>
+  publishMicrophone: (stream: MediaStream) => Promise<string>
   muteMicrophone: () => Promise<void>
   publishControlEvent: (event: VoiceSessionEvent) => Promise<void>
   stopPlayback: (responseId: string, speechStartedAtMs?: number) => number
@@ -83,9 +83,6 @@ const defaultDependencies: VoiceSessionDependencies = {
         bindClockProbe?: (probe: () => Promise<ControlProbeObservation>) => void
         bindRoom?: (room: Pick<LiveKitRoomClient, 'probeControl' | 'setPacketOutputObserver'>) => void
         receiveCoreEvent?: (event: VoiceSessionEvent) => void
-        bindController?: (controller: {
-          speechStarted: (utteranceId: string, atMs: number) => Promise<void>
-        }) => void
       }
     }).__digitalSoulsVoiceSessionTestPort
     if (testPort?.createRoom !== undefined) {
@@ -141,6 +138,14 @@ export class LiveKitVoiceSessionController {
   private microphoneTail: Promise<void> = Promise.resolve()
   private focusRevision = 0
   private inputGatePending = false
+  private audioRevision = 0
+  private inputGeneration: number | null = null
+  private authorizedTrackSid: string | null = null
+  private pendingAudioOpen: {
+    eventId: string; trackSid: string; revision: number
+    resolve: (event: VoiceSessionEvent) => void; reject: (error: Error) => void
+    timer: ReturnType<typeof setTimeout>
+  } | null = null
   private controlTail: Promise<void> = Promise.resolve()
   private generatingResponseId: string | null = null
   private playbackResponseId: string | null = null
@@ -159,16 +164,6 @@ export class LiveKitVoiceSessionController {
     private readonly receiveCoreEvent: (event: VoiceSessionEvent, context: VoiceSessionContext) => void,
     private readonly dependencies: VoiceSessionDependencies = defaultDependencies,
   ) {
-    const testPort = (globalThis as typeof globalThis & {
-      __digitalSoulsVoiceSessionTestPort?: {
-        bindController?: (controller: {
-          speechStarted: (utteranceId: string, atMs: number) => Promise<void>
-        }) => void
-      }
-    }).__digitalSoulsVoiceSessionTestPort
-    testPort?.bindController?.({
-      speechStarted: (utteranceId, atMs) => this.speechStarted(utteranceId, atMs),
-    })
     this.publishSnapshot()
   }
 
@@ -215,7 +210,8 @@ export class LiveKitVoiceSessionController {
   async submitText(context: VoiceSessionContext, text: string): Promise<string> {
     if (!this.canSubmitText(context)) throw new Error('text input is unavailable for this thread')
     const room = this.requiredRoom()
-    const event = this.event({type: 'user_text_submitted', text, speaker: this.userSpeaker()})
+    this.invalidateInputGate()
+    const event = this.event({type: 'user_text_submitted', text, speaker: this.userSpeaker(), input_revision: ++this.audioRevision})
     this.textInputs.begin(event, context)
     this.publishSnapshot()
     this.scheduleTextResultQuery()
@@ -224,6 +220,9 @@ export class LiveKitVoiceSessionController {
     void this.interruptResponse(context).catch(() => undefined)
     try {
       await room.publishControlEvent(event)
+      if (event.input_revision === this.audioRevision && room === this.room) {
+        void this.queueMicrophoneOperation(() => this.openInputGate(room)).catch(() => this.setPhase('error'))
+      }
     } catch {
       // publish失敗はBE未受理の証拠ではない。本文と元のIDを保持する。
       this.textInputs.markUnknown(event.session_id, event.event_id)
@@ -290,6 +289,9 @@ export class LiveKitVoiceSessionController {
     const version = ++this.operationVersion
     this.inputSuppression = new InputSuppressionPolicy()
     this.inputGatePending = false
+    this.audioRevision = 0
+    this.inputGeneration = null
+    this.authorizedTrackSid = null
     this.microphoneStream = null
     this.context = context
     this.setPhase('connecting')
@@ -373,16 +375,80 @@ export class LiveKitVoiceSessionController {
     }))
   }
 
+  private invalidateInputGate(): void {
+    ++this.audioRevision
+    this.inputGeneration = null
+    this.authorizedTrackSid = null
+    this.inputGatePending = true
+    this.setMicrophoneTracks(false)
+    const pending = this.pendingAudioOpen
+    this.pendingAudioOpen = null
+    if (pending !== null) {
+      clearTimeout(pending.timer)
+      pending.reject(new Error('音声入力の状態が変更されました'))
+    }
+  }
+
+  private async openInputGate(room: VoiceSessionRoom): Promise<void> {
+    const stream = this.microphoneStream
+    if (stream === null || room !== this.room || !this.microphoneEnabled
+      || this.inputSuppression.suppressed || this.phase === 'reconnecting') return
+    this.invalidateInputGate()
+    const openingRevision = this.audioRevision
+    let trackSid: string
+    try {
+      await room.muteMicrophone()
+      trackSid = await room.publishMicrophone(stream)
+    } catch (error) {
+      if (room !== this.room || openingRevision !== this.audioRevision) return
+      this.inputSuppression.mute()
+      this.microphoneEnabled = false
+      this.refreshMicrophoneState()
+      throw error
+    }
+    if (room !== this.room || openingRevision !== this.audioRevision || this.inputSuppression.suppressed) return
+    const event = this.event({type: 'audio_input_open_requested', track_sid: trackSid,
+      input_revision: ++this.audioRevision, speaker: this.userSpeaker()})
+    const revision = this.audioRevision
+    const opened = new Promise<VoiceSessionEvent>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.pendingAudioOpen?.eventId !== event.event_id) return
+        this.pendingAudioOpen = null
+        reject(new Error('マイク入力の開始を確認できませんでした。もう一度マイクをオンにしてください'))
+      }, 5_000)
+      this.pendingAudioOpen = {eventId: event.event_id, trackSid, revision, resolve, reject, timer}
+    })
+    try {
+      const [, result] = await Promise.all([this.publishControlEvent(room, event), opened])
+      if (room !== this.room || revision !== this.audioRevision || this.inputSuppression.suppressed) return
+      this.inputGeneration = result.input_generation!
+      this.authorizedTrackSid = trackSid
+      this.inputGatePending = false
+      this.refreshMicrophoneState()
+    } catch (error) {
+      if (this.pendingAudioOpen?.eventId === event.event_id) {
+        clearTimeout(this.pendingAudioOpen.timer)
+        this.pendingAudioOpen = null
+      }
+      if (room !== this.room || revision !== this.audioRevision) return
+      this.inputSuppression.mute()
+      this.microphoneEnabled = false
+      this.refreshMicrophoneState()
+      throw error
+    }
+  }
+
   async resumeMicrophone(stream: MediaStream): Promise<void> {
     const room = this.requiredRoom()
     this.inputSuppression.resumeExplicitly()
     this.microphoneStream = stream
-    this.setMicrophoneTracks(!this.inputSuppression.suppressed && !this.inputGatePending)
+    this.invalidateInputGate()
+    this.microphoneEnabled = !this.hasPersistentMute()
+    const event = this.event({type: 'session_resumed', input_revision: ++this.audioRevision})
     return this.queueMicrophoneOperation(async () => {
-      await room.publishMicrophone(stream)
+      await this.publishControlEvent(room, event)
       if (room !== this.room) return
-      await this.publishControlEvent(room, this.event({ type: 'session_resumed' }))
-      this.microphoneEnabled = !this.hasPersistentMute()
+      await this.openInputGate(room)
       this.refreshMicrophoneState()
     })
   }
@@ -404,7 +470,7 @@ export class LiveKitVoiceSessionController {
     if (!this.matchesContext(context)) return
     if (this.inputSuppression.snapshot().includes('text_focus') === focused) return
     this.inputSuppression.setFocused(focused)
-    this.inputGatePending = true
+    this.invalidateInputGate()
     // focusではdeviceを即時無音化し、回答生成・再生には触れない。
     if (focused) this.setMicrophoneTracks(false)
     this.refreshMicrophoneState(false)
@@ -440,12 +506,14 @@ export class LiveKitVoiceSessionController {
 
   private async applyPersistentMute(): Promise<void> {
     const room = this.requiredRoom()
+    this.invalidateInputGate()
     this.microphoneEnabled = false
     this.refreshMicrophoneState()
+    const event = this.event({type: 'session_muted', input_revision: ++this.audioRevision})
     return this.queueMicrophoneOperation(async () => {
       await room.muteMicrophone()
       if (room !== this.room) return
-      await this.publishControlEvent(room, this.event({ type: 'session_muted' }))
+      await this.publishControlEvent(room, event)
     })
   }
 
@@ -454,57 +522,15 @@ export class LiveKitVoiceSessionController {
     if (this.phase === 'reconnecting') return
     const room = this.requiredRoom()
     const event = this.event({type: 'audio_input_suppression_changed', reason: 'text_focus',
-      suppressed: this.inputSuppression.snapshot().includes('text_focus')})
+      suppressed: this.inputSuppression.snapshot().includes('text_focus'),
+      input_revision: ++this.audioRevision})
     return this.queueMicrophoneOperation(async () => {
       await this.publishControlEvent(room, event)
       if (room === this.room && revision === this.focusRevision) {
-        this.inputGatePending = false
+        await this.openInputGate(room)
         this.refreshMicrophoneState()
       }
     })
-  }
-
-  async speechStarted(utteranceId: string, atMs: number): Promise<void> {
-    if (!this.microphoneEnabled || this.inputSuppression.suppressed || this.inputGatePending || this.phase === 'reconnecting') return
-    const room = this.requiredRoom()
-    const interruptedResponseId = this.generatingResponseId ?? this.playbackResponseId
-    if (!this.speechStarts.has(utteranceId)) {
-      if (this.speechStarts.size >= 256) {
-        const oldest = this.speechStarts.keys().next().value
-        if (oldest !== undefined) this.speechStarts.delete(oldest)
-      }
-      this.speechStarts.set(utteranceId, { atMs: Math.floor(atMs), responseId: interruptedResponseId })
-    }
-    this.input = 'listening'
-    this.publishSnapshot()
-    await this.publishControlEvent(room, this.event({
-      type: 'speech_started',
-      utterance_id: utteranceId,
-      speaker: this.userSpeaker(),
-      ...(interruptedResponseId === null ? {} : { response_id: interruptedResponseId }),
-      monotonic_timestamp_ms: Math.floor(atMs),
-    }))
-  }
-
-  async speechStopped(utteranceId: string, atMs: number): Promise<void> {
-    if (!this.microphoneEnabled || this.inputSuppression.suppressed || this.inputGatePending || this.phase === 'reconnecting') return
-    const room = this.requiredRoom()
-    await this.publishControlEvent(room, this.event({
-      type: 'speech_stopped',
-      utterance_id: utteranceId,
-      speaker: this.userSpeaker(),
-      monotonic_timestamp_ms: Math.floor(atMs),
-    }))
-    await this.publishControlEvent(room, this.event({
-      type: 'observation',
-      utterance_id: utteranceId,
-      measurement: 'speech_stopped',
-      timestamp: Math.floor(atMs),
-      clock_domain: 'client_monotonic',
-      unit: 'millisecond',
-    }))
-    this.input = 'transcribing'
-    this.publishSnapshot()
   }
 
   end(): Promise<void> {
@@ -535,6 +561,7 @@ export class LiveKitVoiceSessionController {
         if (timer !== undefined) clearTimeout(timer)
       }
     }
+    this.invalidateInputGate()
     this.binding = null
     this.room = null
     this.controlTail = Promise.resolve()
@@ -544,7 +571,6 @@ export class LiveKitVoiceSessionController {
     this.playbackLastPlayedSequence = 0
     this.completedPlayback = null
     this.interruptedResponseIds.clear()
-    this.speechStarts.clear()
     this.interruptingUtterances.clear()
     this.microphoneEnabled = false
     this.microphoneStream = null
@@ -564,7 +590,7 @@ export class LiveKitVoiceSessionController {
     const binding = this.binding
     if (binding === null) throw new Error('LiveKit voice session is not connected')
     const envelope: Record<string, unknown> = {
-      protocol_version: '1.1',
+      protocol_version: '2.0',
       event_id: this.dependencies.eventId(),
       session_id: binding.session_id,
       ...fields,
@@ -611,7 +637,7 @@ export class LiveKitVoiceSessionController {
     }
     if (observation.transport === 'unavailable') {
       this.preserveUnconfirmedText()
-      this.setMicrophoneTracks(false)
+      this.invalidateInputGate()
       this.setPhase('reconnecting')
       this.startReconnectTimer(version)
       return
@@ -650,6 +676,27 @@ export class LiveKitVoiceSessionController {
   }
 
   private receiveRoomCoreEvent(event: VoiceSessionEvent): void {
+    if (event.session_id !== this.binding?.session_id) return
+    if (event.type === 'audio_input_opened' || event.type === 'audio_input_rejected') {
+      const pending = this.pendingAudioOpen
+      if (pending === null || event.request_event_id !== pending.eventId) return
+      if (event.type === 'audio_input_opened' && (event.track_sid !== pending.trackSid
+        || event.input_revision !== pending.revision || !Number.isSafeInteger(event.input_generation)
+        || event.input_generation! < 1)) return
+      clearTimeout(pending.timer)
+      this.pendingAudioOpen = null
+      if (event.type === 'audio_input_rejected') pending.reject(new Error('音声入力を開始できませんでした: ' + event.reason))
+      else pending.resolve(event)
+      return
+    }
+    if (event.type === 'speech_started' || event.type === 'speech_stopped') {
+      if (event.input_generation !== this.inputGeneration || event.track_sid !== this.authorizedTrackSid
+        || this.inputSuppression.suppressed || this.inputGatePending) return
+      this.input = event.type === 'speech_started' ? 'listening' : 'transcribing'
+      this.publishSnapshot()
+      this.notifyCoreEvent(event)
+      return
+    }
     if (event.response_id !== undefined && this.interruptedResponseIds.has(event.response_id)
       && (event.type === 'response_delta' || event.type === 'response_started')) return
     if (event.type === 'user_input_result') {
@@ -769,15 +816,12 @@ export class LiveKitVoiceSessionController {
     }))
   }
 
-  private readonly speechStarts = new Map<string, { atMs: number; responseId: string | null }>()
   private readonly interruptingUtterances = new Map<string, string>()
 
   private stopInterruptedPlayback(responseId: string, utteranceId?: string): void {
     const room = this.room
     if (room === null || this.interruptedResponseIds.has(responseId)) return
-    const speech = utteranceId === undefined ? undefined : this.speechStarts.get(utteranceId)
-    const startedAt = speech?.responseId === responseId ? speech.atMs : undefined
-    const lastPlayedAudioSequence = room.stopPlayback(responseId, startedAt)
+    const lastPlayedAudioSequence = room.stopPlayback(responseId)
     const atMs = this.dependencies.monotonicMs()
     if (utteranceId !== undefined) this.interruptingUtterances.set(responseId, utteranceId)
     this.playback = 'stopped'
@@ -794,6 +838,7 @@ export class LiveKitVoiceSessionController {
 
   private terminateTransport(phase: 'ended' | 'error'): void {
     this.preserveUnconfirmedText()
+    this.invalidateInputGate()
     ++this.operationVersion
     this.clearReconnectTimer()
     this.room?.disconnect()
@@ -805,7 +850,6 @@ export class LiveKitVoiceSessionController {
     this.playbackLastPlayedSequence = 0
     this.completedPlayback = null
     this.interruptedResponseIds.clear()
-    this.speechStarts.clear()
     this.interruptingUtterances.clear()
     this.microphoneEnabled = false
     this.input = 'inactive'

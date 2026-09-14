@@ -17,9 +17,11 @@ from app.livekit_transport.bootstrap import (
 )
 from app.routers.screen_perception import _require_owner
 from app.tts.irodori_client import IrodoriTtsError
+from app.voice_input.models import VadPreparationError
 
 
-SUPPORTED_PROTOCOL_VERSION = "1.1"
+SUPPORTED_PROTOCOL_VERSION = "2.0"
+SUPPORTED_TRANSPORT_PROTOCOL_VERSION = "2.0"
 MAX_RECONNECT_GRACE_MS = 60_000
 
 router = APIRouter(prefix="/voice/livekit", tags=["livekit"])
@@ -27,6 +29,7 @@ router = APIRouter(prefix="/voice/livekit", tags=["livekit"])
 
 class TokenRequest(BaseModel):
     protocol_version: str
+    transport_protocol_version: str | None = None
     request_id: UUID
     character_id: str
     conversation_id: UUID
@@ -72,6 +75,11 @@ async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
                 "supported_protocol_version": SUPPORTED_PROTOCOL_VERSION,
             },
         )
+    if body.transport_protocol_version != SUPPORTED_TRANSPORT_PROTOCOL_VERSION:
+        raise HTTPException(409, detail={
+            "code": "transport_protocol_version_mismatch",
+            "supported_transport_protocol_version": SUPPORTED_TRANSPORT_PROTOCOL_VERSION,
+        })
     service, livekit_url = _configured(request)
     if body.screen_client_session_id is not None:
         _require_owner(request, body.screen_client_session_id)
@@ -88,6 +96,8 @@ async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
         raise HTTPException(504, detail={"code": "bootstrap_timeout"}) from error
     except (TtsConfigMissingError, TtsConfigValidationError) as error:
         raise HTTPException(503, detail={"code": error.error_code}) from error
+    except VadPreparationError as error:
+        raise HTTPException(503, detail={"code": "vad_unavailable"}) from error
     except IrodoriTtsError as error:
         raise HTTPException(503, detail={"code": error.error_code}) from error
     return TokenResponse(

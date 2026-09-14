@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from jsonschema import Draft202012Validator, FormatChecker
+from app.voice_session.validation import validate_speech_positions
 
 
 class TerminalProtocolError(RuntimeError):
@@ -116,6 +117,10 @@ def decode_core_event(payload: bytes) -> dict[str, object]:
         raise TerminalProtocolError("malformed Core event") from error
     if not isinstance(value, dict) or list(_CORE_VALIDATOR.iter_errors(value)):
         raise TerminalProtocolError("invalid Core event")
+    try:
+        validate_speech_positions(value)
+    except ValueError as error:
+        raise TerminalProtocolError("invalid media positions") from error
     return value
 
 

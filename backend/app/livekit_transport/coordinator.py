@@ -30,7 +30,7 @@ from app.livekit_transport.outbox import (
 
 APPLICATION_TOPIC = "digital-souls.core.v1"
 SCREEN_TOPIC = "digital-souls.screen-perception.v1"
-PRIVATE_TOPIC = "digital-souls.livekit-transport.v1"
+PRIVATE_TOPIC = "digital-souls.livekit-transport.v2"
 OUTBOX_MAX_EVENTS = 256
 OUTBOX_MAX_BYTES = 1024 * 1024
 
@@ -195,9 +195,15 @@ class ProductionSessionCoordinator:
                 event = decode_core_event(payload)
                 if str(event["session_id"]) != self.session_id:
                     raise TerminalProtocolError("Core event session mismatch")
-                if event["type"] in {"user_input_result", "response_privacy_skipped"}:
-                    raise TerminalProtocolError("result is owned by Backend")
-                if event["type"] in {"user_text_submitted", "user_input_result_requested"}:
+                if event["type"] not in {
+                    "session_start_requested", "session_muted", "session_resumed", "session_ended",
+                    "session_reconnect_requested", "audio_input_suppression_changed",
+                    "audio_input_open_requested", "user_text_submitted", "user_input_result_requested",
+                    "response_cancel_requested", "playback_started", "playback_stopped",
+                    "playback_completed", "playback_decode_failed", "observation",
+                }:
+                    raise TerminalProtocolError("event is owned by Backend")
+                if event["type"] in {"user_text_submitted", "user_input_result_requested", "audio_input_open_requested"}:
                     speaker = event.get("speaker")
                     expected = self._mapping.core_notification(
                         identity=identity, event_type="text_input"
@@ -221,7 +227,7 @@ class ProductionSessionCoordinator:
                     )
                 await self._publish_private(
                     {
-                        "protocol_version": "1.0",
+                        "protocol_version": "2.0",
                         "type": "ack",
                         "event_id": event["event_id"],
                         "generation": self.generation,
@@ -263,7 +269,7 @@ class ProductionSessionCoordinator:
                     if self._lifecycle.phase == "available":
                         self._observe_sync("probe_ack_started")
                         await self._publish_private({
-                            "protocol_version": "1.0",
+                            "protocol_version": "2.0",
                             "type": "control_probe_ack",
                             "probe_id": frame["probe_id"],
                             "generation": self.generation,
@@ -321,7 +327,7 @@ class ProductionSessionCoordinator:
         self._output_stop_requests[request_id] = (response_id, generation, confirmed)
         try:
             await self._publish_private({
-                "protocol_version": "1.0", "type": "output_stop_request",
+                "protocol_version": "2.0", "type": "output_stop_request",
                 "session_id": self.session_id, "response_id": response_id,
                 "request_id": request_id, "generation": generation,
             })
@@ -377,7 +383,7 @@ class ProductionSessionCoordinator:
             raise RuntimeError("session is not available")
         await self._publish_private(
             {
-                "protocol_version": "1.0",
+                "protocol_version": "2.0",
                 "type": "logical_audio_segment",
                 "response_id": response_id,
                 "audio_sequence": audio_sequence,
@@ -396,7 +402,7 @@ class ProductionSessionCoordinator:
         if input_sample_count + padding_sample_count != captured_sample_count:
             raise ValueError("response source sample conservation failed")
         await self._publish_private({
-            "protocol_version": "1.0", "type": "response_audio_finished",
+            "protocol_version": "2.0", "type": "response_audio_finished",
             "response_id": response_id, "generation": self.generation,
             "input_sample_count": input_sample_count,
             "captured_sample_count": captured_sample_count,
@@ -497,7 +503,7 @@ class ProductionSessionCoordinator:
     async def _send_authoritative_state(self) -> None:
         frames = reconnect_sync_frames(
             authoritative_state={
-                "protocol_version": "1.0",
+                "protocol_version": "2.0",
                 "generation": self.generation,
                 "session_phase": self.phase,
             },
@@ -519,7 +525,7 @@ class ProductionSessionCoordinator:
             self._abort_output_stops()
         payload = json.dumps(
             {
-                "protocol_version": "1.1",
+                "protocol_version": "2.0",
                 "event_id": str(uuid4()),
                 "type": event_type,
                 "session_id": self.session_id,
