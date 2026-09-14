@@ -1,0 +1,54 @@
+{
+  "scope": "BE pauseハーネスと実Whisper入力端部の限定診断。100試行・前後比較・人の受入ではない。",
+  "measurement_revision": "76b042f69d8c31902feb02c0fbe52de37d603b33",
+  "profile": "integration-voice-pcm",
+  "counts": {
+    "expected": 3,
+    "recorded": 3,
+    "successful": 2,
+    "failed": 1,
+    "session_end_confirmed": 3
+  },
+  "trials": [
+    {
+      "pause_ms": 200,
+      "outcome": "failure",
+      "stage": "initial_response",
+      "reason": "audio_integrity_unavailable",
+      "labeled_fixture_injected": false
+    },
+    {
+      "pause_ms": 400,
+      "outcome": "success",
+      "confirmed": 1,
+      "ended": 1,
+      "finalized": 1,
+      "pcm_edges_matched": true
+    },
+    {
+      "pause_ms": 600,
+      "outcome": "success",
+      "confirmed": 1,
+      "ended": 1,
+      "finalized": 1,
+      "pcm_edges_matched": true
+    }
+  ],
+  "pcm_report": "voice-backend-358-pause-pcm-pilot.json",
+  "evidence_sha256": {
+    "trial-manifest.json": "ff91777dcce371b926d435f21accdb8adb16f14f73940578f4104c23d4d0ee59",
+    "whisper-input-pcm.jsonl": "fbb4a8aa272d365d8cefa3095ee7c0589183b9e87afe57921710193079898ec7",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "ca87382a7ae6d066ad9f1f5e5fd96a92ca081e51ea868b35aec622f9035111d1",
+    "playwright-results.json": "141e59ba6db15d6579ef7a5d2c36d790d10b7627167223ee3e41ac7186ac7a51",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "runtime-data/runtime/standalone/environment-run.json": "7a0113c7db6012bc7c956ed7c5d9c0798f2e9995678b4cb47a31644651c71b72"
+  },
+  "limitations": [
+    "語頭末尾のPCM照合と、正式VAD sample位置の誤差集計は異なる。後者は未了。",
+    "初回発話の統計未確認による破棄を保持。原因の詳細な範囲は記録されていない。"
+  ],
+  "cleanup": {
+    "owned_services_stopped": true,
+    "shared_inference_preserved": true
+  }
+}

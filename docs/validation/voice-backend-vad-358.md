@@ -331,3 +331,19 @@ BE detector sample位置とsource PCMを結ぶ境界offset集計は引き続き�
 
 検証: 新しいハーネス用unit **13 passed**、VAD／STT PCM集計 **39 passed**、
 Svelte／E2E TypeScript **0 errors / 0 warnings**。
+
+
+`76b042f` の実pause pilotは3件中2件成功、1件失敗。
+400ms／600msの休止では正式発話が各1件で、Whisperへの最終入力と固定音声の語頭・末尾も
+既存v4 PCM照合で確認できた。200msの試行は初期応答用の発話が
+audio_integrity_unavailableで破棄され、ラベル付き音声の投入へ進んでいない。
+[3件全体の証跡](../artifacts/voice-backend-358-pause-smoke.json)と
+[PCM集計](../artifacts/voice-backend-358-pause-pcm-pilot.json)に失敗を含めて保存した。
+
+受信統計の最初の有効観測より前に入力開始ACKを返し得る順序がコード上にあったため、
+認可trackの統計準備をACK前に待つ。FEの5秒deadlineに収めるためBEの準備上限は4秒とし、
+準備できなければ入力開始を拒否する。過去の未観測範囲を正常へ遡及補完しない。
+この変更だけで今回の初回失敗原因を特定・解消済みとは扱わず、同じ実3試行で再確認する。
+
+局所検証: 統計準備の待機・終了・取消とruntime **76 passed**、
+正式Ruff成功、mypy **337 files成功**。

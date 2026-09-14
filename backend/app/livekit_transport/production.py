@@ -1804,16 +1804,28 @@ class ProductionRuntimeManager:
 
         async def authorize_microphone(track_sid: str) -> bool:
             try:
-                async with asyncio.timeout(5):
+                # FEの5秒ACK待ちに収める。統計開始前の発話を認可し、後から欠測で
+                # 破棄する状態を避けるため、無音trackで最初の有効統計を待つ。
+                async with asyncio.timeout(4):
                     while True:
                         for track, identity, participant_sid, generation, task in tuple(microphone_readers.values()):
                             if (str(track.sid) == track_sid and task is not None and not task.done()
                                     and generation == coordinator.generation
                                     and coordinator.is_current_participant(identity=identity, participant_sid=participant_sid)):
-                                return True
-                        microphone_changed.clear()
-                        await microphone_changed.wait()
-            except TimeoutError:
+                                monitor = self._microphone_integrities.get((session_id, track_sid))
+                                if monitor is None:
+                                    # reader taskは登録直後、最初の実行をまだ待っている場合がある。
+                                    await asyncio.sleep(0.01)
+                                    break
+                                await monitor.wait_ready()
+                                return (not task.done() and generation == coordinator.generation
+                                        and self._microphone_integrities.get((session_id, track_sid)) is monitor
+                                        and coordinator.is_current_participant(
+                                            identity=identity, participant_sid=participant_sid))
+                        else:
+                            microphone_changed.clear()
+                            await microphone_changed.wait()
+            except (TimeoutError, AudioInputFault):
                 return False
 
         async def verify_audio_integrity(track_sid: str, start_sample: int, end_sample: int) -> None:

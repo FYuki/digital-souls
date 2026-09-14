@@ -73,6 +73,7 @@ class MicrophoneIntegrity:
         self._faults: deque[tuple[int, int, str]] = deque()
         self._lock = asyncio.Lock()
         self._closed = False
+        self._ready = asyncio.Event()
 
     async def observe(self) -> None:
         async with self._lock:
@@ -109,10 +110,17 @@ class MicrophoneIntegrity:
                     self._faults.append((self._covered_end, position, "audio_gap"))
             self._previous = current
             self._covered_end = position
+            self._ready.set()
             # 30秒発話＋prerollより長い保持窓。超過区間は確認不能として扱う。
             while len(self._faults) > MAX_OBSERVATION_WINDOWS:
                 _, end, _ = self._faults.popleft()
                 self._known_start = max(self._known_start or 0, end + 1)
+
+    async def wait_ready(self) -> None:
+        """入力認可前に最初の有効統計を待つ。上限は呼出側の認可deadlineで管理する。"""
+        await self._ready.wait()
+        if self._closed or self._previous is None or self._known_start is None:
+            raise AudioInputFault("audio_integrity_unavailable")
 
     async def run(self) -> None:
         while not self._closed:
@@ -160,4 +168,5 @@ class MicrophoneIntegrity:
 
     def close(self) -> None:
         self._closed = True
+        self._ready.set()
         self._faults.clear()

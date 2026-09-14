@@ -156,3 +156,54 @@ def test_cached_verified_window_keeps_detected_loss() -> None:
         monitor.close()
 
     asyncio.run(scenario())
+
+
+def test_input_readiness_waits_for_valid_initial_stats_without_backfilling():
+    async def scenario():
+        position = 1600
+        valid = False
+        async def read():
+            return report(1) if valid else []
+        monitor = MicrophoneIntegrity(read, lambda: position)
+        waiting = asyncio.create_task(monitor.wait_ready())
+        await asyncio.sleep(0)
+        assert not waiting.done()
+        with pytest.raises(AudioInputFault):
+            await monitor.observe()
+        assert not waiting.done()
+        valid = True
+        await monitor.observe()
+        await waiting
+        assert monitor._known_start == 1600
+        assert not monitor._verified_range(0, 1600)
+        monitor.close()
+    asyncio.run(scenario())
+
+
+def test_reader_close_releases_pending_readiness_as_unavailable():
+    async def scenario():
+        async def read():
+            return []
+        monitor = MicrophoneIntegrity(read, lambda: 0)
+        waiting = asyncio.create_task(monitor.wait_ready())
+        await asyncio.sleep(0)
+        monitor.close()
+        with pytest.raises(AudioInputFault, match="audio_integrity_unavailable"):
+            await waiting
+    asyncio.run(scenario())
+
+
+def test_cancelled_readiness_does_not_cancel_statistics_monitor():
+    async def scenario():
+        async def read():
+            return report(1)
+        monitor = MicrophoneIntegrity(read, lambda: 0)
+        waiting = asyncio.create_task(monitor.wait_ready())
+        await asyncio.sleep(0)
+        waiting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiting
+        await monitor.observe()
+        await monitor.wait_ready()
+        monitor.close()
+    asyncio.run(scenario())
