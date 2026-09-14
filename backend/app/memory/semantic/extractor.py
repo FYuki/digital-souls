@@ -205,11 +205,16 @@ def _resolve_quote(quote: EvidenceQuote, by_key: dict[str, InputPart]) -> Semant
         raise SemanticConflict("semantic quote references an unknown source")
     fragment = part.fragment
     text = fragment.text
-    start = quote.start - fragment.start if quote.start is not None else text.find(quote.quote)
-    if start < 0 or not text.startswith(quote.quote, start):
-        raise SemanticConflict("semantic quote is not grounded")
-    if quote.start is None and text.find(quote.quote, start + 1) >= 0:
-        raise SemanticConflict("ambiguous semantic quote requires an offset")
+    hinted_start = quote.start - fragment.start if quote.start is not None else -1
+    if hinted_start >= 0 and text.startswith(quote.quote, hinted_start):
+        start = hinted_start
+    else:
+        # LLMの文字数計算を根拠にせず、原文の完全一致が一箇所なら実際の位置を使う。
+        start = text.find(quote.quote)
+        if start < 0:
+            raise SemanticConflict("semantic quote is not grounded")
+        if text.find(quote.quote, start + 1) >= 0:
+            raise SemanticConflict("ambiguous semantic quote requires an offset")
     turn = fragment.source.turn
     span = SourceSpan(
         source_id=turn.turn_id, revision=fragment.source.revision, role=fragment.role,
