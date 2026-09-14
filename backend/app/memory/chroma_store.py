@@ -89,6 +89,7 @@ class MemorySearchResult:
     match_kind: RetrievalMatchKind = RetrievalMatchKind.SEMANTIC
     temporal_text: str | None = None
     content_version: int | None = None
+    current_self_report: bool = False
 
 
 class _ChromaCollection(Protocol):

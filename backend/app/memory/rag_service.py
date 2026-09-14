@@ -17,7 +17,7 @@ from app.memory.chroma_store import (
     query_memories,
 )
 from app.memory.memory_policy import MemoryPolicy, rag_service_policy
-from app.memory.read_contracts import EpisodicMemoryView, MemoryReadRepository, ReadableMemory
+from app.memory.read_contracts import EpisodicMemoryView, MemoryReadRepository, ReadableMemory, SemanticMemoryView
 from app.memory.episodic.temporal import render_time
 from app.memory.episodic.time_search import matches_time
 from app.memory.persistence.contracts import (
@@ -392,6 +392,7 @@ def _search_result(
         temporal_text=(render_time(memory.five_w.when)
                        if isinstance(memory, EpisodicMemoryView) and memory.five_w else None),
         content_version=memory.content_version,
+        current_self_report=isinstance(memory, SemanticMemoryView) and memory.current_self_report,
     )
 
 

@@ -45,6 +45,7 @@ class SemanticMemoryView:
     created_at: datetime
     updated_at: datetime
     last_user_mentioned_at: datetime | None
+    current_self_report: bool = False
     provider_id: str = "core"
     memory_kind: str = "SEMANTIC"
     occurred_at: datetime | None = None

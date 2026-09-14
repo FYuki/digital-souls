@@ -60,10 +60,28 @@ def test_semantic_correction_and_deletion_reach_canonical_chroma_and_prompt_refe
     prompt = _rag_context_for_reply("miori", "私の居住地は？", context, dependencies)
     assert prompt.items[0].reference.memory_id == corrected["id"]
     assert prompt.items[0].reference.content_version == corrected["content_version"]
-    assert "東京" in prompt.items[0].content
+    assert "現在有効な自己申告: ユーザーの居住地は東京" == prompt.items[0].content
+    assert "訂正前の内容を現在の答えとして使わない" in prompt.required_instruction
+    assert found[0].normalized_text == "ユーザーの居住地は東京"
     from uuid import UUID
     manager.delete(character_id="miori", record_id=UUID(corrected["id"]), version=corrected["content_version"])
     assert not retrieve().memories
     with sqlite3.connect(h.paths.sqlite_path) as connection:
         assert connection.execute("SELECT user_content FROM conversation_turns WHERE turn_id=?",
                                   (str(original_source.source_id),)).fetchone()[0] == "私は大阪に住んでいる"
+
+def test_historical_and_derived_memories_are_not_marked_as_current_self_report(h):
+    from app.memory.semantic.contracts import SemanticOperation
+    from tests.module.test_semantic_store import derived
+
+    original = save(h, candidate(source(h)))
+    current = save(h, candidate(source(h, "東京へ引っ越した"), value="東京"),
+                   target=original, op=SemanticOperation.CHANGE)
+    generalization = save(h, candidate(derived(h), predicate="コーヒーの好み", value="好き",
+                                      derived=True, self_report=False))
+    reader = SemanticReadRepository(h.store)
+    views = {view.id: view for view in reader.list_active(character_id="miori")}
+    assert views[current.id].current_self_report
+    assert not views[original.id].current_self_report
+    assert "過去の状態" in views[original.id].normalized_text
+    assert not views[generalization.id].current_self_report

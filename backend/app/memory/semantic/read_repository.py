@@ -52,6 +52,8 @@ class SemanticReadRepository:
             normalized_text=text, proposition=value if active else None,
             policy_version=record.stamp.policy_version, content_version=record.content_version,
             status=MemoryStatus.ACTIVE if active else MemoryStatus.INACTIVE,
+            current_self_report=bool(record.status is SemanticStatus.ACTIVE
+                and record.formation_type is FormationType.DIRECT_EXTRACTION and value and value.self_report),
             created_at=record.created_at, updated_at=record.updated_at,
             last_user_mentioned_at=max((s.span.stated_at for s in record.sources if s.span and s.span.role=="user"),
                                        default=None),
