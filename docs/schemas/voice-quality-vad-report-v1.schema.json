@@ -99,6 +99,11 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 100
+        },
+        "backend_media_alignment_unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
         }
       }
     },
@@ -374,6 +379,12 @@
           "const": false
         }
       }
+    },
+    "input_authority": {
+      "enum": [
+        "frontend",
+        "backend"
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema"

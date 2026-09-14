@@ -1,3 +1,4 @@
+import {readBackendVadObservation} from './backend-vad-diagnostic'
 import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 import { selectPcmFixture, snapshotPcmInputs } from './whisper-pcm-observer'
 import {installServerClockProbe} from './server-clock-probe'
@@ -69,7 +70,8 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
     await mkdir(dirname(output), {recursive: true})
     await writeFile(output, JSON.stringify({measurement_scope: cohort === 'pause' ? 'labeled_livekit_vad_diagnostic' : 'labeled_livekit_interruption_diagnostic',
       measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
-      ...(cohort === 'take_turn' ? {latency_origin: 'scheduled_fixture_speech_start', input_authority: inputAuthority} : {}),
+      input_authority: inputAuthority,
+      ...(cohort === 'take_turn' ? {latency_origin: 'scheduled_fixture_speech_start'} : {}),
       cohort, expected_measured: count, initial_fixture_sha256: initial.audioSha256,
       ...(selection === undefined ? {} : {fixture_indices: indices}),
       labeled_manifest_sha256: createHash('sha256').update(manifestBytes).digest('hex'), trials}, null, 2) + '\n')
@@ -162,6 +164,23 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       trial.fixture_clock_bounds = await readFixtureBounds(page)
       if (cohort === 'pause') {
         stage = 'vad_completion'
+        if (inputAuthority === 'backend') {
+          // fixtureを供給した後、BEの正式utteranceと最終STTを照合する。
+          // この件数だけで音声全体の到着・語頭末尾の保持を証明せず、PCM診断で別に確認する。
+          await expect.poll(async () => {
+            const evidence = await snapshot(page)
+            const observation = readBackendVadObservation({
+              events: evidence.core_events, overflow: evidence.core_events_overflow,
+              sessionId: String(trial.session_id), initialUtteranceId: cycle.utteranceId,
+              sourceStartLowerMs: evidence.fixture_clock_bounds.sourceStart?.lowerMs ?? Number.NaN,
+            })
+            trial.backend_vad = observation
+            return observation.status
+          }, {timeout: 10000}).toBe('observed')
+          expect(trial.backend_vad).toMatchObject({confirmed: 1, ended: 1, finalized: 1})
+          trial.outcome = 'success'
+          continue
+        }
         // fixture全体を出した後に主VADのframe処理まで待つ。先行応答のVADや
         // 文中の最初の終了だけを、対象音声全体の成功と取り違えない。
         await page.waitForFunction(() => {

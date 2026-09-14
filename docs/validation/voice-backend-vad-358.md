@@ -314,3 +314,20 @@ LLM／VOICEVOXで **1 passed、skip 0**。新しいreporter・cohort schemaを�
 過去のメタデータなしFE artifactの解釈は維持する。
 
 最終確認: 関連unit **214 passed**。保存した匿名pilot reportも現行cohort validatorで再検証済み。
+
+
+### M5: pauseハーネスのBE境界への接続
+
+pause cohortは新しいBE版でFE VAD frameを待たず、同一session・track・入力世代の
+正式speech_started／speech_stoppedと最終utteranceを照合する。
+二つの発話を一つに統合せず、重複・対応なし・逆転・overflow・破棄は診断失敗として保持する。
+旧FE版比較はinput_authority=frontendを明示して旧ハーネスの境界観測を維持する。
+
+診断件数だけで音声全体の到着や語頭・末尾を証明しない。
+BE通知のserver実行時刻からsample数を引いてbrowser上の発話時刻を合成しない。
+旧VAD境界reportはBE入力をmedia照合未了として欠測にし、旧FEイベントが含まれても代用しない。
+実PCMの端部確認には既存のobserve-stt-pcm／report_stt_pcmを併用する。
+BE detector sample位置とsource PCMを結ぶ境界offset集計は引き続き未完了。
+
+検証: 新しいハーネス用unit **13 passed**、VAD／STT PCM集計 **39 passed**、
+Svelte／E2E TypeScript **0 errors / 0 warnings**。

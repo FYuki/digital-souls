@@ -10,6 +10,7 @@ from uuid import UUID
 
 COHORTS = {"backchannel", "take_turn", "pause"}
 MISSING = {
+    "backend_media_alignment_unavailable",
     "fixture_boundary_unavailable", "detector_events_unavailable",
     "detector_event_overflow", "speech_not_confirmed", "speech_end_unavailable",
     "detector_event_order_invalid",
@@ -120,6 +121,9 @@ def summarize(manifest_bytes: bytes, fixture_bytes: bytes) -> dict[str, Any]:
         selected = available[:count]
     if len(selected) != count:
         raise ValueError("fixture cohort incomplete")
+    authority = manifest.get("input_authority", "frontend")
+    if authority not in {"frontend", "backend"}:
+        raise ValueError("unsupported VAD input authority")
     sessions = set()
     missing: Counter[str] = Counter()
     measured = []
@@ -147,7 +151,10 @@ def summarize(manifest_bytes: bytes, fixture_bytes: bytes) -> dict[str, Any]:
             if (type(pause) is not int or not 0 < pause <= 28800
                     or intervals[1]["start_sample"] - intervals[0]["end_sample"] != pause):
                 raise ValueError("pause outside acceptance scope")
-        row = measure(trial, fixture)
+        # BEの検知通知は実行時計であり、FEのmedia時計ではない。sample/source照合なしで
+        # 旧FEの検出時刻を代入して語頭・末尾の誤差が0になったように見せない。
+        row = ({"missing": "backend_media_alignment_unavailable"} if authority == "backend"
+               else measure(trial, fixture))
         if "missing" in row:
             missing[row["missing"]] += 1
         else:
@@ -160,6 +167,7 @@ def summarize(manifest_bytes: bytes, fixture_bytes: bytes) -> dict[str, Any]:
              "early_end_error_at_most_one_percent": counts["early_end_error"] * 100 <= count,
              "split_at_most_one_percent": counts["split"] * 100 <= count}
     return {"schema_version": "1.0", "measurement_scope": "real_browser_vad_detector_boundaries",
+            **({"input_authority": authority} if "input_authority" in manifest else {}),
             "cohort": cohort, "raw_sha256": sha256(manifest_bytes).hexdigest(),
             "fixture_manifest_sha256": sha256(fixture_bytes).hexdigest(),
             "clock_domain": "browser_monotonic", "maximum_fixture_uncertainty_ms": 20,
