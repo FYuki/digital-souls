@@ -8,11 +8,11 @@ from app.memory.episodic.time_search import exact_occurred_at, matches_time
 from app.memory.persistence.contracts import MemoryStatus, TemporalPrecision
 from app.memory.read_contracts import MemoryReadRepository, ReadableMemory, SemanticMemoryView
 from app.memory.semantic.contracts import FormationType, SemanticRecord, SemanticStatus
-from app.memory.semantic.service import SemanticStore
+from app.memory.semantic.service import SemanticSourceReader
 
 
 class SemanticReadRepository:
-    def __init__(self, store: SemanticStore) -> None:
+    def __init__(self, store: SemanticSourceReader) -> None:
         self.store = store
 
     def get(self, *, character_id: str, memory_id: UUID) -> SemanticMemoryView | None:

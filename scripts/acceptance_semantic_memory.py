@@ -115,7 +115,8 @@ def main() -> int:
     for target, output in (("CHAT", 1024), ("PRIVACY", 512),
                            ("MEMORY_EXTRACTION", 4096), ("MEMORY_CONSOLIDATION", 512),
                            ("SEMANTIC_EXTRACTION", 4096)):
-        input_tokens = 32768 if target in {"SEMANTIC_EXTRACTION", "MEMORY_EXTRACTION"} else 7680
+        input_tokens = (32768 if target in {"SEMANTIC_EXTRACTION", "MEMORY_EXTRACTION"}
+                        else 7168 if target == "CHAT" else 7680)
         model = args.model if target == "SEMANTIC_EXTRACTION" else "gemma4:e4b"
         token_limits[target] = {"input": input_tokens, "output": output}
         environment.update({
