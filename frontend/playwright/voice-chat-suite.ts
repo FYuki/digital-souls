@@ -14,9 +14,6 @@ import { expect, type Page } from '@playwright/test'
 
 declare global {
   interface Window {
-    __voiceSessionController?: {
-      speechStarted: (utteranceId: string, atMs: number) => Promise<void>
-    }
     __voiceChatE2E: {
       decodedReceipts?: DecodedReceiptSnapshot[]
       decodedReceiptsOverflow?: boolean
@@ -178,9 +175,6 @@ const installPlaybackProbe = async (page: Page) => {
           decision?: string
           final?: boolean
         }) => void
-        bindController?: (controller: {
-          speechStarted: (utteranceId: string, atMs: number) => Promise<void>
-        }) => void
       }
     }
     testPortTarget.__digitalSoulsVoiceSessionTestPort = {
@@ -195,9 +189,6 @@ const installPlaybackProbe = async (page: Page) => {
         const rows = window.__voiceChatE2E.staleAudio ??= []
         if (rows.length >= 1024) {window.__voiceChatE2E.staleAudioOverflow = true; return}
         rows.push(observation)
-      },
-      bindController: (controller) => {
-        window.__voiceSessionController = controller
       },
       observeRoom: (observation) => {
         if (observation.mediaTimelineInterruption) {
@@ -551,7 +542,7 @@ export const createVoiceChatDriver = () => {
 
   const waitForSpeechCompletion = async (page: Page) => {
     const button = page.getByRole('button', { name: /マイクを(オン|オフ)にする/ })
-    await expect(button).toHaveClass(/mic-active/, { timeout: 15_000 })
+    await expect(button).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 })
     await page.waitForFunction(
       () => window.__voiceChatE2E.cycles.length > 0,
       undefined,

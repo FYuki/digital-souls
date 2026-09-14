@@ -113,3 +113,22 @@ Backend全体の合格、実サービスの往復、M5／M6の受入完了は引
 | ds358_final_targeted.xml | 923c99ddbbf518a2266136ff90f6315b59bb619cd7e0e07377d31111a792d352 |
 
 実サービス・ブラウザ試験、移設前後の計測、人の実マイク・聴感受入は未完了。
+
+## 2026-09-15: Frontend結合試験・モックE2Eの移行
+
+- Roomモックは新track SIDとBEの入力開始ACKを返す。録音デバイスが有効になる前の発話代入を拒否し、clientから正式speechイベントが送られた場合も失敗させる。
+- 発話／割り込みは明示的なBEモック通知へ変更し、削除済みcontroller.speechStartedへのテスト入口を除去した。
+- マイクボタンは端末の有効状態、会話状態欄はBEの発話状態として検証する。focus／手動mute／text受理／再接続で新trackを開くこと、遅着出力を破棄することを保持した。
+- 既存3往復ケースはFE VAD asset取得を禁止し、取得要求0件で履歴へ反映されることを検証する。発話境界はモックであり、実PCMからの3往復受入ではない。
+- モックの停止時間はBE判断通知からlocal停止までの時計として記録する。旧FE VAD時計を補完せず、実発話からの性能指標とは別にした。
+- Addon音声承認ケースはブラウザのテスト用マイクを設定し、BE ACKによる有効化を待ってから発話を通知する。マイク未接続でも発話だけを注入していたfixtureを修正した。
+- Speech／Text履歴投影、privacy終端、bootstrapの結合試験fixtureをprotocol 2.0へ移行した。
+
+検証結果:
+
+- Frontend module: **141 passed、0 failed、0 skipped**。
+- 音声モックE2E: **16 passed**。その後、Addon／通常チャット／画面共有等を含む全体を実行し、**56 passed、0 failed、0 skipped**（37.4秒）。
+- Svelte: **0 errors / 0 warnings**。E2E／integration TypeScript検査成功。
+- Frontend build成功。500kB超のchunk警告は残る。
+
+実LiveKit／Whisper／LLM／TTS、実発話起点とBE境界の計測相関、前後比較、人の実マイク・聴感受入は未完了。
