@@ -67,6 +67,28 @@ def residency_values(body: object, model: str) -> dict[str, object]:
     }
 
 
+def configured_chat_model_contexts(environment: dict[str, str]) -> dict[str, int]:
+    """CHATと同じmodelを使う各生成用途の設定値だけを匿名で記録する。"""
+    from app.inference.config import TARGET_DEFINITIONS
+
+    reference = environment.get("INFERENCE_TARGET_CHAT")
+    if not reference or not reference.startswith("ollama/"):
+        raise ValueError("configured chat reference unavailable")
+    contexts: dict[str, int] = {}
+    for definition in TARGET_DEFINITIONS.values():
+        key = "INFERENCE_TARGET_" + definition.env_token
+        if not definition.requires_output_limit or environment.get(key) != reference:
+            continue
+        limits = [environment.get(key + suffix) for suffix in (
+            "_MAX_INPUT_TOKENS", "_MAX_OUTPUT_TOKENS",
+        )]
+        if any(value is None or re.fullmatch(r"[1-9][0-9]*", value) is None for value in limits):
+            raise ValueError("configured context limit unavailable")
+        contexts[definition.env_token] = sum(int(value) for value in limits if value is not None)
+    # 設定値が常駐contextと一致しても、要求の主体・実行時刻の証明にはしない。
+    return contexts
+
+
 def probe_residency(endpoint: str, model: str) -> dict[str, object]:
     started = time.monotonic_ns()
     try:
@@ -247,6 +269,7 @@ def run(args: argparse.Namespace) -> int:
     model = reference.split("/", 1)[1]
     endpoint = env.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     expected_context = int(env["INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS"]) + int(env["INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS"])
+    configured_contexts = configured_chat_model_contexts(env)
     base = run_root(args.run_id)
     base.mkdir(parents=True, exist_ok=False)  # 失敗した試行のdata rootも上書きしない。
     with ExitStack() as owned:
@@ -265,6 +288,7 @@ def run(args: argparse.Namespace) -> int:
                 sample = 0
                 while process.poll() is None:
                     row = {"scope": "controlled_shared_inference_observation" if args.controlled else "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
+                           "configured_chat_model_context_tokens_by_target": configured_contexts,
                            "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking, "scheduled_fixture": args.scheduled_fixture, "continuous_turns": args.continuous_turns,
                            "ollama": probe_residency(endpoint, model), "backend": resources.sample()}
                     if sample % 10 == 0:
