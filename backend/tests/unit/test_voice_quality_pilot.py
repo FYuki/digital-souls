@@ -380,3 +380,54 @@ def test_irodori_fault_probe_keeps_shared_tts_and_selects_dedicated_bridge(tmp_p
     assert env["IRODORI_BASE_URL"] == "http://127.0.0.1:50024"
     assert env["LIVEKIT_URL"] == "ws://127.0.0.1:19880"
     assert env["VOICE_QUALITY_NETWORK_FAULT"] == "1"
+
+
+def test_configured_contexts_distinguish_background_targets():
+    env = {
+        "INFERENCE_TARGET_CHAT": "ollama/private-model",
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/private-model",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+        "INFERENCE_TARGET_PRIVACY": "ollama/different-private-model",
+        "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "7680",
+        "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_EMBEDDING": "ollama/private-model",
+        "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192",
+        "INFERENCE_TARGET_PRIVATE_UNKNOWN": "ollama/private-model",
+        "OLLAMA_BASE_URL": "http://private-host",
+    }
+    original = dict(env)
+    result = pilot.configured_chat_model_contexts(env)
+    assert result == {"CHAT": 8192, "MEMORY_EXTRACTION": 36864}
+    assert "private" not in json.dumps(result).lower()
+    assert env == original
+
+
+@pytest.mark.parametrize("invalid", [None, "", "private-secret", "0", "-1", "1.5"])
+def test_configured_contexts_do_not_invent_missing_limits(invalid):
+    env = {
+        "INFERENCE_TARGET_CHAT": "ollama/private-model",
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/private-model",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+    }
+    if invalid is not None:
+        env["INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS"] = invalid
+    with pytest.raises(ValueError, match="configured context limit unavailable") as exc:
+        pilot.configured_chat_model_contexts(env)
+    assert "private" not in str(exc.value)
+
+
+def test_configured_contexts_match_committed_measurement_settings():
+    env = {key: value for key, value in pilot.dotenv_values(
+        _PATH.parents[2] / "backend/.env.example"
+    ).items() if value is not None}
+    assert pilot.configured_chat_model_contexts(env) == {
+        "CHAT": 8192,
+        "PRIVACY": 8192,
+        "MEMORY_EXTRACTION": 36864,
+        "MEMORY_CONSOLIDATION": 8192,
+    }
