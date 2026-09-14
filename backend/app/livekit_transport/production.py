@@ -916,8 +916,7 @@ class _UserAudioCapture:
     interrupted_response_id: str | None = None
     pcm: bytearray = field(default_factory=bytearray)
     finalized: bool = False
-    finalization_scheduled: bool = False
-    media_tail_elapsed: bool = False
+    integrity_verified: bool = False
     capacity_exceeded: bool = False
     preview_attempts: int = 0
     preview_complete: bool = False
@@ -935,7 +934,6 @@ class _ConversationCoreBridge:
         schedule: Callable[[Awaitable[None]], None],
         stop_audio: Callable[[str], None] = lambda _response_id: None,
         confirm_response_playback: Callable[[str, int], bool] = lambda _response_id, _sequence: False,
-        media_tail_seconds: float = 0.15,
         measurement: LiveKitMeasurementSession | None = None,
         session_metrics: SessionMetrics | None = None,
         text_input: TextInputReceiver | None = None,
@@ -953,7 +951,6 @@ class _ConversationCoreBridge:
         self._user_participant_id = user_participant_id
         self._playback_response_id: str | None = None
         self._schedule = schedule
-        self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
         self._confirm_response_playback = confirm_response_playback
         self._measurement = measurement
@@ -1084,11 +1081,13 @@ class _ConversationCoreBridge:
             )
         except AudioInputFault as error:
             self._audio_discarded(boundary.utterance_id, error.code)
+            # 先行発話が失敗しても、別世代で終了・検証済みの後続を滞留させない。
+            await self._finalize_user_audio_if_ready()
             return
         if not any(item is capture for item in self._user_audio_captures):
             return
         # BE自身がPCM境界を検出するため、FE通知後のmedia tail待機は不要。
-        capture.media_tail_elapsed = True
+        capture.integrity_verified = True
         await self._finalize_user_audio_if_ready()
 
     def _audio_discarded(self, utterance_id: str | None, reason: str) -> None:
@@ -1249,20 +1248,18 @@ class _ConversationCoreBridge:
         self._microphone_received_bytes += len(pcm)
         if self._audio_input_suppressed:
             return
-        if not self._user_audio_captures:
+        capture = next(
+            (item for item in reversed(self._user_audio_captures) if not item.finalized),
+            None,
+        )
+        if capture is None:
+            # BEがPCMから確定した終了境界を越える音声は次の入力のprerollにする。
+            # 終了通知・欠落確認の待機中にも、確定済みcaptureへ追加しない。
             self._microphone_preroll.extend(pcm)
             excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
             if excess > 0:
                 del self._microphone_preroll[:excess]
             return
-        active = next(
-            (item for item in reversed(self._user_audio_captures) if not item.finalized),
-            None,
-        )
-        capture = active or next(
-            (item for item in self._user_audio_captures if not item.pcm),
-            self._user_audio_captures[0],
-        )
         if self._measurement is not None:
             self._measurement.record_utterance_event(
                 utterance_id=capture.utterance_id,
@@ -1276,7 +1273,6 @@ class _ConversationCoreBridge:
             capture.pcm.extend(pcm)
         self._consider_stt_preparation(capture, pcm)
         self._consider_turn_preview(capture)
-        self._schedule_finalization_if_ready(capture)
 
     def _consider_turn_preview(self, capture: _UserAudioCapture) -> None:
         if (capture.interrupted_response_id is None or capture.preview_complete
@@ -1408,26 +1404,6 @@ class _ConversationCoreBridge:
                 if capture is not None:
                     self._consider_turn_preview(capture)
 
-    def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
-        if (
-            capture.finalized
-            and capture.pcm
-            and not capture.finalization_scheduled
-        ):
-            capture.finalization_scheduled = True
-            self._schedule(self._finalize_after_media_tail(capture.utterance_id))
-
-    async def _finalize_after_media_tail(self, utterance_id: str) -> None:
-        # reliable dataとWebRTC mediaは同じ到着順を保証しない。VAD停止直後の
-        # audio frameを取りこぼさない短い猶予を置いてからSTT入力を確定する。
-        if self._media_tail_seconds > 0:
-            await asyncio.sleep(self._media_tail_seconds)
-        for capture in self._user_audio_captures:
-            if capture.utterance_id == utterance_id:
-                capture.media_tail_elapsed = True
-                await self._finalize_user_audio_if_ready()
-                break
-
     async def _finalize_user_audio_if_ready(self) -> None:
         while self._user_audio_captures:
             capture = self._user_audio_captures[0]
@@ -1438,9 +1414,9 @@ class _ConversationCoreBridge:
                     return
                 self._user_audio_captures.popleft()
                 continue
-            # 各発話のtimerが完了するまで、その発話の末尾を確定しない。
+            # 各発話の欠落確認が成功するまでSTTへ渡さない。
             # 音声のない旧captureは従来どおり後続を妨げず取り除く。
-            if not capture.media_tail_elapsed:
+            if not capture.integrity_verified:
                 return
             utterance_id = capture.utterance_id
             microphone_pcm = bytes(capture.pcm)

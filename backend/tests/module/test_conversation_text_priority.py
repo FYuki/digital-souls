@@ -7,6 +7,7 @@ from uuid import uuid4
 from app.conversation_core import ConversationCoreSession
 from app.livekit_transport.production import _ConversationCoreBridge
 from app.livekit_transport.text_input import TextInputReceiver
+from tests.voice_capture_test_support import begin_capture, finish_capture
 from tests.conversation_core_test_support import (
     BlockingLlm, RecordingDelivery, RecordingObservation, RecordingPersistence, RecordingTts,
 )
@@ -54,12 +55,12 @@ def test_protocol_text_invalidates_queued_audio_once_and_does_not_wait_for_old_s
         )
         bridge = _ConversationCoreBridge(
             session, lambda op: tasks.append(asyncio.create_task(op)),
-            text_input=receiver, media_tail_seconds=0,
+            text_input=receiver,
         )
 
         def event(kind: str, **fields: object) -> bytes:
             return json.dumps({
-                "protocol_version": "1.1", "type": kind, "session_id": session.session_id,
+                "protocol_version": "2.0", "input_revision": 1, "type": kind, "session_id": session.session_id,
                 "event_id": str(uuid4()), "monotonic_timestamp_ms": 1,
                 "speaker": {"role": "user", "participant_id": participant_id}, **fields,
             }).encode()
@@ -70,14 +71,15 @@ def test_protocol_text_invalidates_queued_audio_once_and_does_not_wait_for_old_s
                     await asyncio.sleep(0)
 
         async def speech(utterance_id: str, pcm: bytes, *, stop: bool = True) -> None:
-            bridge.notify(event("speech_started", utterance_id=utterance_id))
+            begin_capture(bridge, utterance_id)
             bridge.receive_microphone(pcm)
             if stop:
-                bridge.notify(event("speech_stopped", utterance_id=utterance_id))
+                await finish_capture(bridge, utterance_id)
             await asyncio.sleep(0)
 
         old_id, queued_id, open_id, fresh_id = (str(uuid4()) for _ in range(4))
         try:
+            await bridge.prepare_audio()
             await session.submit_text(input_id=str(uuid4()), text="保存する先行入力")
             await speech(old_id, old_pcm)
             await asyncio.wait_for(old_started.wait(), 2)
@@ -111,6 +113,7 @@ def test_protocol_text_invalidates_queued_audio_once_and_does_not_wait_for_old_s
         finally:
             release_old.set()
             release_fresh.set()
+            await bridge.close_audio()
             await asyncio.gather(*tasks)
             await session.end()
 

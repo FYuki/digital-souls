@@ -82,3 +82,34 @@ M3／M4接続実装（`b0b0452`）に対して、既存のApp・録音UI・共�
 - 最初の一括実行は、無効な旧protocolの送信でcleanup待機へ入り進行しなかったため中断した。protocol fixture更新後、該当する配送suiteは上記145件の一部として正常完了した。
 
 Backend全体の合格、実サービスの往復、M5／M6の受入完了は引き続き未確認。
+
+## 2026-09-15: BE終了境界の固定と既存Backend試験の更新
+
+終了したcaptureへ、欠落確認を待っている間に後続PCMが追記される経路を修正した。
+終了済み区間を固定し、次のPCMは未終了captureまたは上限付きprerollだけへ渡す。
+旧FE通知後のmedia tail timerを削除し、BE境界と発話ごとの欠落確認成功をSTT開始条件にした。
+先行発話の欠落確認が失敗した場合も、別入力世代で終了・検証済みの後続発話を処理する。
+
+- 実Silero／libfvadへ固定speech.wavを入力し、先行終了後の確認待機中にfocus／blurと新track入力を挟むmodule回帰試験を追加した。
+- 先行確認の成功／失敗の両方でPCMの不変性と発話の分離を検証した。失敗側では修正前に後続STTが滞留することを再現し、修正後に後続だけ進むことを確認した。
+- このmodule試験のCore／STTと通信上の欠落確認はモックである。実VADは動作するが、実ネットワーク欠落の受入を代用しない。
+- 前節の未移行43件を含め、capture、preroll、preview、STT直列化、入力抑止、text優先、SQLite履歴の既存試験を新契約へ更新した。単体capture fixtureはBE判断後の内部入口を利用し、clientのspeech通知を再許可していない。
+- BE検知時計からFE発話起点を捏造しないことを確認した。実発話起点からの遅延測定はM5／M6の残作業である。
+
+検証結果:
+
+- 既存LiveKit関連・契約・bootstrap: **500 passed**。
+- Backend unit／module全体は600秒上限で中断したため、未実行・旧fixture失敗を後続実行で補完した。現在収集される**5,640件**のtest IDを3個のJUnit結果と照合し、各IDの最終結果は**5,640 passed、0 failed、0 skipped、0 missing**だった。これは単一の中断なし全体実行の成功ではない。
+- 元の一括実行は5,067 passed／1 failed／1 skipped、未実行・失敗の補完は571 passed／1 failed、最終修正後の対象実行は70 passed。元のskipはroot依存不足によるPromptfoo smokeであり、npm ci後の実行成功で解消した。
+- mypy: **337 source filesで問題なし**。ruff成功。
+
+一時JUnit結果の照合情報（SHA256）:
+
+| 対象 | SHA256 |
+|---|---|
+| 現在の収集test ID一覧 | 4bee552753fa779e4d0c9755012f3c7d90ae4691e9a5075c9da9800759e9dae6 |
+| ds358_be_full.xml | 15c324c8d6149f91ade873678c50f86e84a4d36322d850d0602a6b521afa709d |
+| ds358_be_remaining_full.xml | 9faa2bf5fc30b6a8d716267374d45a9d0e1b3bdb088667f0088eb58314e74034 |
+| ds358_final_targeted.xml | 923c99ddbbf518a2266136ff90f6315b59bb619cd7e0e07377d31111a792d352 |
+
+実サービス・ブラウザ試験、移設前後の計測、人の実マイク・聴感受入は未完了。
