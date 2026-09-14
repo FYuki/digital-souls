@@ -2399,8 +2399,9 @@ def test_production_stop_retries_only_failed_room_disconnect() -> None:
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize("failure_stage", ["connect", "tts_prepare"])
 def test_production_connect_failure_is_compensated_by_bootstrap_owner(
-    monkeypatch,
+    monkeypatch, failure_stage,
 ) -> None:
     bootstrap = importlib.import_module("app.livekit_transport.bootstrap")
     production = importlib.import_module("app.livekit_transport.production")
@@ -2423,7 +2424,8 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
             return lambda callback: callback
 
         async def connect(self, _url: str, _token: str) -> None:
-            raise RuntimeError("room connection failed")
+            if failure_stage == "connect":
+                raise RuntimeError("room connection failed")
 
         async def disconnect(self) -> None:
             disconnected.append(session_id)
@@ -2465,6 +2467,16 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
         session_repository=sessions,
         core_port=CorePort(),
     )
+    closed_sources = []
+    async def close_source():
+        closed_sources.append(session_id)
+    async def prepare_output(_room):
+        return SimpleNamespace(aclose=close_source)
+    async def fail_preparation(**_kwargs):
+        raise RuntimeError("tts preparation failed")
+    if failure_stage == "tts_prepare":
+        runtime._prepare_output_track = prepare_output
+        runtime._core_session_factory = SimpleNamespace(create=fail_preparation, create_ready=fail_preparation)
     service = bootstrap.BootstrapService(
         session_repository=sessions,
         room_manager=rooms,
@@ -2480,7 +2492,7 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
         "requested_reconnect_grace_ms": 60_000,
     }
 
-    with pytest.raises(RuntimeError, match="room connection failed"):
+    with pytest.raises(RuntimeError, match="room connection failed|tts preparation failed"):
         asyncio.run(asyncio.wait_for(service.bootstrap(request), timeout=0.5))
 
     assert sessions.contains(session_id) is False
@@ -2489,6 +2501,9 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
     assert runtime._coordinators == {}
     assert runtime._session_tasks == {}
     assert disconnected == [session_id]
+
+    assert closed_sources == ([session_id] if failure_stage == "tts_prepare" else [])
+    assert runtime._audio_sources == {}
 
 
 def test_production_core_bridge_waits_for_each_utterances_media_tail() -> None:
@@ -2760,3 +2775,77 @@ def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() 
     assert records[-1]["outcome"] == "excluded"
     assert records[-1]["reason_code"] == "barge_in"
     assert all("terminal_state_bounds_ns" not in event for event in wire)
+
+
+@pytest.mark.parametrize("waiting_stage", ["connect", "output", "tts"])
+def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypatch, waiting_stage):
+    from uuid import uuid4
+    production = importlib.import_module("app.livekit_transport.production")
+
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+        closed, ended, deleted = [], [], []
+        async def pause(stage):
+            if waiting_stage == stage:
+                entered.set()
+                await release.wait()
+        class Room:
+            def __init__(self):
+                self.local_participant = SimpleNamespace(publish_data=lambda *args, **kwargs: None)
+            def on(self, _event):
+                return lambda callback: callback
+            async def connect(self, *_args):
+                await pause("connect")
+            async def disconnect(self):
+                pass
+        rtc = SimpleNamespace(Room=Room)
+        monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+        monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
+        async def token(_request):
+            return "character-token"
+        async def delete(identifier):
+            deleted.append(identifier)
+        async def close_source():
+            closed.append("audio")
+        async def prepare(_room):
+            await pause("output")
+            return SimpleNamespace(aclose=close_source, clear=lambda: None)
+        class Core(NoopCoreSession):
+            async def end(self):
+                ended.append("core")
+        async def create(**_kwargs):
+            await pause("tts")
+            return Core()
+        runtime = production.ProductionRuntimeManager(
+            livekit_url="ws://127.0.0.1:7880",
+            signer=SimpleNamespace(issue_token=token),
+            room_manager=SimpleNamespace(delete=delete),
+            session_repository=SimpleNamespace(delete=delete),
+            core_port=SimpleNamespace(notify=lambda _payload: None),
+            core_session_factory=SimpleNamespace(create=create, create_ready=create),
+        )
+        runtime._prepare_output_track = prepare
+        session_id = str(uuid4())
+        pending = asyncio.create_task(runtime.start_runtime({
+            "session_id": session_id, "identity": "character",
+            "character_id": "miori", "conversation_id": str(uuid4()),
+            "core_participant_id": str(uuid4()), "reconnect_grace_ms": 60_000,
+        }))
+        await asyncio.wait_for(entered.wait(), 1)
+        coordinator = runtime._coordinators[session_id]
+        # 90秒待たずに、実際のjoin期限処理とcleanupを通す。
+        await coordinator._expire_after(0)
+        release.set()
+        with pytest.raises(RuntimeError, match="runtime startup ended"):
+            await asyncio.wait_for(pending, 1)
+        assert runtime._core_sessions == {}
+        assert runtime._core_bridges == {}
+        assert runtime._audio_sources == {}
+        assert runtime._coordinators == {}
+        assert runtime._rooms == {}
+        assert runtime._ready == {}
+        assert runtime._cleanup_states == {}
+        assert closed == ([] if waiting_stage == "connect" else ["audio"])
+        assert ended == (["core"] if waiting_stage == "tts" else [])
+        assert len(deleted) == 2
+    asyncio.run(scenario())

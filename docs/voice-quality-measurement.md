@@ -43,6 +43,12 @@ p50とp95は Hyndman-Fan Type 7 で計算する。p50は診断値、latencyの�
 
 LiveKitの絶対p95上限は TTFA 2000ms、local stop 3000ms、turn decision 3000ms、decision後cancel 200ms、全cancel 3500ms、utterance確定 800msである。local stopと全cancelは、VAD直後に相槌でも停止する旧方式ではなく、冒頭STTによる相槌／発話判定を含む。比較可能な同一区間では `WebSocket p95 + max(10%, 50ms)` も同時に満たす。TTFA p50 1000msは改善目安であり合否を変えない。CPU、memory、bandwidth、packet loss、network条件も診断値であり合否に使わない。
 
+## Irodori差し替え時の測定区分（#329、設計）
+
+[Irodori要件](irodori-tts-requirements.md)に従い、起動からモデル読み込み・ウォームアップ合成成功までの初回準備時間と、準備済みの通常会話TTFAを分ける。準備前のIrodori音声会話は開始不可とし、health応答だけで測定可能としない。
+
+VOICEVOXとの比較は同等条件で行う。devの競合なし測定とdev／dogfood同時利用を別条件として記録し、dogfood優先による待機とキャンセル後の後続会話への影響を観測する。既存の指標・clock・失敗／欠測の扱い・合否基準を維持し、この節の追加をIrodoriの測定済み証跡や基準緩和と扱わない。
+
 ## controlled WebSocket baseline
 
 Ubuntu-dev の `integration-voice` Profileで Backend、Ollama、Whisper、VOICEVOX、Chromium を起動し、日本語固定fixture `speech-v2`・同一初期状態でwarm-up 5回を行った後、独立session・独立conversationで100回を測定する。fixtureは日本語の単一発話とVAD確定用の後続無音を含み、正解transcriptは実際の発話内容と一致する。外部の Ollama と VOICEVOX を起動してから、repository rootで `npm run baseline:websocket` を実行する。runnerはwarm-up前にfixture version、WAVのSHA-256・sample rate、発話境界、期待transcriptを検証する。各試行では画面に確定した利用者transcriptをUnicode NFKC正規化、前後空白除去、連続空白圧縮して期待値と比較し、不一致なら停止する。通常の `test:integration:voice` とは別の `frontend/test-results/controlled-baseline/` を一時data rootとし、trial manifestにはfixture version、hash、transcript一致結果だけを残す。warm-upはaggregateに入れない。finalizerは回数・独立ID・fixture identity・全試行のtranscript一致・初期状態を再検証し、schema検証と再帰的な匿名性検査を通したaggregateだけを `docs/artifacts/websocket-baseline-v1.json` へ保存する。LiveKit版Wave 3 pipelineが計測可能になった時点でtransportだけを `livekit` とし、同じfixture、回数、schema、目標値で再実行する。

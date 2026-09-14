@@ -1,0 +1,39 @@
+name: digital-souls-irodori
+
+services:
+  irodori:
+    image: ${DOGFOOD_IRODORI_IMAGE:?DOGFOOD_IRODORI_IMAGE must be an immutable digest}
+    user: "10001:10001"
+    build:
+      context: ../..
+      dockerfile: irodori_service/Dockerfile
+    container_name: digital-souls-irodori
+    network_mode: host
+    gpus: all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      DS_IRODORI_VOICES_DIR: /voices
+      DS_IRODORI_MODEL_CACHE: /models/huggingface
+      DS_IRODORI_WARMUP_VOICE: ${DS_IRODORI_WARMUP_VOICE:-miori-b3-4221}
+      DS_IRODORI_MAX_VOICE_CHECKS: ${DS_IRODORI_MAX_VOICE_CHECKS:-2}
+      DS_IRODORI_MAX_PENDING: ${DS_IRODORI_MAX_PENDING:-8}
+      DS_IRODORI_QUEUE_TIMEOUT_SECONDS: ${DS_IRODORI_QUEUE_TIMEOUT_SECONDS:-10}
+      DS_IRODORI_INFERENCE_TIMEOUT_SECONDS: ${DS_IRODORI_INFERENCE_TIMEOUT_SECONDS:-30}
+      DS_IRODORI_STARTUP_TIMEOUT_SECONDS: ${DS_IRODORI_STARTUP_TIMEOUT_SECONDS:-300}
+    volumes:
+      - type: bind
+        source: ${DOGFOOD_IRODORI_VOICES_DIR:?DOGFOOD_IRODORI_VOICES_DIR is required}
+        target: /voices
+        read_only: true
+      - type: bind
+        source: ${DOGFOOD_IRODORI_MODEL_CACHE:?DOGFOOD_IRODORI_MODEL_CACHE is required}
+        target: /models/huggingface
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:50024/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 600s

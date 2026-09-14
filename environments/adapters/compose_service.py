@@ -32,6 +32,7 @@ BACKEND_ENV_PREFIXES = (
     "INFERENCE_",
     "OPENAI_",
     "VOICEVOX_",
+    "IRODORI_",
     "LIVEKIT_",
     "RAG_",
     "MEMORY_",

@@ -1,0 +1,11 @@
+{
+  "scope": "compile_dynamic_real_gpu_startup",
+  "compile_model": true,
+  "compile_dynamic": true,
+  "compile_threads": 1,
+  "startup_timeout_seconds": 900,
+  "outcome": "failure",
+  "code": "tts_preparation_failed",
+  "completed_syntheses": 0,
+  "model_or_voice_adoption_changed": false
+}

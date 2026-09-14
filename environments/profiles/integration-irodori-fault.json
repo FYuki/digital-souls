@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "name": "integration-irodori-fault",
+  "description": "共有Irodoriと専用LiveKit bridgeを用いた実障害回復診断。通常devと共有推論の起動・停止は行わない",
+  "readyGate": {
+    "baseUrl": "http://127.0.0.1:18574"
+  },
+  "dependencies": {
+    "frontend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:18573",
+      "readinessPath": "/"
+    },
+    "backend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:18500",
+      "readinessPath": "/health/ready",
+      "reload": true
+    },
+    "ollama": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://localhost:11434",
+      "readinessPath": "/api/tags"
+    },
+    "voicevox": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50021",
+      "readinessPath": "/version"
+    },
+    "livekit": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:19880",
+      "readinessPath": "/"
+    },
+    "whisper": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50022",
+      "readinessPath": "/health/ready"
+    },
+    "chroma": {
+      "mode": "disabled",
+      "source": null
+    },
+    "irodori": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50024",
+      "readinessPath": "/health/ready"
+    }
+  }
+}

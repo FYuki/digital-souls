@@ -14,7 +14,7 @@ def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path:
 
     registry = create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
 
-    assert set(registry.services) == {*DEPENDENCY_NAMES, "livekit"}
+    assert set(registry.services) == {*DEPENDENCY_NAMES, "livekit", "irodori"}
     assert registry.prepare_order == ("backend", "frontend")
     assert registry.start_order == ("ollama", "voicevox", "backend", "frontend")
     assert registry.available_prepare_order == ("ollama",)

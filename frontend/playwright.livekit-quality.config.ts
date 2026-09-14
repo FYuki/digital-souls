@@ -32,7 +32,12 @@ const pcmObserver = process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1'
 if (process.env.VOICE_QUALITY_OBSERVE_STT_PCM !== undefined && (!pcmObserver || faultBridge)) {
   throw new Error('invalid PCM observer selection')
 }
-const selectedProfile = pcmObserver ? 'integration-voice-pcm' : (faultBridge ? 'integration-voice-fault' : 'integration-voice')
+const measurementProfile = process.env.VOICE_QUALITY_PROFILE ?? 'integration-voice'
+if (!['integration-voice', 'integration-irodori'].includes(measurementProfile)
+  || (measurementProfile === 'integration-irodori' && pcmObserver)) {
+  throw new Error('invalid voice quality profile selection')
+}
+const selectedProfile = pcmObserver ? 'integration-voice-pcm' : (faultBridge ? measurementProfile + '-fault' : measurementProfile)
 const base = createSuiteConfig('integration-voice', selectedProfile !== 'integration-voice' ? {
   loadProfile: () => JSON.parse(readFileSync(join(frontendRoot, '..', 'environments', 'profiles', `${selectedProfile}.json`), 'utf8')),
 } : undefined)

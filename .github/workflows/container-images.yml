@@ -30,6 +30,8 @@ jobs:
             dockerfile: frontend/Dockerfile
           - name: whisper
             dockerfile: whisper_service/Dockerfile
+          - name: irodori
+            dockerfile: irodori_service/Dockerfile
     steps:
       - uses: actions/checkout@v6
       - id: registry

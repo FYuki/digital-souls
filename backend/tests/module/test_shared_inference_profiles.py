@@ -10,7 +10,7 @@ from tests.environment_test_support import resolved_runtime_paths
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-PROFILE_NAMES = ("dev", "dev-voice", "integration-text", "integration-voice")
+PROFILE_NAMES = ("dev", "dev-voice", "integration-text", "integration-voice", "integration-irodori", "integration-irodori-fault")
 VOICEVOX_PROFILE_NAMES = ("dev", "dev-voice", "integration-voice", "dogfood")
 
 
@@ -149,3 +149,48 @@ def test_dev_voice_profile_disables_rag_at_runtime(tmp_path: Path) -> None:
     assert report["dependencies"]["chroma"] == {"mode": "disabled", "source": None}
     assert report["derivedEnvironment"]["RAG_ENABLED"] == "false"
     assert "voice-chat-real" in report["capabilities"]
+
+
+@pytest.mark.parametrize("profile_name", ["integration-irodori", "integration-irodori-fault"])
+def test_irodori_is_external_and_cannot_be_owned_by_development(tmp_path: Path, profile_name: str) -> None:
+    from service_registry import create_service_registry, resolve_runtime_services
+    from profile_resolution import derive_capabilities
+    from profile_validation import _validate_dependency
+    from profile_types import ProfileError
+    from adapters.compose_service import BACKEND_ENV_PREFIXES
+
+    report = _resolve(profile_name, tmp_path)
+    dependency = report["dependencies"]["irodori"]
+    assert dependency["source"] == "external"
+    assert report["derivedEnvironment"]["IRODORI_BASE_URL"] == "http://127.0.0.1:50024"
+    assert dependency["readinessUrl"] == "http://127.0.0.1:50024/health/ready"
+    registry = create_service_registry(ROOT_DIR, resolved_runtime_paths(tmp_path))
+    runtime = resolve_runtime_services(report, registry)
+    assert registry.services["irodori"].adapter is None
+    assert "irodori" not in runtime.start_order
+    assert "IRODORI_" in BACKEND_ENV_PREFIXES
+    report["dependencies"]["voicevox"] = {"mode": "disabled", "source": None}
+    assert "voice-chat-real" in derive_capabilities(report["dependencies"])
+    with pytest.raises(ProfileError, match="external"):
+        _validate_dependency(profile_name, "irodori", {
+            "mode": "real", "source": "managed",
+            "baseUrl": "http://127.0.0.1:50024", "readinessPath": "/health/ready",
+        })
+
+
+def test_irodori_fault_profile_cannot_target_normal_livekit(tmp_path: Path) -> None:
+    from profile_validation import _validate_dependency
+    from profile_types import ProfileError
+
+    report = _resolve("integration-irodori-fault", tmp_path)
+    assert report["dependencies"]["livekit"]["baseUrl"] == "http://127.0.0.1:19880"
+    assert report["dependencies"]["backend"]["baseUrl"] == "http://localhost:18500"
+    for profile_name, url in [
+        ("integration-irodori", "http://127.0.0.1:19880"),
+        ("integration-irodori-fault", "http://127.0.0.1:7880"),
+        ("integration-irodori-fault", "http://127.0.0.1:17880"),
+    ]:
+        with pytest.raises(ProfileError, match="fixed local service"):
+            _validate_dependency(profile_name, "livekit", {
+                "mode": "real", "source": "external", "baseUrl": url, "readinessPath": "/",
+            })

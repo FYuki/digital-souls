@@ -344,3 +344,39 @@ def test_zero_response_lifecycle_cannot_leak_into_normal_measurement(tmp_path, m
     normal = pilot.pilot_environment(inference, livekit, 'normal-test', 100, False,
                                      scheduled_fixture=True, controlled=True)
     assert 'VOICE_QUALITY_SESSION_LIFECYCLE' not in normal
+
+
+def test_irodori_measurement_selects_matching_profile_and_http_settings(tmp_path, monkeypatch):
+    inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
+    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\n"
+                         "IRODORI_BASE_URL=http://127.0.0.1:50024\n"
+                         "IRODORI_REQUEST_TIMEOUT_SECONDS=45\n")
+    livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
+    monkeypatch.setenv("VOICE_QUALITY_PROFILE", "stale-profile")
+    args = (inference, livekit, "irodori-pilot", 3, False, True)
+    env = pilot.pilot_environment(*args, profile="integration-irodori")
+    assert env["DS_PROFILE"] == env["VOICE_QUALITY_PROFILE"] == "integration-irodori"
+    assert env["IRODORI_BASE_URL"] == "http://127.0.0.1:50024"
+    assert env["IRODORI_REQUEST_TIMEOUT_SECONDS"] == "45"
+    ordinary = pilot.pilot_environment(*args)
+    assert ordinary["DS_PROFILE"] == ordinary["VOICE_QUALITY_PROFILE"] == "integration-voice"
+    for options in ({"profile": "unknown"},
+                    {"profile": "integration-irodori", "observe_stt_pcm": True},
+                    {"profile": "integration-irodori", "fault_bridge": True}):
+        with pytest.raises(ValueError):
+            pilot.pilot_environment(*args, **options)
+
+
+def test_irodori_fault_probe_keeps_shared_tts_and_selects_dedicated_bridge(tmp_path):
+    inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
+    inference.write_text("IRODORI_BASE_URL=http://127.0.0.1:50024\n")
+    livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
+    env = pilot.pilot_environment(
+        inference, livekit, "irodori-fault-test", 1, False, scheduled_fixture=True,
+        profile="integration-irodori", control_probe=True, fault_bridge=True, network_fault=True,
+    )
+    assert env["DS_PROFILE"] == "integration-irodori-fault"
+    assert env["VOICE_QUALITY_PROFILE"] == "integration-irodori"
+    assert env["IRODORI_BASE_URL"] == "http://127.0.0.1:50024"
+    assert env["LIVEKIT_URL"] == "ws://127.0.0.1:19880"
+    assert env["VOICE_QUALITY_NETWORK_FAULT"] == "1"

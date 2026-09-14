@@ -1,3 +1,4 @@
+import { readVoiceMeasurementBaseUrl } from '../../playwright/resolved-profile'
 import { measureZeroResponseSessions } from '../../playwright/zero-response-session-diagnostic'
 import { installPlaybackSupplyDiagnostic, readPlaybackSupplyDiagnostic } from '../../playwright/playback-supply-diagnostic'
 import { selectPcmFixture, snapshotPcmInputs } from '../../playwright/whisper-pcm-observer'
@@ -153,7 +154,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
 
   for (let index = 0; index < WARMUP_RUNS + MEASURED_RUNS; index += 1) {
     const page = await browser.newPage({
-      baseURL: 'http://localhost:5173', permissions: ['microphone'],
+      baseURL: await readVoiceMeasurementBaseUrl(), permissions: ['microphone'],
     })
     const driver = createVoiceChatDriver()
     try {

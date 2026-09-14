@@ -18,6 +18,7 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
+- [`tts-engine-reference-voice-2026-09.md`](tts-engine-reference-voice-2026-09.md)は、#329のSession開始時のTTS選択と、Irodoriのvoice ID・参照音声の固定対応を追加する。既存の音声／Speech・Text共通Session契約と環境分離境界を維持する。Irodoriの実装・モデル本採用・dogfood受入は未完了で、[要件](../irodori-tts-requirements.md)と#329で追跡する。
 - [`episode-fact-semantic-boundaries-2026-09.md`](episode-fact-semantic-boundaries-2026-09.md)は、#352で確定したEpisode / Fact / Semantic / Reflectionの正本責務、述語のみ必須の5W、config timezone、FactのID参照・版・失効、同thread登録時照合と後続#354の別thread非同期整理を定める。#340で合意した日常経験・仮定/創作、経験の単位、Fact更新と統合の区別、管理操作・dev受入も含む。この記憶再編の範囲ではCharacter Life・用語・Wave 2・RAG privacy ADRの旧記述より優先する。
 
 - [`conversation-session-text-input-2026-09.md`](conversation-session-text-input-2026-09.md)は、#319のSpeech/Text共通入力、受理結果照合、focus抑止、スレッド別送信を定める。この範囲は既存の音声／LiveKit契約より優先する。実装・受入の追跡元は#321〜#327で、現行の受入結果と残課題は[混在Session受入](../conversation-session-acceptance.md)等を参照する。

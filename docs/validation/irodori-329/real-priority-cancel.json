@@ -1,0 +1,61 @@
+{
+  "scope": "real_gpu_shared_service_priority_and_http_cancel",
+  "version": {
+    "serviceVersion": "1.0",
+    "model": "Aratako/Irodori-TTS-v4.1-Small",
+    "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+    "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+    "device": "cuda",
+    "precision": "bf16",
+    "quantized": false,
+    "globalInflight": 1,
+    "maxPending": 8,
+    "maxVoiceChecks": 2,
+    "queueTimeoutSeconds": 10.0,
+    "inferenceTimeoutSeconds": 30.0,
+    "preparationSeconds": 20.33300531801069,
+    "active": 0,
+    "pending": 0
+  },
+  "http_completion_order": [
+    {
+      "label": "priority_active",
+      "environment": "dev",
+      "status": 200,
+      "seconds": 1.3813094780198298,
+      "frames": 441600,
+      "sha256": "d78092d5515cbe888de0976468f3f3011819649a27834a58764ef3547302d9ca"
+    },
+    {
+      "label": "priority_dogfood_waiting",
+      "environment": "dogfood",
+      "status": 200,
+      "seconds": 2.3035155960242264,
+      "frames": 167040,
+      "sha256": "bdeaf7029c9e5ce7faa06dccac1ff09ea3f7be6c5de09e03070adb0e02ce40fb"
+    },
+    {
+      "label": "priority_dev_waiting",
+      "environment": "dev",
+      "status": 200,
+      "seconds": 3.2351170910405926,
+      "frames": 167040,
+      "sha256": "43c20d8d35206590f178967c848bd0ad2ce8151b7e35d4d0bd33e142095a770d"
+    },
+    {
+      "label": "after_cancel_dogfood",
+      "environment": "dogfood",
+      "status": 200,
+      "seconds": 1.767124493024312,
+      "frames": 167040,
+      "sha256": "d3dcee04794fdfe5bbe858346892bb69954dacddecfb83be8eba52289bb60126"
+    }
+  ],
+  "cancel_waiter_removed": true,
+  "active_slot_after_http_cancel": 1,
+  "final_active": 0,
+  "final_pending": 0,
+  "actual_worker_kill_tested": false
+}

@@ -35,7 +35,7 @@ Windowsやcloudへの暗黙fallbackを前提にしない。
                     ├─ MCP / Tool Use / Execution Gate / Addon管理
                     └─ Character Life / DBOS（任意有効化・dev/test）
                   音声認識: 共有Whisper HTTP service
-                  音声合成: VOICEVOX
+                  音声合成: CCV選択のVOICEVOX / Irodori
 ```
 
 通常の起動はEnvironment ProfileとDockerを使用する。Profileの`managed`は起動管理の所有対象、
@@ -73,7 +73,15 @@ Chromaがin_processである。接続先とreadinessは[dev Profile](../environm
 * `stt/remote_whisper_client.py` — 共有GPU Whisper HTTP serviceによる音声認識。旧`whisper_client.py`はGoal 2受入までrollback用に保持する
 * `model_settings.py` — Whisperモデル、履歴・入力・モデルcontext上限を型付きで解決する。InferenceのProvider、Model、入力／出力上限は`inference/config.py`がTarget単位で解決し、Backendはlifespanの先頭で検証する
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
+* `tts/irodori_client.py` — Irodoriの準備確認と区間単位HTTP合成。CCVをSession開始時に固定し、切断時にはHTTP待機を取り消す
 * `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
+
+リポジトリルートの `irodori_service/` はBackendから独立し、dogfoodが所有する共有GPUサービス。
+固定revision、参照音声登録、実合成warmup、単一workerと待機列を管理する。
+Irodori対応はepic実装であり、本採用・性能受入は#329の実測後に判断する。
+通常のdev Profileへ必須依存を追加せず、`integration-irodori`で外部サービスの準備を確認する。
+合成失敗時の応答終了、逐次区間送信、再接続は既存Conversation Core／LiveKit境界を使う。
+詳細は[共有TTS運用](../infra/irodori/README.md)を参照する。
 
 共有VOICEVOX clientは同期HTTP requestを合成全体30秒のdeadline内で実行する。process shutdownでは新規synthesis受付を止め、in-flight requestを既定35秒までdrainしてからclientをcloseする。防御的なdrain timeout時は本文を含まない理由コードを記録してshutdown処理を進めるが、in-flightより先にclientをcloseせず、最後のrequestが終了したthreadで遅延closeする。通常requestは全体30秒deadlineが35秒drainより短いため、このtimeoutはHTTP libraryがdeadlineに従わない異常の識別用である。synthesis lifecycleは`completed`、`request_timeout`、`connection_failed`、`request_failed`を本文なしで記録する。barge-inによるasync response cancelはConversation CoreのTTS stageへ`cancelled`として記録し、process shutdownと区別する。cancel後も同期requestが終了するまではclientを早期closeしない。
 

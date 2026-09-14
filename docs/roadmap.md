@@ -93,6 +93,8 @@ LiveKitを正式な音声経路とし、旧WebSocket音声pipelineは移行前ba
 Speech/Textの併用、入力受理照合、focus抑止、スレッド別送信は[混在Session契約](decisions/conversation-session-text-input-2026-09.md)と[共通client契約](decisions/conversation-session-client-2026-09.md)へ続く。
 実装があることと品質・長時間運転の受入完了は別で、結果・残課題は[受入記録](conversation-session-acceptance.md)と関連運用記録で追跡する。
 
+TTS差し替えの拡張設計は[Irodori要件](irodori-tts-requirements.md)と[Epic #329](https://github.com/FYuki/digital-souls/issues/329)を参照する。既存の区間合成を再利用し、実装・性能受入・モデル最終採用は今後の検証対象とする。本採用音声の選定は独立した関連[Issue #330](https://github.com/FYuki/digital-souls/issues/330)で扱う。
+
 ### Wave 4: 「役に立つ」（外部ツール・推論・利用形態の拡張）
 
 外部MCPを将来の接続候補としてだけ扱わず、既存の接続・実行・会話利用・管理基盤を起点に拡張する。

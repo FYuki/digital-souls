@@ -92,6 +92,9 @@ def create_service_registry(
         "whisper": ServiceRegistration(
             "whisper", None, None, LiveKitExternalOperations()
         ),
+        "irodori": ServiceRegistration(
+            "irodori", None, None, LiveKitExternalOperations()
+        ),
         "chroma": ServiceRegistration("chroma", None, "backend"),
         "livekit": ServiceRegistration(
             "livekit", None, None, LiveKitExternalOperations()

@@ -18,7 +18,7 @@ from profile_types import (
 
 PROFILE_SCHEMA_VERSION = 1
 REQUIRED_DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
-OPTIONAL_DEPENDENCY_NAMES = ("livekit",)
+OPTIONAL_DEPENDENCY_NAMES = ("livekit", "irodori")
 DEPENDENCY_NAMES = REQUIRED_DEPENDENCY_NAMES + OPTIONAL_DEPENDENCY_NAMES
 DOWNSTREAM_DEPENDENCIES = ("ollama", "voicevox", "whisper", "chroma")
 PROFILE_FIELDS = {"schemaVersion", "name", "description", "readyGate", "dependencies"}
@@ -121,6 +121,10 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_
         raise ProfileError(f"{path}.mode mock is only valid for backend/browser")
     if mode == "mock" and ("baseUrl" in dependency or "readinessPath" in dependency):
         raise ProfileError(f"{path} mock/browser cannot define connection fields")
+    if mode == "real" and name == "irodori" and source != "external":
+        raise ProfileError(f"{path}.source must be external when mode is real")
+    if mode == "real" and name == "irodori" and dependency.get("readinessPath") != "/health/ready":
+        raise ProfileError(f"{path}.readinessPath must be /health/ready")
     if mode == "real" and name == "chroma" and source != "in_process":
         raise ProfileError(f"{path}.source must be in_process when mode is real")
     if mode == "real" and name == "whisper" and source not in {"in_process", "external"}:
@@ -136,7 +140,7 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_
             raise ProfileError(f"{path}.readinessPath is required for real/{source}")
     if mode == "real" and name in FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS:
         fixed_base_urls, fixed_readiness_path = FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS[name]
-        if name == "livekit" and profile_name == "integration-voice-fault":
+        if name == "livekit" and profile_name in {"integration-voice-fault", "integration-irodori-fault"}:
             # 通常dev/dogfoodの許可先は拡張せず、専用Profileだけを障害注入先へ固定する。
             fixed_base_urls = {"http://127.0.0.1:19880", "http://127.0.0.1:19880/"}
         if name == "whisper" and profile_name == "integration-voice-pcm":
@@ -248,7 +252,9 @@ def validate_profile(raw_profile: object, expected_name: str) -> Profile:
             )
     dependencies = cast(Dependencies, dependency_map)
     if dependencies["backend"]["mode"] != "real":
-        for name in DOWNSTREAM_DEPENDENCIES:
+        for name in (*DOWNSTREAM_DEPENDENCIES, "irodori"):
+            if name not in dependencies:
+                continue
             dependency = dependency_map[name]
             if dependency["mode"] != "disabled":
                 raise ProfileError(
