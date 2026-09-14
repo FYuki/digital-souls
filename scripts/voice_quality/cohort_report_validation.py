@@ -33,6 +33,59 @@ def _require(condition: bool, reason: str) -> None:
         raise ValueError(reason)
 
 
+def _validate_fixture_bounds(report: dict[str, Any]) -> None:
+    """主指標には遅延の上限を使い、別起点・部分分母・楽観的な合否への変更を拒否する。"""
+    fixture_origin = report.get("latency_origin") == "scheduled_fixture_speech_start"
+    for metric in report["metrics"]:
+        if metric["name"] == "cancel_after_decision":
+            continue
+        _require(
+            metric["start_point"]
+            == (
+                "fixture_speech_start_lower_bound"
+                if fixture_origin
+                else "speech_started_client"
+            ),
+            "latency origin and metric boundary mismatch",
+        )
+        if not fixture_origin:
+            continue
+        bounds = report["fixture_latency_bounds"][metric["name"]]
+        _require(
+            bounds["measured_count"] == metric["success_count"]
+            and bounds["missing_count"] == metric["missing_count"]
+            and bounds["measured_count"] + bounds["missing_count"]
+            == metric["trial_count"],
+            "fixture latency denominator mismatch",
+        )
+        values = [
+            bounds[f"p{q}_{side}_ms"] for q in (50, 95) for side in ("lower", "upper")
+        ]
+        if not bounds["measured_count"]:
+            _require(
+                all(value is None for value in values),
+                "fixture bounds without observations",
+            )
+            continue
+        _require(
+            all(
+                type(value) in (int, float) and math.isfinite(value) for value in values
+            ),
+            "fixture latency bounds unavailable",
+        )
+        lower50, upper50, lower95, upper95 = values
+        _require(
+            0 <= lower50 <= upper50
+            and lower50 <= lower95 <= upper95
+            and upper50 <= upper95,
+            "fixture latency bound order mismatch",
+        )
+        _require(
+            upper50 == metric["p50"] and upper95 == metric["p95"],
+            "fixture latency upper bound differs from main metric",
+        )
+
+
 def validate_report(
     report: dict[str, Any], metric_schema: dict[str, Any], cohort_schema: dict[str, Any]
 ) -> None:
@@ -123,6 +176,7 @@ def validate_report(
             _require(quantiles == (None, None), "metric quantiles without observations")
     evaluation = report["evaluation"]
     if report["cohort"] == "take_turn":
+        _validate_fixture_bounds(report)
         injected, cancelled = counts["verified_injection"], counts["verified_cancel"]
         _require(
             cancelled <= min(injected, counts["take_turn_decision"]),

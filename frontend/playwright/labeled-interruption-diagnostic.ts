@@ -61,11 +61,15 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
   const selected = indices.map(index => available[index - 1])
   if (selected.some(t => t === undefined)) throw new Error('diagnostic fixture selection unavailable')
   if (selected.length !== count) throw new Error('labeled cohort coverage unavailable')
+  // 旧版の比較測定も同じfixture起点を使い、判断主体は実際に動かす版に合わせて明示する。
+  const inputAuthority = process.env.VOICE_QUALITY_INPUT_AUTHORITY ?? 'backend'
+  if (inputAuthority !== 'backend' && inputAuthority !== 'frontend') throw new Error('invalid voice input authority')
   const trials: Record<string, unknown>[] = []
   const persist = async () => {
     await mkdir(dirname(output), {recursive: true})
     await writeFile(output, JSON.stringify({measurement_scope: cohort === 'pause' ? 'labeled_livekit_vad_diagnostic' : 'labeled_livekit_interruption_diagnostic',
       measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
+      ...(cohort === 'take_turn' ? {latency_origin: 'scheduled_fixture_speech_start', input_authority: inputAuthority} : {}),
       cohort, expected_measured: count, initial_fixture_sha256: initial.audioSha256,
       ...(selection === undefined ? {} : {fixture_indices: indices}),
       labeled_manifest_sha256: createHash('sha256').update(manifestBytes).digest('hex'), trials}, null, 2) + '\n')

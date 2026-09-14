@@ -121,6 +121,27 @@ M2の固定音声・欠落試験で根拠を検証する。値を変更する場
 局所unit/moduleと固定音声の比較、実サービス・ブラウザ、人の実マイク・聴感確認は別の証跡にする。
 M6では人の確認が未実施なら未完了として残す。
 
+### take-turn集計の起点と誤差
+
+既存のラベル付き測定ハーネスは、take-turn manifestに
+`latency_origin=scheduled_fixture_speech_start` と `input_authority` を記録する。
+現行BE版は既定値の `backend`、旧FE版を同じハーネスで比較する場合は
+`VOICE_QUALITY_INPUT_AUTHORITY=frontend` を指定し、実行するFE／BEの版と一致させる。
+メタデータを持たない過去artifactは従来のFE VAD起点として読み、同じ起点の比較とは扱わない。
+
+`scripts/voice_quality/report_take_turn.py` はfixtureのspeechStart上下限と、
+同一ブラウザ時計の実停止・取消確認を使う。判定受信traceの整数ms切り捨てには上限1msを加える。
+主指標のp50／p95と既存の合否には遅延の上限を採用し、
+`fixture_latency_bounds` にType 7の上下限・測定数・欠測数を残す。
+BEのserver時計はclient時計から減算せず、server取消処理の内訳にのみ使う。
+
+BE発話のsession／utterance／responseとtrack・入力世代・sample境界を照合し、
+通知の受信時刻はfixtureとの因果関係の確認に限る。
+相関不足、観測overflow、重複・曖昧な停止、起点と終点の重なりは理由付き欠測とする。
+初期化やcleanupに失敗した試行も全体の分母に残す。
+集計schemaとvalidatorは起点・上下限・分母・主指標の一致を検証する。
+これらは測定手順の定義であり、100試行の前後比較や実マイク受入を完了した証跡ではない。
+
 ## 段階適用と切り戻し
 
 M2はtransport非依存のVAD・区間処理と局所試験、M3は新schema・BE/Core、M4はFE入出力clientと新契約へ接続する。

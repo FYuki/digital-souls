@@ -278,3 +278,17 @@ preview開始からtake-turnまで約255ms、take-turnからserver取消まで�
 
 今回起動した専用LiveKit・Backend・Frontendは停止済み。7880／7881／8000／5173／4174の閉鎖を確認し、
 共有Ollama／VOICEVOX／Whisperと別タスクのOllamaは継続している。
+
+
+### M5: take-turn集計の固定音声起点への移行
+
+既存のtake-turn reporterを、scheduled fixtureの正解発話開始とBE正式発話の相関で
+集計できるようにした。主指標と合否には遅延の上限を使い、上下限と全分母を保持する。
+旧FE VAD起点の保存済み集計は引き続き検証可能であり、同一起点の前後比較とは区別する。
+不完全なメタデータ、別起点、楽観的な上限、分母の不一致をcohort validatorで拒否する。
+
+- take-turn／cohort schema／相槌／通常遅延／VAD／pilot関連のunit: **213 passed**。
+- 変更PythonのRuff、差分空白検査: 成功。
+- Svelte／E2E TypeScript: **0 errors / 0 warnings**。
+- 今回の追加は集計・ハーネス・仕様の接続。実サービスでの新report出力、
+  pause cohort移行、100試行の前後比較と人の実マイク確認は引き続き未完了。
