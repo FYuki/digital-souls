@@ -132,3 +132,44 @@ Backend全体の合格、実サービスの往復、M5／M6の受入完了は引
 - Frontend build成功。500kB超のchunk警告は残る。
 
 実LiveKit／Whisper／LLM／TTS、実発話起点とBE境界の計測相関、前後比較、人の実マイク・聴感受入は未完了。
+
+## 2026-09-15: 実LiveKit輸送・固定音声のブラウザ往復
+
+専用のLiveKit 1.9.7を既存Composeからdev用7880で起動し、test専用data rootと
+Backend／Frontendイメージを使用した。dogfoodの17880と会話データには接続していない。
+共有Whisper／Ollama／VOICEVOXは既存サービスへ接続し、起動・停止・設定変更は行っていない。
+
+### 実ブラウザの機能確認
+
+アプリの対象commitは`0055de4`。既存の固定speech.wavをAudioWorkletから流す実サービス試験で確認した。
+本文・tokenを含めない証跡と資材hashは[機能確認artifact](../artifacts/voice-backend-358-livekit-smoke.json)に記録した。
+
+- 通常音声1往復: **1 passed**。BEの発話開始・終了、実STT／LLM／TTS、再生開始1件・再生完了1件。transport failure 0件。
+- 同じSessionでの3往復: **1 passed**。発話3件、再生開始3件・再生完了3件。transport failure 0件。
+- 物理マイク・人の聴感は未実施。所要時間は試験全体の時間であり、発話単位の遅延や前後性能比較には使用しない。
+
+### 実通信試験と統計確認の競合修正
+
+既存の実LiveKit suiteをCore／private 2.0へ移行した。client側ACK確認は許可されたsession_resumedを使い、
+BE専用session_startedの偽送信を除去した。継続マイク試験は入力開始ACK後に実PCMを送り、
+実CPU VAD／prerollへの到達と、Opus統計による確認を検証する。
+
+最初の全体実行では旧fixtureが1件失敗し、修正後の実行では継続マイクの統計確認が1件失敗した。
+後者は確認対象16,000〜64,000 sampleに対し、既知開始1,600・確認済み末尾174,080 sampleで、
+欠落窓もないのにverifyがtimeoutしていた。確認済み範囲を参照する前にverify自身の統計再読込成功を
+待つ構造が原因であり、重複snapshotの条件を使ったmodule試験でも再現した。
+
+`caa5f5f`で、background監視の確認済み範囲を使って判定するよう修正した。
+確認範囲の延長、検出済み欠落の不採用、close後の成功は許可しない。
+
+- 修正前の新規module回帰試験: **2 failed**を確認。修正後は実VAD／入力世代／captureを含む**20 passed**。
+- 修正後の継続マイク実接続診断: **5回連続passed**。
+- `caa5f5f`での実LiveKit全suite: **11 passed、0 failed、0 skipped**（52.87秒）。
+  bootstrap、認証期限、カメラpublish拒否、ACK／再送、連続マイク、retry超過、outbox超過、
+  duplicate identity、reconnect猶予切れとRoom解放を確認した。
+- mypy 337 source files、ruff、git diff --check成功。
+- `0055de4`のPR #403では4つのCIジョブが成功した。上記の追加修正は更新後のCIで別に確認する。
+
+ここで確認したのは実輸送・固定音声の限定的な機能であり、M5／M6全体の完了ではない。
+実発話起点の計測相関、全cohortの同条件前後比較、割り込み・混在操作・障害時の実受入、
+VAD／reader実行時障害の追加監査、更新・切り戻し、人の実マイク・聴感確認が残る。
