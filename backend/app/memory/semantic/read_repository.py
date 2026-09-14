@@ -25,6 +25,9 @@ class SemanticReadRepository:
         return [view for record in records
                 if (view := self._project(record, records)).status is MemoryStatus.ACTIVE]
 
+    def list_conflicted(self, *, character_id: str) -> tuple[SemanticRecord, ...]:
+        return tuple(record for record in self.store.reconcile(character_id)
+                     if record.status is SemanticStatus.CONFLICTED and record.proposition is not None)
     def list_character_ids(self) -> set[str]:
         with self.store.repository.read() as tx:
             return {str(row[0]) for row in tx.connection.execute("SELECT DISTINCT character_id FROM semantic_records")}

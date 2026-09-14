@@ -1,3 +1,4 @@
+import json
 import logging
 import sqlite3
 from collections.abc import Callable
@@ -25,6 +26,7 @@ from app.memory.persistence.contracts import (
     TemporalPrecision,
 )
 from app.memory.ranking import RetrievalRankingCandidate, rank_retrieval_candidates
+from app.memory.semantic.read_repository import WithSemanticReadRepository
 from app.memory.temporal_query import (
     TemporalQuery,
     TemporalQueryKind,
@@ -61,6 +63,7 @@ class _VerifiedCandidate:
 class RetrievalOutcome:
     memories: tuple[MemorySearchResult, ...]
     no_match: bool
+    response_cautions: tuple[str, ...] = ()
 
 
 def embed_text(_text: str) -> list[float]:
@@ -100,6 +103,10 @@ def retrieve_prompt_memories(
                 assessment.reason_code.value,
             )
             return RetrievalOutcome((), False)
+        cautions = _semantic_response_cautions(
+            approved_repository, character=character, query=user_message,
+            policy=policy, scanner=scanner,
+        )
         ranking_policy = rag_service_policy(policy)
         temporal_query = parse_temporal_query(
             user_message,
@@ -151,6 +158,7 @@ def retrieve_prompt_memories(
                     for item in ranked[: ranking_policy.max_retrieved_memories]
                 ),
                 False,
+                cautions,
             )
         period_memories = _verified_period_memories(
             period_memories,
@@ -168,11 +176,31 @@ def retrieve_prompt_memories(
                 : ranking_policy.max_retrieved_memories
             ]
         )
-        return RetrievalOutcome(memories, not memories)
+        return RetrievalOutcome(memories, not memories, cautions)
     except RAG_OPERATION_ERRORS as exc:
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
         return RetrievalOutcome((), False)
 
+
+def _semantic_response_cautions(
+    repository: MemoryReadRepository, *, character: str, query: str,
+    policy: MemoryPolicy, scanner: PrivacyScanner,
+) -> tuple[str, ...]:
+    if not isinstance(repository, WithSemanticReadRepository):
+        return ()
+    cautions: list[str] = []
+    for record in repository.semantic.list_conflicted(character_id=character):
+        value = record.proposition
+        if (value is None or record.character_id != character
+                or record.stamp.policy_version not in policy.retrieval_compatible_policy_versions
+                or value.predicate.casefold() not in query.casefold()):
+            continue
+        caution = json.dumps({"subject": value.subject, "attribute": value.predicate}, ensure_ascii=False)
+        scan = scanner.scan(caution)
+        if isinstance(scan, ScanSuccess) and not _scan_blocks_retrieval(scan, policy):
+            if caution not in cautions:
+                cautions.append(caution)
+    return tuple(cautions)
 
 def _include_current_self_reports(
     ranked: tuple[_VerifiedCandidate, ...], *, character: str, policy: MemoryPolicy,

@@ -146,3 +146,39 @@ def test_current_value_expansion_excludes_foreign_or_incompatible_snapshot(h):
         repository.get.return_value = invalid
         assert _include_current_self_reports(ranked, character="miori", policy=policy,
             scanner=scanner, approved_repository=repository, now=h.store.clock()) == ranked
+
+def test_conflicted_attribute_constrains_reply_without_exposing_either_value(h, monkeypatch):
+    from app.memory.semantic.contracts import SemanticOperation
+
+    policy = resolved_memory_policy()
+    h.reviewer.review = lambda *_: PrivacyReview(True, "ALLOW", STAMP.model_copy(
+        update={"policy_version": policy.policy_version}))
+    first_conversation = h.history.create_conversation("miori")
+    first = save(h, candidate(source(h, "誕生日は6月12日", conversation=first_conversation),
+                              predicate="誕生日", value="6月12日", fixed=True))
+    second_conversation = h.history.create_conversation("miori")
+    save(h, candidate(source(h, "誕生日は6月13日", conversation=second_conversation),
+                      predicate="誕生日", value="6月13日", fixed=True),
+         target=first, op=SemanticOperation.CONFLICT)
+    legacy = ApprovedMemoryRepository(database_path=h.paths.persona_memory_sqlite_path,
+        clock=h.store.clock, uuid_factory=uuid4, outbox_uuid_factory=uuid4)
+    reader = WithSemanticReadRepository(CombinedMemoryReadRepository(legacy, h.store.episode_reader))
+    reader.bind(SemanticReadRepository(h.store))
+    monkeypatch.setattr("app.memory.rag_service.query_memories", lambda *_a, **_k: [])
+    scanner, classifier = Mock(), Mock()
+    scanner.scan.return_value = ScanSuccess(())
+    classifier.classify.return_value = _assessment(SemanticClassification.NOT_SENSITIVE,
+                                                  SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT)
+    dependencies = SimpleNamespace(privacy_scanner=scanner, semantic_classifier=classifier,
+        approved_memory_repository=reader, memory_embedder=FakeEmbedder(), clock=h.store.clock)
+    context = SimpleNamespace(memory_policy=policy, chroma_path=h.paths.chroma_path, occurred_timezone="Asia/Tokyo")
+    prompt = _rag_context_for_reply("miori", "私の誕生日は？", context, dependencies)
+    assert '"attribute": "誕生日"' in prompt.required_instruction
+    assert "現在は確定できない" in prompt.required_instruction
+    assert "6月12日" not in prompt.required_instruction and "6月13日" not in prompt.required_instruction
+    assert not prompt.items
+    assert not _rag_context_for_reply("miori", "好きな楽器は？", context, dependencies).required_instruction
+    assert not _rag_context_for_reply("other", "私の誕生日は？", context, dependencies).required_instruction
+    h.history.hard_delete_conversation("miori", first_conversation.conversation_id)
+    h.history.hard_delete_conversation("miori", second_conversation.conversation_id)
+    assert not _rag_context_for_reply("miori", "私の誕生日は？", context, dependencies).required_instruction
