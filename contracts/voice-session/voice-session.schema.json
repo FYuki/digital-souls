@@ -1660,8 +1660,52 @@
         },
         "monotonic_timestamp_ms": {
           "$ref": "#/$defs/MonotonicTimestamp"
+        },
+        "track_sid": {
+          "$ref": "#/$defs/MicrophoneTrackSid"
+        },
+        "input_generation": {
+          "$ref": "#/$defs/Sequence"
+        },
+        "input_revision": {
+          "$ref": "#/$defs/Sequence"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "audio_input_unavailable"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "track_sid",
+              "input_generation",
+              "input_revision"
+            ],
+            "properties": {
+              "classification": {
+                "const": "recoverable"
+              },
+              "user_state": {
+                "const": "muted"
+              },
+              "track_sid": {
+                "$ref": "#/$defs/MicrophoneTrackSid"
+              },
+              "input_generation": {
+                "$ref": "#/$defs/Sequence"
+              },
+              "input_revision": {
+                "$ref": "#/$defs/Sequence"
+              }
+            }
+          }
+        }
+      ]
     },
     "NetworkMissing": {
       "type": "object",

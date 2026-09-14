@@ -400,3 +400,23 @@ it.each(['valid', 'missing', 'private', 'wrong_clock'])('RTP観測契約の数�
   if (mode === 'private' || mode === 'wrong_clock') expect(() => parseVoiceSessionEvent(event)).toThrow()
   else expect(parseVoiceSessionEvent(event).network_summary?.downlink.lostPackets).toBe(-1)
 })
+
+
+it('入力停止エラーには世代・revision・trackとmuted状態が必須', async () => {
+  const {parseVoiceSessionEvent} = await loadValidationModule()
+  const event = {
+    type: 'error', protocol_version: '2.0',
+    event_id: '10000000-0000-4000-8000-000000000001',
+    session_id: '20000000-0000-4000-8000-000000000001',
+    monotonic_timestamp_ms: 1, error_code: 'audio_input_unavailable',
+    classification: 'recoverable', user_state: 'muted',
+    track_sid: 'TR_first', input_generation: 1, input_revision: 1,
+  }
+  expect(parseVoiceSessionEvent(event)).toMatchObject(event)
+  for (const field of ['track_sid', 'input_generation', 'input_revision']) {
+    const missing: Record<string, unknown> = {...event}
+    delete missing[field]
+    expect(() => parseVoiceSessionEvent(missing)).toThrow()
+  }
+  expect(() => parseVoiceSessionEvent({...event, user_state: 'listening'})).toThrow()
+})

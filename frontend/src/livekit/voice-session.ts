@@ -686,7 +686,13 @@ export class LiveKitVoiceSessionController {
       clearTimeout(pending.timer)
       this.pendingAudioOpen = null
       if (event.type === 'audio_input_rejected') pending.reject(new Error('音声入力を開始できませんでした: ' + event.reason))
-      else pending.resolve(event)
+      else {
+        // 送信完了を待つ間の停止通知にも対応できるよう、ACKの世代を先に保持する。
+        // マイク有効化はopenInputGateの完了・revision確認後に限定する。
+        this.inputGeneration = event.input_generation!
+        this.authorizedTrackSid = event.track_sid!
+        pending.resolve(event)
+      }
       return
     }
     if (event.type === 'speech_started' || event.type === 'speech_stopped') {
@@ -783,6 +789,12 @@ export class LiveKitVoiceSessionController {
         this.playback = 'stopped'
       }
     } else if (event.type === 'error') {
+      if (event.error_code === 'audio_input_unavailable') {
+        if (event.input_revision !== this.audioRevision
+          || event.input_generation !== this.inputGeneration
+          || event.track_sid !== this.authorizedTrackSid) return
+        this.invalidateInputGate()
+      }
       if (event.user_state === 'muted') {
         this.inputSuppression.mute()
         this.microphoneEnabled = false

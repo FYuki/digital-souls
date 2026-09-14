@@ -269,7 +269,9 @@
       if (event.utterance_id !== undefined) finalizedUtterances.delete(event.utterance_id)
       voiceErrors = {...voiceErrors, [`${context.character}:${context.conversationId}`]:
         event.error_code === 'audio_input_repeat_required'
-          ? '音声の一部を受け取れませんでした。もう一度話してください。' : ERROR_MESSAGE}
+          ? '音声の一部を受け取れませんでした。もう一度話してください。'
+          : event.error_code === 'audio_input_unavailable'
+            ? '音声入力が停止しました。マイクを再開して、もう一度話してください。' : ERROR_MESSAGE}
       return
     }
     if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {

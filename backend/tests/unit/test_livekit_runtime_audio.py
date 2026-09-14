@@ -2424,3 +2424,60 @@ def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypat
         assert ended == (["core"] if waiting_stage == "tts" else [])
         assert len(deleted) == 2
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("ending", ["eof", "exception", "invalid_frame", "cancel"])
+def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeypatch, ending):
+    """無音中のEOF・例外・不正frameでも、終了処理と入力停止を省略しない。"""
+    production = importlib.import_module("app.livekit_transport.production")
+    stream_closed = False
+    closed_tracks = []
+    class AudioStream:
+        def __init__(self, *_args, **_kwargs):
+            self.emitted = False
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            if ending == "eof" or self.emitted:
+                raise StopAsyncIteration
+            self.emitted = True
+            if ending == "exception":
+                raise RuntimeError("injected stream failure")
+            if ending == "cancel":
+                raise asyncio.CancelledError
+            return SimpleNamespace(frame=SimpleNamespace(
+                sample_rate=8000, num_channels=1, samples_per_channel=160,
+                data=memoryview(bytes(320)), userdata={},
+            ))
+        async def aclose(self):
+            nonlocal stream_closed
+            stream_closed = True
+    rtc = SimpleNamespace(AudioStream=AudioStream)
+    monkeypatch.setattr(production, "_livekit_rtc_module", lambda: rtc)
+    class Coordinator:
+        generation = 1
+        def is_current_participant(self, **kwargs):
+            return True
+    class Bridge:
+        def close_microphone_track(self, sid):
+            closed_tracks.append(sid)
+        async def receive_microphone_frame(self, *args, **kwargs):
+            pytest.fail("不正なframeをVADへ配送した")
+    async def publish_data(*args):
+        pass
+    async def scenario():
+        runtime = _runtime_shell(production)
+        runtime._core_bridges["session"] = Bridge()
+        operation = runtime._observe_microphone(
+            "session", SimpleNamespace(sid="TR_first", get_stats=AsyncMock(return_value=[])),
+            Coordinator(), "user", "participant", 1, publish_data,
+        )
+        if ending == "cancel":
+            with pytest.raises(asyncio.CancelledError):
+                await operation
+        else:
+            await operation
+        assert closed_tracks == ["TR_first"]
+        assert stream_closed
+        assert runtime._microphone_integrities == {}
+    asyncio.run(scenario())

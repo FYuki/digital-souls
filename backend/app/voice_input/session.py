@@ -138,7 +138,13 @@ class BackendVoiceInput:
             utterance_id, self._active_utterance = self._active_utterance, None
             self._on_discarded(utterance_id, error.code)
             # 欠落した発話の語尾は静音境界を確認するまで採用しない。
-            await self._worker.reset(quarantine=True)
+            try:
+                await self._worker.reset(quarantine=True)
+            except AudioInputFault:
+                if self._grant is not grant:
+                    return
+                self.suppress(reason="input_closed")
+                raise
             return
         if self._grant is not grant:
             return

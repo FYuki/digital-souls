@@ -173,3 +173,35 @@ BE専用session_startedの偽送信を除去した。継続マイク試験は入
 ここで確認したのは実輸送・固定音声の限定的な機能であり、M5／M6全体の完了ではない。
 実発話起点の計測相関、全cohortの同条件前後比較、割り込み・混在操作・障害時の実受入、
 VAD／reader実行時障害の追加監査、更新・切り戻し、人の実マイク・聴感確認が残る。
+
+
+## 2026-09-15 実行中のVAD障害と入力停止通知
+
+`47fbbc7` の後続差分で、native推論・resetの例外経路を監査した。推論例外は
+発話の回復処理を通らず、owned taskの例外としてSession全体のcleanupへ進んでいた。
+また、無音中のreader EOFは未終了発話がないため入力停止を通知していなかった。
+
+- 新しい実VAD障害注入試験は修正前に **4 failed**。推論失敗を型付き障害へ正規化し、
+  未終了発話を破棄・resetして、700ms以上の静音後に次の発話へ回復するよう修正した。
+- reset失敗は入力認可を破棄して世代付きの停止エラーを通知する。開始時はrequestに対応した拒否を返す。
+  readerのEOF・例外・不正frame・cancelではmonitorとstreamを解放し、当該入力を停止する。
+- FEでは停止通知のSID・世代・revisionを照合する。旧reader終了・旧reset失敗・旧エラー通知が
+  再開後の入力へ作用しないことを確認した。
+- 開始ACK後、制御送信の完了前に停止通知が届く条件では、マイクが再び有効になる不具合を
+  **1 failed**で再現した。ACK受信時点で認可を保持し、入力有効化前のrevision確認で停止を維持した。
+
+検証結果:
+
+- BEの実VAD入力・bridge・worker・runtime audio: **103 passed**。
+  外部STT等はmodule境界のstubであり、この障害試験を実サービス障害受入とは扱わない。
+- FE unit: **876 passed**、module: **141 passed**。
+- Svelte check: **0 errors / 0 warnings**、E2E TypeScript check成功。
+- 正式なPython lint範囲 `backend/app` とmypy **337 source files**成功。
+- 任意に広げた `backend/tests` 全体のruffは既存の79件で失敗。今回変更したテストファイルの指摘は0件。
+  既存のテスト全体lintの課題をこの修正で解消したとは扱わない。
+- JSON Schemaから共有型を再生成した。型ファイル自体の差分はなく、条件付き必須項目は
+  wire validatorで検証する。FEのAJV strict設定とBEのdecodeで通知を検証した。
+- 前段コミット `47fbbc7` のPR #403 CIは4ジョブ成功。今回差分のCI結果は別途確認する。
+
+未完了: 実環境での障害注入、M5の実発話起点の計測相関、全cohortの同条件前後比較、
+残る割り込み・混在操作の実受入、更新・切り戻し、人の実マイク・聴感確認。

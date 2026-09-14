@@ -88,6 +88,10 @@ LiveKit Python 1.1.16のAudioStreamは16kHz mono PCMを返すが、frame単位�
 - 欠落統計が利用不能なら、その制約を明示して対象発話を保留し、上限内に確認できなければ破棄する。未観測を欠落なし・品質合格へ読み替えない。
 - 長い静音でもPCMを蓄積し続けず、prerollと証拠窓の上限に収める。idle resetはsample数で進める。
 - モデルhash、WASM、I/O、CPU推論の初期化を音声Sessionの利用開始前に確認する。失敗は音声利用不可として通知し、FE判定へ戻さない。
+- 実行中のVAD推論失敗は未終了発話を破棄して通知し、reset後に700ms以上の静音を確認してから新発話を採用する。失敗した発話の語尾を新発話へ変換しない。
+- resetにも失敗した場合、または認可trackのreaderが終了・失敗した場合は、その入力認可を破棄する。無音中も `error_code=audio_input_unavailable`、`user_state=muted` を通知する。終了済み発話・text・回答再生をreaderの失敗だけで取り消さない。
+- 入力停止エラーは `track_sid / input_generation / input_revision` を必須とする。FEは現在の認可に一致する停止だけを適用し、手動再開では新SIDのACKを取り直す。開始ACK直後で送信完了待ちの間も、停止通知を受けた入力を有効化しない。
+- 入力開始時のreset失敗は `audio_input_rejected(reason=vad_unavailable)` で返す。暗黙のFE VAD復帰や無限の自動再試行は行わない。
 
 上限は既存のcapture・preroll・FE backlogを基準に設定する。80msは約1 VAD frameより短い欠落を区別する初期基準であり、
 M2の固定音声・欠落試験で根拠を検証する。値を変更する場合は仕様の破棄／話し直し動作を維持し、変更根拠と回帰を記録する。

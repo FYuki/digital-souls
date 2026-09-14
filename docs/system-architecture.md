@@ -46,6 +46,8 @@ Chromaがin_processである。接続先とreadinessは[dev Profile](../environm
 #358作業ブランチのLiveKit入力はCore／private protocol 2.0を使用する。FEは新trackを通知し、
 BEの入力開始ACK後にマイクを有効化する。発話境界と割り込み判断はBEが通知し、
 FEは再生停止と実再生観測を担当する。FE／BEを一組で更新・切り戻す。
+VAD推論失敗は発話を破棄して静音後に回復する。reset失敗・認可trackのreader終了は、
+入力世代付きのエラーで当該マイクを停止し、新SIDによる明示再開を必要とする。
 [移行契約](voice-backend-migration-contract.md)と[検証記録](validation/voice-backend-vad-358.md)を参照する。
 実サービス・前後性能比較・人の実マイク受入は未完了である。
 

@@ -171,3 +171,157 @@ def test_input_closed_during_open_reset_does_not_reopen() -> None:
             await session.close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_inference_failure_discards_input_and_recovers_after_silence(active):
+    """実VADの途中障害を注入し、欠けた語尾を採用せず次の発話へ回復する。"""
+    async def scenario():
+        session, starts, stops, discards, frames = input_session()
+        pipeline = session._worker._pipeline
+        original = pipeline._model.process
+        pcm = speech_pcm()
+        offset = 0
+        try:
+            grant = await session.open(
+                track_sid="mic-1", request_id="open-1", input_revision=1
+            )
+            if active:
+                for offset in range(0, len(pcm), 320):
+                    await session.receive(
+                        pcm[offset:offset + 320], start_sample=offset // 2, grant=grant
+                    )
+                    if starts:
+                        offset += 320
+                        break
+                assert starts and not stops
+            def fail(samples):
+                raise RuntimeError("injected inference failure")
+            pipeline._model.process = fail
+            await session.receive(
+                pcm[offset:offset + 3072], start_sample=offset // 2, grant=grant
+            )
+            assert discards == [
+                (starts[0].utterance_id if active else None, "vad_processing_failed")
+            ]
+            assert session.grant is grant
+            pipeline._model.process = original
+            position = offset // 2 + 1536
+            # 欠落後の連続した語尾は、強い音声でも新しい発話として採用しない。
+            before = len(starts)
+            loud = np.full(1536, 8000, dtype="<i2").tobytes()
+            for _ in range(12):
+                await session.receive(loud, start_sample=position, grant=grant)
+                position += 1536
+            assert len(starts) == before
+            assert not stops
+            for offset in range(0, len(pcm), 320):
+                await session.receive(
+                    pcm[offset:offset + 320],
+                    start_sample=position + offset // 2, grant=grant,
+                )
+            assert len(starts) == before + 1
+            assert len(stops) == 1
+            assert stops[0].utterance_id == starts[-1].utterance_id
+        finally:
+            pipeline._model.process = original
+            await session.close()
+    asyncio.run(scenario())
+
+
+def test_open_reset_failure_is_typed_and_new_track_can_retry():
+    async def scenario():
+        session, _, _, _, _ = input_session()
+        pipeline = session._worker._pipeline
+        original = pipeline.reset
+        def fail(*args, **kwargs):
+            raise RuntimeError("injected reset failure")
+        try:
+            pipeline.reset = fail
+            with pytest.raises(AudioInputFault, match="vad_unavailable"):
+                await session.open(
+                    track_sid="mic-1", request_id="open-1", input_revision=1
+                )
+            assert session.grant is None
+            pipeline.reset = original
+            grant = await session.open(
+                track_sid="mic-2", request_id="open-2", input_revision=2
+            )
+            assert session.grant is grant
+        finally:
+            pipeline.reset = original
+            await session.close()
+    asyncio.run(scenario())
+
+
+def test_failed_recovery_revokes_grant_and_requires_reopen():
+    async def scenario():
+        session, _, _, discards, frames = input_session()
+        pipeline = session._worker._pipeline
+        original_feed, original_reset = pipeline.feed, pipeline.reset
+        def fail(*args, **kwargs):
+            raise RuntimeError("injected failure")
+        try:
+            grant = await session.open(
+                track_sid="mic-1", request_id="open-1", input_revision=1
+            )
+            pipeline.feed = pipeline.reset = fail
+            with pytest.raises(AudioInputFault, match="vad_unavailable"):
+                await session.receive(bytes(3072), start_sample=0, grant=grant)
+            assert session.grant is None
+            pipeline.feed, pipeline.reset = original_feed, original_reset
+            await session.receive(bytes(3072), start_sample=1536, grant=grant)
+            assert not frames
+            next_grant = await session.open(
+                track_sid="mic-2", request_id="open-2", input_revision=2
+            )
+            await session.receive(bytes(3072), start_sample=0, grant=next_grant)
+            assert len(frames) == 1
+        finally:
+            pipeline.feed, pipeline.reset = original_feed, original_reset
+            await session.close()
+    asyncio.run(scenario())
+
+
+def test_late_failed_recovery_does_not_revoke_new_input():
+    async def scenario():
+        session, _, _, _, frames = input_session()
+        pipeline = session._worker._pipeline
+        original_feed, original_reset = pipeline.feed, session._worker.reset
+        entered, release = asyncio.Event(), asyncio.Event()
+        def fail(*args, **kwargs):
+            raise RuntimeError("injected inference failure")
+        async def delayed_reset(*args, **kwargs):
+            if kwargs.get("quarantine"):
+                entered.set()
+                await release.wait()
+                raise AudioInputFault("vad_unavailable")
+            await original_reset(*args, **kwargs)
+        receiving = None
+        try:
+            first = await session.open(
+                track_sid="mic-1", request_id="open-1", input_revision=1
+            )
+            pipeline.feed = fail
+            session._worker.reset = delayed_reset
+            receiving = asyncio.create_task(
+                session.receive(bytes(3072), start_sample=0, grant=first)
+            )
+            await asyncio.wait_for(entered.wait(), 2)
+            pipeline.feed = original_feed
+            second = await session.open(
+                track_sid="mic-2", request_id="open-2", input_revision=2
+            )
+            release.set()
+            await receiving
+            assert session.grant is second
+            await session.receive(bytes(3072), start_sample=0, grant=second)
+            assert len(frames) == 1
+        finally:
+            release.set()
+            if receiving is not None:
+                await asyncio.gather(receiving, return_exceptions=True)
+            pipeline.feed = original_feed
+            session._worker.reset = original_reset
+            await session.close()
+    asyncio.run(scenario())

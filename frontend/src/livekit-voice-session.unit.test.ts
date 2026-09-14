@@ -804,3 +804,59 @@ describe('session単位の操作計測', () => {
     } finally { vi.useRealTimers() }
   })
 })
+
+
+test('BE入力停止は当該世代だけをミュートし、再開後の古い停止やspeech通知を捨てる', async () => {
+  const {controller, coreEventReceivers, events, room, delivered} = setup()
+  const track = {enabled: false}
+  const stream = {getAudioTracks: () => [track]} as unknown as MediaStream
+  await controller.ensureSession({characterId: 'miori', conversationId: 'a'})
+  await controller.resumeMicrophone(stream)
+  const first = events.findLast(event => event.type === 'audio_input_open_requested')!
+  const stopped = {
+    protocol_version: '2.0', event_id: '10000000-0000-4000-8000-000000000091',
+    session_id: SESSION_ID, monotonic_timestamp_ms: 1000,
+    type: 'error', classification: 'recoverable', error_code: 'audio_input_unavailable',
+    user_state: 'muted', track_sid: first.track_sid,
+    input_generation: 1, input_revision: first.input_revision,
+  } as VoiceSessionEvent
+  coreEventReceivers[0](stopped)
+  expect(track.enabled).toBe(false)
+  expect(controller.snapshot().phase).toBe('muted')
+  expect(room.disconnect).not.toHaveBeenCalled()
+  const count = delivered.length
+  coreEventReceivers[0]({
+    ...stopped, type: 'speech_started', utterance_id: UTTERANCE_ID,
+  } as VoiceSessionEvent)
+  expect(delivered).toHaveLength(count)
+  await controller.resumeMicrophone(stream)
+  expect(track.enabled).toBe(true)
+  const next = events.findLast(event => event.type === 'audio_input_open_requested')!
+  expect(next.track_sid).not.toBe(first.track_sid)
+  coreEventReceivers[0](stopped)
+  expect(track.enabled).toBe(true)
+  expect(controller.snapshot().phase).toBe('listening')
+  await controller.end()
+})
+
+
+test('入力開始ACK直後、送信完了待ち中の停止通知でもマイクを有効化しない', async () => {
+  const {controller, coreEventReceivers, room} = setup()
+  await controller.ensureSession({characterId: 'miori', conversationId: 'a'})
+  const original = vi.mocked(room.publishControlEvent).getMockImplementation()!
+  vi.mocked(room.publishControlEvent).mockImplementation(async event => {
+    await original(event)
+    if (event.type === 'audio_input_open_requested') coreEventReceivers[0]({
+      protocol_version: '2.0', event_id: '10000000-0000-4000-8000-000000000092',
+      session_id: SESSION_ID, monotonic_timestamp_ms: 1000,
+      type: 'error', classification: 'recoverable', error_code: 'audio_input_unavailable',
+      user_state: 'muted', track_sid: event.track_sid,
+      input_generation: 1, input_revision: event.input_revision,
+    })
+  })
+  const track = {enabled: false}
+  await controller.resumeMicrophone({getAudioTracks: () => [track]} as unknown as MediaStream)
+  expect(track.enabled).toBe(false)
+  expect(controller.snapshot().phase).toBe('muted')
+  await controller.end()
+})

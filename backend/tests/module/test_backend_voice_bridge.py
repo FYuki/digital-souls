@@ -232,3 +232,136 @@ def test_finished_capture_stays_frozen_while_integrity_waits_and_input_reopens(f
             await asyncio.gather(*tasks)
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("failure", ["inference", "reset", "track_closed"])
+def test_runtime_fault_is_recoverable_and_notifies_the_affected_input(active, failure):
+    async def scenario():
+        core, tasks, events = Core(), [], []
+        async def publish(event):
+            decode_core_event(json.dumps(event).encode())
+            events.append(event)
+        async def authorize(track):
+            return True
+        async def verify(track, start, end):
+            return None
+        bridge = _ConversationCoreBridge(
+            core, lambda operation: tasks.append(asyncio.create_task(operation)),
+            publish_audio_event=publish, authorize_microphone=authorize,
+            verify_audio_integrity=verify, user_participant_id=str(uuid4()),
+        )
+        async def open_input(track, revision):
+            await bridge._open_audio({
+                "event_id": str(uuid4()), "track_sid": track, "input_revision": revision,
+            })
+        try:
+            await bridge.prepare_audio()
+            await open_input("TR_first", 1)
+            source = bridge._voice_input
+            pipeline = source._worker._pipeline
+            grant = source.grant
+            pcm = pcm_fixture()
+            offset = 0
+            if active:
+                for offset in range(0, len(pcm), 320):
+                    await bridge.receive_microphone_frame(
+                        pcm[offset:offset + 320], start_sample=offset // 2,
+                        track_sid="TR_first",
+                    )
+                    if source._active_utterance is not None:
+                        offset += 320
+                        break
+                assert source._active_utterance is not None
+            utterance_id = source._active_utterance
+            original_feed, original_reset = pipeline.feed, pipeline.reset
+            def fail(*args, **kwargs):
+                raise RuntimeError("injected native failure")
+            try:
+                if failure == "track_closed":
+                    bridge.close_microphone_track("TR_first")
+                    # 二重終了は同じ入力に重ねて通知しない。
+                    bridge.close_microphone_track("TR_first")
+                else:
+                    pipeline.feed = fail
+                    if failure == "reset":
+                        pipeline.reset = fail
+                    await bridge.receive_microphone_frame(
+                        pcm[offset:offset + 3072], start_sample=offset // 2,
+                        track_sid="TR_first",
+                    )
+            finally:
+                pipeline.feed, pipeline.reset = original_feed, original_reset
+            await asyncio.gather(*tasks)
+            assert not core.transcriptions
+            if active:
+                assert core.discards == [{
+                    "utterance_id": utterance_id,
+                    "reason": "audio_gap" if failure == "track_closed" else "vad_unavailable",
+                }]
+            else:
+                assert not core.discards
+            errors = [event for event in events if event["type"] == "error"]
+            if failure == "inference":
+                assert source.grant is grant
+                assert [event["error_code"] for event in errors] == ["audio_input_repeat_required"]
+            else:
+                assert source.grant is None
+                unavailable = [event for event in errors if event["error_code"] == "audio_input_unavailable"]
+                assert len(unavailable) == 1
+                assert unavailable[0]["user_state"] == "muted"
+                assert unavailable[0]["track_sid"] == grant.track_sid
+                assert unavailable[0]["input_generation"] == grant.input_generation
+                assert unavailable[0]["input_revision"] == grant.input_revision
+            await open_input("TR_next", 2)
+            for offset in range(0, len(pcm), 320):
+                await bridge.receive_microphone_frame(
+                    pcm[offset:offset + 320], start_sample=offset // 2,
+                    track_sid="TR_next",
+                )
+            await asyncio.gather(*tasks)
+            assert len(core.transcriptions) == 1
+            # 旧readerの遅着終了は再開した入力を停止しない。
+            bridge.close_microphone_track("TR_first")
+            assert source.grant.track_sid == "TR_next"
+        finally:
+            await bridge.close_audio()
+            await asyncio.gather(*tasks)
+    asyncio.run(scenario())
+
+
+def test_reset_failure_during_open_publishes_rejection():
+    async def scenario():
+        core, tasks, events = Core(), [], []
+        async def publish(event):
+            decode_core_event(json.dumps(event).encode())
+            events.append(event)
+        async def authorize(track):
+            return True
+        bridge = _ConversationCoreBridge(
+            core, lambda operation: tasks.append(asyncio.create_task(operation)),
+            publish_audio_event=publish, authorize_microphone=authorize,
+            user_participant_id=str(uuid4()),
+        )
+        try:
+            await bridge.prepare_audio()
+            pipeline = bridge._voice_input._worker._pipeline
+            original = pipeline.reset
+            def fail(*args, **kwargs):
+                raise RuntimeError("injected reset failure")
+            pipeline.reset = fail
+            request = str(uuid4())
+            try:
+                await bridge._open_audio({
+                    "event_id": request, "track_sid": "TR_first", "input_revision": 1,
+                })
+            finally:
+                pipeline.reset = original
+            assert len(events) == 1
+            assert events[0]["type"] == "audio_input_rejected"
+            assert events[0]["request_event_id"] == request
+            assert events[0]["reason"] == "vad_unavailable"
+        finally:
+            await bridge.close_audio()
+            await asyncio.gather(*tasks)
+    asyncio.run(scenario())

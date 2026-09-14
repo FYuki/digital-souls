@@ -39,7 +39,7 @@
 | Generation / 世代 | Session・応答・画面共有等で古い処理を識別して採用しないための世代。どの領域の世代かを明記する | 実装：[音声契約](decisions/voice-session-contract-2026-08.md)、[画面契約](decisions/browser-screen-perception-2026-09.md) |
 | 音声入力世代 | 抑止・再開・再接続等の境界をまたぐ旧音声と遅延処理結果を新しい発話へ採用しないための識別。response IDや画面共有の世代とは区別する | BE採番のinput_generationへ接続済み：[BackendVoiceInput](../backend/app/voice_input/session.py)、[移行契約](voice-backend-migration-contract.md) |
 | 入力操作順序、`input_revision` | FEのmute・focus・text送信・再開要求の順序番号。BEが採番する音声入力世代や正式utteranceとは別 | 接続済み：[client](../frontend/src/livekit/voice-session.ts)、[移行契約](voice-backend-migration-contract.md) |
-| 入力認可、`InputGrant` | BEが新trackのSIDと入力世代を結び付ける認可。FEは対応する入力開始ACKを受けるまでtrackを有効化しない | 接続済み：[BackendVoiceInput](../backend/app/voice_input/session.py)、[client](../frontend/src/livekit/voice-session.ts) |
+| 入力認可、`InputGrant` | BEが新trackのSIDと入力世代を結び付ける認可。FEは対応する入力開始ACKを受けるまでtrackを有効化しない。入力停止通知もSID・世代・revisionで対応付け、旧認可の停止を新入力へ適用しない | 接続済み：[BackendVoiceInput](../backend/app/voice_input/session.py)、[client](../frontend/src/livekit/voice-session.ts) |
 | VAD | 音声活動を検出する処理。その判定だけでは正式発話の終了、STT確定、相槌／take-turn、応答開始を意味しない | LiveKitはBEへ接続済み：[モデル](../backend/app/voice_input/models.py)。旧WebSocketは[FE音声UI](../frontend/src/lib/AudioRecorder.svelte)を維持 |
 | 発話区間管理 | VADと短発話の補助根拠、無音継続等から発話開始・終了や誤検出を確定する処理。音声活動の検出と会話上の発言権判断を区別する | LiveKitはBEへ接続済み：[区間検出](../backend/app/voice_input/detector.py)、[pipeline](../backend/app/voice_input/pipeline.py)。既存FE資産との同値性は[検証記録](validation/voice-backend-vad-358.md)を参照 |
 | Barge-in / 割り込み | キャラクターの応答中に新しい入力を優先し、旧応答を止めること。古い生成・音声結果の不採用も必要 | 実装：[Core](../backend/app/conversation_core/)、[音声契約](decisions/voice-session-contract-2026-08.md) |

@@ -57,7 +57,7 @@ from app.livekit_transport.microphone_frames import (
 from app.livekit_transport.microphone_integrity import MicrophoneIntegrity
 from app.voice_input.models import check_ready
 from app.voice_input.pipeline import AudioInputFault, VoiceInputPipeline
-from app.voice_input.session import BackendVoiceInput, SpeechBoundary
+from app.voice_input.session import BackendVoiceInput, InputGrant, SpeechBoundary
 
 from app.livekit_transport.text_input import TextInputReceiver
 from app.livekit_transport.stt_audio import (
@@ -1100,9 +1100,11 @@ class _ConversationCoreBridge:
                 "invalid_audio_frame": "invalid_audio",
                 "vad_backlog_exceeded": "input_capacity_exceeded",
                 "vad_reset_required": "vad_unavailable",
+                "vad_processing_failed": "vad_unavailable",
+                "microphone_track_unavailable": "audio_gap",
             }.get(reason, reason)
             self._schedule(self._discard_capture(utterance_id, normalized))
-        if reason not in {"input_suppressed", "input_replaced", "input_closed", "text_priority", "disconnect"}:
+        if reason not in {"input_suppressed", "input_replaced", "input_closed", "text_priority", "disconnect", "microphone_track_unavailable"}:
             self._schedule(self._publish_audio(self._audio_event(
                 "error", classification="recoverable", error_code="audio_input_repeat_required",
                 user_state="listening",
@@ -1142,13 +1144,31 @@ class _ConversationCoreBridge:
         grant = source.grant
         if grant is None or grant.track_sid != track_sid:
             return
-        await source.receive(pcm, start_sample=start_sample, grant=grant)
+        try:
+            await source.receive(pcm, start_sample=start_sample, grant=grant)
+        except AudioInputFault:
+            # resetの失敗は当該入力だけを停止する。旧世代の失敗で新入力を止めない。
+            if self._voice_input is source and source.revision == grant.input_revision:
+                self._audio_unavailable(grant)
 
-    def close_microphone_track(self, track_sid: str, *, reason: str = "audio_gap") -> None:
+    def _audio_unavailable(self, grant: InputGrant) -> None:
+        self._schedule(self._publish_audio(self._audio_event(
+            "error", classification="recoverable", error_code="audio_input_unavailable",
+            user_state="muted", track_sid=grant.track_sid,
+            input_generation=grant.input_generation, input_revision=grant.input_revision,
+        )))
+
+    def close_microphone_track(
+        self, track_sid: str, *, reason: str = "microphone_track_unavailable",
+    ) -> None:
         source = self._voice_input
         if source is not None and source.grant is not None and source.grant.track_sid == track_sid:
+            grant = source.grant
             source.suppress(reason=reason)
             self._microphone_preroll.clear()
+            if reason == "microphone_track_unavailable":
+                # 無音中のreader終了にも通知し、聴取中表示を残さない。
+                self._audio_unavailable(grant)
 
     async def close_audio(self) -> None:
         source, self._voice_input = self._voice_input, None
@@ -2110,8 +2130,6 @@ class ProductionRuntimeManager:
                 try:
                     pcm, start_sample = clock.read(frame)
                 except AudioInputFault:
-                    bridge._audio_discarded(None, "invalid_audio_frame")
-                    bridge.close_microphone_track(str(track.sid), reason="input_closed")
                     return
                 await bridge.receive_microphone_frame(
                     pcm, start_sample=start_sample, track_sid=str(track.sid),
@@ -2123,6 +2141,10 @@ class ProductionRuntimeManager:
                 )
                 if session_id not in self._rooms:
                     return
+        except Exception:
+            # 端末trackの読取失敗はfinallyで入力停止として通知する。
+            # text・終了済み発話・回答再生はこのreaderの所有物ではない。
+            logger.warning("LiveKit microphone reader failed")
         finally:
             monitor.close()
             monitor_task.cancel()
