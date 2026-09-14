@@ -90,19 +90,24 @@ def main():
         "cache": False, "case_count": len(cases), "runs": args.runs,
         "acceptance_eligible": args.runs == 3 and len(cases) == 100,
     }
+    if manifest["acceptance_eligible"] and manifest["dirty"]:
+        raise ValueError("commit the worktree before the full three-run evaluation")
     (output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
     sys.path.insert(0, str(ROOT / "backend"))
     from evals.semantic_memory.score import score
+    from evals.semantic_memory.telemetry import MemorySampler
     print(f"評価証跡: {output}", flush=True)
     summaries = []
     for run in range(1, args.runs + 1):
         progress = output / f"run-{run}.jsonl"
         environment["SEMANTIC_EVAL_PROGRESS"] = str(progress)
-        with (output / f"run-{run}.log").open("w") as log:
+        with MemorySampler(args.endpoint, output / f"run-{run}-memory.jsonl") as memory, \
+                (output / f"run-{run}.log").open("w") as log:
             result = subprocess.run([str(ROOT / "node_modules/.bin/promptfoo"), "eval",
                 "--config", str(config_path), "--no-cache", "--max-concurrency", "1", "--no-table",
                 "--output", str(output / f"run-{run}.json")],
                 cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT, check=False)
+        (output / f"run-{run}-memory-summary.json").write_text(json.dumps(memory.summary(), ensure_ascii=False, indent=2))
         rows = [json.loads(line) for line in progress.read_text().splitlines()] if progress.exists() else []
         by_id = {r["case_id"]: r for r in rows}
         categories = defaultdict(list)

@@ -106,9 +106,9 @@ class SemanticExtractor:
     def __init__(self, client: StructuredClient, *, timeout_seconds: float, max_output_tokens: int) -> None:
         self.client, self.timeout_seconds, self.max_output_tokens = client, timeout_seconds, max_output_tokens
 
-    def extract(
-        self, *, parts: tuple[InputPart, ...], catalog: tuple[SemanticRecord, ...],
-    ) -> SemanticBatch:
+    def _request(
+        self, parts: tuple[InputPart, ...], catalog: tuple[SemanticRecord, ...],
+    ) -> tuple[tuple[dict[str, str], ...], dict[str, object]]:
         existing = [{
             "key": f"m{index}", "subject": record.proposition.subject,
             "predicate": record.proposition.predicate, "value": record.proposition.value,
@@ -124,10 +124,29 @@ class SemanticExtractor:
             } for part in parts],
             "existing": existing,
         }
+        messages = ({"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": json.dumps(data, ensure_ascii=False)})
+        schema = _response_schema(tuple(f"m{index}" for index, record in enumerate(catalog) if record.proposition is not None))
+        return messages, schema
+
+    def catalog_for(
+        self, *, parts: tuple[InputPart, ...], catalog: tuple[SemanticRecord, ...],
+    ) -> tuple[SemanticRecord, ...]:
+        from app.memory.semantic.catalog import select_catalog
+        fits = getattr(self.client, "fits", None)
+        if fits is None:
+            return catalog
+        return select_catalog(
+            catalog, conversation="\n".join(part.fragment.text for part in parts),
+            fits=lambda subset: bool(fits(*self._request(parts, subset))),
+        )
+
+    def extract(
+        self, *, parts: tuple[InputPart, ...], catalog: tuple[SemanticRecord, ...],
+    ) -> SemanticBatch:
+        messages, schema = self._request(parts, catalog)
         raw = self.client.chat(
-            ({"role": "system", "content": SYSTEM_PROMPT},
-             {"role": "user", "content": json.dumps(data, ensure_ascii=False)}),
-            json_schema=_response_schema(tuple(f"m{index}" for index, record in enumerate(catalog) if record.proposition is not None)),
+            messages, json_schema=schema,
             timeout_seconds=self.timeout_seconds, max_output_tokens=self.max_output_tokens,
         )
         result = SemanticBatch.model_validate_json(raw)

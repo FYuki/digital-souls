@@ -34,12 +34,14 @@ class SemanticPipeline:
         batches: tuple[tuple[InputPart, ...], ...], catalog: tuple[SemanticRecord, ...],
         extraction: ExtractionIdentity, should_defer: Callable[[], bool] = lambda: False,
     ) -> PipelineResult:
+        catalog = tuple(record for record in catalog if record.character_id == character_id)
         proposed: list[ResolvedProposal] = []
         for parts in batches:
             if should_defer():
                 raise SemanticDeferred()
-            output = self.extractor.extract(parts=parts, catalog=catalog)
-            proposed.extend(resolve_proposals(output, parts=parts, catalog=catalog,
+            selected = self.extractor.catalog_for(parts=parts, catalog=catalog)
+            output = self.extractor.extract(parts=parts, catalog=selected)
+            proposed.extend(resolve_proposals(output, parts=parts, catalog=selected,
                                              character_id=character_id, timezone=self.timezone))
         prepared: list[tuple[ResolvedProposal, FormationStamp]] = []
         rejected = 0

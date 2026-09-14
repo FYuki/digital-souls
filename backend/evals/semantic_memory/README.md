@@ -33,4 +33,12 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/eval_semantic_memory.py --mo
 これは出典検査・scanner・保存禁止条件の省略ではない。
 
 この評価は記憶判断とSQLite保存経路の検証であり、Chroma・UI・実会話の受入証明ではない。
-初期動作確認では誕生日のprivacy拒否や好みのslot誤りが残っており、採用モデルは未決定。
+採用モデルは正式比較と負荷・実接続受入後に決める。調整結果は[進捗記録](../../../docs/semantic-memory-341-progress.md)を参照する。
+
+正式な100ケース×3回はクリーンなコミットからのみ実行する。`--case-prefix confirmation --runs 1`は分類を絞る診断用。
+各runの`*-memory.jsonl`と`*-memory-summary.json`へ、Ollamaの読み込み量とGPU使用量の定期観測を記録する。
+記録値はサンプル間の瞬間最大値を保証しない。共有GPUの使用量には他プロセスが含まれる。
+
+既存知識が入力予算に収まる場合は全件を照合する。超過時だけ会話と属性・値の文字的一致、更新日時で候補を順位づけし、
+本番clientがschemaを含めて見積もったtoken上限内へ収める。正本は削除しない。意味的な同義語の網羅を保証する検索ではなく、
+この候補選択も本番と性能評価で同じ経路を通す。入力だけで予算を超える設定は明示的なエラーとし、処理位置を進めない。
