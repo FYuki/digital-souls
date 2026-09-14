@@ -503,3 +503,20 @@ HTTP200・空でない転写を確認し、[数値証跡](../artifacts/voice-bac
 サービスの再起動・設定変更は行っていない。
 追加変換ライブラリ・外部変換器がないことによる診断準備の失敗は推論失敗に数えず、
 既存変換を再利用して確認した。1回の成功を継続安定性や100試行合格へ読み替えない。
+
+### 移設前比較用ハーネスの実接続確認
+
+比較用 `67e1a03`（アプリ基準 `07b8b1e`）を実Browser／LiveKit／Whisper／Ollama／VOICEVOXで実行した。
+input_authority=frontendを明示し、旧FE VADのアプリコードと資産を保持したまま相槌3試行に成功した。
+
+- [旧FE版の相槌集計](../artifacts/voice-backend-358-before-backchannel-pilot.json):
+  相槌判定3件、旧応答の全出力継続3件、実停止・取消・欠測0件。
+- [旧FE版のPCM集計](../artifacts/voice-backend-358-before-backchannel-pcm-pilot.json):
+  最終STT入力と端部一致3件、欠測0、最小端部相関約0.993。
+- session終了3件、専用アプリ・LiveKit・50023中継の停止を確認。
+  LiveKitはbaseline worktreeのComposeから所有コンテナを再作成したため、
+  新しいIDとproject／serviceラベルを確認して停止した。共有サービスは変更していない。
+- 移設前後の推論設定例、integration-voice／PCM Profile、固定音声metadata／ラベルmanifest、
+  run_pilot.pyの計6ファイルが同一であることを確認した。
+- 旧版・新版とも少数pilotであり、100試行前後比較・全体性能合格を意味しない。
+  中止済みの新版100試行runは保持する。
