@@ -191,7 +191,7 @@ def test_real_adapter_keeps_segment_streaming_and_allows_next_response_after_fai
                 nonlocal generation_count
                 generation_count += 1
                 try:
-                    yield TextDelta(1, "最初の文です。", (0, 7))
+                    yield TextDelta(1, "光織の声です。", (0, 7))
                     if generation_count == 1:
                         await rest_allowed.wait()
                     yield TextDelta(2, "続きです。", (7, 12))
@@ -224,7 +224,7 @@ def test_real_adapter_keeps_segment_streaming_and_allows_next_response_after_fai
             await asyncio.wait_for(settle(), 1)
             assert session.response(first.response_id).state.value == "failed"
             assert llm_closed.is_set()
-            assert calls == ["最初の文です。"]
+            assert calls == ["みおりの声です。"]
             assert not any(event_field(e, "type") == "response_audio_segment" for e in delivery.events)
             second = await session.finalize_utterance(
                 utterance_id=str(uuid4()), transcript="もう一度", should_response=True,
@@ -237,7 +237,7 @@ def test_real_adapter_keeps_segment_streaming_and_allows_next_response_after_fai
                     await asyncio.sleep(0)
             await asyncio.wait_for(wait_audio(), 1)
             assert not rest_allowed.is_set()
-            assert calls == ["最初の文です。"]
+            assert calls == ["みおりの声です。"]
             rest_allowed.set()
             await asyncio.wait_for(settle(), 1)
             audio = [e for e in delivery.events if event_field(e, "type") == "response_audio_segment"]

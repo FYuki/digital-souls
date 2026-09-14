@@ -18,6 +18,7 @@ from app.tts.speech_synthesizer import SpeechSynthesisError
 
 
 MAX_AUDIO_BYTES = 48_000 * 2 * 60 + 4096
+_SPEECH_READINGS = (("光織", "みおり"),)
 _ERROR_CODES = frozenset({
     "tts_not_ready", "tts_capacity_exceeded", "tts_queue_timeout",
     "tts_inference_timeout", "tts_inference_failed", "tts_worker_failed",
@@ -115,8 +116,12 @@ class IrodoriClient:
             raise IrodoriTtsError("tts_service_unavailable") from error
 
     async def _synthesize_pcm(self, text: str, voice: IrodoriTtsConfig) -> bytes:
+        # 表示・履歴・text_rangeの原文を保ち、合成へ渡す文字列だけ読みを適用する。
+        speech_text = text
+        for written, reading in _SPEECH_READINGS:
+            speech_text = speech_text.replace(written, reading)
         payload = {
-            "model": "irodori-tts", "input": text, "voice": voice.voice_id,
+            "model": "irodori-tts", "input": speech_text, "voice": voice.voice_id,
             "response_format": "wav", "speed": voice.speed,
             "irodori": {
                 "caption": voice.caption, "seed": voice.seed,

@@ -142,7 +142,10 @@ URL・timeout・pathをCCVに入れない。未知engine、不正voice ID、参�
 Session作成前にreadyと登録音声を確認し、既存Session／一時再接続で設定を読み直さない。
 VOICEVOXへ戻す場合は従来の `{"engine":"voicevox","speaker_id":14}` を設定して新しいSessionを開始する。
 旧WebSocket baselineではIrodori設定を明示エラーにし、自動fallbackしない。
-出荷済み光織CCVの既定値はVOICEVOXのままとし、Irodoriの本採用判断と区別する。
+光織CCVは2026-09-14のdev試聴後にユーザーが採用したIrodori設定
+（`miori-b3-4221`、speed `1.02`、seed `4221`、40 steps）を既定値とする。
+「光織 → みおり」は合成用テキストだけに適用する。[採用音声](../../characters/miori/voice.md)を参照。
+共有Irodoriの準備完了が音声Session開始に必要であり、VOICEVOXへの自動fallbackは行わない。
 
 ## 検証状態
 
