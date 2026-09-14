@@ -226,3 +226,39 @@ def test_lexical_match_ignores_common_self_reference_and_preserves_precise_attri
     assert lexical_relevance("私の居住地は？", predicate="居住地", value="東京", quotes=()) > 0
     assert lexical_relevance("私は今どこに住んでいたかな？", predicate="居住地", value="大阪",
                              quotes=("大阪に住んでいます。",)) > 0
+
+def test_explicit_correction_resolves_connected_conflicts_but_keeps_other_attributes(h):
+    from app.memory.semantic.contracts import SemanticOperation, SemanticStatus
+    from app.memory.rag_service import _semantic_response_cautions
+
+    policy = resolved_memory_policy()
+    h.reviewer.review = lambda *_: PrivacyReview(True, "ALLOW", STAMP.model_copy(
+        update={"policy_version": policy.policy_version}))
+    first = save(h, candidate(source(h, "誕生日は6月12日"), predicate="誕生日", value="6月12日", fixed=True))
+    second = save(h, candidate(source(h, "誕生日は6月13日"), predicate="誕生日", value="6月13日", fixed=True),
+                  target=first, op=SemanticOperation.CONFLICT)
+    third = save(h, candidate(source(h, "誕生日は6月14日"), predicate="誕生日", value="6月14日", fixed=True),
+                 target=second, op=SemanticOperation.CONFLICT)
+    birthplace = save(h, candidate(source(h, "出身地は大阪"), predicate="出身地", value="大阪", fixed=True))
+    birthplace_other = save(h, candidate(source(h, "出身地は京都"), predicate="出身地", value="京都", fixed=True),
+                           target=birthplace, op=SemanticOperation.CONFLICT)
+    from tests.module.test_semantic_management import Index
+    manager = SemanticMemoryManagement(h.store, Index())
+    corrected = manager.correct(character_id="miori", record_id=second.id, version=second.content_version,
+                                value="6月12日", key=uuid4())
+    with h.repo.read() as tx:
+        for old in (first, second, third):
+            saved = tx.get("miori", old.id)
+            assert saved.status is SemanticStatus.SUPERSEDED
+            assert saved.proposition == old.proposition
+            assert any(str(r.source_id)==str(old.id) and str(r.target_id)==corrected['id']
+                       and r.relation is SemanticOperation.CORRECT for r in tx.relations("miori"))
+        for unrelated in (birthplace, birthplace_other):
+            assert tx.get("miori", unrelated.id).status is SemanticStatus.CONFLICTED
+    legacy = ApprovedMemoryRepository(database_path=h.paths.persona_memory_sqlite_path,
+        clock=h.store.clock, uuid_factory=uuid4, outbox_uuid_factory=uuid4)
+    reader = WithSemanticReadRepository(CombinedMemoryReadRepository(legacy, h.store.episode_reader))
+    reader.bind(SemanticReadRepository(h.store))
+    scanner = Mock();scanner.scan.return_value = ScanSuccess(())
+    assert not _semantic_response_cautions(reader, character="miori", query="私の誕生日は？", policy=policy, scanner=scanner)
+    assert _semantic_response_cautions(reader, character="miori", query="私の出身地は？", policy=policy, scanner=scanner)

@@ -182,24 +182,51 @@ class SemanticTransaction:
         )
         self._version(record_id, character_id)
         if target is not None:
-            previous_status = {
-                SemanticOperation.CORRECT: SemanticStatus.SUPERSEDED,
-                SemanticOperation.CHANGE: SemanticStatus.HISTORICAL,
-                SemanticOperation.CONFLICT: SemanticStatus.CONFLICTED,
-            }.get(operation)
-            if previous_status is not None:
-                self._status(character_id, target.id, previous_status)
-            self.connection.execute(
-                "INSERT INTO semantic_relations VALUES(?,?,?,?,?,?,?)",
-                (character_id, str(target.id), target.content_version,
-                 str(record_id), 1, operation.value, self.now),
-            )
+            previous_records = (self._correction_targets(character_id, target)
+                                if operation is SemanticOperation.CORRECT else (target,))
+            for previous in previous_records:
+                previous_status = {
+                    SemanticOperation.CORRECT: SemanticStatus.SUPERSEDED,
+                    SemanticOperation.CHANGE: SemanticStatus.HISTORICAL,
+                    SemanticOperation.CONFLICT: SemanticStatus.CONFLICTED,
+                }.get(operation)
+                if previous_status is not None:
+                    self._status(character_id, previous.id, previous_status)
+                self.connection.execute(
+                    "INSERT INTO semantic_relations VALUES(?,?,?,?,?,?,?)",
+                    (character_id, str(previous.id), previous.content_version,
+                     str(record_id), 1, operation.value, self.now),
+                )
         result = self.get(character_id, record_id)
         assert result is not None
         self._receipt(result, receipt_key)
         self._outbox(character_id, record_id)
         return result
 
+    def _correction_targets(self, character_id: str, target: SemanticRecord) -> tuple[SemanticRecord, ...]:
+        # 明示訂正で同じ矛盾が解決した場合、対になる旧値だけを未解決として残さない。
+        # 本文・根拠は消さず、別属性や一般化との優先関係を横断しない。
+        if target.status is not SemanticStatus.CONFLICTED or target.proposition is None:
+            return (target,)
+        eligible = {
+            record.id: record for record in self.list_records(character_id)
+            if record.status is SemanticStatus.CONFLICTED and record.proposition is not None
+            and record.formation_type is target.formation_type
+            and (record.proposition.subject, record.proposition.predicate, record.proposition.self_report)
+            == (target.proposition.subject, target.proposition.predicate, target.proposition.self_report)
+        }
+        adjacency: dict[UUID, set[UUID]] = {}
+        for relation in self.relations(character_id):
+            if (relation.relation is SemanticOperation.CONFLICT
+                    and relation.source_id in eligible and relation.target_id in eligible):
+                adjacency.setdefault(relation.source_id, set()).add(relation.target_id)
+                adjacency.setdefault(relation.target_id, set()).add(relation.source_id)
+        found, pending = {target.id}, [target.id]
+        while pending:
+            for neighbor in adjacency.get(pending.pop(), set()) - found:
+                found.add(neighbor)
+                pending.append(neighbor)
+        return (target, *(eligible[identifier] for identifier in sorted(found - {target.id}, key=str)))
     def _status(self, character_id: str, record_id: UUID, status: SemanticStatus) -> None:
         self._write()
         self.connection.execute(
