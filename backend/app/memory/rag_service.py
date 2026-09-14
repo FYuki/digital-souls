@@ -57,6 +57,7 @@ RAG_OPERATION_ERRORS = (
 class _VerifiedCandidate:
     candidate: MemorySearchCandidate
     memory: ReadableMemory
+    match_kind: RetrievalMatchKind | None = None
 
 
 @dataclass(frozen=True)
@@ -148,6 +149,10 @@ def retrieve_prompt_memories(
             equivalence_margin=ranking_policy.equivalence_margin,
         )
         if temporal_query is None:
+            ranked = _include_lexical_semantics(
+                ranked, character=character, query=user_message, policy=policy, scanner=scanner,
+                approved_repository=approved_repository, now=now.astimezone(UTC),
+            )
             ranked = _include_current_self_reports(
                 ranked, character=character, policy=policy, scanner=scanner,
                 approved_repository=approved_repository, now=now.astimezone(UTC),
@@ -181,6 +186,25 @@ def retrieve_prompt_memories(
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
         return RetrievalOutcome((), False)
 
+
+def _include_lexical_semantics(
+    ranked: tuple[_VerifiedCandidate, ...], *, character: str, query: str,
+    policy: MemoryPolicy, scanner: PrivacyScanner, approved_repository: MemoryReadRepository, now: datetime,
+) -> tuple[_VerifiedCandidate, ...]:
+    if not isinstance(approved_repository, WithSemanticReadRepository):
+        return ranked
+    snapshots: list[ReadableMemory] = list(approved_repository.semantic.search_by_text(
+        character_id=character, query=query,
+    ))
+    verified = _verified_period_memories(snapshots, character=character, policy=policy,
+        scanner=scanner, approved_repository=approved_repository, now=now)
+    by_id = {item.memory.id: item for item in ranked}
+    supplemental = tuple(_VerifiedCandidate(
+        by_id[memory.id].candidate if memory.id in by_id else MemorySearchCandidate(str(memory.id), float("inf")),
+        memory, RetrievalMatchKind.LEXICAL,
+    ) for memory in verified)
+    selected_ids = {item.memory.id for item in supplemental}
+    return (*supplemental, *(item for item in ranked if item.memory.id not in selected_ids))
 
 def _semantic_response_cautions(
     repository: MemoryReadRepository, *, character: str, query: str,
@@ -243,7 +267,7 @@ def _include_current_self_reports(
             if value.id not in seen:
                 # 正本から補う場合はベクトル距離を捏造しない。
                 result.append(by_id.get(value.id) or _VerifiedCandidate(
-                    MemorySearchCandidate(str(value.id), float("inf")), value,
+                    MemorySearchCandidate(str(value.id), float("inf")), value, RetrievalMatchKind.RELATED,
                 ))
                 seen.add(value.id)
         if memory.id not in seen:
@@ -467,7 +491,7 @@ def _search_result(
         normalized_text=memory.normalized_text,
         occurred_at=_format_occurred_at(memory),
         occurred_precision=memory.occurred_precision,
-        match_kind=match_kind,
+        match_kind=candidate.match_kind or match_kind,
         memory_type=memory.memory_type.value,
         raw_distance=candidate.candidate.raw_distance,
         temporal_text=(render_time(memory.five_w.when)

@@ -20,6 +20,8 @@ class RetrievalMatchKind(str, Enum):
     BOTH = "BOTH"
     SEMANTIC = "SEMANTIC"
     PERIOD = "PERIOD"
+    LEXICAL = "LEXICAL"
+    RELATED = "RELATED"
 
 
 COLLECTION_NAME_PREFIX = "character"

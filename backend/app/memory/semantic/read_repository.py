@@ -9,6 +9,10 @@ from app.memory.persistence.contracts import MemoryStatus, TemporalPrecision
 from app.memory.read_contracts import MemoryReadRepository, ReadableMemory, SemanticMemoryView
 from app.memory.semantic.contracts import FormationType, SemanticRecord, SemanticStatus
 from app.memory.semantic.service import SemanticSourceReader
+from app.memory.semantic.search import lexical_relevance
+from app.memory.semantic.sources import validate_sources
+from app.memory.semantic.repository import SemanticConflict
+from app.memory.episodic.sources import InvalidConversationSource
 
 
 class SemanticReadRepository:
@@ -25,6 +29,36 @@ class SemanticReadRepository:
         return [view for record in records
                 if (view := self._project(record, records)).status is MemoryStatus.ACTIVE]
 
+    def search_by_text(self, *, character_id: str, query: str) -> list[SemanticMemoryView]:
+        records = self.store.reconcile(character_id)
+        scored: list[tuple[float, SemanticMemoryView]] = []
+        with self.store.source_guard.snapshot() as (history, cutoff), self.store.repository.read() as tx:
+            for record in records:
+                view = self._project(record, records)
+                if view.status is not MemoryStatus.ACTIVE or view.proposition is None:
+                    continue
+                try:
+                    validate_sources(history, cutoff, tx, character_id=character_id,
+                                     sources=record.sources, episode_reader=self.store.episode_reader)
+                except (InvalidConversationSource, SemanticConflict):
+                    continue
+                quotes = []
+                for source in record.sources:
+                    if source.kind != "CONVERSATION" or source.span is None or source.span.role != "user":
+                        continue
+                    row = history.execute(
+                        "SELECT user_content FROM conversation_turns WHERE character_id=? AND conversation_id=? AND turn_id=?",
+                        (character_id, str(source.conversation_id), str(source.source_id)),
+                    ).fetchone()
+                    if row is not None:
+                        quotes.append(str(row[0])[source.span.start:source.span.end])
+                score = lexical_relevance(query, predicate=view.proposition.predicate,
+                    value=view.proposition.value, quotes=tuple(quotes))
+                if score > 0:
+                    scored.append((score, view))
+        return [view for _, view in sorted(scored, key=lambda item: (
+            -item[0], -item[1].updated_at.timestamp(), str(item[1].id),
+        ))]
     def list_conflicted(self, *, character_id: str) -> tuple[SemanticRecord, ...]:
         return tuple(record for record in self.store.reconcile(character_id)
                      if record.status is SemanticStatus.CONFLICTED and record.proposition is not None)

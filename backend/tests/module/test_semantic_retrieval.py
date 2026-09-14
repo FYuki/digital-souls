@@ -182,3 +182,47 @@ def test_conflicted_attribute_constrains_reply_without_exposing_either_value(h, 
     h.history.hard_delete_conversation("miori", first_conversation.conversation_id)
     h.history.hard_delete_conversation("miori", second_conversation.conversation_id)
     assert not _rag_context_for_reply("miori", "私の誕生日は？", context, dependencies).required_instruction
+
+def test_lexical_source_match_recovers_current_residence_outside_vector_pool(h, monkeypatch):
+    from app.memory.chroma_store import MemorySearchCandidate, RetrievalMatchKind
+    from app.memory.semantic.contracts import SemanticOperation
+
+    policy = resolved_memory_policy()
+    h.reviewer.review = lambda *_: PrivacyReview(True, "ALLOW", STAMP.model_copy(
+        update={"policy_version": policy.policy_version}))
+    old_conversation = h.history.create_conversation("miori")
+    old = save(h, candidate(source(h, "大阪に住んでいます。", conversation=old_conversation)))
+    current = save(h, candidate(source(h, "東京に引っ越しました。"), value="東京"),
+                   target=old, op=SemanticOperation.CHANGE)
+    noise = [save(h, candidate(source(h, "私の好きな果物は桃です。"), predicate=f"好み{index}", value="桃"))
+             for index in range(6)]
+    legacy = ApprovedMemoryRepository(database_path=h.paths.persona_memory_sqlite_path,
+        clock=h.store.clock, uuid_factory=uuid4, outbox_uuid_factory=uuid4)
+    reader = WithSemanticReadRepository(CombinedMemoryReadRepository(legacy, h.store.episode_reader))
+    reader.bind(SemanticReadRepository(h.store))
+    monkeypatch.setattr("app.memory.rag_service.query_memories",
+                        lambda *_a, **_k: [MemorySearchCandidate(str(item.id), 0.01) for item in noise])
+    scanner, classifier = Mock(), Mock()
+    scanner.scan.return_value = ScanSuccess(())
+    classifier.classify.return_value = _assessment(SemanticClassification.NOT_SENSITIVE,
+                                                  SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT)
+    found = retrieve_prompt_memories("miori", "私は今どこに住んでいたかな？", policy,
+        scanner=scanner, classifier=classifier, approved_repository=reader,
+        embedder=FakeEmbedder(), chroma_path=h.paths.chroma_path,
+        now=h.store.clock(), timezone="Asia/Tokyo").memories
+    assert len(found) == 5
+    assert [item.memory_id for item in found[:2]] == [str(current.id), str(old.id)]
+    assert [item.match_kind for item in found[:2]] == [RetrievalMatchKind.RELATED, RetrievalMatchKind.LEXICAL]
+    assert not reader.semantic.search_by_text(character_id="other", query="大阪に住んでいた")
+    h.history.hard_delete_conversation("miori", old_conversation.conversation_id)
+    assert all(item.id != old.id for item in reader.semantic.search_by_text(
+        character_id="miori", query="大阪に住んでいた"))
+
+
+def test_lexical_match_ignores_common_self_reference_and_preserves_precise_attribute():
+    from app.memory.semantic.search import lexical_relevance
+    assert lexical_relevance("私の今の住まいは？", predicate="好みの花", value="桜",
+                             quotes=("私の好きな花は桜です",)) == 0
+    assert lexical_relevance("私の居住地は？", predicate="居住地", value="東京", quotes=()) > 0
+    assert lexical_relevance("私は今どこに住んでいたかな？", predicate="居住地", value="大阪",
+                             quotes=("大阪に住んでいます。",)) > 0

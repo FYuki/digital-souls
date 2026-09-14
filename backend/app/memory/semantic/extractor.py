@@ -237,7 +237,7 @@ def _response_schema(target_keys: tuple[str, ...]) -> dict[str, object]:
         update["properties"]["target_key"] = {"type": "string", "enum": list(target_keys)}
         branches.append(update)
     # 自己申告の対象は本人に固定する。属性名をsubjectへ入れる誤りを生成時にも防ぐ。
-    constrained = []
+    constrained: list[dict[str, object]] = []
     for branch in branches:
         own = deepcopy(branch)
         own["properties"]["self_report"] = {"type": "boolean", "const": True}
