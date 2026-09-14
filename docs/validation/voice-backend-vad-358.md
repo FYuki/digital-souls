@@ -358,3 +358,21 @@ audio_integrity_unavailableで破棄され、ラベル付き音声の投入へ�
 統計取得失敗・ID変更・stale snapshot・counter逆行の件数を既存のutterance traceへ記録する。
 本文・PCM・統計の識別子は転記しない。失敗・閾値・待機上限の判定は変更しない。
 追加後の局所検証: **77 passed**、正式Ruff・mypy成功。
+
+
+`3a447f4` の数値診断追加後、独立した1件runと5件runを実行した。
+いずれも全件で正式発話は各1件、最終STT・実Whisper入力と語頭／末尾のv4照合に成功し、
+session終了まで確認できた。5件の最小端部相関は約0.945。
+[1件のPCM report](../artifacts/voice-backend-358-pause-pcm-diagnostic-01.json)と
+[5件のPCM report](../artifacts/voice-backend-358-pause-pcm-diagnostic-02.json)は欠測0だが、
+100件条件を満たさないためpassedはfalseのまま保持する。
+
+この2 runでは統計欠測が再現しなかったため、追加した数値traceによる根本原因の確定には
+至っていない。先の失敗2件は保持し、初回発話の問題を解消済みとは記録しない。
+[全runの証跡](../artifacts/voice-backend-358-pause-smoke.json)へ実行版とhashを追加した。
+BE detectorのsample位置とsource PCMの境界offset集計、全cohortの同条件100試行比較、
+実マイク・聴感、切替／切り戻しは未完了。
+
+今回の専用LiveKit／Backend／FrontendとPCM中継は停止済み。
+7880／7881／8000／5173／4174に加えて50023の閉鎖を確認し、
+共有推論サービスと別タスクのOllamaは維持している。
