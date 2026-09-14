@@ -761,3 +761,7 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_vad.py 
 PCM受入の詳細は同じraw入力の `report_stt_pcm.py` に残す。
 旧FE reportは従来のbrowser時計を維持し、判断主体と時計を混同しない。
 終了コードは受入合格0、pilotや欠測など受入未達1、入力・schemaエラー2。
+
+BE版の相槌集計では、`core_events_overflow` と `interruptions_overflow` が
+ともにfalseであることを正常継続の必要条件にする。
+欠落した観測から誤停止なしと推定せず、確認済みの取消・停止は失敗件数として保持する。

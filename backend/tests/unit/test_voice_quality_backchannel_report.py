@@ -294,3 +294,42 @@ def test_final_decision_for_other_response_is_unverified():
     assert result["counts"]["backchannel_decision"] == 99
     assert result["counts"]["indeterminate_decision"] == 0
     assert result["counts"]["unverified_final_decision"] == 1
+
+
+@pytest.mark.parametrize("flag", ["core_events_overflow", "interruptions_overflow"])
+@pytest.mark.parametrize("state", [True, None, "false"])
+def test_backend_incomplete_observation_cannot_prove_no_false_cancel(flag, state):
+    args = case()
+    args[0]["input_authority"] = "backend"
+    for trial in args[0]["trials"]:
+        trial["evidence"].update(core_events_overflow=False, interruptions_overflow=False)
+    evidence = args[0]["trials"][0]["evidence"]
+    evidence[flag] = state
+    result = report.summarize(*args)
+    assert result["metrics"][0]["missing_count"] == 1
+    assert result["metrics"][0]["success_count"] == 99
+    assert result["metrics"][0]["rate_denominator"] == 100
+    assert not result["evaluation"]["false_cancel_rate_passed"]
+
+
+def test_backend_observed_cancel_is_retained_even_when_observation_overflows():
+    args = case()
+    args[0]["input_authority"] = "backend"
+    for trial in args[0]["trials"]:
+        trial["evidence"].update(core_events_overflow=False, interruptions_overflow=False)
+    trial = args[0]["trials"][0]
+    trial["evidence"]["interruptions_overflow"] = True
+    trial["evidence"]["interruptions"] = [
+        {"responseId": trial["old_response_id"], "localPlaybackStoppedAtMs": 1200}
+    ]
+    result = report.summarize(*args)
+    assert result["metrics"][0]["failure_count"] == 1
+    assert result["metrics"][0]["missing_count"] == 0
+
+
+def test_legacy_explicit_overflow_is_missing_without_changing_old_absent_flags():
+    args = case()
+    args[0]["trials"][0]["evidence"]["core_events_overflow"] = True
+    result = report.summarize(*args)
+    assert result["metrics"][0]["missing_count"] == 1
+    assert result["metrics"][0]["success_count"] == 99
