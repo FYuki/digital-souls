@@ -3,6 +3,8 @@
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
+from contextlib import closing
+import sqlite3
 
 from app.inference import InferenceTarget
 from app.inference.runtime import InferenceRuntime
@@ -15,6 +17,7 @@ from app.memory.formation.durable_scheduler import DurableMemoryFormationSchedul
 from app.memory.formation.compact_extractor import COMPACT_EXTRACTOR_VERSION, CompactExtractor
 from app.memory.formation.episodic_worker import EpisodicFormationWorker
 from app.memory.formation.thread_queue import ThreadFormationQueue
+from app.memory.formation.priority import conversation_idle
 from app.memory.inference_client import StructuredMemoryInferenceClient
 
 
@@ -45,8 +48,12 @@ def build_episodic_scheduler(
     registration = EpisodicRegistrationService(
         repository=repository, queue=queue, reviewer=reviewer, timezone=timezone, clock=clock,
     )
+    def priority_available() -> bool:
+        with closing(sqlite3.connect(history_path.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.2)) as history:
+            return conversation_idle(history, now=clock())
+
     return DurableMemoryFormationScheduler(
-        queue=queue,
+        queue=queue, priority_available=priority_available,
         worker=EpisodicFormationWorker(
             queue=queue, extractor=CompactExtractor(client=client, settings=settings),
             registration=registration, entity_labels=entity_labels,

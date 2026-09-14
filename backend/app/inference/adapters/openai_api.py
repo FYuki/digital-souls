@@ -28,6 +28,7 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.adapters.cancellable_http import post as cancellable_post
 from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 
 
@@ -348,7 +349,7 @@ class OpenAIAPIAdapter:
         timeout_seconds: float,
     ) -> dict[str, object]:
         try:
-            response = self._http_client.post(
+            response = cancellable_post(self._http_client,
                 f"{OPENAI_API_BASE_URL}{path}",
                 json=dict(payload),
                 headers=self._headers,
@@ -470,6 +471,8 @@ class OpenAIAPIAdapter:
 
     @staticmethod
     def _raise_transport(error: Exception) -> NoReturn:
+        if isinstance(error, InferenceError):
+            raise error
         if isinstance(error, httpx.TimeoutException):
             category = InferenceErrorCategory.TIMEOUT
         elif isinstance(error, (httpx.ConnectError, httpx.NetworkError)):

@@ -41,7 +41,7 @@ def build_semantic_scheduler(
         with store.source_guard.snapshot() as (history, _):
             return conversation_idle(history, now=store.clock(), stale_after=stale_after)
 
-    return DurableMemoryFormationScheduler(queue=queue, worker=SemanticWorker(
+    return DurableMemoryFormationScheduler(queue=queue, priority_available=priority_available, worker=SemanticWorker(
         queue=queue, identity=identity, priority_available=priority_available,
         pipeline=SemanticPipeline(store, SemanticExtractor(
             client, timeout_seconds=target.timeout_seconds, max_output_tokens=target.max_output_tokens,

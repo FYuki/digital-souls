@@ -28,6 +28,7 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.adapters.cancellable_http import post as cancellable_post
 from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 from app.inference.diagnostics import diagnostic, ollama_diagnostics, ollama_request_diagnostics
 from app.inference.token_estimate_cache import ExactTokenEstimateCache
@@ -155,7 +156,7 @@ class OllamaAdapter:
                 retryable=False,
             )
         try:
-            response = self._http_client.post(
+            response = cancellable_post(self._http_client,
                 self._endpoint("/api/embed"),
                 json={
                     "model": request.model_id,
@@ -356,7 +357,7 @@ class OllamaAdapter:
         if cached is not None:
             return cached
         try:
-            response = self._http_client.post(
+            response = cancellable_post(self._http_client,
                 self._endpoint("/api/show"),
                 json={"model": model_id},
                 timeout=httpx.Timeout(timeout_seconds),
@@ -402,7 +403,7 @@ class OllamaAdapter:
                 context_window_tokens=context_window_tokens,
             )
             ollama_request_diagnostics(cast(Mapping[str, object], payload["options"]))
-            response = self._http_client.post(
+            response = cancellable_post(self._http_client,
                 self._endpoint("/api/chat"),
                 json=payload,
                 timeout=httpx.Timeout(request.timeout_seconds),
