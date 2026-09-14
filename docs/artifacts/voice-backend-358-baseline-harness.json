@@ -1,0 +1,40 @@
+{
+  "application_baseline_commit": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+  "harness_source_commit": "9ebc209eb1500620cad20ae78a899026b61e3aa2",
+  "input_authority": "frontend",
+  "measurement_files": [
+    "docs/schemas/voice-quality-cohort-report-v1.schema.json",
+    "docs/schemas/voice-quality-vad-report-v1.schema.json",
+    "frontend/playwright/backend-vad-diagnostic.ts",
+    "frontend/playwright/interruption-probe.ts",
+    "frontend/playwright/labeled-interruption-diagnostic.ts",
+    "frontend/playwright/voice-chat-suite.ts",
+    "scripts/voice_quality/cohort_report_validation.py",
+    "scripts/voice_quality/report_backchannel.py",
+    "scripts/voice_quality/report_stt_pcm.py",
+    "scripts/voice_quality/report_take_turn.py",
+    "scripts/voice_quality/report_vad.py",
+    "scripts/voice_quality/report_vad_backend.py"
+  ],
+  "application_trees": {
+    "backend": "b040981140e114d6af322146c1108d9b59657072",
+    "frontend/src": "ab9d598f53538c64549585684071d89d079c361f",
+    "frontend/public": null,
+    "contracts": "c6f54bd0ffdaa379603dea5262bea3924c0ad23e",
+    "environments": "692268afe6bc6a7f89b427476fda368bab957486",
+    "characters": "eb2a83dfa33416127f193120eeb7ced6545ea7c8",
+    "infra": "3b49e4f122f2b7a81296019bd5cda16a684167a2"
+  },
+  "driver_legacy_adapter": [
+    "旧FE 1.1のテスト用bindControllerを保持",
+    "マイク待機の確認は旧FEの状態観測を保持"
+  ],
+  "status": "local_checks_passed_runtime_unverified",
+  "validation": {
+    "legacy_report_tests_passed": 62,
+    "svelte_errors": 0,
+    "svelte_warnings": 0,
+    "e2e_types_passed": true,
+    "actual_before_measurement_completed": false
+  }
+}

@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
@@ -17,6 +18,7 @@ from app.voice_metrics import (
     TraceEvent,
     aggregate_metric,
     duration_ms,
+    type7_quantile,
 )
 from jsonschema import Draft202012Validator
 
@@ -51,6 +53,7 @@ POINTS = {
     ),
 }
 STAGES = {
+    "microphone_activation",
     "initial_response",
     "playback_overlap",
     "fixture_and_decision",
@@ -122,6 +125,110 @@ def latency(
     return MetricObservation.measured(value)
 
 
+def client_point(
+    events: Sequence[TraceEvent],
+    name: str,
+) -> tuple[TraceEvent | None, str | None]:
+    rows = [event for event in events if event.name == name]
+    if len(rows) > 1:
+        return None, "trace_point_duplicated"
+    if not rows:
+        return None, "trace_point_unavailable"
+    event = rows[0]
+    if event.outcome != "success":
+        return None, "trace_point_not_successful"
+    if event.clock_domain != "client_monotonic" or event.unit != "millisecond":
+        return None, "trace_clock_mismatch"
+    try:
+        number(event.timestamp)
+    except ValueError:
+        return None, "trace_timestamp_invalid"
+    return event, None
+
+
+def backend_speech_matches(trial: dict[str, Any], decision: dict[str, Any]) -> bool:
+    """正式なBE入力とfixtureの対応だけを照合し、BE時刻を発話起点へ流用しない。"""
+    utterance = decision.get("utteranceId")
+    if (
+        not isinstance(utterance, str)
+        or not utterance
+        or utterance == trial.get("initial_utterance_id")
+    ):
+        return False
+    rows = [
+        row
+        for row in trial.get("evidence", {}).get("core_events", [])
+        if row.get("type") == "speech_started" and row.get("utteranceId") == utterance
+    ]
+    if len(rows) != 1:
+        return False
+    row = rows[0]
+    if (
+        row.get("sessionId") != trial.get("session_id")
+        or row.get("responseId") != trial.get("old_response_id")
+        or row.get("sampleRate") != 16000
+        or row.get("clockDomain") != "server_monotonic"
+        or not isinstance(row.get("trackSid"), str)
+        or re.fullmatch(r"TR_[A-Za-z0-9_-]{1,100}", row["trackSid"]) is None
+    ):
+        return False
+    if any(
+        type(row.get(key)) is not int or not 0 <= row[key] <= 2**53 - 1
+        for key in (
+            "inputGeneration",
+            "startSample",
+            "activeEndSample",
+            "detectedSample",
+        )
+    ):
+        return False
+    if not (
+        row["inputGeneration"] > 0
+        and row["startSample"] <= row["activeEndSample"] <= row["detectedSample"]
+    ):
+        return False
+    try:
+        number(row["serverTimestampMs"])
+        source = trial.get(
+            "fixture_clock_bounds", trial["evidence"].get("fixture_clock_bounds")
+        )
+        # 通知の到着を因果関係の確認だけに使う。異なるhostの時計は減算しない。
+        return number(row["atMs"]) >= number(source["sourceStart"]["lowerMs"])
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def fixture_latency(
+    events: Sequence[TraceEvent],
+    end: str,
+    trial: dict[str, Any],
+    observed_endpoint: object | None,
+) -> tuple[MetricObservation, tuple[float, float] | None]:
+    point, reason = client_point(events, end)
+    if reason is not None or point is None:
+        return MetricObservation.missing(reason or "trace_point_unavailable"), None
+    try:
+        bounds = trial.get(
+            "fixture_clock_bounds",
+            trial.get("evidence", {}).get("fixture_clock_bounds"),
+        )
+        start = bounds["speechStart"]
+        # 判定受信traceは整数msへ切り捨てられる。実停止・取消確認はbrowserの高精度観測値を使う。
+        endpoint = (
+            number(point.timestamp)
+            if observed_endpoint is None
+            else number(observed_endpoint)
+        )
+        resolution = 1 if observed_endpoint is None else 0
+        lower = endpoint - number(start["upperMs"])
+        upper = endpoint + resolution - number(start["lowerMs"])
+        if lower < 0 or upper < lower:
+            return MetricObservation.missing("fixture_boundary_overlaps_endpoint"), None
+        return MetricObservation.measured(upper), (lower, upper)
+    except (KeyError, TypeError, ValueError):
+        return MetricObservation.missing("fixture_boundary_unavailable"), None
+
+
 def summarize(
     manifest: dict[str, Any], events: Sequence[TraceEvent], fixtures: dict[str, Any]
 ) -> dict[str, Any]:
@@ -130,6 +237,29 @@ def summarize(
         or manifest.get("cohort") != "take_turn"
     ):
         raise ValueError("take-turn diagnostic manifest required")
+    origin = manifest.get("latency_origin", "legacy_client_vad")
+    authority = manifest.get("input_authority", "frontend")
+    if origin not in {
+        "legacy_client_vad",
+        "scheduled_fixture_speech_start",
+    } or authority not in {"frontend", "backend"}:
+        raise ValueError("unsupported latency origin or input authority")
+    fixture_origin = origin == "scheduled_fixture_speech_start"
+    if fixture_origin and "input_authority" not in manifest:
+        raise ValueError("fixture latency origin requires explicit input authority")
+    if authority == "backend" and not fixture_origin:
+        raise ValueError("backend input requires fixture latency origin")
+    definitions = {
+        name: ("fixture_speech_start_lower_bound", *definition[1:])
+        if fixture_origin and definition[2] == "client_monotonic"
+        else definition
+        for name, definition in POINTS.items()
+    }
+    interval_observations: dict[str, list[tuple[float, float]]] = {
+        name: []
+        for name, definition in POINTS.items()
+        if definition[2] == "client_monotonic"
+    }
     count = manifest.get("expected_measured")
     trials = manifest.get("trials")
     if (
@@ -161,7 +291,10 @@ def summarize(
             raise ValueError("invalid trial outcome")
         if trial["outcome"] == "failure":
             stage = trial.get("failure_stage")
-            if stage is None and trial.get("cleanup_failed") is True:
+            if stage is None and (
+                trial.get("cleanup_failed") is True
+                or trial.get("audit_cleanup_failed") is True
+            ):
                 stage = "cleanup"
             if stage not in STAGES | {"cleanup"}:
                 raise ValueError("invalid failure stage")
@@ -208,39 +341,40 @@ def summarize(
             and e.get("sessionId") == trial.get("session_id")
             for e in evidence.get("core_events", [])
         )
+        overflow = (
+            evidence.get("interruptions_overflow") is True
+            or evidence.get("core_events_overflow") is True
+        )
+        speech_matched = authority != "backend" or (
+            matched_decision and backend_speech_matches(trial, decision)
+        )
         verified_stop = False
         verified_ack = False
         if len(stops) == 1:
-            points = {
-                name: [e for e in correlated if e.name == name]
-                for name in (
-                    "speech_started_client",
-                    "local_playback_stopped",
-                    "server_cancelled_client",
-                )
-            }
-
-            def client_point(
-                name: str, observation_points: dict[str, list[TraceEvent]] = points,
-            ) -> TraceEvent | None:
-                rows = observation_points[name]
-                if len(rows) != 1:
-                    return None
-                event = rows[0]
-                if (
-                    event.clock_domain != "client_monotonic"
-                    or event.unit != "millisecond"
-                    or event.outcome != "success"
-                ):
-                    return None
-                return event
-
-            first, stopped, acknowledged = (client_point(name) for name in points)
+            first, _ = client_point(correlated, "speech_started_client")
+            stopped, _ = client_point(correlated, "local_playback_stopped")
+            acknowledged, _ = client_point(correlated, "server_cancelled_client")
             stop = stops[0]
-            if first is not None and stopped is not None:
+            source_matched = (
+                (
+                    stop.get("utteranceId") == decision.get("utteranceId")
+                    and stop.get("ambiguousDecision") is False
+                    and stop.get("duplicateStop") is False
+                )
+                if authority == "backend" and matched_decision
+                else first is not None
+            )
+            if stopped is not None and source_matched:
                 try:
+                    legacy_matches = authority == "backend" or (
+                        first is not None
+                        and number(stop.get("speechStartedAtMs"))
+                        == number(first.timestamp)
+                    )
                     verified_stop = (
-                        number(stop.get("speechStartedAtMs")) == number(first.timestamp)
+                        legacy_matches
+                        and not overflow
+                        and speech_matched
                         and abs(
                             number(stop.get("localPlaybackStoppedAtMs"))
                             - number(stopped.timestamp)
@@ -249,10 +383,12 @@ def summarize(
                     )
                 except ValueError:
                     pass
-            if acknowledged is not None:
+            if acknowledged is not None and source_matched:
                 try:
                     verified_ack = (
-                        abs(
+                        not overflow
+                        and speech_matched
+                        and abs(
                             number(stop.get("cancelConfirmedAtMs"))
                             - number(acknowledged.timestamp)
                         )
@@ -264,7 +400,7 @@ def summarize(
             injected and cancelled and verified_stop and verified_ack
         )
         outcomes["verified_cancel"] += verified_cancel
-        for name, definition in POINTS.items():
+        for name, definition in definitions.items():
             reason = (
                 "fixture_injection_unverified"
                 if not injected
@@ -272,13 +408,27 @@ def summarize(
                 if not matched_decision
                 else "take_turn_not_selected"
                 if not take_turn
+                else "browser_observations_overflow"
+                if overflow
+                else "backend_speech_correlation_unavailable"
+                if not speech_matched
                 else None
             )
-            observation = (
-                MetricObservation.missing(reason)
-                if reason
-                else latency(correlated, definition)
-            )
+            interval = None
+            if reason:
+                observation = MetricObservation.missing(reason)
+            elif fixture_origin and definition[2] == "client_monotonic":
+                endpoint = None
+                if len(stops) == 1:
+                    if name == "local_playback_stop":
+                        endpoint = stops[0].get("localPlaybackStoppedAtMs")
+                    elif name == "barge_in_cancel_total":
+                        endpoint = stops[0].get("cancelConfirmedAtMs")
+                observation, interval = fixture_latency(
+                    correlated, definition[1], trial, endpoint
+                )
+            else:
+                observation = latency(correlated, definition)
             if observation.status == "measured":
                 if name == "local_playback_stop" and not verified_stop:
                     observation = MetricObservation.missing(
@@ -293,11 +443,13 @@ def summarize(
                         "server_cancel_not_confirmed"
                     )
             observations[name].append(observation)
+            if interval is not None and observation.status == "measured":
+                interval_observations[name].append(interval)
     metrics = [
         aggregate_metric(
             name, observations[name], start_point=definition[0], end_point=definition[1]
         ).model_dump(mode="json")
-        for name, definition in POINTS.items()
+        for name, definition in definitions.items()
     ]
     missed = outcomes["verified_injection"] - outcomes["verified_cancel"]
     full_coverage = (
@@ -350,6 +502,27 @@ def summarize(
             },
         },
     }
+    if fixture_origin:
+        result.update(
+            latency_origin=origin,
+            input_authority=authority,
+            fixture_latency_bounds={
+                name: {
+                    "measured_count": len(values),
+                    "missing_count": count - len(values),
+                    **{
+                        f"p{percent}_{side}_ms": type7_quantile(
+                            [row[index] for row in values], percent / 100
+                        )
+                        if values
+                        else None
+                        for percent in (50, 95)
+                        for index, side in enumerate(("lower", "upper"))
+                    },
+                }
+                for name, values in interval_observations.items()
+            },
+        )
     _assert_anonymous(result)
     return result
 

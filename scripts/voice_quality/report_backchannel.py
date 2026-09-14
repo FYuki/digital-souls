@@ -94,6 +94,9 @@ def summarize(
         or manifest.get("cohort") != "backchannel"
     ):
         raise ValueError("backchannel diagnostic manifest required")
+    authority = manifest.get("input_authority", "frontend")
+    if authority not in {"frontend", "backend"}:
+        raise ValueError("unsupported input authority")
     count, trials = manifest.get("expected_measured"), manifest.get("trials")
     if (
         type(count) is not int
@@ -181,6 +184,13 @@ def summarize(
             observation = MetricObservation.failed("backchannel_cancelled")
         elif stops:
             observation = MetricObservation.missing("local_stop_observation_invalid")
+        elif any(
+            evidence.get(flag) is True
+            or (authority == "backend" and evidence.get(flag) is not False)
+            for flag in ("core_events_overflow", "interruptions_overflow")
+        ):
+            # 観測できた取消は上で失敗に残し、欠けた観測から正常継続を推定しない。
+            observation = MetricObservation.missing("browser_observations_incomplete")
         elif preserved_output(trial, events):
             observation = MetricObservation.measured(0)
         else:
