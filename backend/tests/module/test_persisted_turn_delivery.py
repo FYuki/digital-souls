@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from app.audio_pipeline import AudioPipelineService
+from app.characters.loader import VoicevoxTtsConfig
 from app.conversation_history.titles import DEFAULT_CONVERSATION_TITLE
 
 
@@ -158,7 +159,12 @@ def test_should_send_metadata_only_for_privacy_skipped_text_websocket(client) ->
     )
 
 
-def test_should_synthesize_only_the_persisted_masked_assistant_content(client) -> None:
+def test_should_synthesize_only_the_persisted_masked_assistant_content(client, monkeypatch) -> None:
+    # 旧WebSocketのVOICEVOX経路を、同梱キャラクターの既定engineと独立に検証する。
+    monkeypatch.setattr(
+        "app.audio_pipeline.load_tts_config",
+        lambda _: VoicevoxTtsConfig(speaker_id=14),
+    )
     conversation = _create_conversation(client)
     synthesizer = _RecordingSpeechSynthesizer()
     client.app.state.audio_pipeline_service = AudioPipelineService(
@@ -177,7 +183,12 @@ def test_should_synthesize_only_the_persisted_masked_assistant_content(client) -
     _assert_conversation_title(client, conversation.conversation_id, MASKED_USER)
 
 
-def test_should_not_synthesize_content_for_privacy_skipped_audio_turn(client) -> None:
+def test_should_not_synthesize_content_for_privacy_skipped_audio_turn(client, monkeypatch) -> None:
+    # 旧WebSocketのVOICEVOX経路を、同梱キャラクターの既定engineと独立に検証する。
+    monkeypatch.setattr(
+        "app.audio_pipeline.load_tts_config",
+        lambda _: VoicevoxTtsConfig(speaker_id=14),
+    )
     conversation = _create_conversation(client)
     synthesizer = _RecordingSpeechSynthesizer()
     client.app.state.audio_pipeline_service = AudioPipelineService(
