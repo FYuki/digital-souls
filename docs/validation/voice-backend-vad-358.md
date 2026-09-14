@@ -614,3 +614,23 @@ raw manifest・trace・PCM観測・資源観測・開始終了identity等のhash
 全100件の収集完了であり、相槌品質・PCM品質・前後比較の合格ではない。
 モデル・設定の一致だけから同等の負荷条件を主張せず、移設後の同条件測定と資源差の確認が残る。
 以前の3試行pilot・中止runを今回の成功試行で置き換えていない。
+
+### M6: 旧client拒否と実SFUの資源境界
+
+アプリ10a5286の実装に対し、既存LiveKit integration suiteへ
+旧版拒否4パターンと正常版の正の対照を追加し、**1 test passed**を確認した。
+[匿名証跡](../artifacts/voice-backend-358-legacy-bootstrap-real.json)にテストソース・JUnit・logのhashを保持する。
+
+- Core 1.1（private省略）、Core 2.0にprivate省略／1.0／0.0の4パターンはHTTP409。
+  Session予約、Room作成、runtime接続、token発行の各呼び出しはすべて0回だった。
+- 呼び出し計数は元の実装へ必ず委譲する。外部資源の戻り値をstubへ置き換えていない。
+  各拒否の後に実LiveKit APIからRoom一覧が変わっていないことも確認した。
+- 同じ実portsで現行Core／private 2.0のbootstrapは200となり、
+  実Python RTC clientが実SFUへ接続した。userとcharacterの2participant、Room解放を確認した。
+  正常版では各資源の作成経路が実際に呼ばれたため、未設定による拒否だけを成功と扱っていない。
+- bootstrap検証区間のgenerate_text／generate_structured／embed／estimate_input_tokensは各0回。
+  マイクtrackはpublishしていない。共有推論を性能測定に使用した結果ではない。
+- pytestの新規一時data rootを使用し、専用LiveKitのみ停止した。
+  7880／7881／8000／5173／4174閉鎖、共有Ollama／Whisper／VOICEVOXの稼働継続を確認した。
+- API側はFastAPI TestClientで実行した。配備済みHTTPサーバーとブラウザ旧clientの操作、
+  FE／BE一括更新・切り戻しの通し確認は別途残る。変更テストのRuff・差分checkは成功。

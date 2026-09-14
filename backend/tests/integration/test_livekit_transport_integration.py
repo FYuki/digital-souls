@@ -921,3 +921,110 @@ def test_real_livekit_grace_timeout_cleans_up_and_requires_a_new_session() -> No
                     )
 
     asyncio.run(exercise())
+
+
+def test_real_livekit_rejects_legacy_bootstrap_before_resource_creation(
+    client, monkeypatch,
+) -> None:
+    """実資源の呼出しを透過計数し、旧版拒否と正常版の実接続を同じ構成で確認する。"""
+    from app.livekit_transport.bootstrap import BootstrapService
+
+    api, rtc = _livekit_sdk()
+    livekit_url = _required_setting("LIVEKIT_URL")
+    api_key = _required_setting("LIVEKIT_API_KEY")
+    api_secret = _required_setting("LIVEKIT_API_SECRET")
+    service = client.app.state.livekit_bootstrap_service
+    assert isinstance(service, BootstrapService)
+    counts = {"session": 0, "room": 0, "runtime": 0, "token": 0}
+
+    def observe(label, original):
+        async def invoke(*args, **kwargs):
+            counts[label] += 1
+            return await original(*args, **kwargs)
+        return invoke
+
+    # 元の実装へ必ず委譲する。Room、runtime、tokenの結果をstubへ差し替えない。
+    for label, target, method in (
+        ("session", service._sessions, "reserve"),
+        ("room", service._rooms, "create"),
+        ("runtime", service._runtimes, "connect"),
+        ("token", service._signer, "issue_with_expiration"),
+    ):
+        monkeypatch.setattr(target, method, observe(label, getattr(target, method)))
+
+    inference_counts = {}
+    def observe_inference(name, original):
+        def invoke(*args, **kwargs):
+            inference_counts[name] += 1
+            return original(*args, **kwargs)
+        return invoke
+    for method in ("generate_text", "generate_structured", "embed", "estimate_input_tokens"):
+        inference_counts[method] = 0
+        router = client.app.state.inference_router
+        monkeypatch.setattr(router, method, observe_inference(method, getattr(router, method)))
+
+    async def exercise() -> None:
+        async with api.LiveKitAPI(livekit_url, api_key, api_secret) as livekit_api:
+            conversation_id = _create_conversation(client)
+            room = rtc.Room()
+            session_id = None
+            try:
+                initial_rooms = {
+                    item.name for item in (
+                        await livekit_api.room.list_rooms(api.ListRoomsRequest())
+                    ).rooms
+                }
+                for core, transport, expected_code in (
+                    ("1.1", None, "protocol_version_mismatch"),
+                    ("2.0", None, "transport_protocol_version_mismatch"),
+                    ("2.0", "1.0", "transport_protocol_version_mismatch"),
+                    ("2.0", "0.0", "transport_protocol_version_mismatch"),
+                ):
+                    body = {
+                        "protocol_version": core,
+                        "request_id": str(uuid4()),
+                        "character_id": CHARACTER_ID,
+                        "conversation_id": conversation_id,
+                        "requested_reconnect_grace_ms": 60_000,
+                    }
+                    if transport is not None:
+                        body["transport_protocol_version"] = transport
+                    response = client.post("/voice/livekit/token", json=body)
+                    assert response.status_code == 409
+                    assert response.json()["detail"]["code"] == expected_code
+                    assert set(response.json()) == {"detail"}
+                    assert counts == {"session": 0, "room": 0, "runtime": 0, "token": 0}
+                    assert {
+                        item.name for item in (
+                            await livekit_api.room.list_rooms(api.ListRoomsRequest())
+                        ).rooms
+                    } == initial_rooms
+
+                # 同じ実portsで正常clientが接続できることを確認し、未設定による拒否を除外する。
+                response = _bootstrap(
+                    client, conversation_id=conversation_id, reconnect_grace_ms=60_000,
+                )
+                assert response.status_code == 200
+                binding = response.json()
+                session_id = binding["session_id"]
+                await room.connect(binding["livekit_url"], binding["token"])
+                assert await _wait_for_participants(
+                    livekit_api, api, room_name=binding["room"],
+                    expected_identities={
+                        f"user-{session_id}", f"character-{CHARACTER_ID}-{session_id}",
+                    },
+                ) == {f"user-{session_id}", f"character-{CHARACTER_ID}-{session_id}"}
+                assert all(value > 0 for value in counts.values())
+                assert all(value == 0 for value in inference_counts.values())
+                assert not room.local_participant.track_publications
+                client.delete(f"/voice/livekit/sessions/{session_id}").raise_for_status()
+                assert await _wait_for_room_cleanup(
+                    livekit_api, api, room_name=binding["room"],
+                ) == []
+            finally:
+                await _cleanup_resources(
+                    client, rooms=(room,), session_ids=(session_id,),
+                    conversation_id=conversation_id,
+                )
+
+    asyncio.run(exercise())

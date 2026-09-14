@@ -94,7 +94,7 @@ backend/.venv/bin/python scripts/voice_quality/check_history_compatibility.py   
 |---|---|
 | 履歴保存コード・schemaの移設前との差分 | 変更なしを確認 |
 | 新規SQLiteによる旧版／新版の読み書き往復 | 4段階成功 |
-| Core 1.1・旧privateの資源作成前拒否 | API module回帰で確認。外部資源はstub |
+| Core 1.1・旧privateの資源作成前拒否 | moduleに加え、TestClient＋実SFUで4パターンの作成呼び出し0回と正常版実接続を確認。ブラウザ通し操作は未確認 |
 | FE／BE一括更新・切り戻しの通し実行 | 未実施 |
-| 同条件の全cohort 100試行前後比較 | 未完了。中止runを保持 |
+| 同条件の全cohort 100試行前後比較 | 未完了。移設前相槌100件を記録したが品質gate未達。中止runも保持 |
 | 人の実マイク・聴感 | 未実施 |
