@@ -244,8 +244,16 @@ def test_explicit_correction_resolves_connected_conflicts_but_keeps_other_attrib
                            target=birthplace, op=SemanticOperation.CONFLICT)
     from tests.module.test_semantic_management import Index
     manager = SemanticMemoryManagement(h.store, Index())
+    key = uuid4()
     corrected = manager.correct(character_id="miori", record_id=second.id, version=second.content_version,
-                                value="6月12日", key=uuid4())
+                                value="6月12日", key=key)
+    assert manager.correct(character_id="miori", record_id=second.id, version=second.content_version,
+                           value="6月12日", key=key)["id"] == corrected["id"]
+    import pytest
+    from app.memory.episodic.repository import RecordConflict
+    with pytest.raises(RecordConflict):
+        manager.correct(character_id="miori", record_id=first.id, version=first.content_version,
+                        value="6月12日", key=key)
     with h.repo.read() as tx:
         for old in (first, second, third):
             saved = tx.get("miori", old.id)

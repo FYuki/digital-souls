@@ -200,6 +200,10 @@ class SemanticTransaction:
         result = self.get(character_id, record_id)
         assert result is not None
         self._receipt(result, receipt_key)
+        if (operation is SemanticOperation.CORRECT and target is not None
+                and receipt_key.startswith("manual:") and any(s.kind == "MANUAL" for s in candidate.sources)):
+            # 複数の旧値へCORRECT関係を張っても、再送キーは最初に指定した対象へ固定する。
+            self._receipt(target, "manual-target:" + receipt_key.removeprefix("manual:"))
         self._outbox(character_id, record_id)
         return result
 

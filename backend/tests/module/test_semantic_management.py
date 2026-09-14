@@ -120,3 +120,17 @@ def test_storage_refusal_never_reaches_semantic_classifier(text):
     review = reviewer.review(Proposition(subject="ユーザー", predicate="居住地", value="大阪",
                                         content="ユーザーの居住地は大阪", mutability="CHANGEABLE", self_report=True), (text,))
     assert not review.allowed and not review.retryable
+
+
+def test_legacy_single_target_receipt_still_replays_without_target_binding(h, client):
+    record = save(h, candidate(source(h)))
+    request = correction(record)
+    first = client.patch(url(record), json=request)
+    assert first.status_code == 200
+    with h.repo.transaction() as tx:
+        tx.connection.execute("DELETE FROM semantic_receipts WHERE character_id=? AND receipt_key=?",
+                              ("miori", "manual-target:" + request["idempotency_key"]))
+    replay = client.patch(url(record), json=request)
+    assert replay.status_code == 200 and replay.json()["id"] == first.json()["id"]
+    another = save(h, candidate(source(h)))
+    assert client.patch(url(another), json=correction(another, key=request["idempotency_key"])).status_code == 409

@@ -114,9 +114,14 @@ class SemanticStore(SemanticSourceReader):
         with self.repository.read() as tx:
             replay = tx.replay(character_id, "manual:"+str(receipt_id))
             if replay is not None:
-                matching = any(r.source_id == record_id and r.target_id == replay.id
-                               and r.relation is SemanticOperation.CORRECT
-                               for r in tx.relations(character_id))
+                bound_target = tx.replay(character_id, "manual-target:" + str(receipt_id))
+                if bound_target is not None:
+                    matching = bound_target.id == record_id
+                else:
+                    # 旧版の単一対象receiptも読める。複数候補なら対象を推測しない。
+                    relations = [r for r in tx.relations(character_id)
+                                 if r.target_id == replay.id and r.relation is SemanticOperation.CORRECT]
+                    matching = len(relations) == 1 and relations[0].source_id == record_id
                 if not matching or (replay.proposition is not None and replay.proposition != proposition):
                     raise SemanticConflict("manual receipt was used for another correction")
                 return replay
