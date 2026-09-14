@@ -22,12 +22,38 @@ const setup = () => {
   const observations: Array<(value: RoomObservation) => void> = []
   const coreEventReceivers: Array<(event: VoiceSessionEvent) => void> = []
   const delivered: Array<{event: VoiceSessionEvent; context: {characterId: string; conversationId: string}}> = []
+  let trackIndex = 0
+  let inputGeneration = 0
+  const receiveSpeech = (
+    type: 'speech_started' | 'speech_stopped', utteranceId: string, detectedAt: number,
+  ) => {
+    const request = events.findLast(event => event.type === 'audio_input_open_requested')
+    if (!request || request.type !== 'audio_input_open_requested') throw new Error('入力開始要求がない')
+    coreEventReceivers.at(-1)!({
+      protocol_version: '2.0', event_id: dependencies.eventId(),
+      session_id: SESSION_ID, monotonic_timestamp_ms: detectedAt, type,
+      utterance_id: utteranceId, speaker: {participant_id: PARTICIPANT_ID, role: 'user'},
+      track_sid: request.track_sid, input_generation: inputGeneration,
+      start_sample: 0, active_end_sample: 3200, detected_sample: 16000,
+      sample_rate: 16000, clock_domain: 'server_monotonic',
+    } as VoiceSessionEvent)
+  }
   const room: VoiceSessionRoom = {
     connect: vi.fn(async () => undefined),
-    publishMicrophone: vi.fn(async () => undefined),
+    publishMicrophone: vi.fn(async () => `TR_test_${++trackIndex}`),
     muteMicrophone: vi.fn(async () => undefined),
     stopPlayback: vi.fn(() => 0),
-    publishControlEvent: vi.fn(async (event) => { events.push(event) }),
+    publishControlEvent: vi.fn(async (event) => {
+      events.push(event)
+      if (event.type === 'audio_input_open_requested') {
+        coreEventReceivers.at(-1)!({
+          protocol_version: '2.0', event_id: dependencies.eventId(),
+          session_id: SESSION_ID, monotonic_timestamp_ms: 1000, type: 'audio_input_opened',
+          request_event_id: event.event_id, track_sid: event.track_sid,
+          input_revision: event.input_revision, input_generation: ++inputGeneration,
+        })
+      }
+    }),
     disconnect: vi.fn(),
   }
   let eventIndex = 1
@@ -57,6 +83,7 @@ const setup = () => {
   )
   return {
     controller,
+    receiveSpeech,
     coreEventReceivers,
     dependencies,
     events,
@@ -108,7 +135,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     const oldResponse = '50000000-0000-4000-8000-000000000051'
     const newResponse = '50000000-0000-4000-8000-000000000052'
     await controller.ensureSession(context)
-    coreEventReceivers[0]({type: 'response_started', response_id: oldResponse} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_started', response_id: oldResponse} as VoiceSessionEvent)
     let release: () => void = () => undefined
     vi.mocked(room.publishControlEvent).mockImplementation(async event => {
       events.push(event)
@@ -119,10 +146,10 @@ describe('通常会話UI向けLiveKit音声session', () => {
     await submitted
     expect(events.map(event => event.type)).toEqual(expect.arrayContaining(['response_cancel_requested', 'user_text_submitted']))
     expect(controller.snapshot().response).toBe('interrupting')
-    coreEventReceivers[0]({type: 'response_delta', response_id: oldResponse, text: '遅着'} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_delta', response_id: oldResponse, text: '遅着'} as VoiceSessionEvent)
     expect(controller.snapshot().response).toBe('interrupting')
-    coreEventReceivers[0]({type: 'response_started', response_id: newResponse} as VoiceSessionEvent)
-    coreEventReceivers[0]({type: 'response_delta', response_id: oldResponse, text: 'さらに遅着'} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_started', response_id: newResponse} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_delta', response_id: oldResponse, text: 'さらに遅着'} as VoiceSessionEvent)
     observations[0]({transport: 'available', control: 'available', audio: 'available', activeResponseId: oldResponse, renderedEnergy: 1})
     expect(controller.snapshot()).toMatchObject({activeResponseId: newResponse, playback: 'idle'})
     expect(delivered.some(row => row.event.type === 'response_delta')).toBe(false)
@@ -131,18 +158,18 @@ describe('通常会話UI向けLiveKit音声session', () => {
   })
 
   test('focusだけで音声入力を抑止し、回答と接続を保持してblurで再開する', async () => {
-    const {controller, room, events, coreEventReceivers} = setup()
+    const {controller, room, events, coreEventReceivers, receiveSpeech} = setup()
     const context = {characterId: 'miori', conversationId: 'a'}
     const track = {enabled: true}
     const stream = {getAudioTracks: () => [track]} as unknown as MediaStream
     await controller.ensureSession(context)
     await controller.resumeMicrophone(stream)
-    coreEventReceivers[0]({type: 'response_started', response_id: 'response-a'} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_started', response_id: 'response-a'} as VoiceSessionEvent)
     const focus = controller.setTextInputFocused(context, true)
     expect(track.enabled).toBe(false)
     await focus
-    await controller.speechStarted(UTTERANCE_ID, 1010)
-    await controller.speechStopped(UTTERANCE_ID, 1020)
+    receiveSpeech('speech_started', UTTERANCE_ID, 1010)
+    receiveSpeech('speech_stopped', UTTERANCE_ID, 1020)
     expect(controller.snapshot()).toMatchObject({input: 'suppressed', response: 'generating'})
     expect(events.some(event => event.type === 'speech_started' || event.type === 'session_muted')).toBe(false)
     expect(room.stopPlayback).not.toHaveBeenCalled()
@@ -154,19 +181,19 @@ describe('通常会話UI向けLiveKit音声session', () => {
   })
 
   test('テキスト入力中は回答再生を続け、送信時だけ旧回答を止める', async () => {
-    const {controller, room, events, coreEventReceivers, observations} = setup()
+    const {controller, room, events, coreEventReceivers, observations, receiveSpeech} = setup()
     const context = {characterId: 'miori', conversationId: 'a'}
     const responseId = '50000000-0000-4000-8000-000000000051'
     const track = {enabled: true}
     await controller.ensureSession(context)
     await controller.resumeMicrophone({getAudioTracks: () => [track]} as unknown as MediaStream)
-    coreEventReceivers[0]({type: 'response_started', response_id: responseId} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_started', response_id: responseId} as VoiceSessionEvent)
     observations[0]({transport: 'available', control: 'available', audio: 'available',
       activeResponseId: responseId, renderedEnergy: 1})
     expect(controller.snapshot().playback).toBe('playing')
     await controller.setTextInputFocused(context, true)
-    await controller.speechStarted(UTTERANCE_ID, 1010)
-    await controller.speechStopped(UTTERANCE_ID, 1020)
+    receiveSpeech('speech_started', UTTERANCE_ID, 1010)
+    receiveSpeech('speech_stopped', UTTERANCE_ID, 1020)
     expect(track.enabled).toBe(false)
     expect(controller.snapshot()).toMatchObject({input: 'suppressed', playback: 'playing'})
     expect(room.stopPlayback).not.toHaveBeenCalled()
@@ -205,7 +232,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     const focused = controller.setTextInputFocused(context, true)
     const blurred = controller.setTextInputFocused(context, false)
     const refocused = controller.setTextInputFocused(context, true)
-    await vi.waitFor(() => expect(room.publishControlEvent).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => expect(room.publishControlEvent).toHaveBeenCalledTimes(4))
     expect(track.enabled).toBe(false)
     acknowledge()
     await Promise.all([focused, blurred, refocused])
@@ -228,32 +255,32 @@ describe('通常会話UI向けLiveKit音声session', () => {
   })
 
   test('sessionとutteranceを分離し、mute後も同じsessionを再開する', async () => {
-    const { controller, dependencies, events, room } = setup()
+    const { controller, dependencies, events, room, receiveSpeech } = setup()
     const context = { characterId: 'miori', conversationId: 'conversation-id' }
 
     await controller.ensureSession(context)
     await controller.resumeMicrophone(MICROPHONE_STREAM)
-    await controller.speechStarted(UTTERANCE_ID, 1_010)
-    await controller.speechStopped(UTTERANCE_ID, 1_020)
+    receiveSpeech('speech_started', UTTERANCE_ID, 1_010)
+    receiveSpeech('speech_stopped', UTTERANCE_ID, 1_020)
     await controller.muteMicrophone()
     await controller.resumeMicrophone(MICROPHONE_STREAM)
 
     expect(dependencies.requestToken).toHaveBeenCalledTimes(1)
     expect(room.publishMicrophone).toHaveBeenCalledTimes(2)
-    expect(room.muteMicrophone).toHaveBeenCalledTimes(1)
+    expect(room.muteMicrophone).toHaveBeenCalledTimes(3)
     expect(events.map((event) => event.type)).toEqual([
       'session_start_requested',
       'session_resumed',
-      'speech_started',
-      'speech_stopped',
-      'observation',
+      'audio_input_open_requested',
       'observation',
       'session_muted',
       'session_resumed',
+      'audio_input_open_requested',
     ])
     expect(events[2]).toMatchObject({
       session_id: SESSION_ID,
-      utterance_id: UTTERANCE_ID,
+      type: 'audio_input_open_requested',
+      track_sid: 'TR_test_1',
       speaker: { participant_id: PARTICIPANT_ID, role: 'user' },
     })
     expect(controller.snapshot().phase).toBe('listening')
@@ -283,7 +310,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     observations[0]({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
     observations[0]({ transport: 'available', control: 'available', audio: 'available' })
 
-    expect(controller.snapshot().phase).toBe('listening')
+    await vi.waitFor(() => expect(controller.snapshot().phase).toBe('listening'))
   })
 
   test('再接続中の明示muteは操作可能へ戻さず、復旧後もmutedを維持する', async () => {
@@ -324,7 +351,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     const { controller, room } = setup()
     vi.mocked(room.publishMicrophone)
       .mockRejectedValueOnce(new Error('permission or publish failure'))
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce('TR_retry')
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
@@ -340,12 +367,13 @@ describe('通常会話UI向けLiveKit音声session', () => {
   })
 
   test('生成・再生中もspeech startでは継続しtake turn判定後だけ停止する', async () => {
-    const { controller, coreEventReceivers, events, observations, room } = setup()
+    const { controller, coreEventReceivers, events, observations, room, receiveSpeech } = setup()
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
     await controller.resumeMicrophone(MICROPHONE_STREAM)
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'response_started',
       response_id: '50000000-0000-4000-8000-000000000001',
       source_utterance_ids: [UTTERANCE_ID],
@@ -356,23 +384,18 @@ describe('通常会話UI向けLiveKit音声session', () => {
       renderedEnergy: 1,
     })
 
-    await controller.speechStarted(UTTERANCE_ID, 1_010)
-    await controller.speechStarted(
+    receiveSpeech('speech_started', UTTERANCE_ID, 1_010)
+    receiveSpeech('speech_started',
       '30000000-0000-4000-8000-000000000002',
       1_011,
     )
 
     expect(room.stopPlayback).not.toHaveBeenCalled()
-    expect(events.slice(2).map((event) => event.type)).toEqual([
-      'speech_started',
-      'speech_started',
-    ])
-    expect(events.at(-1)).toMatchObject({
-      type: 'speech_started',
-      response_id: '50000000-0000-4000-8000-000000000001',
-    })
+    expect(events.some(event => event.type === 'speech_started')).toBe(false)
+    expect(controller.snapshot().input).toBe('listening')
 
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'turn_decision',
       utterance_id: UTTERANCE_ID,
       response_id: '50000000-0000-4000-8000-000000000001',
@@ -380,6 +403,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
       final: false,
     } as VoiceSessionEvent)
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'turn_decision',
       utterance_id: UTTERANCE_ID,
       response_id: '50000000-0000-4000-8000-000000000001',
@@ -390,7 +414,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
 
     expect(room.stopPlayback).toHaveBeenCalledTimes(1)
     expect(room.stopPlayback).toHaveBeenCalledWith(
-      '50000000-0000-4000-8000-000000000001', 1_010,
+      '50000000-0000-4000-8000-000000000001',
     )
     await vi.waitFor(() => expect(events.map((event) => event.type)).toContain('playback_stopped'))
     expect(events.map((event) => event.type)).not.toContain('response_cancel_requested')
@@ -400,12 +424,13 @@ describe('通常会話UI向けLiveKit音声session', () => {
   })
 
   test('生成完了後の相槌では再生と履歴完成状態を維持する', async () => {
-    const { controller, coreEventReceivers, events, observations, room } = setup()
+    const { controller, coreEventReceivers, events, observations, room, receiveSpeech } = setup()
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
     await controller.resumeMicrophone(MICROPHONE_STREAM)
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'response_started',
       response_id: '50000000-0000-4000-8000-000000000001',
       source_utterance_ids: [UTTERANCE_ID],
@@ -416,13 +441,15 @@ describe('通常会話UI向けLiveKit音声session', () => {
       renderedEnergy: 1,
     })
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'response_completed',
       response_id: '50000000-0000-4000-8000-000000000001',
     } as VoiceSessionEvent)
 
-    await controller.speechStarted(UTTERANCE_ID, 1_010)
+    receiveSpeech('speech_started', UTTERANCE_ID, 1_010)
 
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'turn_decision',
       utterance_id: UTTERANCE_ID,
       response_id: '50000000-0000-4000-8000-000000000001',
@@ -432,7 +459,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
 
     expect(room.stopPlayback).not.toHaveBeenCalled()
     expect(events.map((event) => event.type)).toEqual([
-      'session_start_requested', 'session_resumed', 'speech_started',
+      'session_start_requested', 'session_resumed', 'audio_input_open_requested',
     ])
     expect(controller.snapshot().response).toBe('idle')
   })
@@ -444,11 +471,13 @@ describe('通常会話UI向けLiveKit音声session', () => {
       characterId: 'miori', conversationId: 'conversation-id',
     })
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'response_started',
       response_id: responseId,
       source_utterance_ids: [UTTERANCE_ID],
     } as VoiceSessionEvent)
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'response_completed',
       response_id: responseId,
       last_audio_sequence: 2,
@@ -473,15 +502,16 @@ describe('通常会話UI向けLiveKit音声session', () => {
   })
 
   test('容量超過で破棄された発話は文字起こし中表示を解除する', async () => {
-    const { controller, coreEventReceivers } = setup()
+    const { controller, coreEventReceivers, receiveSpeech } = setup()
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
     await controller.resumeMicrophone(MICROPHONE_STREAM)
-    await controller.speechStopped(UTTERANCE_ID, 1_020)
+    receiveSpeech('speech_stopped', UTTERANCE_ID, 1_020)
     expect(controller.snapshot().input).toBe('transcribing')
 
     coreEventReceivers[0]({
+      session_id: SESSION_ID,
       type: 'utterance_discarded',
       utterance_id: UTTERANCE_ID,
       reason: 'input_capacity_exceeded',
@@ -538,7 +568,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     const context = { characterId: 'miori', conversationId: 'conversation-id' }
     await controller.ensureSession(context)
 
-    coreEventReceivers[0]({ type: 'session_ended' } as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'session_ended' } as VoiceSessionEvent)
 
     expect(controller.snapshot()).toMatchObject({
       phase: 'ended', context, sessionId: null, input: 'inactive',
@@ -579,7 +609,7 @@ describe('音声sessionのテキスト受付と結果照合', () => {
   const context = {characterId: 'miori', conversationId: 'thread-a'}
   const result = (inputId: string, status: 'processing' | 'accepted' | 'rejected' | 'not_received',
     sessionId = SESSION_ID): VoiceSessionEvent => ({
-    type: 'user_input_result', protocol_version: '1.1', session_id: sessionId,
+    type: 'user_input_result', protocol_version: '2.0', session_id: sessionId,
     event_id: crypto.randomUUID(), monotonic_timestamp_ms: 1, input_event_id: inputId, status,
   })
 
@@ -690,7 +720,7 @@ describe('音声sessionのテキスト受付と結果照合', () => {
   test('回答eventは表示先を参照せずsessionの所属スレッドと共に通知する', async () => {
     const {controller, delivered, coreEventReceivers} = setup()
     await controller.ensureSession(context)
-    coreEventReceivers[0]({type: 'response_started', response_id: 'response-a'} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_started', response_id: 'response-a'} as VoiceSessionEvent)
     expect(delivered[0].context).toEqual(context)
     expect(controller.snapshot().response).toBe('generating')
     await controller.end()
@@ -700,14 +730,14 @@ describe('音声sessionのテキスト受付と結果照合', () => {
     const {controller, room, events, coreEventReceivers} = setup()
     await controller.ensureSession(context)
     const responseId = '50000000-0000-4000-8000-000000000001'
-    coreEventReceivers[0]({type: 'response_started', response_id: responseId} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_started', response_id: responseId} as VoiceSessionEvent)
     const interrupt = controller.interruptResponse(context)
     expect(room.stopPlayback).toHaveBeenCalledWith(responseId)
     expect(controller.snapshot().response).toBe('interrupting')
     await interrupt
     expect(events.slice(-2).map(event => event.type)).toEqual(['playback_stopped', 'response_cancel_requested'])
     expect(controller.snapshot().response).toBe('interrupting')
-    coreEventReceivers[0]({type: 'response_cancelled', response_id: responseId} as VoiceSessionEvent)
+    coreEventReceivers[0]({session_id: SESSION_ID, type: 'response_cancelled', response_id: responseId} as VoiceSessionEvent)
     expect(controller.snapshot().response).toBe('idle')
     await controller.end()
   })

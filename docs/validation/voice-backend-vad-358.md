@@ -48,3 +48,20 @@ FEの実モデル・WASM・区間検出をNodeから実行し、BEと次を比�
 | モデル初期化前／処理後の最大RSS | 56,896／97,344 KiB |
 
 最大RSS差は解放後の常駐量・Session単位の使用量ではない。#358の前後比較や共有推論への影響は、M5／M6の同条件測定で別に確認する。
+
+
+## 2026-09-15: 既存Frontend単体試験の新契約への移行
+
+M3／M4接続実装（`b0b0452`）に対して、既存のApp・録音UI・共通client・Room・Core／private契約テストを更新した。
+
+- FEがspeechイベントを発行するfixtureを、BEの入力開始ACKと発話通知を受け取るfixtureへ変更した。focus、手動／スレッド切替mute、再接続、相槌／take-turn、text優先、結果照合、履歴表示の既存検証を維持した。
+- 入力再開時は新しいtrack SIDをpublishし、ACKを待つ。録音UIがsuspended解除だけでtrackを有効化しないこと、publish／入力開始失敗でtrackを解放することを検証した。
+- 録音UIの旧continuous専用VAD試験は、新しい責務に合わせてVAD非依存の開始・停止・再開・失敗試験に置き換えた。発話境界・短発話・quiet resetの同値性は、本書のBackend実VAD parity試験が担当する。旧WebSocket録音のVAD試験は保持した。
+- CoreとLiveKit privateのfixtureは2.0に更新し、別契約の画面要求は1.0を保持した。非互換protocolを拒否する試験も保持した。
+
+検証結果:
+
+- `cd frontend && node node_modules/vitest/vitest.mjs run .unit.test.ts`: **873 passed、0 failed**。
+- `cd frontend && npm run check`: Svelte **0 errors / 0 warnings**、E2E／integrationのTypeScript検査成功。
+
+このUI単体試験ではRoomとBE通知をモックしている。実PCMからの境界検出、実LiveKit／STT／LLM／TTSの往復、ブラウザE2Eの実行、移設前後の品質測定、人による実マイク・聴感の受入を証明するものではない。Backendの既存試験とM5／M6は継続中。
