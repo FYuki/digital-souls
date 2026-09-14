@@ -263,3 +263,18 @@ VAD／reader実行時障害の追加監査、更新・切り戻し、人の実�
   正解境界・停止・取消の添付を判定前へ移し、afterEachにも本文・tokenを除いた相関と時刻を残す。
 - 次の診断では既存controlled traceを併用し、VAD・preview STT・判定・通知の内訳を調べる。
   3秒／3.5秒の基準は変更しない。
+
+
+`0a1e198` で詳細添付と既存controlled traceを使った再実行は **1 passed**。
+正解境界から実停止まで **1,148.4〜1,152.3ms**、取消確認まで **1,203.4〜1,207.3ms**。
+BEの同一時計内では、発話検知からpreview開始まで約290ms、
+preview開始からtake-turnまで約255ms、take-turnからserver取消まで約37msであり、
+この試行は発話終了前のpreview判定で停止した。
+
+初回6,166.5msの失敗にはstage traceがないため、その原因が解消されたとは扱わない。
+同じ基準に対する失敗・成功の両方を[割り込み診断artifact](../artifacts/voice-backend-358-interruption-smoke.json)へ残した。
+追加診断の最初の起動は、suiteが固定するdata rootとtrace pathの不一致でreadiness失敗した。
+試験開始前のsetup失敗として区別し、既存test領域内の新規trace pathへ修正してから実行した。
+
+今回起動した専用LiveKit・Backend・Frontendは停止済み。7880／7881／8000／5173／4174の閉鎖を確認し、
+共有Ollama／VOICEVOX／Whisperと別タスクのOllamaは継続している。
