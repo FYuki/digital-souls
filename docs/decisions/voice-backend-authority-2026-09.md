@@ -54,3 +54,7 @@ BEにはsession単位のモデル状態・buffer・readiness・負荷上限管�
 
 移設前後の遅延回帰と既存未達を分ける定量的な受入基準は[指示書](../epic-358-voice-backend-requirements.md)を参照する。
 #150の性能目標を緩和せず、#350の許容済み未達を今回の移設成功で解消済みにしない。
+
+## 実装契約への対応
+
+M1で棚卸しした値、Core 2.0／private v2、認可trackとBE入力世代による抑止境界、欠落・上限、比較条件は[移設契約](../voice-backend-migration-contract.md)を参照する。これらの実装・実接続受入はM2以降で検証する。

@@ -15,6 +15,8 @@ FEは音声入出力、ユーザー操作、端末で観測した事実を担当
 - 同commitの`frontend/src/lib/audio/utterance-detector.ts`には`silenceMs=600`、`neuralSilenceMs=700`がある。古いADRの1,400msと区別し、有効設定・モデル・preroll・検証済み挙動はM1で改めて棚卸しする。
 - 同mainには#329のIrodori対応が含まれる。既存のSession単位TTS選択・区間合成・取消契約を保持する。Irodoriの採用・声選定・品質改善を#358の前提に追加しない。
 
+M1の棚卸し・protocol・計測条件は[移設契約](voice-backend-migration-contract.md)を参照する。
+
 ## 対象範囲と要件
 
 ### BEが所有する判断
