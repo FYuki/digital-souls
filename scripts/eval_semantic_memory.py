@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--endpoint", default="http://localhost:11438")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--case-prefix", help="失敗分類の調査用。正式評価には使用しない")
     parser.add_argument("--limit", type=int, default=100, help="部分実行は調査専用、正式合格には使用しない")
     args = parser.parse_args()
     url = urlparse(args.endpoint)
@@ -61,6 +62,10 @@ def main():
     with urlopen(args.endpoint + "/api/version", timeout=10) as response:
         version = json.load(response)
     cases = [json.loads(line) for line in (SUITE / "cases.jsonl").read_text().splitlines()][:args.limit]
+    if args.case_prefix:
+        cases = [case for case in cases if case["id"].startswith(args.case_prefix)]
+        if not cases:
+            raise ValueError("no diagnostic cases matched")
     tests = [{"vars": {"case_id": c["id"], "category": c["category"],
                        "input_json": json.dumps({k: c[k] for k in ("turns", "existing")}, ensure_ascii=False),
                        "expected_json": json.dumps(c["expected"], ensure_ascii=False)}} for c in cases]
@@ -73,7 +78,9 @@ def main():
     config_path = output / "config.json"
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2))
     tracked = [*SUITE.glob("*.py"), SUITE / "cases.jsonl",
-               * (ROOT / "backend/app/memory/semantic").glob("*.py")]
+               * (ROOT / "backend/app/memory/semantic").glob("*.py"),
+               ROOT / "backend/app/memory/memory_policy.json",
+               * (ROOT / "backend/app/privacy/semantic").glob("*.py"), Path(__file__).resolve()]
     manifest = {
         "model": models[args.model], "privacy_model": models["gemma4:e4b"], "ollama": version,
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),

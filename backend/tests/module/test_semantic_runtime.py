@@ -179,3 +179,19 @@ def test_input_chunks_cover_all_primary_text_and_overlap(h):
     assert primary[0].start == 0 and primary[-1].end == len(text)
     assert all(left.end > right.start for left, right in zip(primary, primary[1:]))
     assert all(p.end - p.start <= 1000 for p in primary)
+
+
+def test_response_schema_restricts_operation_and_target_pairs():
+    from jsonschema import Draft202012Validator
+    from app.memory.semantic.extractor import _response_schema
+    item = {"operation": "NEW", "target_key": None, "subject": "ユーザー", "predicate": "居住地",
+            "value": "大阪", "mutability": "CHANGEABLE", "self_report": True, "confidence": 1,
+            "sources": [{"source_key": "u0", "quote": "大阪に住んでいます"}]}
+    empty = Draft202012Validator(_response_schema(()))
+    assert empty.is_valid({"items": [item]})
+    assert not empty.is_valid({"items": [{**item, "operation": "REAFFIRM", "target_key": "c0:assistant"}]})
+    known = Draft202012Validator(_response_schema(("m0",)))
+    assert known.is_valid({"items": [{**item, "operation": "REAFFIRM", "target_key": "m0"}]})
+    assert not known.is_valid({"items": [{**item, "operation": "REAFFIRM", "target_key": None}]})
+    assert not known.is_valid({"items": [{**item, "operation": "NEW", "target_key": "m0"}]})
+    assert not known.is_valid({"items": [{**item, "operation": "CORRECT", "target_key": "m1"}]})

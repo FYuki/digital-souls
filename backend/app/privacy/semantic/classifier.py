@@ -20,7 +20,7 @@ from app.privacy.semantic.contracts import (
     SubjectScope,
 )
 SEMANTIC_CLASSIFIER_VERSION = "semantic-privacy-classifier-v2"
-SEMANTIC_PROMPT_VERSION = "semantic-privacy-prompt-v11"
+SEMANTIC_PROMPT_VERSION = "semantic-privacy-prompt-v12"
 UNRESOLVED_MODEL_DIGEST = "unresolved"
 SEMANTIC_FEW_SHOT_TEXTS = (
     "通院の予定が変わって少し不安です",
@@ -348,6 +348,13 @@ def _build_messages(text: str) -> tuple[dict[str, str], ...]:
         "a sensitive warning sign and a harmless fact, choose SENSITIVE. Use "
         "NOT_SENSITIVE only for clearly harmless facts or clearly general content. "
         "Do not infer an undisclosed private fact from a general question. "
+        "A harmless self-report of birthday month and day without a birth year, "
+        "a city or broad region of residence without a precise address or current location, "
+        "and ordinary preferences are NOT_SENSITIVE unless another clause contains "
+        "sensitive information. These facts do not become OTHER_SENSITIVE merely because "
+        "they describe a particular person or are rewritten as the user's profile. "
+        "Precise home addresses, private contact details, identifiers, health, finances, "
+        "and nonpublic third-party disclosures remain SENSITIVE. "
         "Return exactly one JSON object with classification, subject_scope, category, "
         "and reason_code. "
         f"Allowed classification values: [{classification_values}]. "

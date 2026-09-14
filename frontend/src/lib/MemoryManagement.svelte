@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
   import EpisodicMemoryManagement from './EpisodicMemoryManagement.svelte'
+  import SemanticMemoryManagement from './SemanticMemoryManagement.svelte'
 
   import {
     MemoryCorrectionRejected,
@@ -16,6 +17,7 @@
 
   export let character: string
   export let onClose: () => void
+  export let onOpenConversation: (conversationId: string) => void = () => undefined
 
   let personaMemories: PersonaMemory[] = []
   let temporaryRecords: TemporaryRecord[] = []
@@ -228,7 +230,8 @@
     <button type="button" on:click={onClose}>チャットに戻る</button>
   </header>
 
-  {#key character}<EpisodicMemoryManagement {character} />{/key}
+  {#key character}<SemanticMemoryManagement {character} {onOpenConversation} />
+    <EpisodicMemoryManagement {character} />{/key}
 
   {#if loading}
     <p>読み込み中</p>

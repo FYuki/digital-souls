@@ -86,6 +86,14 @@ class SemanticStore:
         proposition: Proposition, receipt_id: UUID,
     ) -> SemanticRecord:
         with self.repository.read() as tx:
+            replay = tx.replay(character_id, "manual:"+str(receipt_id))
+            if replay is not None:
+                matching = any(r.source_id == record_id and r.target_id == replay.id
+                               and r.relation is SemanticOperation.CORRECT
+                               for r in tx.relations(character_id))
+                if not matching or (replay.proposition is not None and replay.proposition != proposition):
+                    raise SemanticConflict("manual receipt was used for another correction")
+                return replay
             current = tx.get(character_id, record_id)
             if (current is None or current.formation_type is not FormationType.DIRECT_EXTRACTION
                     or current.proposition is None or not current.proposition.self_report):

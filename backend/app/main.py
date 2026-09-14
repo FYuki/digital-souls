@@ -82,6 +82,8 @@ from app.memory.formation.scheduler import MemoryFormationScheduler
 from app.memory.formation.combined_scheduler import CombinedFormationScheduler
 from app.memory.formation.runtime import build_episodic_scheduler
 from app.memory.semantic.privacy import SemanticPrivacyReviewer
+from app.memory.semantic.management import SemanticMemoryManagement
+from app.routers.semantic_memories import router as semantic_memories_router
 from app.memory.semantic.read_repository import SemanticReadRepository, WithSemanticReadRepository
 from app.memory.semantic.repository import SemanticRepository
 from app.memory.semantic.runtime import build_semantic_scheduler
@@ -663,6 +665,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ), clock=clock,
             )
             memory_read_repository.bind(SemanticReadRepository(semantic_store))
+            app.state.semantic_memory_management = SemanticMemoryManagement(semantic_store, memory_index_sync)
             app.state.semantic_store = semantic_store
             semantic_store_state_set = True
             app.state.persona_memory_provider = PersonaMemoryProvider(
@@ -1124,6 +1127,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     )
                 if semantic_store_state_set:
                     cleanup.callback(delattr, app.state, "semantic_store")
+                    cleanup.callback(delattr, app.state, "semantic_memory_management")
                 if episodic_memory_management_state_set:
                     cleanup.callback(delattr, app.state, "episodic_memory_management")
                 if persona_memory_provider_state_set:
@@ -1164,6 +1168,7 @@ app.include_router(character_catalog_router)
 app.include_router(conversations_router)
 app.include_router(memory_management_router)
 app.include_router(episodic_memories_router)
+app.include_router(semantic_memories_router)
 app.include_router(ui_settings_router)
 app.include_router(livekit_router)
 app.include_router(screen_perception_router)

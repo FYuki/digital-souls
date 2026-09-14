@@ -138,6 +138,12 @@ class SemanticTransaction:
             if (target.proposition.subject != candidate.proposition.subject
                     or target.proposition.predicate != candidate.proposition.predicate):
                 raise SemanticConflict("semantic target has another subject or predicate")
+        if (target is not None and target.proposition is not None
+                and target.formation_type is FormationType.EXPERIENCE_DERIVED
+                and candidate.formation_type is FormationType.DIRECT_EXTRACTION
+                and candidate.proposition.self_report):
+            # LLMが訂正・変化を提案しても、自己申告だけを理由に一般化を停止させない。
+            operation = SemanticOperation.SELF_REPORT
         if operation is SemanticOperation.REAFFIRM:
             assert target is not None and target.proposition is not None
             if (target.status is not SemanticStatus.ACTIVE
