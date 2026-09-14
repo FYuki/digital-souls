@@ -175,6 +175,8 @@ def main() -> int:
     def record_state() -> None:
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     record_state()
+    environment["DS_ACCEPTANCE_ACTIVITY_LOG"] = str(root / "inference-activity.jsonl")
+    environment["DS_ACCEPTANCE_RUN_ID"] = str(manifest["runId"])
     stopped = threading.Event()
     for signum in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signum, lambda *_: stopped.set())
@@ -182,7 +184,7 @@ def main() -> int:
     try:
         with (root / "backend.log").open("ab") as backend_log, (root / "frontend.log").open("ab") as frontend_log:
             api = subprocess.Popen(
-                [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1",
+                [sys.executable, str(ROOT / "scripts/acceptance_semantic_backend.py"), "app.main:app", "--host", "127.0.0.1",
                  "--port", str(backend_port), "--no-access-log", "--log-level", "warning",
                  "--log-config", str(log_config_path)],
                 cwd=ROOT, env=environment, stdout=backend_log, stderr=subprocess.STDOUT,

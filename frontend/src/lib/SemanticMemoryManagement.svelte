@@ -173,13 +173,15 @@
   article { border: 1px solid #514558; border-radius: 10px; padding: 16px; margin-block: 12px; scroll-margin-top: 16px; }
   .content { font-size: 1.05rem; white-space: pre-wrap; overflow-wrap: anywhere; }
   .metadata { font-size: .8rem; opacity: .8; overflow-wrap: anywhere; }
-  button, input { font: inherit; }
-  button { padding: 7px 12px; cursor: pointer; }
+  button, input { font: inherit; min-height: 44px; box-sizing: border-box; padding: 8px 12px;
+    border: 1px solid #574d63; border-radius: 8px; background: #100d17; color: #fff; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
   button:disabled { cursor: wait; opacity: .6; }
   .actions { display: flex; gap: 8px; margin-top: 12px; }
   form, .delete-confirm { padding: 12px; border: 1px solid #847091; margin-top: 12px; }
   label { display: flex; flex-direction: column; gap: 6px; }
-  input { padding: 8px; }
+  input { width: 100%; }
   details { margin-block: 12px; }
   summary { cursor: pointer; }
   a { color: #cab8f0; }

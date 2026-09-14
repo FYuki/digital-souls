@@ -758,6 +758,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_formation_scheduler = CombinedFormationScheduler(
                 (build_semantic_scheduler(
                     store=semantic_store, runtime=inference_runtime, timezone=occurred_timezone,
+                    stale_after=conversation_history_config.stale_after,
                 ) if InferenceTarget.SEMANTIC_EXTRACTION in inference_runtime.settings.targets
                  else preference_formation_scheduler),
                 build_episodic_scheduler(
