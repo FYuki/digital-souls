@@ -1,0 +1,131 @@
+{
+  "model": {
+    "name": "gemma4:12b",
+    "model": "gemma4:12b",
+    "modified_at": "2026-09-14T15:43:49.707717541Z",
+    "size": 7556508396,
+    "digest": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c",
+    "details": {
+      "parent_model": "",
+      "format": "gguf",
+      "family": "gemma4",
+      "families": [
+        "gemma4"
+      ],
+      "parameter_size": "11.9B",
+      "quantization_level": "Q4_K_M",
+      "context_length": 262144,
+      "embedding_length": 3840
+    },
+    "capabilities": [
+      "completion",
+      "tools",
+      "thinking",
+      "vision"
+    ]
+  },
+  "commit": "ee0a3ced5249d4655b976545aa0c264932569b7c",
+  "evaluation_root": "/tmp/ds341-formal-v6-12b-01",
+  "summary": {
+    "acceptance_eligible": true,
+    "runs": [
+      {
+        "run": 1,
+        "passed": true,
+        "category_accuracy": {
+          "direct": 1.0,
+          "event_exclusion": 0.9,
+          "confirmation": 1.0,
+          "reaffirm": 1.0,
+          "change": 0.9,
+          "correction": 1.0,
+          "fixed_conflict": 0.9,
+          "self_report_priority": 1.0,
+          "grounding_exclusion": 0.9,
+          "safety": 1.0
+        },
+        "forbidden_cases": [],
+        "failures": {
+          "event_exclusion-06": "saved_count",
+          "change-10": "operation",
+          "fixed_conflict-07": "operation",
+          "grounding_exclusion-05": "saved_count"
+        },
+        "cli_exit": 0
+      },
+      {
+        "run": 2,
+        "passed": true,
+        "category_accuracy": {
+          "direct": 1.0,
+          "event_exclusion": 0.9,
+          "confirmation": 0.9,
+          "reaffirm": 1.0,
+          "change": 0.9,
+          "correction": 0.9,
+          "fixed_conflict": 0.9,
+          "self_report_priority": 1.0,
+          "grounding_exclusion": 0.9,
+          "safety": 1.0
+        },
+        "forbidden_cases": [],
+        "failures": {
+          "event_exclusion-06": "saved_count",
+          "confirmation-10": "saved_count,operation,value,source_turn",
+          "change-10": "operation",
+          "correction-02": "execution_error,saved_count,operation,target,value",
+          "fixed_conflict-07": "operation",
+          "grounding_exclusion-05": "saved_count"
+        },
+        "cli_exit": 0
+      },
+      {
+        "run": 3,
+        "passed": true,
+        "category_accuracy": {
+          "direct": 1.0,
+          "event_exclusion": 0.9,
+          "confirmation": 0.9,
+          "reaffirm": 1.0,
+          "change": 0.9,
+          "correction": 0.9,
+          "fixed_conflict": 0.9,
+          "self_report_priority": 1.0,
+          "grounding_exclusion": 0.9,
+          "safety": 1.0
+        },
+        "forbidden_cases": [],
+        "failures": {
+          "event_exclusion-06": "saved_count",
+          "confirmation-10": "saved_count,operation,value,source_turn",
+          "change-10": "operation",
+          "correction-02": "execution_error,saved_count,operation,target,value",
+          "fixed_conflict-07": "operation",
+          "grounding_exclusion-05": "saved_count"
+        },
+        "cli_exit": 0
+      }
+    ],
+    "passed": true
+  },
+  "artifact_sha256": {
+    "config.json": "4a0cbce646653d4598f9d0878dd9723bbdb0756cb7e0f8235f297e64e65fe849",
+    "manifest.json": "80fa83a5573ee57ae11363f73dcae6c38b5f7b339e42a4925f4b63b55388b55d",
+    "run-1-memory-summary.json": "68133ea6bc14368a540d3d175837f8f92395ef7a1c2e821d0c38c334460ba231",
+    "run-1-memory.jsonl": "54af88b1a89573228158406057ab7b92b1c21917289f00af5c01f78b91a3880e",
+    "run-1.json": "2cf8defc015b8b22959505a5dec6008aea331aba4b5d315ffc348176a8afd184",
+    "run-1.jsonl": "fa3b08aaeb3bb5ab9fc1c37c9599704b45a555c2147c0c58a330c390a003e8c5",
+    "run-1.log": "2c65a4489e3195506e9eb2b488bc65c3eafaff8d6ffecc3b155ca98f9d6baa44",
+    "run-2-memory-summary.json": "a1025a96a01141b925bfe6e6a88d8cbf44b96a6cbe5bb226d3b2272a858c4fe8",
+    "run-2-memory.jsonl": "839400349fea2631714d9a70d54e1ab64f02ccdf3d2f4af073e616763201ecf9",
+    "run-2.json": "93902cd896f824be50241c18e23e79665e172090bbed3fd4ec129dfbf35881e2",
+    "run-2.jsonl": "42b73885d4d024593cf1125a878091320c2e632f25a5a8bae53f165aea5851dc",
+    "run-2.log": "062a63a1532517c843105d4be01d72432a52b4d5f44bf10cf2a9483b99683188",
+    "run-3-memory-summary.json": "04dacccf4e9d644aac773065dace8a7a2b63e41dec7629d26e36783cf8b331bf",
+    "run-3-memory.jsonl": "9582562d266e86d73bd9ee462c23d3431ba44a20b409e61cd04b4eb397ea9c37",
+    "run-3.json": "0b3ddfccc8a9f681b540dcf4b153d710c080e5fd9cc1ea4eeebab46914d73b97",
+    "run-3.jsonl": "27123be5a9daf5c01d1f1f4ee376164af367657b8db4d07f2688ba962ceaf80e",
+    "run-3.log": "bedc1fc9a8d4308aee77369c7451a99033a67f1d2f27723181bf1ecb8b3cf613",
+    "summary.json": "7c89846937da2b2a5c6c37126b37eddefa91d432f7b5221e7b34dee60fce834f"
+  }
+}
