@@ -165,3 +165,20 @@ M5で既存計測と横断回帰を整合し、M6で一括切替・切り戻し�
 - 非無音concealmentはconcealed_samplesからsilent_concealed_samplesを除く。packet lossやjitterの値だけでは破棄しない。意味の根拠は[WebRTC統計仕様](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-concealedsamples)を参照する。
 - 統計のrequest後に届いたPCMまで確認済みにはしない。確認不能は1秒の上限まで保留し、確認できなければSTTへ渡さず、音声の話し直しを案内する。
 - 上記は接続実装の契約補足。新しい局所試験・本番ビルドの成功だけで、既存suiteの移行や実サービス受入を完了としない。
+
+### BE VAD境界と実STT入力のsample対応
+
+BE版のVAD境界reportは、開始通知を発行したframeのtrack sample位置とBridgeの受信連番を対応付ける。
+終了時には最初のawaitより前に対応を固定し、連続したcapture範囲・preroll・STTのprefix除去を検証する。
+世代をまたいで継続する受信連番と、新しいtrackのsample位置を同一視しない。
+対応できない場合は位置を補完せず、数値traceのmedia spanを無効とする。
+
+固定音声への対応には既存の二つの独立PCM anchorとv4端部照合の両方を要求する。
+相関・競合peak・sample数を再検証し、anchor間の位置差が32 sampleを超える場合は欠測とする。
+上下限は確認したoffsetに既存の32 sample許容幅を加えた範囲であり、
+物理時計の誤差保証や音声内部全体の連続性保証ではない。
+VADの開始・検知終了位置から固定音声境界までを16kHzのmedia軸で集計し、server時計とbrowser時計は減算しない。
+
+誤分割は正式BE境界から独立して件数を保持する。複数のSTT入力を結合して一発話のPCM証跡へ変換しない。
+境界offsetが欠測でも、確認済みの誤分割を分母・件数から除外しない。
+100試行条件、全件coverage、cleanup条件は維持する。人の実マイク・聴感受入は別途必要である。

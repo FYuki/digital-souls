@@ -923,6 +923,11 @@ class _UserAudioCapture:
     preview_last_signal_samples: int = 0
     preview_signal: SttSignalSpan = field(default_factory=SttSignalSpan)
     received_span: PcmCaptureSpan = field(default_factory=PcmCaptureSpan)
+    media_offset_samples: int | None = None
+    vad_started_sample: int | None = None
+    vad_active_end_sample: int | None = None
+    vad_detected_end_sample: int | None = None
+    media_end_anchor_valid: bool = False
     preparation_started: bool = False
     quiet_samples: int = 0
 
@@ -1068,6 +1073,16 @@ class _ConversationCoreBridge:
             return
         # 発話終了位置は既にPCMで確認済み。focus抑止はこの区間を取り消さない。
         capture.finalized = True
+        # await前に、この終了frameまでの受信連番とVADのtrack sample位置を固定する。
+        detection = boundary.detection
+        capture.vad_active_end_sample = detection.active_end_sample
+        capture.vad_detected_end_sample = detection.detected_sample
+        capture.media_end_anchor_valid = (
+            capture.media_offset_samples is not None
+            and capture.vad_started_sample == detection.started_sample
+            and self._microphone_received_bytes // 2 + capture.media_offset_samples
+            == detection.detected_sample
+        )
         await self._publish_audio(self._speech_event("speech_stopped", boundary))
         if self._measurement is not None:
             self._measurement.record_utterance_event(
@@ -1217,6 +1232,14 @@ class _ConversationCoreBridge:
                 else None
             ),
         )
+        detected, started = event.get("detected_sample"), event.get("start_sample")
+        if (event.get("type") == "speech_started"
+                and type(detected) is int and type(started) is int
+                and 0 <= started <= detected):
+            # on_frameがこのconfirmed frameをcaptureへ渡した直後に呼ばれる。
+            # 世代間でbridgeの受信連番は継続するため、offsetは負にもなり得る。
+            capture.media_offset_samples = detected - self._microphone_received_bytes // 2
+            capture.vad_started_sample = started
         capture.received_span.append(
             self._microphone_received_bytes - len(self._microphone_preroll),
             len(self._microphone_preroll),
@@ -1454,7 +1477,24 @@ class _ConversationCoreBridge:
                 )
                 continue
             if self._measurement is not None:
-                for name, value in capture.received_span.statistics(microphone_pcm).items():
+                statistics = capture.received_span.statistics(microphone_pcm)
+                valid_media = capture.media_end_anchor_valid and statistics["stt_capture_received_span_valid"] == 1
+                statistics["stt_capture_media_span_valid"] = 0
+                if valid_media and capture.media_offset_samples is not None:
+                    media_start = statistics["stt_capture_received_start_sample"] + capture.media_offset_samples
+                    media_end = statistics["stt_capture_received_end_sample"] + capture.media_offset_samples
+                    if (0 <= media_start <= media_end and media_end == capture.vad_detected_end_sample
+                            and capture.vad_started_sample is not None
+                            and capture.vad_active_end_sample is not None):
+                        statistics.update(
+                            stt_capture_media_span_valid=1,
+                            stt_capture_media_start_sample=media_start,
+                            stt_capture_media_end_sample=media_end,
+                            vad_started_sample=capture.vad_started_sample,
+                            vad_active_end_sample=capture.vad_active_end_sample,
+                            vad_detected_end_sample=media_end,
+                        )
+                for name, value in statistics.items():
                     self._measurement.record_utterance_event(
                         utterance_id=utterance_id, name=name, stage='stt_capture', value=value,
                     )

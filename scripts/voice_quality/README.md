@@ -737,3 +737,27 @@ manifestにはsessionの識別子、発話・応答件数、明示終了要求�
 ### Irodoriの実ネットワーク障害診断
 
 run_pilot.py に --profile integration-irodori --control-probe --fault-bridge --network-fault --scheduled-fixture --trials 1 を指定すると integration-irodori-fault を使う。通常測定と同じ専用アプリポート（Frontend 18573、Backend 18500、ready gate 18574）と共有Irodori 50024を維持し、LiveKitだけを所有確認済みの専用bridge 19880へ切り替える。--run-id、--inference-env、専用bridgeの --livekit-env も指定する。bridgeの準備は infra/voice-quality/README.md に従う。共有TTSの起動・停止をテストから行わない。通常の100試行集計には混在させない。
+
+## BE VAD境界の実PCM対応
+
+BE版のラベル付きrunを `--scheduled-fixture --observe-stt-pcm` で取得した後、
+既存VAD reporterへ同じrunのcontrolled traceとWhisper入力観測を渡す。
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_vad.py \
+  --manifest <run-root>/trial-manifest.json \
+  --fixtures <ラベル付きfixture-manifest.json> \
+  --trace <run-root>/runtime-data/voice-metrics/controlled-trace.jsonl \
+  --pcm-observer <run-root>/whisper-input-pcm.jsonl \
+  --output <新しいreport.json>
+```
+
+`clock_domain=vad_media_samples` はBE detectorのsample軸と実PCMの対応を表す。
+二つの独立anchor・v4端部照合・captureから最終STT入力への連続範囲が一致した試行だけoffsetを計算する。
+32 sampleの許容幅は既存照合方式の判定幅であり、物理時刻の確度を示すものではない。
+非一様なoffset、曖昧な相関、未確認のspanは欠測にする。
+`split_observed_trials / split_unknown_trials` はoffsetの測定可否とは別に構造の観測範囲を示す。
+`limits.captured_pcm_boundary_verified=false` はVAD集計自体をPCM品質受入の代用にしない制約である。
+PCM受入の詳細は同じraw入力の `report_stt_pcm.py` に残す。
+旧FE reportは従来のbrowser時計を維持し、判断主体と時計を混同しない。
+終了コードは受入合格0、pilotや欠測など受入未達1、入力・schemaエラー2。

@@ -13,7 +13,11 @@ _SPEC = importlib.util.spec_from_file_location("voice_quality_vad_report", _ROOT
 assert _SPEC is not None and _SPEC.loader is not None
 report_vad = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = report_vad
-_SPEC.loader.exec_module(report_vad)
+sys.path.insert(0, str(_ROOT / 'scripts/voice_quality'))
+try:
+    _SPEC.loader.exec_module(report_vad)
+finally:
+    sys.path.remove(str(_ROOT / 'scripts/voice_quality'))
 measure, summarize, main = report_vad.measure, report_vad.summarize, report_vad.main
 
 

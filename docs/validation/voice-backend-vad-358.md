@@ -376,3 +376,15 @@ BE detectorのsample位置とsource PCMの境界offset集計、全cohortの同�
 今回の専用LiveKit／Backend／FrontendとPCM中継は停止済み。
 7880／7881／8000／5173／4174に加えて50023の閉鎖を確認し、
 共有推論サービスと別タスクのOllamaは維持している。
+
+### M5: BE sample境界と実STT入力の対応付け
+
+正式開始frameでtrack sampleとBridge受信連番を対応付け、終了frameでawait前に固定する。
+captureの連続範囲とSTT前処理のprefix除去を介して、既存PCM observerの二つの独立anchorと
+v4端部照合へ接続した。offsetはmedia軸で算出し、異なる時計の減算は行わない。
+確認不能・不一致は欠測とし、誤分割件数はPCM照合可否から独立して保持する。
+
+- capture lineage、既存PCM／VAD report、新BE report・CLIの局所試験: **75 passed**。
+- 正式Ruff成功、mypy **337 files成功**。
+- 初回局所試験で既存testの定数import削除を検出し修正した。実装の成功へ読み替えず再実行で確認した。
+- この段階は合成証拠と局所回帰の確認。新しいsample対応を記録する版での実接続確認は後続とする。

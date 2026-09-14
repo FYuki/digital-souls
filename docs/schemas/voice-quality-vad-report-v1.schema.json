@@ -41,7 +41,10 @@
       "pattern": "^[a-f0-9]{64}$"
     },
     "clock_domain": {
-      "const": "browser_monotonic"
+      "enum": [
+        "browser_monotonic",
+        "vad_media_samples"
+      ]
     },
     "maximum_fixture_uncertainty_ms": {
       "const": 20
@@ -101,6 +104,41 @@
           "maximum": 100
         },
         "backend_media_alignment_unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "backend_event_overflow": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "backend_structure_unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "backend_input_discarded": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "final_utterance_unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "backend_split_pcm_alignment_unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "backend_pcm_input_unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "backend_pcm_alignment_unverified": {
           "type": "integer",
           "minimum": 0,
           "maximum": 100
@@ -385,7 +423,98 @@
         "frontend",
         "backend"
       ]
+    },
+    "backend_alignment_method": {
+      "const": "two_anchor_pcm_with_v4_edge_witness"
+    },
+    "trace_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "pcm_observer_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "split_observed_trials": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "split_unknown_trials": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
     }
   },
-  "$schema": "https://json-schema.org/draft/2020-12/schema"
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "input_authority"
+        ],
+        "properties": {
+          "input_authority": {
+            "const": "backend"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "backend_alignment_method",
+          "trace_sha256",
+          "pcm_observer_sha256",
+          "split_observed_trials",
+          "split_unknown_trials"
+        ],
+        "properties": {
+          "clock_domain": {
+            "const": "vad_media_samples"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "clock_domain": {
+            "const": "browser_monotonic"
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "backend_alignment_method"
+              ]
+            },
+            {
+              "required": [
+                "trace_sha256"
+              ]
+            },
+            {
+              "required": [
+                "pcm_observer_sha256"
+              ]
+            },
+            {
+              "required": [
+                "split_observed_trials"
+              ]
+            },
+            {
+              "required": [
+                "split_unknown_trials"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
 }
