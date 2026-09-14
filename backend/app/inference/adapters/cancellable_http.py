@@ -15,6 +15,8 @@ def post(
 ) -> httpx.Response:
     token = current_cancellation_token()
     if token is None:
+        if headers is None:
+            return client.post(url, json=json, timeout=timeout)
         return client.post(url, json=json, timeout=timeout, headers=headers)
     raise_if_cancelled()
     request = client.build_request("POST", url, json=json, timeout=timeout, headers=headers)
