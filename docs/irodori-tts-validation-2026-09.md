@@ -77,7 +77,7 @@ VOICEVOXは既存のTTFA p95 2000ms目標を満たす。Irodoriは未達で、p9
 
 受信音声は2件で取消時刻の境界と重なり、合計で最大2packet／1920sampleが取消後受信の可能性として残る。確実な取消後受信は0で、これらも旧音声として再生されていない。受信と提示の境界を混同せず、受信packetすべてが確実に0だったとは扱わない。
 
-[正式割込100試行](validation/irodori-329/take-turn-100-report.json)と[正式旧応答停止監査](validation/irodori-329/stale-output-100-report.json)に、匿名集計・元manifest/trace/fixture/reporterのhashを保存した。先の3件pilotのファイルは変更していない。
+[正式割込100試行](validation/irodori-329/take-turn-100-report.json)と[正式旧応答停止監査](validation/irodori-329/stale-output-100-report.json)に、匿名集計・元manifest/trace/fixture/reporterのhashを保存した。先の3件pilotのファイルは変更していない。 各公開レポートから元の実行ログを追跡する保存先とhashは、[一次証跡の対応表](validation/irodori-329/README.md)と同名の.provenance.jsonを参照する。
 
 ## 実ブラウザ出力の試聴用録音
 
