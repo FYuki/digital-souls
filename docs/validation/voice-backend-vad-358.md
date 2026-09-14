@@ -579,3 +579,38 @@ context差だけを外部異常として中止せず、停止が必要な場合�
 
 同じ観測・テスト変更を比較用branchへ適用した（07269e5）。旧版でも **91 passed**、
 07b8b1eからbackend/app・frontend/src・contracts・environments・characters・infraの差分0を確認した。
+
+### M5: 移設前の相槌100試行を完走（品質未合格）
+
+比較用07269e5（旧アプリ基準07b8b1e）で固定順の全100件を記録した。
+[run証跡](../artifacts/voice-backend-358-before-backchannel-run-100.json)に
+raw manifest・trace・PCM観測・資源観測・開始終了identity等のhashを保持する。
+実Browser／LiveKit／Whisper／Ollama／VOICEVOXを使用し、記憶抽出を含む構成を維持した。
+
+- 成功68・失敗32、独立Session 100件、終了確認100件。
+  失敗段階は相槌判定／再生継続確認25件、初期応答7件。成功100件のPlaywright検証は失敗した。
+- [相槌集計](../artifacts/voice-backend-358-before-backchannel-100.json):
+  相槌判定74・判定不能19・最終判定未確認7件。実停止・取消の観測は0件だが、
+  継続成立84件・欠測16件（全出力継続未確認9、fixture注入未確認7）でcoverage gateは未達。
+  欠測を取消なしへ補完しない。
+- [PCM集計](../artifacts/voice-backend-358-before-backchannel-pcm-100.json):
+  最終HTTP入力との相関93件、端部一致91件、欠測9件。
+  内訳は最終HTTP入力の一意性未確認4、最終発話未確認3、端部未確認2件。
+  全体位置ずれの非一様4件を端部一致とは別に残した。
+- PCM reporterはschema検証済みJSONを書いた後、品質gate不成立をexit 1で示した。
+  一時集計ラッパーはこのexitをassertで止めたため、生成済みJSONを直接確認して保存した。
+  JSON生成例外・全試行の中止とは扱わない。
+- STT中継の上流HTTPは200が374件、504が2件、503が4件。最大観測待ち時間は約46.2秒。
+  HTTP要求数と失敗試行数は同じではなく、全初期応答失敗をSTT由来と断定しない。
+- [開始終了identity照合](../artifacts/voice-backend-358-before-backchannel-identity-100.json):
+  モデルdigest（5用途）、Whisper設定、サービスimage、固定設定・fixtureのhashが一致した。
+  旧アプリの保護対象treeも基準と一致した。
+- GPU使用量の最大は約16.5GB。途中の補足観測では別Ollama（11438）にも
+  GPU上のmodel常駐を確認した。測定内の記憶抽出に加え、外部の共有GPU利用もあり得るが、
+  一時点の常駐から各障害の原因や全区間の負荷を確定しない。
+- 専用LiveKit／Backend／Frontend／PCM中継を停止し、
+  7880／7881／8000／5173／4174／50023閉鎖を確認した。共有推論サービスは変更していない。
+
+全100件の収集完了であり、相槌品質・PCM品質・前後比較の合格ではない。
+モデル・設定の一致だけから同等の負荷条件を主張せず、移設後の同条件測定と資源差の確認が残る。
+以前の3試行pilot・中止runを今回の成功試行で置き換えていない。
