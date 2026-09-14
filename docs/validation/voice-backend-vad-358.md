@@ -292,3 +292,25 @@ preview開始からtake-turnまで約255ms、take-turnからserver取消まで�
 - Svelte／E2E TypeScript: **0 errors / 0 warnings**。
 - 今回の追加は集計・ハーネス・仕様の接続。実サービスでの新report出力、
   pause cohort移行、100試行の前後比較と人の実マイク確認は引き続き未完了。
+
+
+`618177c` で既存run_pilotのtake-turnを1試行実行し、実Browser／LiveKit／Whisper／
+LLM／VOICEVOXで **1 passed、skip 0**。新しいreporter・cohort schemaを通して、
+正式BE発話との相関、実停止、取消確認、session終了を欠測なしで確認した。
+
+- 正解発話開始から実停止: **1,979.7〜1,981.9ms**。
+- 正解発話開始から取消確認: **2,040.7〜2,042.9ms**。
+- BE同一時計のtake-turnから取消: **28.1ms**。
+- [匿名集計](../artifacts/voice-backend-358-take-turn-pilot.json)は全1件を分母として保持する。
+  既存遅延基準は通過したが、100試行に届かないため見逃し率の受入はfalseのまま。
+- [診断証跡](../artifacts/voice-backend-358-interruption-smoke.json)に実行commit、
+  fixture・raw manifest・trace・native SDK・runtime結果のhashを追加した。
+  先の6,166.5ms失敗は削除せず、原因解消・回帰なしとは扱わない。
+- test専用LiveKit／Backend／Frontendを停止し、7880／7881／8000／5173／4174閉鎖を確認。
+  共有11434／50021／50022と別タスク11438は継続。
+
+保存前の検証で、新起点のraw manifestにinput_authorityがないとfrontendを補完する箇所を
+追加の反例テストで検出した。新起点では判断主体を明示必須にし、不完全な証跡を拒否する。
+過去のメタデータなしFE artifactの解釈は維持する。
+
+最終確認: 関連unit **214 passed**。保存した匿名pilot reportも現行cohort validatorで再検証済み。

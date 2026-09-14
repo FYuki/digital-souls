@@ -74,5 +74,27 @@
     "owned_services_stopped": true,
     "shared_inference_preserved": true,
     "other_task_ollama_preserved": true
-  }
+  },
+  "labeled_cohort_pilots": [
+    {
+      "application_commit": "618177ce6822ff27ee234068f4d13ef669022f5d",
+      "cohort": "take_turn",
+      "trials": 1,
+      "playwright": "1 passed / 0 failed / 0 skipped",
+      "report": "voice-backend-358-take-turn-pilot.json",
+      "report_sha256": "187af5dec1417ce2bcdfd1241c52ef1f79a5116fc2ecef2c70aa5873f07218e1",
+      "fixture_sha256": "c14c470baf158d5de45b7a07f28f8da9c8b454da94c1a307effbe6608a728642",
+      "runtime_status": "completed",
+      "native_sdk_verified": true,
+      "raw_sha256": {
+        "trial-manifest.json": "c83cf01c77b8c498b084748e42c3f41f56abc1dde89b32ebe8a1ace0e8857424",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "d36c371fee345a4c4e1b2de62619fb019eec627090f6e06a18ce720e3969667d",
+        "playwright-results.json": "f747a3f655f6d16ea8b50ae719989fe1ef93240ebe68ff217c45f5c7292c8c3e",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/environment-run.json": "24626c00426ac5e1d4187de0e7d1899c177a550529cdee8270ff67c33171e0d9"
+      },
+      "observations_overflow": false,
+      "limitation": "集計と実サービス証跡の接続を1試行で確認した限定pilot。100試行の前後比較や先の遅延失敗の解消を証明しない。"
+    }
+  ]
 }

@@ -491,3 +491,10 @@ def test_fixture_failures_remain_in_denominator_when_activation_or_cleanup_fails
     assert result["failure_stages"] == {
         failure if failure == "microphone_activation" else "cleanup": 1
     }
+
+
+def test_fixture_origin_requires_explicit_authority():
+    manifest, events, fixtures = fixture_case()
+    manifest.pop("input_authority")
+    with pytest.raises(ValueError, match="explicit input authority"):
+        report.summarize(manifest, events, fixtures)

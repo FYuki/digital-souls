@@ -245,6 +245,8 @@ def summarize(
     } or authority not in {"frontend", "backend"}:
         raise ValueError("unsupported latency origin or input authority")
     fixture_origin = origin == "scheduled_fixture_speech_start"
+    if fixture_origin and "input_authority" not in manifest:
+        raise ValueError("fixture latency origin requires explicit input authority")
     if authority == "backend" and not fixture_origin:
         raise ValueError("backend input requires fixture latency origin")
     definitions = {

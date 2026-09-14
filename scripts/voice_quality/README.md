@@ -52,6 +52,20 @@ Ollamaの`load_duration`はprovider報告値として扱う。v0.32.5の[ChatHan
 [v1](../../frontend/playwright/fixtures/voice-quality-v1/README.md)と[v2](../../frontend/playwright/fixtures/voice-quality-v2/README.md)に、独立したラベル、音声生成クレジット、WAV hash、正解境界、展開・診断手順を記載する。`fixtures.py`と`stt_turn_diagnostic.py`は`--cases`で対応する固定ラベル定義を選択できる。
 
 
+## #358のtake-turn集計
+
+現行のラベル付きtake-turnハーネスは `latency_origin=scheduled_fixture_speech_start` と
+`input_authority=backend` をmanifestに保存する。移設前FE版の比較には
+`VOICE_QUALITY_INPUT_AUTHORITY=frontend` を指定し、使用したFE／BEの版と合わせる。
+新起点で判断主体が欠ける入力は拒否する。メタデータのない過去artifactは旧FE VAD起点として扱う。
+
+`report_take_turn.py` の `--manifest`・`--trace`・`--fixtures`・`--output` は従来どおり。
+新起点ではfixtureの正解境界と実停止・取消の上下限を算出し、上限を主指標と合否へ使う。
+`fixture_latency_bounds` の分母と主指標をcohort schema／validatorで照合する。
+[測定契約](../../docs/voice-backend-migration-contract.md)と
+[1試行の接続検証](../../docs/artifacts/voice-backend-358-take-turn-pilot.json)を参照。
+pilotの成功を100試行の品質受入や物理マイクの時刻検証へ読み替えない。
+
 ## 同一sessionの応答track切替診断
 
 `--continuous-turns 3 --scheduled-fixture`を指定すると、同じsession／conversationとマイクstreamを維持して固定音声を3回供給する。最初のマイクON後はマイクを操作せず、各応答のtrack名のresponse ID、一意な応答ID、transcript一致、応答完了、最後の明示終了を確認する。
