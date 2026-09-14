@@ -388,3 +388,19 @@ v4端部照合へ接続した。offsetはmedia軸で算出し、異なる時計�
 - 正式Ruff成功、mypy **337 files成功**。
 - 初回局所試験で既存testの定数import削除を検出し修正した。実装の成功へ読み替えず再実行で確認した。
 - この段階は合成証拠と局所回帰の確認。新しいsample対応を記録する版での実接続確認は後続とする。
+
+`1f64a08` の実Browser／LiveKit／Whisper／Ollama／VOICEVOXでpause 3試行を実行し、
+**全3件成功、欠測0、誤分割0**。新しい[BE VAD集計](../artifacts/voice-backend-358-pause-vad-pilot.json)と
+[実PCM集計](../artifacts/voice-backend-358-pause-pcm-media-pilot.json)の両方で同一3件の対応を確認した。
+
+- 3件の開始offsetの下限～上限全体は約 **-52.8～-3.1ms**。
+- 検知終了offsetの下限～上限全体は約 **647.2～704.9ms**。
+  固定音声の末尾から検知終了までのmedia軸上の差であり、応答遅延ではない。
+- 語頭／末尾基準違反0、境界不確定0、cleanup 3件、端部最小相関約0.934。
+- 100試行条件は未達であり、両reportのpassedはfalseを保持する。
+- raw manifest、trace、PCM observerのhashを匿名reportに保持した。
+  前の初回発話失敗2件は今回再現しなかったが、原因を解消済みとは扱わない。
+
+専用LiveKit／Backend／Frontendと50023のPCM中継は停止済み。
+7880／7881／8000／5173／4174／50023閉鎖、共有推論サービス継続を確認した。
+全cohortの同条件前後100試行、人の実マイク・聴感、切替／切り戻しは引き続き未完了。
