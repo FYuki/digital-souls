@@ -1,0 +1,61 @@
+{
+  "scope": "before_backchannel_background_extraction_audit",
+  "application_baseline_revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+  "measurement_revision": "67e1a03e232a5e75ca717ec28bc720e00f267849",
+  "configured_context_tokens": {
+    "CHAT": 8192,
+    "PRIVACY": 8192,
+    "MEMORY_EXTRACTION": 36864,
+    "MEMORY_CONSOLIDATION": 8192
+  },
+  "configured_targets_share_ollama_model": true,
+  "own_test_database": {
+    "memory_thread_job_count": 38,
+    "job_outcomes": {
+      "EMPTY": 1,
+      "FAILED": 1,
+      "PENDING": 12,
+      "SAVED": 24
+    },
+    "receipts": [
+      {
+        "outcome": "EMPTY",
+        "count": 1,
+        "saved_count": 0,
+        "rejected_count": 0
+      },
+      {
+        "outcome": "SAVED",
+        "count": 24,
+        "saved_count": 29,
+        "rejected_count": 0
+      }
+    ],
+    "episodic_processed_spans": 48,
+    "episodic_records": 29,
+    "episodic_receipts": 29
+  },
+  "own_background_extraction_verified": true,
+  "observed_context_attributed_per_request": false,
+  "rag_disabled_implies_memory_extraction_disabled": false,
+  "runtime_configuration_changed": false,
+  "source_sha256": {
+    "backend/.env.example": "dad7a00382842f732c63f99583f0433210c2eb270683340f9b62c6f73fd81b91",
+    "backend/app/main.py": "8d744acac9cbbcb37aaecf079332895f944079680e2f949fafce411972d482fb",
+    "backend/app/memory/inference_client.py": "127ab08def9201a798d283bcea6ed21fda8991e1726fbce53b87998b0eaf16c8",
+    "backend/app/inference/adapters/ollama.py": "2f1dd0dce100bac284a6a87ddb584f43b8d43440d5139d64d73845487255c8ca"
+  },
+  "evidence_sha256": {
+    "runtime-data/conversation-history.db": "6df15eb01776f0ec5662178837802a234e78cbc94d543833197050fcff2d03cb",
+    "runtime-data/persona-memory.db": "4134870033eea8bff5660abfa4c56b916729014098ea1169c17a0d5d5f21b9e4",
+    "runtime-data/persona-memory.db-wal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "interpretation": [
+    "試験自身の記憶抽出が実行された。RAG_ENABLED=falseはこのschedulerを無効化しない",
+    "36,864は現行記憶抽出の入力32,768+出力4,096と一致し、CHAT設定8,192との差だけでは外部負荷や設定逸脱を証明しない",
+    "個々の常駐contextをどの要求が変更したか、GPU負荷とWhisper障害の因果関係は未確定",
+    "前回中止runの41件・失敗22件と終了コードは維持する。完了済み100件へ読み替えない",
+    "次回は既定の記憶処理も含む同一構成で失敗・欠測を記録し、context差だけを中止理由にしない"
+  ],
+  "acceptance_passed": false
+}

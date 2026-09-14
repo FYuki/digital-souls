@@ -776,3 +776,12 @@ workerのhashと各版commitを匿名reportへ保存する。
 assertを無効化するPython最適化実行、保存コードが基準から異なる版、既存outputの上書きは拒否する。
 これは[一括更新・切り戻し](../../docs/voice-backend-rollout.md)のうち保存形式の互換性確認であり、
 実ブラウザ・FE／BEの切替・人の実マイク受入とは分ける。
+
+### 共有modelのcontext観測
+
+`inference-runtime.jsonl`の`expected_context_tokens`はCHAT用途の設定値である。
+`configured_chat_model_context_tokens_by_target`は、CHATと同じmodelを使う各生成用途の
+入力＋出力上限を記録する。記憶抽出などが異なるcontextを使うため、常駐値がCHAT設定と違う
+という理由だけで外部負荷・構成変更を断定しない。
+これらは設定メタデータであり、個々の常駐値と要求主体を相関させた観測ではない。
+`RAG_ENABLED=false`も記憶形成schedulerの停止を意味しない。

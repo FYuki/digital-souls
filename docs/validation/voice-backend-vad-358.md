@@ -550,3 +550,32 @@ run ID・cwd・Playwright引数で所有確認したrunnerへSIGINTを送り終�
 全100試行の集計・前後比較は未成立のまま。今回の途中結果を完全cohort用reporterへ投入せず、
 記録済みの失敗を後続の成功試行で置き換えない。
 再測定では、モデル・設定の一致に加えて常駐contextの切り替わりと共有STTの継続可用性を確認する。
+
+### M5: 試験自身の記憶抽出負荷と観測上の訂正
+
+中止runの専用SQLiteを読み取り専用で確認した。
+[記憶抽出の匿名監査](../artifacts/voice-backend-358-background-inference-audit.json)では、
+抽出ジョブ38件（SAVED 24・EMPTY 1・FAILED 1・PENDING 12）と、
+保存済み記録29件を確認した。既存の実会話・dogfood DBは使用していない。
+
+- 旧アプリでも完成したCore turnから記憶抽出をsubmitし、schedulerを起動する。
+  `RAG_ENABLED=false`はこの処理を無効化する設定ではない。
+- 同じOllama modelに対し、CHAT／PRIVACY／MEMORY_CONSOLIDATIONは8,192、
+  MEMORY_EXTRACTIONは32,768＋4,096＝36,864を設定している。
+  記憶clientはこのTargetの上限を使用する。
+- よって前項の「常駐contextがCHAT予定値から変化した」という観測だけでは、
+  他タスクの干渉・構成変更・同条件比較の不成立を証明できない。
+  試験自身の背景処理も要求元になり得る。個別要求との相関、Whisper障害の原因は未確定である。
+- 既存`run_pilot.py`へ、同一CHAT modelを共有する生成用途別context設定の数値記録を追加した。
+  provider／model名、任意の設定文字列・秘密情報を出さず、設定欠落を推測で補わない。
+  従来の`expected_context_tokens`はCHATの予定値として保持する。
+- 追加8試験の未実装時失敗を確認後、pilot関連 **91 passed**。
+  これは観測メタデータの検証であり、100試行の受入結果ではない。
+
+推論モデル・上限・記憶抽出の動作は変更していない。
+次回は同じ背景処理を含む構成のまま全試行の失敗・欠測を記録する。
+context差だけを外部異常として中止せず、停止が必要な場合は実際の障害・影響を根拠とする。
+既存中止runの失敗や終了コードは保持し、今回の原因候補発見で解消済みとは扱わない。
+
+同じ観測・テスト変更を比較用branchへ適用した（07269e5）。旧版でも **91 passed**、
+07b8b1eからbackend/app・frontend/src・contracts・environments・characters・infraの差分0を確認した。
