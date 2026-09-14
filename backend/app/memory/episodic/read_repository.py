@@ -36,13 +36,20 @@ class EpisodicReadRepository:
 
     def get(self, *, character_id: str, memory_id: UUID) -> EpisodicMemoryView | None:
         with self.source_guard.snapshot() as (history, cutoff), self.repository.read() as tx:
-            record = tx.get(character_id, memory_id)
-            if record is None:
-                return None
-            state = self._read_state(tx, history, cutoff, character_id)
-            return self._project(
-                tx, history, cutoff, record, self._unsafe_facts(tx, history, cutoff, character_id, state), state,
-            )
+            return self.get_in_snapshot(tx, history, cutoff, character_id=character_id, memory_id=memory_id)
+
+    def get_in_snapshot(
+        self, tx: EpisodicTransaction, history: sqlite3.Connection, cutoff: datetime, *,
+        character_id: str, memory_id: UUID,
+    ) -> EpisodicMemoryView | None:
+        """派生記憶の保存中も同じ履歴・記憶snapshotで根拠を検証する。"""
+        record = tx.get(character_id, memory_id)
+        if record is None:
+            return None
+        state = self._read_state(tx, history, cutoff, character_id)
+        return self._project(
+            tx, history, cutoff, record, self._unsafe_facts(tx, history, cutoff, character_id, state), state,
+        )
 
     def list_active(self, *, character_id: str) -> list[EpisodicMemoryView]:
         with self.source_guard.snapshot() as (history, cutoff), self.repository.read() as tx:
