@@ -122,26 +122,38 @@ class MicrophoneIntegrity:
                 pass  # 発話確定時はverifyで未観測を拒否する。
             await asyncio.sleep(POLL_SECONDS)
 
+    def _verified_range(self, start_sample: int, end_sample: int) -> bool:
+        if self._closed:
+            raise AudioInputFault("audio_integrity_unavailable")
+        if (
+            self._known_start is None
+            or self._known_start > start_sample
+            or self._covered_end < end_sample
+        ):
+            return False
+        for lower, upper, reason in self._faults:
+            if lower <= end_sample and upper >= start_sample:
+                raise AudioInputFault(reason)
+        return True
+
     async def verify(self, start_sample: int, end_sample: int) -> None:
         if start_sample < 0 or end_sample < start_sample:
             raise AudioInputFault("audio_integrity_unavailable")
         try:
             async with asyncio.timeout(VERIFY_TIMEOUT_SECONDS):
                 while True:
+                    # background pollで既に確認した範囲は、その証拠で判定する。
+                    # 同じ統計snapshotの再読込を待って確認済み区間を欠測にしない。
+                    if self._verified_range(start_sample, end_sample):
+                        return
                     try:
                         await self.observe()
-                        if (
-                            self._known_start is not None
-                            and self._known_start <= start_sample
-                            and self._covered_end >= end_sample
-                        ):
-                            for lower, upper, reason in self._faults:
-                                if lower <= end_sample and upper >= start_sample:
-                                    raise AudioInputFault(reason)
-                            return
                     except AudioInputFault as error:
                         if error.code == "audio_gap":
                             raise
+                    else:
+                        if self._verified_range(start_sample, end_sample):
+                            return
                     await asyncio.sleep(POLL_SECONDS)
         except TimeoutError as error:
             raise AudioInputFault("audio_integrity_unavailable") from error

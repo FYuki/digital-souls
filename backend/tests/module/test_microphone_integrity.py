@@ -110,3 +110,49 @@ def test_samples_arriving_during_stats_request_are_not_covered() -> None:
         monitor.close()
 
     asyncio.run(scenario())
+
+
+def test_verified_window_survives_a_cached_duplicate_snapshot(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.livekit_transport.microphone_integrity.VERIFY_TIMEOUT_SECONDS", 0.02
+    )
+
+    async def scenario() -> None:
+        position, timestamp = 0, 1
+
+        async def read():
+            return report(timestamp)
+
+        monitor = MicrophoneIntegrity(read, lambda: position)
+        await monitor.observe()
+        position, timestamp = 1600, 2
+        # background pollが先に確認した範囲を、verify自身の再読込成功に依存させない。
+        await monitor.observe()
+        await monitor.verify(0, 1600)
+        # 同じsnapshotを、新たに届いたPCMの証拠として延長することは禁止。
+        position = 3200
+        with pytest.raises(AudioInputFault, match="audio_integrity_unavailable"):
+            await monitor.verify(0, 3200)
+        monitor.close()
+        with pytest.raises(AudioInputFault, match="audio_integrity_unavailable"):
+            await monitor.verify(0, 1600)
+
+    asyncio.run(scenario())
+
+
+def test_cached_verified_window_keeps_detected_loss() -> None:
+    async def scenario() -> None:
+        position, timestamp, concealed = 0, 1, 0
+
+        async def read():
+            return report(timestamp, concealed)
+
+        monitor = MicrophoneIntegrity(read, lambda: position)
+        await monitor.observe()
+        position, timestamp, concealed = 1600, 2, 3840
+        await monitor.observe()
+        with pytest.raises(AudioInputFault, match="audio_gap"):
+            await monitor.verify(0, 1600)
+        monitor.close()
+
+    asyncio.run(scenario())
