@@ -11,3 +11,8 @@ livekit-api==1.2.0
 livekit==1.1.16
 mcp==2.0.0
 dbos==2.31.0
+
+# #358: FEと同じモデル・WASMをCPUで実行する。
+numpy>=1.26,<3
+onnxruntime==1.27.0
+wasmtime==36.0.0
