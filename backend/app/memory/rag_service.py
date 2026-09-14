@@ -141,6 +141,10 @@ def retrieve_prompt_memories(
             equivalence_margin=ranking_policy.equivalence_margin,
         )
         if temporal_query is None:
+            ranked = _include_current_self_reports(
+                ranked, character=character, policy=policy, scanner=scanner,
+                approved_repository=approved_repository, now=now.astimezone(UTC),
+            )
             return RetrievalOutcome(
                 tuple(
                     _search_result(item, RetrievalMatchKind.SEMANTIC)
@@ -169,6 +173,55 @@ def retrieve_prompt_memories(
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
         return RetrievalOutcome((), False)
 
+
+def _include_current_self_reports(
+    ranked: tuple[_VerifiedCandidate, ...], *, character: str, policy: MemoryPolicy,
+    scanner: PrivacyScanner, approved_repository: MemoryReadRepository, now: datetime,
+) -> tuple[_VerifiedCandidate, ...]:
+    # 過去の自己申告だけが類似検索に当たっても、同じ属性の現在値を取り落とさない。
+    historical_keys = {
+        (item.memory.proposition.subject, item.memory.proposition.predicate)
+        for item in ranked
+        if isinstance(item.memory, SemanticMemoryView)
+        and item.memory.proposition is not None and item.memory.proposition.self_report
+        and not item.memory.current_self_report
+    }
+    if not historical_keys:
+        return ranked
+    snapshots: list[ReadableMemory] = [
+        memory for memory in approved_repository.list_active(character_id=character)
+        if isinstance(memory, SemanticMemoryView) and memory.current_self_report
+        and memory.proposition is not None
+        and (memory.proposition.subject, memory.proposition.predicate) in historical_keys
+    ]
+    current = _verified_period_memories(
+        snapshots, character=character, policy=policy, scanner=scanner,
+        approved_repository=approved_repository, now=now,
+    )
+    by_id = {item.memory.id: item for item in ranked}
+    result: list[_VerifiedCandidate] = []
+    seen: set[UUID] = set()
+    for item in ranked:
+        memory = item.memory
+        related = [
+            value for value in current
+            if isinstance(value, SemanticMemoryView) and value.current_self_report
+            and value.proposition is not None and isinstance(memory, SemanticMemoryView)
+            and memory.proposition is not None and not memory.current_self_report
+            and (value.proposition.subject, value.proposition.predicate)
+            == (memory.proposition.subject, memory.proposition.predicate)
+        ]
+        for value in related:
+            if value.id not in seen:
+                # 正本から補う場合はベクトル距離を捏造しない。
+                result.append(by_id.get(value.id) or _VerifiedCandidate(
+                    MemorySearchCandidate(str(value.id), float("inf")), value,
+                ))
+                seen.add(value.id)
+        if memory.id not in seen:
+            result.append(item)
+            seen.add(memory.id)
+    return tuple(result)
 
 def _embedding_fingerprint(
     embedder: Callable[[str], list[float]], embedding: list[float]

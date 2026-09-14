@@ -85,3 +85,64 @@ def test_historical_and_derived_memories_are_not_marked_as_current_self_report(h
     assert not views[original.id].current_self_report
     assert "過去の状態" in views[original.id].normalized_text
     assert not views[generalization.id].current_self_report
+
+
+def test_historical_vector_match_includes_current_value_and_rechecks_its_source(h, monkeypatch):
+    from app.memory.chroma_store import MemorySearchCandidate
+    from app.memory.semantic.contracts import SemanticOperation
+
+    policy = resolved_memory_policy()
+    h.reviewer.review = lambda *_: PrivacyReview(True, "ALLOW", STAMP.model_copy(
+        update={"policy_version": policy.policy_version}))
+    old = save(h, candidate(source(h)))
+    current_conversation = h.history.create_conversation("miori")
+    current_source = source(h, "東京に引っ越した", conversation=current_conversation)
+    current = save(h, candidate(current_source, value="東京"), target=old, op=SemanticOperation.CHANGE)
+    unrelated = save(h, candidate(source(h, "猫が好き"), predicate="動物の好み", value="猫"))
+    reader = SemanticReadRepository(h.store)
+    monkeypatch.setattr("app.memory.rag_service.query_memories",
+                        lambda *_args, **_kwargs: [MemorySearchCandidate(str(old.id), 0.01)])
+    scanner, classifier = Mock(), Mock()
+    scanner.scan.return_value = ScanSuccess(())
+    classifier.classify.return_value = _assessment(SemanticClassification.NOT_SENSITIVE,
+                                                  SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT)
+
+    def retrieve():
+        return retrieve_prompt_memories("miori", "今どこに住んでいる？", policy,
+            scanner=scanner, classifier=classifier, approved_repository=reader,
+            embedder=FakeEmbedder(), chroma_path=h.paths.chroma_path,
+            now=h.store.clock(), timezone="Asia/Tokyo").memories
+
+    found = retrieve()
+    assert [item.memory_id for item in found] == [str(current.id), str(old.id)]
+    assert found[0].current_self_report and found[0].raw_distance == float("inf")
+    assert str(unrelated.id) not in {item.memory_id for item in found}
+    h.history.hard_delete_conversation("miori", current_conversation.conversation_id)
+    assert [item.memory_id for item in retrieve()] == [str(old.id)]
+
+
+def test_current_value_expansion_excludes_foreign_or_incompatible_snapshot(h):
+    from dataclasses import replace
+    from app.memory.chroma_store import MemorySearchCandidate
+    from app.memory.rag_service import _include_current_self_reports, _VerifiedCandidate
+    from app.memory.semantic.contracts import SemanticOperation
+
+    policy = resolved_memory_policy()
+    h.reviewer.review = lambda *_: PrivacyReview(True, "ALLOW", STAMP.model_copy(
+        update={"policy_version": policy.policy_version}))
+    old = save(h, candidate(source(h)))
+    current = save(h, candidate(source(h, "東京に引っ越した"), value="東京"),
+                   target=old, op=SemanticOperation.CHANGE)
+    reader = SemanticReadRepository(h.store)
+    old_view = reader.get(character_id="miori", memory_id=old.id)
+    current_view = reader.get(character_id="miori", memory_id=current.id)
+    ranked = (_VerifiedCandidate(MemorySearchCandidate(str(old.id), 0.1), old_view),)
+    scanner = Mock()
+    scanner.scan.return_value = ScanSuccess(())
+    for invalid in (replace(current_view, character_id="other"),
+                    replace(current_view, policy_version="incompatible")):
+        repository = Mock()
+        repository.list_active.return_value = [invalid]
+        repository.get.return_value = invalid
+        assert _include_current_self_reports(ranked, character="miori", policy=policy,
+            scanner=scanner, approved_repository=repository, now=h.store.clock()) == ranked
