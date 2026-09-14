@@ -101,7 +101,7 @@ test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page
 
 test('VAD発話終了後もLiveKit継続microphone sessionを維持する', async ({ page }) => {
   const button = await enableScheduledMicrophone(page)
-  await expect(button).toHaveClass(/mic-active/, { timeout: 15_000 })
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
   await driver.expectMicrophoneStandby(page)
   await expect(button).toHaveAttribute('aria-pressed', 'true')
 })
@@ -167,7 +167,8 @@ test('ラベル付き実音声によるLiveKit barge-inのlocal停止とcancel�
 
   const evidence = await driver.waitForInterruptionEvidence(page) as {
     responseId: string
-    speechStartedAtMs: number
+    utteranceId: string
+    backendDecisionReceivedAtMs: number
     localPlaybackStoppedAtMs: number
     cancelConfirmedAtMs: number
   }
@@ -185,19 +186,24 @@ test('ラベル付き実音声によるLiveKit barge-inのlocal停止とcancel�
   expect(localStopFromFixtureUpperMs).toBeLessThanOrEqual(3_000)
   expect(cancelFromFixtureUpperMs).toBeGreaterThanOrEqual(0)
   expect(cancelFromFixtureUpperMs).toBeLessThanOrEqual(3_500)
-  const localStopMs = evidence.localPlaybackStoppedAtMs - evidence.speechStartedAtMs
-  const cancelTotalMs = evidence.cancelConfirmedAtMs - evidence.speechStartedAtMs
-
-  expect(localStopMs).toBeGreaterThanOrEqual(0)
-  // 冒頭STTで相槌を除外してから停止するため、VAD直後の即時停止は要求しない。
-  expect(localStopMs).toBeLessThanOrEqual(3_000)
-  expect(cancelTotalMs).toBeGreaterThanOrEqual(0)
-  expect(cancelTotalMs).toBeLessThanOrEqual(3_500)
+  // 正解境界の誤差を上下限で残す。BE検知時刻や受信時刻を発話起点にしない。
+  const localStopBoundsMs = {
+    lowerMs: evidence.localPlaybackStoppedAtMs - bounds.speechStart.upperMs,
+    upperMs: localStopFromFixtureUpperMs,
+  }
+  const cancelTotalBoundsMs = {
+    lowerMs: evidence.cancelConfirmedAtMs - bounds.speechStart.upperMs,
+    upperMs: cancelFromFixtureUpperMs,
+  }
+  expect(localStopBoundsMs.lowerMs).toBeGreaterThanOrEqual(0)
+  expect(cancelTotalBoundsMs.lowerMs).toBeGreaterThanOrEqual(0)
   await testInfo.attach('barge-in-latency.real.json', {
     body: JSON.stringify({
       source: 'automated_test',
-      localStopMs,
-      cancelTotalMs,
+      origin: 'scheduled_fixture_speech_start',
+      localStopBoundsMs,
+      cancelTotalBoundsMs,
+      interruption_evidence: evidence,
       fixture_sha256: interruption.audioSha256,
       fixture_clock_bounds: bounds,
       localStopFromFixtureUpperMs,

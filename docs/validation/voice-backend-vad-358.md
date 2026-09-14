@@ -225,3 +225,28 @@ VAD／reader実行時障害の追加監査、更新・切り戻し、人の実�
 
 - 変更したDockerfileで専用Backendイメージの構築成功。初期化・disposeのRUNを実行し、
   SDK build cacheを保持した。実ブラウザでの回帰確認は後続の計測移行と合わせて行う。
+
+
+## 2026-09-15 BE判断に対応した割り込み観測の移行
+
+既存Playwright driverの割り込み記録が、削除済みのFE VAD由来
+`speechStartedAtMs` を必須としていたため、BE判断による実停止が収集されなかった。
+同じdriverへ、responseに対応した実停止・BE判定受信・取消確認の収集を接続した。
+
+- ローカル停止callbackが判定通知より先に届く場合と、取消確認が停止より先に届く場合を扱う。
+  観測順序6通り・別response・重複・上限超過のunit試験 **9 passed**。
+- BE speechイベントのSID・入力世代・sample境界・BE時刻を本文なしの診断へ保持する。
+  client到着時刻とBE時刻は別fieldで保存し、直接減算しない。
+- FE VAD由来の時刻がない場合はnullのまま残す。固定音声の実barge-in試験では、
+  workletで観測した正解speechStartの上下限から停止・取消確認の遅延範囲を算出する。
+- 継続マイクの発話終了試験は、廃止したFE VADのCSS状態に代えて、
+  同じutterance・SID・入力世代のBE開始／終了通知を確認する。
+- 収集上限超過と、複数の異なる停止・判定が同じresponseへ来る曖昧さを明示する。
+  実停止を観測していない取消だけから停止時刻を作らない。
+
+全体検証は、初回にVitest worker 1個が異常終了して既存RTPテスト9件の結果が欠けた。
+この実行を全体成功とは扱わずログを保持した。対象を変えずworker数を4に制限した再実行で
+**FE unit 885 passed / module 141 passed / Svelte 0 errors・0 warnings / E2E型検証成功**。
+
+これは計測移行の一部である。実ブラウザでの新probe確認、pause cohortのFE frame依存解除、
+集計側の旧client起点から正解境界・BE境界への移行、全cohortの前後比較は未完了。

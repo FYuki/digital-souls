@@ -4,6 +4,7 @@ import type {CoreDeliveryObservation} from '../src/livekit/core-delivery-observa
 import type {StaleAudioObservation} from '../src/livekit/post-gain-monitor'
 import { installUserControlProbe } from './user-control-probe'
 import type {} from './controlled-audio-fixture'
+import {installInterruptionProbe, type InterruptionEvidence} from './interruption-probe'
 import type {RtpPacketGap} from '../src/livekit/rtp-packet-sequence'
 import { fileURLToPath } from 'node:url'
 import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit/packet-renderer'
@@ -47,17 +48,14 @@ declare global {
       frameOrder: string[]
       liveKitOrder: string[]
       coreEventDiagnostics: Record<string, string | number | boolean | null>[]
+      coreEventDiagnosticsOverflow?: boolean
       responseSourceUtterances?: Record<string, string[]>
       micStates: ('off' | 'standby' | 'active')[]
       localStopAt?: number
       cancelRequestedAt?: number
       stoppedResponseId?: string
-      interruptions: {
-        responseId: string
-        speechStartedAtMs: number
-        localPlaybackStoppedAtMs: number
-        cancelConfirmedAtMs: number | null
-      }[]
+      interruptions: InterruptionEvidence[]
+      interruptionsOverflow?: boolean
     }
   }
 }
@@ -85,6 +83,7 @@ type CompletedVoiceCycle = {
 const installPlaybackProbe = async (page: Page) => {
   await page.addInitScript(installStaleTextProbe)
   await page.addInitScript(installUserControlProbe)
+  await page.addInitScript(installInterruptionProbe)
   await page.addInitScript(() => {
     window.__voiceChatE2E = {
       cycles: [],
@@ -174,6 +173,14 @@ const installPlaybackProbe = async (page: Page) => {
           transcript?: string
           decision?: string
           final?: boolean
+          track_sid?: string
+          input_generation?: number
+          start_sample?: number
+          active_end_sample?: number
+          detected_sample?: number
+          sample_rate?: number
+          monotonic_timestamp_ms?: number
+          clock_domain?: string
         }) => void
       }
     }
@@ -228,30 +235,7 @@ const installPlaybackProbe = async (page: Page) => {
           mediaByResponse.set(observation.mediaResponseId, observation.mediaObservation)
           applyMediaEvidence(observation.mediaResponseId)
         }
-        if (
-          observation.activeResponseId !== undefined
-          && observation.activeResponseId !== ''
-          && observation.speechStartedAtMs !== undefined
-          && observation.localPlaybackStoppedAtMs !== undefined
-        ) {
-          window.__voiceChatE2E.interruptions.push({
-            responseId: observation.activeResponseId,
-            speechStartedAtMs: observation.speechStartedAtMs,
-            localPlaybackStoppedAtMs: observation.localPlaybackStoppedAtMs,
-            cancelConfirmedAtMs: null,
-          })
-        }
-        if (
-          observation.activeResponseId !== undefined
-          && observation.cancelConfirmedAtMs !== undefined
-        ) {
-          const interruption = [...window.__voiceChatE2E.interruptions]
-            .reverse()
-            .find((candidate) => candidate.responseId === observation.activeResponseId)
-          if (interruption !== undefined) {
-            interruption.cancelConfirmedAtMs = observation.cancelConfirmedAtMs
-          }
-        }
+        window.__voiceInterruptionProbe!.observeRoom(observation)
         if ((observation.activeAudioGraphs ?? 0) > 0) appendOnce('room:audio-graph')
         if (
           observation.firstPlaybackAtMs !== undefined
@@ -270,6 +254,7 @@ const installPlaybackProbe = async (page: Page) => {
         }
       },
       receiveCoreEvent: (event) => {
+        window.__voiceInterruptionProbe!.receiveCoreEvent(event)
         // 本文は保存せず、応答開始前に失敗した試行も相関できる状態だけを残す。
         const diagnostics = window.__voiceChatE2E.coreEventDiagnostics
         diagnostics.push({
@@ -279,8 +264,15 @@ const installPlaybackProbe = async (page: Page) => {
           reasonCode: event.error_code ?? event.reason ?? null,
           transcriptLength: event.transcript?.length ?? null,
           decision: event.decision ?? null, final: event.final ?? null,
+          trackSid: event.track_sid ?? null, inputGeneration: event.input_generation ?? null,
+          startSample: event.start_sample ?? null, activeEndSample: event.active_end_sample ?? null,
+          detectedSample: event.detected_sample ?? null, sampleRate: event.sample_rate ?? null,
+          serverTimestampMs: event.monotonic_timestamp_ms ?? null, clockDomain: event.clock_domain ?? null,
         })
-        if (diagnostics.length > 256) diagnostics.shift()
+        if (diagnostics.length > 256) {
+          diagnostics.shift()
+          window.__voiceChatE2E.coreEventDiagnosticsOverflow = true
+        }
         if (
           event.type === 'utterance_finalized'
           && event.utterance_id !== undefined
@@ -534,9 +526,12 @@ export const createVoiceChatDriver = () => {
 
   const expectMicrophoneStandby = async (page: Page) => {
     await page.waitForFunction(() => {
-      const states = window.__voiceChatE2E.micStates
-      const activeIndex = states.indexOf('active')
-      return activeIndex >= 0 && states.slice(activeIndex + 1).includes('standby')
+      const events = window.__voiceChatE2E.coreEventDiagnostics
+      return events.some(stopped => stopped.type === 'speech_stopped'
+        && events.some(started => started.type === 'speech_started'
+          && started.utteranceId === stopped.utteranceId
+          && started.inputGeneration === stopped.inputGeneration
+          && started.trackSid === stopped.trackSid))
     }, undefined, { timeout: 15_000 })
   }
 
@@ -582,8 +577,10 @@ export const createVoiceChatDriver = () => {
 
   const waitForInterruptionEvidence = async (page: Page) => {
     const handle = await page.waitForFunction(() => {
+      if (window.__voiceChatE2E.interruptionsOverflow) throw new Error('interruption observations overflowed')
       const evidence = window.__voiceChatE2E.interruptions.find((candidate) => (
-        candidate.cancelConfirmedAtMs !== null
+        candidate.cancelConfirmedAtMs !== null && candidate.utteranceId !== null
+        && !candidate.ambiguousDecision && !candidate.duplicateStop
       ))
       return evidence ?? null
     }, undefined, { timeout: VOICE_RESPONSE_TIMEOUT_MS })
