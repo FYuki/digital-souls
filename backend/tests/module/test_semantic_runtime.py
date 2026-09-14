@@ -195,3 +195,20 @@ def test_response_schema_restricts_operation_and_target_pairs():
     assert not known.is_valid({"items": [{**item, "operation": "REAFFIRM", "target_key": None}]})
     assert not known.is_valid({"items": [{**item, "operation": "NEW", "target_key": "m0"}]})
     assert not known.is_valid({"items": [{**item, "operation": "CORRECT", "target_key": "m1"}]})
+
+
+@pytest.mark.parametrize("operation,target,keys", [("NEW", None, ()), ("CHANGE", "m0", ("m0",))])
+def test_self_report_subject_is_user_in_schema_and_decoded_output(operation, target, keys):
+    from jsonschema import Draft202012Validator
+    from app.memory.semantic.extractor import SemanticBatch, _response_schema
+
+    item = {"operation": operation, "target_key": target, "subject": "居住地", "predicate": "居住地",
+            "value": "大阪", "mutability": "CHANGEABLE", "self_report": True, "confidence": 1,
+            "sources": [{"source_key": "u0", "quote": "大阪に住んでいます"}]}
+    validator = Draft202012Validator(_response_schema(keys))
+    assert not validator.is_valid({"items": [item]})
+    with pytest.raises(ValidationError, match="self report must describe the user"):
+        SemanticBatch.model_validate({"items": [item]})
+    for valid in ({**item, "subject": "ユーザー"}, {**item, "subject": "富士山", "self_report": False}):
+        assert validator.is_valid({"items": [valid]})
+        assert SemanticBatch.model_validate({"items": [valid]}).items[0].subject == valid["subject"]
