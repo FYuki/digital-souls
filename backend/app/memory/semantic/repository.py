@@ -200,7 +200,7 @@ class SemanticTransaction:
             "UPDATE semantic_records SET status=?,updated_at=? WHERE character_id=? AND id=? AND status!='DELETED'",
             (status.value, self.now, character_id, str(record_id)),
         )
-        self._outbox(character_id, record_id, delete=status is not SemanticStatus.ACTIVE)
+        self._outbox(character_id, record_id, delete=status not in {SemanticStatus.ACTIVE, SemanticStatus.HISTORICAL})
 
     def invalidate(self, record: SemanticRecord, *, reason: str) -> None:
         self._write()

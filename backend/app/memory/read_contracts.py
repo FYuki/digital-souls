@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.memory.episodic.contracts import FiveW, RecordKind
+from app.memory.semantic.contracts import FormationType, Proposition
 from app.memory.persistence.contracts import ApprovedMemory, MemoryStatus, TemporalPrecision
 
 
@@ -31,7 +32,28 @@ class EpisodicMemoryView:
     expires_at: datetime | None = None
 
 
-ReadableMemory = ApprovedMemory | EpisodicMemoryView
+@dataclass(frozen=True)
+class SemanticMemoryView:
+    id: UUID
+    character_id: str
+    memory_type: FormationType
+    normalized_text: str
+    proposition: Proposition | None
+    policy_version: str
+    content_version: int
+    status: MemoryStatus
+    created_at: datetime
+    updated_at: datetime
+    last_user_mentioned_at: datetime | None
+    provider_id: str = "core"
+    memory_kind: str = "SEMANTIC"
+    occurred_at: datetime | None = None
+    occurred_timezone: str | None = None
+    occurred_precision: TemporalPrecision | None = None
+    expires_at: datetime | None = None
+
+
+ReadableMemory = ApprovedMemory | EpisodicMemoryView | SemanticMemoryView
 
 
 class MemoryReadRepository(Protocol):
