@@ -765,3 +765,14 @@ PCM受入の詳細は同じraw入力の `report_stt_pcm.py` に残す。
 BE版の相槌集計では、`core_events_overflow` と `interruptions_overflow` が
 ともにfalseであることを正常継続の必要条件にする。
 欠落した観測から誤停止なしと推定せず、確認済みの取消・停止は失敗件数として保持する。
+
+## #358 保存履歴の版間互換性
+
+`check_history_compatibility.py --before-repo <旧版worktree> --output <新しいreport.json>`
+をBackendの仮想環境Pythonで実行する。
+既存DBは入力せず、新規の一時SQLiteに旧版Repositoryで完了・中断・privacy除外の履歴を作成し、
+新版・旧版・新版で読み書きする。既存履歴の全テーブル行hashと、各段階の追記を照合する。
+workerのhashと各版commitを匿名reportへ保存する。
+assertを無効化するPython最適化実行、保存コードが基準から異なる版、既存outputの上書きは拒否する。
+これは[一括更新・切り戻し](../../docs/voice-backend-rollout.md)のうち保存形式の互換性確認であり、
+実ブラウザ・FE／BEの切替・人の実マイク受入とは分ける。

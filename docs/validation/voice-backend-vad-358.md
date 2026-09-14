@@ -454,3 +454,22 @@ GPU使用量変化とHTTP障害の因果関係・負荷を発生させたプロ�
 
 比較ハーネスの局所検証: 旧版集計62件成功、Svelte 0 errors / 0 warnings、E2E型検査成功。
 実サービスでのbefore測定・100試行前後比較は未実施。
+
+### M6: 保存履歴の旧版・新版往復と更新手順
+
+保存履歴実装とruntime data pathに `07b8b1e` からの変更がないことを確認したうえで、
+新規一時SQLiteを旧版 `67e1a03`（アプリ基準 `07b8b1e`）と新版 `09653c5` の
+実Repositoryから別プロセスで読み書きした。既存の会話・dogfoodデータは使用していない。
+
+- 旧版で完了・中断prefix・privacy除外の3turnと手動タイトル・archiveを作成。
+- 新版で既存状態を検証して1turn追加。旧版へ戻してその追加を確認し、さらに1turn追加。
+- 新版から全5turnを確認。4段階ともschema 9のままで、切替前後の全テーブル行hashが一致した。
+- character境界、privacy除外本文・policy情報、保存済み中断prefixを確認した。
+- [匿名artifact](../artifacts/voice-backend-358-history-roundtrip.json)と再実行CLIを保存した。
+  後者でも同じ4段階の確認が成功した。既存artifactは上書きしない。
+- 旧client拒否・bootstrap API、履歴schema・状態遷移の関連試験 **91 passed**。
+  API module試験のLiveKit資源はstubであり、実SFUへの旧client拒否の証跡とは区別する。
+
+[一括更新・切り戻し手順](../voice-backend-rollout.md)を既存Environment CLIに沿って整理した。
+同じdata rootとphase別run reportを使用し、所有FE／BEのみ停止する。
+通しの実切替、全cohortの前後100試行、人の実マイク・聴感は未実施のまま。
