@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.characters.loader import load_character_card, load_tts_config
+from app.characters.loader import IrodoriTtsConfig, load_character_card, load_tts_config
 from app.inference.contracts import ProviderTextResult
 from app.prompting import (
     CurrentUserMessage,
@@ -66,7 +66,11 @@ def test_should_build_runtime_prompt_from_shipped_character_card() -> None:
     assert character_prompt.post_history_instructions == ""
     assert len(prompt_contents) == 2
     assert prompt_contents[-1] == "現在ターンの入力"
-    assert tts_config.speaker_id == 14
+    assert isinstance(tts_config, IrodoriTtsConfig)
+    assert tts_config.voice_id == "miori-b3-4221"
+    assert tts_config.speed == 1.02
+    assert tts_config.seed == 4221
+    assert tts_config.num_steps == 40
 
 
 def test_should_omit_final_instruction_when_card_field_is_missing(

@@ -224,10 +224,12 @@
     "extensions": {
       "digital_souls": {
         "tts_config": {
-          "engine": "voicevox",
-          "speaker_id": 14,
-          "speaker_name": "冥鳴ひまり",
-          "style_name": "ノーマル"
+          "engine": "irodori",
+          "voice_id": "miori-b3-4221",
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "speed": 1.02,
+          "num_steps": 40
         }
       }
     }
