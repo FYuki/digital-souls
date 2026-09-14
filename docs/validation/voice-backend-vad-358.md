@@ -415,3 +415,42 @@ BE版は両probeの完全観測を明示必須にし、欠測・不正値・over
 
 修正後、相槌・take-turn・VAD集計の関連試験 **108 passed**、変更ファイルRuff成功。
 全100試行の相槌受入を意味するものではない。
+
+### M5: 実相槌pilotと100試行の中止記録
+
+`9ebc209` の実Browser／LiveKit／Whisper／Ollama／VOICEVOXで相槌3試行を実行し、
+BE相槌判定・旧回答の全出力継続・session終了を全3件で確認した。
+[相槌集計](../artifacts/voice-backend-358-backchannel-pilot.json)は誤停止・取消・欠測0。
+[実PCM集計](../artifacts/voice-backend-358-backchannel-pcm-pilot.json)も端部一致3件、欠測0。
+全体位置ずれが非一様な1件は端部一致とは別に残す。100件条件は未達のまま。
+
+同じ版・固定順で100試行を開始したが、run中にGPU使用メモリが約5.2GBから16.5GB、
+使用率がほぼ100%へ変化し、共有Whisperが504の後に503を繰り返した。
+同条件比較を成立させられないため、所有確認したPlaywrightへSIGINTを送り終了した。
+GPU使用量変化とHTTP障害の因果関係・負荷を発生させたプロセスは未確定である。
+
+[中止runの匿名証跡](../artifacts/voice-backend-358-backchannel-interrupted.json):
+
+- 期待100件、記録済み16件（成功8・失敗8）、未記録84件。
+  PCM観測には17件目の開始が含まれるため、84件をすべて未開始とは扱わない。
+- 記録済み16件のsession終了を確認。中止された17件目の試行成功は補完しない。
+- 失敗内訳: 再生継続確認3件、初期応答5件。
+  前者には相槌判定があり、実停止・取消・transport failureの記録はないが全出力完了証跡がない。
+  後者にはstt_upstream_failedが記録されている。
+- PCM中継の上流HTTP観測: 200が41件、504が2件、503が10件。
+  最大観測待ち時間は約46秒。HTTP要求数は試行数とは区別する。
+- pilot終了コード130。途中runを完全cohortのreporterへ投入して合格にしない。
+  raw manifest・trace・PCM observer・資源観測・中止記録をhashとともに保持した。
+- 専用LiveKit／Backend／Frontend／PCM中継を停止し、
+  7880／7881／8000／5173／4174／50023閉鎖を確認。共有推論・別タスクのOllamaは変更していない。
+
+### 移設前比較用ハーネスの準備
+
+専用branch `codex/358-baseline-measurement`、commit `67e1a03` を作成した。
+アプリ基準 `07b8b1e` のbackend／frontend/src／contracts／environments／characters／infraを保持し、
+測定ハーネスとreporter・schemaだけをそろえた。旧FE版のinput_authorityはfrontendを明示する。
+旧controller hookとマイク待機の観測を残し、旧FEのVAD判断をBE版へ変えていない。
+基準tree、計測コード出典、検証範囲を同branchの匿名artifactと日本語文書に保存した。
+
+比較ハーネスの局所検証: 旧版集計62件成功、Svelte 0 errors / 0 warnings、E2E型検査成功。
+実サービスでのbefore測定・100試行前後比較は未実施。
