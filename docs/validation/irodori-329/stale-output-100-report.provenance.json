@@ -1,0 +1,40 @@
+{
+  "report": "stale-output-100-report.json",
+  "report_sha256": "2d450c597617323e7d02ef23be63dc45841785908f084e820acb3f80e1450dfc",
+  "measurement_revision": "dbc620e3c1eb4b0b44067321cbee96b2cb3ced23",
+  "run_id": "irodori-329-take-turn-100-01",
+  "storage": {
+    "kind": "local_directory",
+    "host": "WSL Ubuntu",
+    "path": "/home/asa/dev/digital-souls-evidence/irodori-329/irodori-329-take-turn-100-01",
+    "original_run_path": "/tmp/digital-souls-329-measure-irodori/frontend/test-results/livekit-quality/runs/irodori-329-take-turn-100-01",
+    "access": "ローカル所有ユーザー限定。生ログは公開リポジトリへ含めない。"
+  },
+  "primary_evidence": [
+    {
+      "relative_path": "trial-manifest.json",
+      "sha256": "920499893150f4d787dc72c4fa2ea40f46d9274aff1f99d3421c9af3ccc3eba4",
+      "bytes": 394812909
+    },
+    {
+      "relative_path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+      "sha256": "04e39b347857d4894e87042149b0882becdaf28fcdf79d9c93c9b42cc91109f7",
+      "bytes": 9807670
+    },
+    {
+      "relative_path": "playwright-results.json",
+      "sha256": "1a6d7539748906317479bf1dd608a424c60e119c464cfbd7d47801c5d4624aaf",
+      "bytes": 5459
+    },
+    {
+      "relative_path": "inference-runtime.jsonl",
+      "sha256": "737f7b2aca41ae423a4a091959907e237a316a699636d210a7fb03fed008dd45",
+      "bytes": 1345349
+    },
+    {
+      "relative_path": "native-sdk.json",
+      "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+      "bytes": 505
+    }
+  ]
+}
