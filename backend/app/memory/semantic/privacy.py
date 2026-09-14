@@ -27,7 +27,12 @@ class SemanticPrivacyReviewer:
             if result.findings or any(value in text for _, value in self.policy.placeholders):
                 return PrivacyReview(False, "SENSITIVE_OR_OPT_OUT")
         assessment: PrivacyAssessment | None = None
-        for text in dict.fromkeys((*source_texts, proposition.content)):
+        classified_content = proposition.content
+        if proposition.self_report and proposition.subject == "ユーザー" and classified_content.startswith("ユーザーの"):
+            # 抽出時に三人称へ正規化した自己申告を、元の話者視点で検査する。
+            # 原文と全slotは上でそのままscannerへ渡し、元の出典も必ず意味分類する。
+            classified_content = "私の" + classified_content.removeprefix("ユーザーの")
+        for text in dict.fromkeys((*source_texts, classified_content)):
             assessment = self.classifier.classify(text, ADMISSION)
             if assessment.policy_version != self.policy.policy_version:
                 return PrivacyReview(False, "POLICY_VERSION_CHANGED", retryable=True)

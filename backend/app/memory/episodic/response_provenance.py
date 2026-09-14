@@ -79,8 +79,10 @@ def record_response(
         exists = connection.execute(
             """SELECT 1 FROM episodic_versions WHERE character_id=? AND record_id=? AND content_version=?
                UNION ALL SELECT 1 FROM approved_memories WHERE character_id=? AND id=?
-               AND content_version>=?""",
-            (character_id, str(memory_id), version, character_id, str(memory_id), version),
+               AND content_version>=?
+               UNION ALL SELECT 1 FROM semantic_versions WHERE character_id=? AND record_id=? AND content_version=?""",
+            (character_id, str(memory_id), version, character_id, str(memory_id), version,
+             character_id, str(memory_id), version),
         ).fetchone()
         if exists is None:
             raise ValueError("memory reference is outside the character or unavailable")
@@ -145,6 +147,29 @@ def invalid_provenance(
         for source in sources:
             if source.role == "assistant":
                 dependencies[node].update(by_turn[str(source.source_id)])
+    # Semanticも回答の版付き依存に加える。Episode/Factと同じ有効性の固定点で循環を拒否する。
+    from app.memory.semantic.contracts import SemanticSource
+    for record_id, version, status, current, content, sources_json in connection.execute(
+        """SELECT v.record_id,v.content_version,r.status,r.content_version,v.proposition,v.sources
+           FROM semantic_versions v JOIN semantic_records r
+           ON r.character_id=v.character_id AND r.id=v.record_id WHERE v.character_id=?""",
+        (character_id,),
+    ):
+        node = str(record_id), int(version)
+        semantic_sources = tuple(SemanticSource.model_validate(s) for s in json.loads(sources_json))
+        safe = status in {"ACTIVE", "HISTORICAL"} and version == current and content is not None
+        for semantic_source in semantic_sources:
+            if semantic_source.kind == "EPISODE":
+                dependencies[node].add((str(semantic_source.source_id), semantic_source.revision))
+            elif semantic_source.kind == "CONVERSATION":
+                span = semantic_source.span
+                assert span is not None
+                if source_validator is not None and not source_validator(semantic_source.conversation_id, (span,)):
+                    safe = False
+                if span.role == "assistant":
+                    dependencies[node].update(by_turn[str(span.source_id)])
+        if safe:
+            eligible.add(node)
     legacy_nodes: set[MemoryVersion] = set()
     removed_turns = {str(source.source_id) for source in masks}
     removed_turns.update(source_id for source_id, _ in invalid_sources)

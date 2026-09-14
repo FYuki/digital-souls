@@ -9,9 +9,13 @@ from collections.abc import Callable
 import threading
 
 from app.memory.formation.contracts import MemoryFormationJob
-from app.memory.formation.thread_queue import ThreadFormationQueue
+
 
 logger = logging.getLogger(__name__)
+
+
+class PendingWork(Protocol):
+    def has_pending(self) -> bool: ...
 
 
 class DurableWorker(Protocol):
@@ -19,7 +23,7 @@ class DurableWorker(Protocol):
 
 
 class DurableMemoryFormationScheduler:
-    def __init__(self, *, worker: DurableWorker, queue: ThreadFormationQueue, poll_seconds: float = 1) -> None:
+    def __init__(self, *, worker: DurableWorker, queue: PendingWork, poll_seconds: float = 1) -> None:
         if not math.isfinite(poll_seconds) or poll_seconds <= 0:
             raise ValueError("poll interval must be positive")
         self._worker = worker
@@ -79,7 +83,7 @@ class DurableMemoryFormationScheduler:
                     f"{trace.tb_frame.f_code.co_name}:{trace.tb_lineno}"
                 )
                 # 例外本文・stackのソース行・localsには元会話が入り得る。コード位置だけ記録する。
-                logger.warning("episodic formation failed: error_type=%s error_site=%s",
+                logger.warning("memory formation failed: error_type=%s error_site=%s",
                                type(error).__name__, site)
                 worked = False
             finally:
