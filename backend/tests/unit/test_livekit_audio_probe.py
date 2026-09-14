@@ -105,7 +105,7 @@ def test_probe_uses_real_pacer_and_waits_for_complete_before_retiring_track(rig)
         assert not rig.tasks[0].done() and not rig.sources[0].closed
         assert bytes(rig.sources[0].pcm) == audio_probe.probe_pcm() + bytes(1920)
         assert rig.tracks[0].name == 'ds-audio-probe-v1:' + A
-        assert rig.frames == [dict(protocol_version='1.0', type='audio_probe_finished', probe_id=A,
+        assert rig.frames == [dict(protocol_version='2.0', type='audio_probe_finished', probe_id=A,
             generation=1, track_sid=SID, input_sample_count=9600, captured_sample_count=10560, padding_sample_count=960)]
         rig.output.receive('audio_probe_complete', A, 1, SID)
         await asyncio.wait_for(rig.tasks[0], 1)

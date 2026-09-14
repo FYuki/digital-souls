@@ -65,3 +65,20 @@ M3／M4接続実装（`b0b0452`）に対して、既存のApp・録音UI・共�
 - `cd frontend && npm run check`: Svelte **0 errors / 0 warnings**、E2E／integrationのTypeScript検査成功。
 
 このUI単体試験ではRoomとBE通知をモックしている。実PCMからの境界検出、実LiveKit／STT／LLM／TTSの往復、ブラウザE2Eの実行、移設前後の品質測定、人による実マイク・聴感の受入を証明するものではない。Backendの既存試験とM5／M6は継続中。
+
+
+## 2026-09-15: 既存Backend契約試験の移行
+
+- Core／private protocolのfixtureを2.0へ更新した。配送の重複排除・ACK・再送・終端・再接続・認証の試験を維持した。
+- old participant SIDの配送拒否試験では、clientから送れる`session_resumed`を使用する。BE専用の`session_started`をclient入力として許可する変更は行っていない。
+- bootstrapにtransport versionを追加し、非対応・未指定transport、および旧Core 1.1のclientを、Room／session／runtime／token作成前に拒否する試験を追加した。
+- 音声出力の単体試験はSDK package全体の差し替えをやめ、AudioSource／track出力APIだけを置き換える。AudioFrameとFrameProcessorは実SDK型を使用する。
+
+検証結果:
+
+- `test_livekit_private_contract.py`、`test_livekit_delivery_and_lifecycle.py`、`test_livekit_audio_probe.py`、`test_voice_session_contract.py`、`test_livekit_bootstrap_api.py`: **145 passed、0 failed**。
+- `test_livekit_playback_summary.py`、`test_livekit_response_audio.py`: **31 passed、0 failed**。
+- その他の既存LiveKit単体試験をファイルごとに棚卸しした。入力抑止・capture lineage・preview・runtimeの計43件は、旧FE発話イベント等に依存するため未移行。これらの失敗を合格・skipへ置き換えず、BE境界・実SDK readerに対応する検証へ更新する必要がある。
+- 最初の一括実行は、無効な旧protocolの送信でcleanup待機へ入り進行しなかったため中断した。protocol fixture更新後、該当する配送suiteは上記145件の一部として正常完了した。
+
+Backend全体の合格、実サービスの往復、M5／M6の受入完了は引き続き未確認。
