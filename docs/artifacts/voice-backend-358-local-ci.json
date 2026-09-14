@@ -1,0 +1,140 @@
+{
+  "scope": "local_ci_equivalent_validation",
+  "tested_commit": "908f966677ea4d01ef5c400437660535029fbfe6",
+  "checks": [
+    {
+      "name": "unit",
+      "exit": 0,
+      "elapsed_seconds": 77.7530940430006,
+      "passed_count": 3929,
+      "log_sha256": "d3e1d38216bd648a3878d5fd533bf4cff26bc1b2595bbf5b4636e94c7715925c",
+      "component": "backend"
+    },
+    {
+      "name": "module",
+      "exit": 0,
+      "elapsed_seconds": 463.2472079889849,
+      "passed_count": 1797,
+      "log_sha256": "4c88bf8dec37c2d6f8718c79e18f98b0aeccba824ca0bc002beeba663e77c14c",
+      "component": "backend"
+    },
+    {
+      "name": "generated",
+      "exit": 0,
+      "elapsed_seconds": 1.768494332965929,
+      "passed_count": null,
+      "log_sha256": "ba5b7281147cf0e5397df735680f8c7faec02f2ff5487f5eb28a126a3a8c6f2a",
+      "component": "frontend"
+    },
+    {
+      "name": "check",
+      "exit": 0,
+      "elapsed_seconds": 6.062278565019369,
+      "passed_count": null,
+      "log_sha256": "81a8687a4acb09cec24a45c9822e2e7751b9b8de1d3d7a3eb8f7a0ba8e22f4e8",
+      "component": "frontend"
+    },
+    {
+      "name": "build",
+      "exit": 0,
+      "elapsed_seconds": 2.9760923179564998,
+      "passed_count": null,
+      "log_sha256": "5a49d564e905cd3168176cd99cbaffe95e820109ddb4a992c7af64c92efd35af",
+      "component": "frontend"
+    },
+    {
+      "name": "unit",
+      "exit": 0,
+      "elapsed_seconds": 13.807963956031017,
+      "passed_count": 898,
+      "log_sha256": "e7245e4fe2488c1a78869af7477aa75b65a3b83f8bced064b17d8add2d9ab546",
+      "component": "frontend"
+    },
+    {
+      "name": "module",
+      "exit": 0,
+      "elapsed_seconds": 6.988568603002932,
+      "passed_count": 141,
+      "log_sha256": "fe56f598be3709c8e643fef9e4a67735ff5d0af36bc269c8350be00ea33ff024",
+      "component": "frontend"
+    },
+    {
+      "name": "application_dev",
+      "exit": 0,
+      "elapsed_seconds": 0.195050120993983,
+      "passed_count": null,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "component": "container-contracts"
+    },
+    {
+      "name": "application_dogfood",
+      "exit": 0,
+      "elapsed_seconds": 0.04613134101964533,
+      "passed_count": null,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "component": "container-contracts"
+    },
+    {
+      "name": "whisper",
+      "exit": 0,
+      "elapsed_seconds": 0.038477459049317986,
+      "passed_count": null,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "component": "container-contracts"
+    },
+    {
+      "name": "irodori",
+      "exit": 0,
+      "elapsed_seconds": 0.06252354802563787,
+      "passed_count": null,
+      "log_sha256": "57f208a1069c0f2c828c6aa0b8d131aff1f7a67ebd944460928f837ce4ef7b08",
+      "component": "container-contracts"
+    },
+    {
+      "name": "application_build",
+      "exit": 0,
+      "elapsed_seconds": 3.3599971840158105,
+      "passed_count": null,
+      "log_sha256": "b0072fdbeeb376f0c49f3d7482ac399a70e0f9b5563d843cbf7333d9b29e989c",
+      "component": "container-contracts"
+    },
+    {
+      "name": "mocked-e2e",
+      "exit": 0,
+      "elapsed_seconds": 11.638037943979725,
+      "passed_count": 56,
+      "log_sha256": "5db3bd88a5c981aea4b60266c6cef0c3d4a8c10b356535ead6f1d76f518c3d68",
+      "component": "mocked-e2e"
+    }
+  ],
+  "all_completed_checks_passed": true,
+  "python_mypy_source_files": 337,
+  "svelte_errors": 0,
+  "svelte_warnings": 0,
+  "frontend_unit_workers": 4,
+  "first_unit_attempt": {
+    "passed": 3928,
+    "failed": 1,
+    "test": "test_reflection_invalidation_covers_old_records_and_preserves_new_revision",
+    "updated_before_created_ms": 1283.233,
+    "affected_code_diff_from_baseline": false,
+    "isolated_baseline_test_passed": true,
+    "cause_confirmed": false,
+    "failure_retained": true
+  },
+  "remote_ci_verified_for_this_commit": false,
+  "real_service_acceptance": false,
+  "limitations": [
+    "ローカルのCI範囲検証であり、未pushのremote CI成功ではない",
+    "初回unit失敗の時刻逆転原因は未確定。再実行成功で解消済みとはしない",
+    "buildの500kB超chunk警告は残る",
+    "実サービス100試行・人の実マイク受入とは別の証跡"
+  ],
+  "baseline_image_build": {
+    "baseline_harness_commit": "67e1a03e232a5e75ca717ec28bc720e00f267849",
+    "application_commit": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+    "exit": 0,
+    "elapsed_seconds": 20.49180392798735,
+    "services_started": false
+  }
+}

@@ -473,3 +473,33 @@ GPU使用量変化とHTTP障害の因果関係・負荷を発生させたプロ�
 [一括更新・切り戻し手順](../voice-backend-rollout.md)を既存Environment CLIに沿って整理した。
 同じdata rootとphase別run reportを使用し、所有FE／BEのみ停止する。
 通しの実切替、全cohortの前後100試行、人の実マイク・聴感は未実施のまま。
+
+### ローカルCI全体の再確認
+
+`908f966` で正式CIのunit／module／生成契約／型／build／mocked E2E範囲を検証した。
+[匿名集計](../artifacts/voice-backend-358-local-ci.json)に各チェックの終了結果とログhashを保持した。
+
+- Backend unit: 初回 **3928 passed / 1 failed**。音声移設で変更していないcharacter lifeの
+  reflection invalidation試験で、更新時刻が作成時刻より約1,283ms前になっていた。
+  当該テストは固定baselineで単独成功したが、時刻逆転の根本原因は未確定である。
+- 同じunit全体の再実行: **3929 passed**。初回失敗を削除・解消済みへ読み替えない。
+- Backend module: **1797 passed**。
+- Frontend unit: **898 passed**（4worker）、module: **141 passed**。
+- mocked E2E: **56 passed**。
+- 生成契約の再生成差分0、mypy337ファイル成功、Svelte 0 errors / 0 warnings、E2E型成功。
+- Application dev／dogfood・Whisper・IrodoriのCompose契約検証成功。
+  FE／BE imageは検証commit専用タグでbuild成功。サービス起動・配備は行っていない。
+- 旧アプリ基準の比較用 `67e1a03` も専用FE／BE imageのbuild成功。
+  同じ固定fixture 300件のhashを照合し、比較用worktreeから参照できるようにした。
+
+これらはローカル結果であり、未pushのremote CI成功・Epic統合の承認条件を満たしたとは扱わない。
+Frontendの500kB超chunk警告と既存の非推奨警告は残る。
+
+### 共有Whisperの復旧確認
+
+GPU使用量が約5GB・使用率0%に戻りreadiness 200を確認した後、
+既存PCM observerと同じ固定音声変換で1回の実STTを実行した。
+HTTP200・空でない転写を確認し、[数値証跡](../artifacts/voice-backend-358-whisper-availability.json)を保存した。
+サービスの再起動・設定変更は行っていない。
+追加変換ライブラリ・外部変換器がないことによる診断準備の失敗は推論失敗に数えず、
+既存変換を再利用して確認した。1回の成功を継続安定性や100試行合格へ読み替えない。
