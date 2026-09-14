@@ -15,6 +15,14 @@ VERIFY_TIMEOUT_SECONDS = 1.0
 MAX_OBSERVATION_WINDOWS = 512
 
 
+class AudioIntegrityFault(AudioInputFault):
+    """欠測の範囲と原因を数値だけで返し、通常の会話本文・統計IDは保持しない。"""
+
+    def __init__(self, code: str, statistics: dict[str, int]) -> None:
+        super().__init__(code)
+        self.statistics = statistics
+
+
 @dataclass(frozen=True)
 class _Counters:
     identifier: str
@@ -74,6 +82,11 @@ class MicrophoneIntegrity:
         self._lock = asyncio.Lock()
         self._closed = False
         self._ready = asyncio.Event()
+        self._observations = 0
+        self._read_errors = 0
+        self._identity_changes = 0
+        self._stale_snapshots = 0
+        self._counter_regressions = 0
 
     async def observe(self) -> None:
         async with self._lock:
@@ -87,6 +100,7 @@ class MicrophoneIntegrity:
             except asyncio.CancelledError:
                 raise
             except Exception as error:
+                self._read_errors += 1
                 raise AudioInputFault("audio_integrity_unavailable") from error
             if self._closed:
                 raise AudioInputFault("audio_integrity_unavailable")
@@ -94,20 +108,24 @@ class MicrophoneIntegrity:
             if previous is None:
                 self._known_start = position
             else:
-                if (
-                    current.identifier != previous.identifier
-                    or current.timestamp <= previous.timestamp
-                    or current.concealed < previous.concealed
-                    or current.silent < previous.silent
-                ):
+                identity_changed = current.identifier != previous.identifier
+                stale = current.timestamp <= previous.timestamp
+                regressed = (current.concealed < previous.concealed
+                             or current.silent < previous.silent)
+                self._identity_changes += identity_changed
+                self._stale_snapshots += stale
+                self._counter_regressions += regressed
+                if identity_changed or stale or regressed:
                     raise AudioInputFault("audio_integrity_unavailable")
                 missing = (current.concealed - previous.concealed) - (
                     current.silent - previous.silent
                 )
                 if missing < 0:
+                    self._counter_regressions += 1
                     raise AudioInputFault("audio_integrity_unavailable")
                 if missing >= 48000 * 80 // 1000:
                     self._faults.append((self._covered_end, position, "audio_gap"))
+            self._observations += 1
             self._previous = current
             self._covered_end = position
             self._ready.set()
@@ -144,6 +162,21 @@ class MicrophoneIntegrity:
                 raise AudioInputFault(reason)
         return True
 
+    def statistics(self, start_sample: int, end_sample: int) -> dict[str, int]:
+        return {
+            "input_integrity_initial_observation_available": int(self._known_start is not None),
+            "input_integrity_known_start_sample": self._known_start or 0,
+            "input_integrity_covered_end_sample": self._covered_end,
+            "input_integrity_source_position_sample": self._position(),
+            "input_integrity_requested_start_sample": start_sample,
+            "input_integrity_requested_end_sample": end_sample,
+            "input_integrity_observations": self._observations,
+            "input_integrity_read_errors": self._read_errors,
+            "input_integrity_identity_changes": self._identity_changes,
+            "input_integrity_stale_snapshots": self._stale_snapshots,
+            "input_integrity_counter_regressions": self._counter_regressions,
+        }
+
     async def verify(self, start_sample: int, end_sample: int) -> None:
         if start_sample < 0 or end_sample < start_sample:
             raise AudioInputFault("audio_integrity_unavailable")
@@ -164,7 +197,13 @@ class MicrophoneIntegrity:
                             return
                     await asyncio.sleep(POLL_SECONDS)
         except TimeoutError as error:
-            raise AudioInputFault("audio_integrity_unavailable") from error
+            raise AudioIntegrityFault(
+                "audio_integrity_unavailable", self.statistics(start_sample, end_sample)
+            ) from error
+        except AudioInputFault as error:
+            raise AudioIntegrityFault(
+                error.code, self.statistics(start_sample, end_sample)
+            ) from error
 
     def close(self) -> None:
         self._closed = True

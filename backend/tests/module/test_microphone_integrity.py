@@ -207,3 +207,27 @@ def test_cancelled_readiness_does_not_cancel_statistics_monitor():
         await monitor.wait_ready()
         monitor.close()
     asyncio.run(scenario())
+
+
+def test_integrity_timeout_exposes_numeric_range_and_stale_snapshot_counts(monkeypatch):
+    monkeypatch.setattr("app.livekit_transport.microphone_integrity.VERIFY_TIMEOUT_SECONDS", 0.02)
+    async def scenario():
+        from app.livekit_transport.microphone_integrity import AudioIntegrityFault
+        position = 1600
+        async def read():
+            return report(1)
+        monitor = MicrophoneIntegrity(read, lambda: position)
+        await monitor.observe()
+        position = 3200
+        with pytest.raises(AudioIntegrityFault) as captured:
+            await monitor.verify(0, 3200)
+        values = captured.value.statistics
+        assert all(type(value) is int and value >= 0 for value in values.values())
+        assert values["input_integrity_known_start_sample"] == 1600
+        assert values["input_integrity_covered_end_sample"] == 1600
+        assert values["input_integrity_requested_start_sample"] == 0
+        assert values["input_integrity_requested_end_sample"] == 3200
+        assert values["input_integrity_observations"] == 1
+        assert values["input_integrity_stale_snapshots"] >= 1
+        monitor.close()
+    asyncio.run(scenario())

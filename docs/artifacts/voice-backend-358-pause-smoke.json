@@ -50,5 +50,23 @@
   "cleanup": {
     "owned_services_stopped": true,
     "shared_inference_preserved": true
+  },
+  "readiness_retry": {
+    "measurement_revision": "0f0a028a87ba105304ae0d26cba2b13f8880d3b9",
+    "counts": {
+      "expected": 3,
+      "success": 2,
+      "failed": 1,
+      "pcm_edges_matched": 2,
+      "session_end_confirmed": 3
+    },
+    "first_failure": "初期応答のaudio_integrity_unavailableが再現。準備待ちだけでは解消していない。",
+    "pcm_report": "voice-backend-358-pause-pcm-pilot-ready.json",
+    "evidence_sha256": {
+      "trial-manifest.json": "9a23a9f74dd45ab86e3a636f73317411c0c1ad9adef148e4c455d979ce8a6a50",
+      "whisper-input-pcm.jsonl": "4b31280240ff2fc922bcf7894acc6f4df2cd162b9fd2f58594fdbea08ea42b90",
+      "runtime-data/voice-metrics/controlled-trace.jsonl": "28cfa3325dd36dc45cbbd83bceff9e7ec1e7755804a3483687f8d9a3167c873e",
+      "playwright-results.json": "b90c81de1d01c8627845219b3cb3eb52ba77f29c47152485d814f65bc95486c8"
+    }
   }
 }

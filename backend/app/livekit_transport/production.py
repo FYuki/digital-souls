@@ -54,7 +54,7 @@ from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.microphone_frames import (
     MicrophoneFrameClock, MICROPHONE_FRAME_MS, MICROPHONE_QUEUE_CAPACITY,
 )
-from app.livekit_transport.microphone_integrity import MicrophoneIntegrity
+from app.livekit_transport.microphone_integrity import AudioIntegrityFault, MicrophoneIntegrity
 from app.voice_input.models import check_ready
 from app.voice_input.pipeline import AudioInputFault, VoiceInputPipeline
 from app.voice_input.session import BackendVoiceInput, InputGrant, SpeechBoundary
@@ -1080,6 +1080,12 @@ class _ConversationCoreBridge:
                 boundary.grant.track_sid, boundary.detection.started_sample, boundary.detection.detected_sample,
             )
         except AudioInputFault as error:
+            if self._measurement is not None and isinstance(error, AudioIntegrityFault):
+                for name, value in error.statistics.items():
+                    self._measurement.record_utterance_event(
+                        utterance_id=boundary.utterance_id, name=name, stage="input_integrity",
+                        value=value,
+                    )
             self._audio_discarded(boundary.utterance_id, error.code)
             # 先行発話が失敗しても、別世代で終了・検証済みの後続を滞留させない。
             await self._finalize_user_audio_if_ready()

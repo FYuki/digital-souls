@@ -347,3 +347,14 @@ audio_integrity_unavailableで破棄され、ラベル付き音声の投入へ�
 
 局所検証: 統計準備の待機・終了・取消とruntime **76 passed**、
 正式Ruff成功、mypy **337 files成功**。
+
+
+統計準備待ちを追加した `0f0a028` の同じ3試行でも、初回は同理由で失敗し、
+後続400ms／600msの2件は誤分割なし・実PCM端部一致だった。
+[2回目のPCM集計](../artifacts/voice-backend-358-pause-pcm-pilot-ready.json)にも
+全3件を残す。準備待ちを実測失敗の修正完了とは扱わない。
+
+原因を絞るため、統計確認のtimeout／失敗時に要求sample範囲・確認済み範囲と、
+統計取得失敗・ID変更・stale snapshot・counter逆行の件数を既存のutterance traceへ記録する。
+本文・PCM・統計の識別子は転記しない。失敗・閾値・待機上限の判定は変更しない。
+追加後の局所検証: **77 passed**、正式Ruff・mypy成功。
