@@ -1,5 +1,7 @@
 # Conversation Session共通clientの利用境界（2026-09）
 
+> #358のBE VAD・正式発話境界と一括移行は[Backend集約ADR](voice-backend-authority-2026-09.md)を優先する。移設は未実装・未受入であり、本書の既存入力操作・response終端・履歴契約と過去の実装記録は維持する。
+
 #319 / #323のclient実装。動作契約は[音声・テキスト併用Conversation Session契約](conversation-session-text-input-2026-09.md)を正本とする。Web入力欄への配線は#324、focus/muteのdevice接続は#325、テキスト優先の横断統合は#326で行う。
 
 ## 接続と送信
