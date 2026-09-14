@@ -205,3 +205,23 @@ VAD／reader実行時障害の追加監査、更新・切り戻し、人の実�
 
 未完了: 実環境での障害注入、M5の実発話起点の計測相関、全cohortの同条件前後比較、
 残る割り込み・混在操作の実受入、更新・切り戻し、人の実マイク・聴感確認。
+
+
+### コンテナ検証でのnative終了競合
+
+`f86b31b` のCI run `34887311350` で、Backendイメージ構築中の
+`FfiClient.instance` 初期化チェックがexit 134（native workerのnon-unwinding panic）で失敗した。
+このstageはアプリコードのCOPY前であり、VAD処理の実行中ではない。
+
+- 既存の専用Backendイメージをnetworkなしで起動して同じコマンドを繰り返すと、
+  5回目にexit 139と同じpanicを再現した。成功4回だけで一過性・解消済みとは判定しなかった。
+- 固定版[FFI dispose](https://github.com/livekit/rust-sdks/blob/63128d01d955d9d8967544f46cff64a361232bf6/livekit-ffi/src/cabi.rs)と
+  [server終了処理](https://github.com/livekit/rust-sdks/blob/63128d01d955d9d8967544f46cff64a361232bf6/livekit-ffi/src/server/mod.rs)、
+  導入済みPython 1.1.16のatexit登録を照合した。Python終了とnative callbackの競合が疑われる。
+- build検証内でSDKのFFIを明示disposeする条件では、同一イメージで **30回連続exit 0**。
+  Dockerfileの初期化・version確認を維持したまま、この解放を追加した。
+- SDK版・native patch・モデル設定は変更していない。これは短時間で終了するbuildチェックの
+  修正であり、稼働中の実会話や全SDK終了経路が検証済みであるという意味ではない。
+
+- 変更したDockerfileで専用Backendイメージの構築成功。初期化・disposeのRUNを実行し、
+  SDK build cacheを保持した。実ブラウザでの回帰確認は後続の計測移行と合わせて行う。

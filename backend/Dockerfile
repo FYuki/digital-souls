@@ -24,7 +24,9 @@ COPY backend/requirements.txt /tmp/backend-requirements.txt
 RUN python -m pip install --no-cache-dir --requirement /tmp/backend-requirements.txt
 COPY --from=sdk-build /native-livekit /opt/digital-souls/livekit
 ENV LIVEKIT_LIB_PATH=/opt/digital-souls/livekit/liblivekit_ffi.so
-RUN python -c 'import json; from importlib.metadata import version; from livekit.rtc._ffi_client import FfiClient; record=json.load(open("/opt/digital-souls/livekit/build.json")); assert version("livekit") == record["python_sdk_version"]; assert FfiClient.instance is not None'
+# 固定SDKのnative callbackをPython終了処理と競合させない。
+# atexit任せにせず、この短いbuild検証内でFFIを解放する。
+RUN python -c 'import json; from importlib.metadata import version; from livekit.rtc._ffi_client import FfiClient; record=json.load(open("/opt/digital-souls/livekit/build.json")); assert version("livekit") == record["python_sdk_version"]; assert FfiClient.instance is not None; FfiClient.instance._ffi_lib.livekit_ffi_dispose()'
 COPY backend /app/backend
 COPY characters /app/characters
 COPY contracts /app/contracts
