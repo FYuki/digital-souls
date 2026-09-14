@@ -205,3 +205,43 @@ mypy 287ファイル、ruffが成功。実モデル・実UIでのこの追加ケ
 1回目の開始時には既存のnomicも一時的に常駐していたため、Ollama合計にはこれを含む。
 共有GPU全体の値は他プロセスを含み、定期観測値は瞬間最大値の保証ではない。
 各回のp95、tokens、モデル別メモリ、観測範囲は上記の確定結果JSONに含めた。
+
+## 最終比較と最新実装のUI実接続（2026-09-15）
+
+semantic-v6の固定100ケース×各3回、計600ケースが完了した。
+12Bは3回とも各分類90%以上・禁止ケース誤採用0件で合格。
+E4Bは3回とも不合格で、毎回safety-06～10の5件を誤採用した。
+E4Bの各回の成績は同一で、直接知識80%、出来事除外10%、明示確認10%、再言及80%、
+時間変化100%、明示訂正90%、固定属性矛盾30%、自己申告優先0%、根拠除外20%、安全境界50%。
+実行エラーは各回3件。共通promptでのE4B採用条件は満たさない。
+
+ケース処理時間中央値は12Bが3.573／3.543／3.563秒、E4Bが10.067／10.089／10.060秒。
+[全600ケースの集計](semantic-memory-341-v6-comparison.json)に各回の誤判定、tokens、p95、メモリと観測範囲を保存した。
+これは品質比較の確定であり、会話併走時の負荷を許容した判断ではない。12Bの正式採用は引き続き未確定。
+
+実装commit `40e3db2320f69b42f5bf322be3204e0b6a897713`、
+専用root `/tmp/ds-memory-341-c3yq075l`、run `a60d7e0a-b16a-466f-93b8-9c880e39bb2f`で、
+以前に通常会話から形成した矛盾を実ブラウザで訂正し、実SQLite・Chroma・nomic経由の応答まで確認した。
+DB直接投入やmockを用いていない。
+
+| 操作 | 確認結果 |
+|---|---|
+| 矛盾した6月13日をUIから6月12日へ訂正 | PATCH 200、旧6月12日・6月13日は本文・根拠を保持して両方SUPERSEDED、新しいMANUAL根拠の値はACTIVE |
+| 別会話で誕生日を質問 | 6月12日と応答。新ID `215bccd3-538f-4055-9fd2-1619e8063ff4` 第1版が実応答の参照に含まれる。3.430秒 |
+| 実索引と元会話 | 旧2件はChromaから除外、新IDは索引に存在。元の6月12日・6月13日の発言は不変 |
+| 続けてUIから6月14日へ訂正 | PATCH 200。別会話で6月14日と応答し、ID `a5767873-8006-49ca-8272-5ec6367b4e8b` を参照。2.196秒 |
+| 6月14日の記憶をUIで削除 | DELETE 204、正本・全版の本文NULL、mask 1件、実Chromaから除外 |
+| 削除後に別会話で再質問 | 6月14日を使わず確認を求める応答。削除IDは応答参照にも含まれない。1.764秒 |
+
+ブラウザpage errorは0件。最後のindex outbox待機件数は0件。
+選択レコードの全版を削除する既存範囲の検証であり、保留中の訂正連鎖の一括削除は含めない。
+専用Backend/Frontendは正常停止し、ポート57019／37357の閉鎖を確認した。データと証跡は保持した。
+
+証跡は同rootの`ui-conflict-correction-evidence.json`、`ui-conflict-correction-canonical-evidence.json`、
+`ui-v6-correct-evidence.json`、`ui-v6-delete-evidence.json`、`ui-v6-delete-canonical-evidence.json`、
+`lifecycle-corrected-conflict.json`、`lifecycle-v6-corrected-birthday.json`、`lifecycle-v6-deleted-birthday.json`。
+先行検証の画面・JSONは上書きせず、今回の画面は`ui-conflict-correction-*`／`ui-v6-*`に保存した。
+
+未完了は会話併走負荷の判断・必要な対策、保留中の削除範囲の判断、公開push・CI・Epic統合。
+曖昧な「現在の居住地」のQUERY_GATE拒否と、属性名を省略した矛盾質問の網羅性は既知の制限として残る。
+mainへのマージはユーザーが行う。
