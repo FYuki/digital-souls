@@ -431,3 +431,24 @@ def test_configured_contexts_match_committed_measurement_settings():
         "MEMORY_EXTRACTION": 36864,
         "MEMORY_CONSOLIDATION": 8192,
     }
+
+
+@pytest.mark.parametrize("phase", ["warmup", "measured"])
+def test_isolated_normal_trial_keeps_phase_explicit_and_clears_inherited_scope(tmp_path, monkeypatch, phase):
+    inference = tmp_path / "inference.env"
+    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\n")
+    livekit = tmp_path / "livekit.env"
+    livekit.write_text('LIVEKIT_KEYS="test: value"\n')
+    monkeypatch.setenv("VOICE_QUALITY_ISOLATED_NORMAL_PHASE", "stale")
+    env = pilot.pilot_environment(inference, livekit, "isolated", 1, False, True,
+                                  isolated_normal_phase=phase)
+    assert env["VOICE_QUALITY_ISOLATED_NORMAL_PHASE"] == phase
+    ordinary = pilot.pilot_environment(inference, livekit, "ordinary", 1, False, True)
+    assert "VOICE_QUALITY_ISOLATED_NORMAL_PHASE" not in ordinary
+    for kwargs in ({"trials": 2}, {"controlled": True}, {"interruption_cohort": "backchannel"},
+                   {"scheduled_fixture": False}, {"isolated_normal_phase": "unknown"}):
+        options = dict(trials=1, disable_thinking=False, scheduled_fixture=True,
+                       isolated_normal_phase=phase)
+        options.update(kwargs)
+        with pytest.raises(ValueError):
+            pilot.pilot_environment(inference, livekit, "invalid", **options)
