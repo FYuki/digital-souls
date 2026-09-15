@@ -798,6 +798,9 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/run_normal_coh
 
 準備5回と測定100回の各回に新規data root・FE／BEを割り当てる。
 共有推論サービス、モデル、生成options、固定音声は維持する。
+既存の通常応答reporterに対応するintegration-voiceを使用し、Whisperへ直接接続する。
+STT入力PCMの中継観測はintegration-voice-pcmの相槌・割り込み・pause cohortで行い、
+中継の有無を含む測定条件を記録する。
 アプリプロセス内のcacheも各回で新しくなるため、同じ方式の移設前後を比較し、
 以前の同一プロセス100試行と同じ条件だったとは扱わない。
 

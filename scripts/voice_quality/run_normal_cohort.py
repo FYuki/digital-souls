@@ -30,7 +30,7 @@ def verify_stopped(base: Path, revision: str) -> dict:
     if (report.get("runtime", {}).get("environmentId") != "test"
             or report["runtime"].get("dataRoot") != str((base / "runtime-data").resolve())
             or report.get("teardown", {}).get("status") != "completed"
-            or report.get("effectiveProfile", {}).get("effectiveProfile") != "integration-voice-pcm"):
+            or report.get("effectiveProfile", {}).get("effectiveProfile") != "integration-voice"):
         raise ValueError("owned test environment teardown not verified")
     native = json.loads((base / "native-sdk.json").read_text())
     if native.get("status") != "verified":
@@ -53,7 +53,7 @@ def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tupl
     command = [sys.executable, str(ROOT / "scripts/voice_quality/run_pilot.py"),
                "--run-id", run_id, "--inference-env", str(args.inference_env),
                "--livekit-env", str(args.livekit_env), "--trials", "1",
-               "--scheduled-fixture", "--observe-stt-pcm", "--isolated-normal-phase", phase]
+               "--scheduled-fixture", "--isolated-normal-phase", phase]
     if args.disable_thinking:
         command.append("--disable-thinking")
     images = {}
