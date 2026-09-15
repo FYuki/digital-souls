@@ -209,6 +209,11 @@ def test_real_wake_and_missing_wake_poll_and_shutdown(tmp_path, transport):
                 service.start()
                 await until(lambda: source.id in service._watches)
                 await asyncio.sleep(.2)
+                # listen開始直後の再確認を先に消化し、実際のResource更新だけで次を起こす。
+                clock.advance(1)
+                await until(lambda: control.calls("history") >= 2)
+                await asyncio.sleep(.1)
+                assert service.store.state(source.id)["position"] == 10
                 initial_calls = control.calls("history")
                 control.update(position=11, wake=True)
                 clock.advance(1)
