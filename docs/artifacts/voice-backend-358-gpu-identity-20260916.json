@@ -1,0 +1,174 @@
+{
+  "scope": "#358 GPU測定series03開始終了の固定推論条件照合",
+  "recorded_at_unix": 1789490063.4273927,
+  "start": {
+    "schema_version": "1.0",
+    "scope": "fixed_shared_inference_identity",
+    "recorded_at_unix_ns": 1789467215982074500,
+    "ollama_roles": {
+      "CHAT": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "PRIVACY": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "MEMORY_EXTRACTION": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "MEMORY_CONSOLIDATION": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "EMBEDDING": {
+        "model_name_sha256": "10886753ec3b09dda767d55999092b801d783cdc24f9e0e5b10045071e2d9a06",
+        "model_digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f"
+      }
+    },
+    "whisper": {
+      "serviceVersion": "1.0",
+      "modelRevision": "08e178d48790749d25932bbc082711ddcfdfbc4f",
+      "device": "cuda",
+      "deviceIndex": 0,
+      "computeType": "int8_float16",
+      "modelInstances": 1,
+      "globalInflight": 1
+    },
+    "whisper_model_name_sha256": "c082456a7766e23a18db084cd34b6ff510baef506548b897cc80e9b7d3e121c8",
+    "voicevox_reported_version": "latest",
+    "configuration_sha256": {
+      "backend/.env.example": "dad7a00382842f732c63f99583f0433210c2eb270683340f9b62c6f73fd81b91",
+      "environments/profiles/integration-voice.json": "d306c2c165cf96ef4b8ab1e61bceb5988ab9b39eab7bb8be03da05f46149083f",
+      "environments/profiles/integration-voice-pcm.json": "1aaa31e3df49b0cb289fd53f8ae4f428435e0c249497aab57bd457a0e9ef2fda",
+      "frontend/playwright/fixtures/speech.metadata.json": "c955ca3dc87b38a9affa8f26f48324292259d9b83f73455f212d7385e63aba6b",
+      "frontend/playwright/fixtures/voice-quality-v2/manifest.json": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3"
+    },
+    "runtime_overrides": {
+      "RAG_ENABLED": false,
+      "PYTHON_DOTENV_DISABLED": true
+    },
+    "service_container_identity": {
+      "voicevox": {
+        "image_id": "sha256:eaf829d9e1d7c85121cba6220292b42e1fbadc22b7552820f8b4fe5df5c819aa",
+        "running": true,
+        "model_mounts": []
+      },
+      "whisper": {
+        "image_id": "sha256:f9dd497557992fc5a08f484a62b732fe4b935c27cb92437b9746f9839cfa814c",
+        "running": true,
+        "model_cache_mount_read_write": true
+      }
+    },
+    "service_identity_recorded_at_unix_ns": 1789467215866666723,
+    "limitations": [
+      "共有image IDは同時に行うdocker inspectと照合する",
+      "Whisperのcache全体のbytes同一性は未検証。APIの固定revisionとimage IDを記録する",
+      "開始・終了のsnapshotは測定中の一時的な変更を完全に除外する証明ではない"
+    ]
+  },
+  "end": {
+    "schema_version": "1.0",
+    "scope": "fixed_shared_inference_identity",
+    "recorded_at_unix_ns": 1789489983528197414,
+    "ollama_roles": {
+      "CHAT": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "PRIVACY": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "MEMORY_EXTRACTION": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "MEMORY_CONSOLIDATION": {
+        "model_name_sha256": "4c3ca7ee04a873e73cecb900eaf0bb3826862ce2e9717dbb999ea97b17b63c88",
+        "model_digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+      },
+      "EMBEDDING": {
+        "model_name_sha256": "10886753ec3b09dda767d55999092b801d783cdc24f9e0e5b10045071e2d9a06",
+        "model_digest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f"
+      }
+    },
+    "whisper": {
+      "serviceVersion": "1.0",
+      "modelRevision": "08e178d48790749d25932bbc082711ddcfdfbc4f",
+      "device": "cuda",
+      "deviceIndex": 0,
+      "computeType": "int8_float16",
+      "modelInstances": 1,
+      "globalInflight": 1
+    },
+    "whisper_model_name_sha256": "c082456a7766e23a18db084cd34b6ff510baef506548b897cc80e9b7d3e121c8",
+    "voicevox_reported_version": "latest",
+    "configuration_sha256": {
+      "backend/.env.example": "dad7a00382842f732c63f99583f0433210c2eb270683340f9b62c6f73fd81b91",
+      "environments/profiles/integration-voice.json": "d306c2c165cf96ef4b8ab1e61bceb5988ab9b39eab7bb8be03da05f46149083f",
+      "environments/profiles/integration-voice-pcm.json": "1aaa31e3df49b0cb289fd53f8ae4f428435e0c249497aab57bd457a0e9ef2fda",
+      "frontend/playwright/fixtures/speech.metadata.json": "c955ca3dc87b38a9affa8f26f48324292259d9b83f73455f212d7385e63aba6b",
+      "frontend/playwright/fixtures/voice-quality-v2/manifest.json": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3"
+    },
+    "runtime_overrides": {
+      "RAG_ENABLED": false,
+      "PYTHON_DOTENV_DISABLED": true
+    },
+    "service_container_identity": {
+      "voicevox": {
+        "image_id": "sha256:eaf829d9e1d7c85121cba6220292b42e1fbadc22b7552820f8b4fe5df5c819aa",
+        "running": true,
+        "model_mounts": []
+      },
+      "whisper": {
+        "image_id": "sha256:f9dd497557992fc5a08f484a62b732fe4b935c27cb92437b9746f9839cfa814c",
+        "running": true,
+        "model_cache_mount_read_write": true
+      }
+    },
+    "service_identity_recorded_at_unix_ns": 1789489983379137692,
+    "limitations": [
+      "共有image IDは同時に行うdocker inspectと照合する",
+      "Whisperのcache全体のbytes同一性は未検証。APIの固定revisionとimage IDを記録する",
+      "開始・終了のsnapshotは測定中の一時的な変更を完全に除外する証明ではない"
+    ]
+  },
+  "ignored_timestamp_fields": [
+    "recorded_at_unix_ns",
+    "service_identity_recorded_at_unix_ns"
+  ],
+  "equal": true,
+  "differences": {},
+  "hardware": {
+    "gpu_csv_columns": [
+      "name",
+      "driver_version",
+      "memory_total_mib"
+    ],
+    "gpu_csv_value": "NVIDIA GeForce RTX 4070 Ti SUPER, 591.86, 16376"
+  },
+  "shared_ollama": {
+    "version": "0.24.0",
+    "active_state": "active",
+    "same_pid_as_post_restart_observation": true,
+    "active_enter_timestamp": "Tue 2026-09-15 19:12:56 JST"
+  },
+  "tcp_listening_after_cleanup": {
+    "7880": false,
+    "7881": false,
+    "8000": false,
+    "5173": false,
+    "4174": false,
+    "50023": false,
+    "19880": false,
+    "19881": false,
+    "11439": false,
+    "11434": true,
+    "11438": true,
+    "50021": true,
+    "50022": true
+  },
+  "owned_fault_sfu_stopped": true
+}

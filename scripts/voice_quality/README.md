@@ -785,3 +785,44 @@ assertを無効化するPython最適化実行、保存コードが基準から�
 という理由だけで外部負荷・構成変更を断定しない。
 これらは設定メタデータであり、個々の常駐値と要求主体を相関させた観測ではない。
 `RAG_ENABLED=false`も記憶形成schedulerの停止を意味しない。
+
+
+## #358 通常応答を試行ごとのdata rootで測る
+
+通常の連続runnerは同じdata rootを使うため、記憶形成が完了すると次の空記憶検査に抵触する。
+既存の記憶形成を無効化せず測る場合は、次の補助runnerで既存の音声試行を逐次起動する。
+
+~~~bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/run_normal_cohort.py   --cohort-id normal-isolated-new --measured 100   --inference-env backend/.env.example --livekit-env /path/to/livekit.env
+~~~
+
+準備5回と測定100回の各回に新規data root・FE／BEを割り当てる。
+共有推論サービス、モデル、生成options、固定音声は維持する。
+既存の通常応答reporterに対応するintegration-voiceを使用し、Whisperへ直接接続する。
+STT入力PCMの中継観測はintegration-voice-pcmの相槌・割り込み・pause cohortで行い、
+中継の有無を含む測定条件を記録する。
+アプリプロセス内のcacheも各回で新しくなるため、同じ方式の移設前後を比較し、
+以前の同一プロセス100試行と同じ条件だったとは扱わない。
+
+run manifestと初期状態hash、native SDK、所有containerの削除を確認してから次へ進む。
+失敗を成功で差し替えず、準備5回も含む全105件を残す。stop-requestedをcohort directoryへ置くと次試行前に停止する。
+全件のraw manifestとtraceを既存reporterへ渡す。失敗・欠測によって既存reporterが拒否した場合も
+summaryとrawを保持し、受入合格にしない。CPU・memory・GPUのraw観測は各runに残し、
+異なるcontainerのCPU累積値を一系列へ接続しない。全stackの受入は別途照合する。
+
+実行引数 --isolated-normal-phase は補助runnerが単独試行へ指定するためのもの。
+単独試行のscopeは isolated_normal_trial であり、通常のpilot／controlled受入とは区別する。
+
+
+### 通常応答に失敗がある場合の診断集計
+
+既存の通常応答reporterが失敗試行を検出して拒否した場合は、その拒否を保持する。
+全105件のmanifestとtraceへ次の診断reporterを適用すると、測定100件を分母に残した時間指標を得る。
+
+~~~bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_normal_diagnostic.py --cohort-root frontend/test-results/livekit-quality/cohorts/COHORT_ID --output /path/to/new-diagnostic.json
+~~~
+
+固定音声、独立した試行、初期状態、時計、packetと全再生の証拠を既存validatorで確認する。
+失敗試行の時間は欠測、処理失敗は失敗として保持する。p50／p95は確認できた試行だけの参考分布であり、
+失敗・欠測を含む前後比較を受入合格へ変換しない。測定リビジョン、入力・reporter・schemaのhashを保持する。
