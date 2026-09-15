@@ -6,6 +6,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 from app._chat_runtime import _rag_context_for_reply
+from app.memory.chroma_store import EmbeddingFingerprint, list_memory_index_ids
 from app.memory.episodic.privacy import PrivacyReview
 from app.memory.episodic.read_repository import CombinedMemoryReadRepository
 from app.memory.index_sync import MemoryIndexSync
@@ -54,6 +55,8 @@ def test_semantic_correction_and_deletion_reach_canonical_chroma_and_prompt_refe
     index.run_worker_once()
     found = retrieve().memories
     assert len(found) == 1 and found[0].memory_id == corrected["id"]
+    assert list_memory_index_ids(character_id="miori", chroma_path=h.paths.chroma_path,
+        fingerprint=EmbeddingFingerprint("fake", "fake", 3)) == {corrected["id"]}
     dependencies = SimpleNamespace(privacy_scanner=scanner, semantic_classifier=classifier,
         approved_memory_repository=reader, memory_embedder=FakeEmbedder(), clock=h.store.clock)
     context = SimpleNamespace(memory_policy=policy, chroma_path=h.paths.chroma_path, occurred_timezone="Asia/Tokyo")
@@ -66,6 +69,12 @@ def test_semantic_correction_and_deletion_reach_canonical_chroma_and_prompt_refe
     from uuid import UUID
     manager.delete(character_id="miori", record_id=UUID(corrected["id"]), version=corrected["content_version"])
     assert not retrieve().memories
+    assert list_memory_index_ids(character_id="miori", chroma_path=h.paths.chroma_path,
+        fingerprint=EmbeddingFingerprint("fake", "fake", 3)) == set()
+    with sqlite3.connect(h.paths.persona_memory_sqlite_path) as connection:
+        assert connection.execute(
+            "SELECT status FROM memory_index_outbox WHERE memory_id=? AND operation='DELETE'",
+            (corrected["id"],)).fetchall() == [("COMPLETED",)]
     with sqlite3.connect(h.paths.sqlite_path) as connection:
         assert connection.execute("SELECT user_content FROM conversation_turns WHERE turn_id=?",
                                   (str(original_source.source_id),)).fetchone()[0] == "私は大阪に住んでいる"
@@ -270,3 +279,47 @@ def test_explicit_correction_resolves_connected_conflicts_but_keeps_other_attrib
     scanner = Mock();scanner.scan.return_value = ScanSuccess(())
     assert not _semantic_response_cautions(reader, character="miori", query="私の誕生日は？", policy=policy, scanner=scanner)
     assert _semantic_response_cautions(reader, character="miori", query="私の出身地は？", policy=policy, scanner=scanner)
+
+
+def test_lexical_supplement_reuses_verified_views_and_keeps_vector_match_kind(h, monkeypatch):
+    from app.memory.chroma_store import MemorySearchCandidate, RetrievalMatchKind
+    from app.memory.rag_service import _include_lexical_semantics, _VerifiedCandidate, _search_result
+    policy = resolved_memory_policy()
+    h.reviewer.review = lambda *_: PrivacyReview(True, "ALLOW", STAMP.model_copy(
+        update={"policy_version": policy.policy_version}))
+    first = save(h, candidate(source(h)))
+    second = save(h, candidate(source(h, "東京に住んでいる"), value="東京"))
+    legacy = ApprovedMemoryRepository(database_path=h.paths.persona_memory_sqlite_path,
+        clock=h.store.clock, uuid_factory=uuid4, outbox_uuid_factory=uuid4)
+    reader = WithSemanticReadRepository(CombinedMemoryReadRepository(legacy, h.store.episode_reader))
+    reader.bind(SemanticReadRepository(h.store))
+    view = reader.get(character_id="miori", memory_id=first.id)
+    reconcile = Mock(wraps=h.store.reconcile)
+    monkeypatch.setattr(h.store, 'reconcile', reconcile)
+    scanner = Mock()
+    scanner.scan.return_value = ScanSuccess(())
+    result = _include_lexical_semantics((_VerifiedCandidate(MemorySearchCandidate(str(first.id), .01), view),),
+        character='miori', query='居住地', policy=policy, scanner=scanner, approved_repository=reader,
+        now=h.store.clock())
+    found = {item.memory.id: _search_result(item, RetrievalMatchKind.SEMANTIC) for item in result}
+    assert found[first.id].match_kind is RetrievalMatchKind.SEMANTIC
+    assert found[second.id].match_kind is RetrievalMatchKind.LEXICAL
+    assert reconcile.call_count == 1
+
+
+def test_self_report_prompt_preserves_partial_applicability_time(h):
+    from app._chat_runtime import _memory_prompt_content
+    from app.memory.chroma_store import MemorySearchCandidate, RetrievalMatchKind
+    from app.memory.rag_service import _VerifiedCandidate, _search_result
+    from app.memory.episodic.contracts import ResolvedTime, TimeParts
+    value = candidate(source(h))
+    when = ResolvedTime(parts=TimeParts(year=2027, month=4), timezone='Asia/Tokyo', reference_at=h.store.clock())
+    value = value.model_copy(update={'proposition': value.proposition.model_copy(update={'valid_from': when})})
+    stored = save(h, value)
+    view = SemanticReadRepository(h.store).get(character_id='miori', memory_id=stored.id)
+    result = _search_result(_VerifiedCandidate(MemorySearchCandidate(str(stored.id), .01), view),
+                            RetrievalMatchKind.SEMANTIC)
+    prompt = _memory_prompt_content(result, 'UTC')
+    assert '適用開始:2027年4月' in prompt and 'Asia/Tokyo' in prompt
+    assert '適用終了:不明' in prompt
+    assert '2027年4月1日' not in prompt

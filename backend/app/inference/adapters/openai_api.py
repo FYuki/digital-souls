@@ -354,6 +354,7 @@ class OpenAIAPIAdapter:
                 json=dict(payload),
                 headers=self._headers,
                 timeout=httpx.Timeout(timeout_seconds),
+                async_client_factory=lambda: self._async_client_factory(timeout_seconds),
             )
         except Exception as error:
             self._raise_transport(error)

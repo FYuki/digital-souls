@@ -16,7 +16,14 @@
   let receipt = ''
   let submittedValue = ''
   let editInput: HTMLInputElement
-  let trigger: HTMLButtonElement | null = null
+  let heading: HTMLHeadingElement
+  async function restoreFocus(id?: string, action?: "correct" | "delete") {
+    await tick()
+    const article = id ? document.getElementById(`semantic-${id}`) : null
+    const button = article?.querySelector<HTMLButtonElement>(action
+      ? `[data-memory-action="${action}"]:not(:disabled)` : '.actions button:not(:disabled)')
+    ;(button ?? article ?? heading)?.focus()
+  }
   const statusLabels = { ACTIVE: '有効', HISTORICAL: '過去の状態', SUPERSEDED: '訂正前',
     CONFLICTED: '矛盾を保留', INACTIVE: '利用停止', DELETED: '削除済み' }
   const relationLabels: Record<string, string> = {
@@ -38,23 +45,23 @@
     finally { loading = false }
   }
   onMount(() => { void load() })
-  async function beginEdit(record: SemanticMemory, button: HTMLButtonElement) {
+  async function beginEdit(record: SemanticMemory) {
     editing = record
     deleting = null
     value = record.proposition?.value ?? ''
     receipt = crypto.randomUUID()
     submittedValue = ''
-    trigger = button
     error = ''
     await tick()
     editInput?.focus()
   }
   async function cancel() {
+    const id = editing?.id ?? deleting?.id
+    const action = editing ? "correct" : "delete"
     editing = null
     deleting = null
     error = ''
-    await tick()
-    trigger?.focus()
+    await restoreFocus(id, action)
   }
   async function save() {
     if (!editing || busy || !value.trim()) return
@@ -62,25 +69,32 @@
     submittedValue = value.trim()
     busy = true
     error = ''
+    let savedId: string | undefined
     try {
-      await correctSemanticMemory(character, editing, submittedValue, receipt)
+      const saved = await correctSemanticMemory(character, editing, submittedValue, receipt)
+      savedId = saved.id
       editing = null
       records = []
       await load()
     } catch (caught) { error = caught instanceof Error ? caught.message : '訂正に失敗しました。' }
     finally { busy = false }
+    if (savedId) await restoreFocus(savedId)
   }
   async function remove() {
     if (!deleting || busy) return
+    const removedId = deleting.id
+    let removed = false
     busy = true
     error = ''
     try {
       await deleteSemanticMemory(character, deleting)
+      removed = true
       deleting = null
       records = []
       await load()
     } catch (caught) { error = caught instanceof Error ? caught.message : '削除に失敗しました。' }
     finally { busy = false }
+    if (removed) await restoreFocus(removedId)
   }
   async function reload() {
     editing = null
@@ -91,13 +105,13 @@
 </script>
 
 <section class="semantic" aria-label="意味記憶">
-  <div class="heading"><div><h2>意味記憶</h2><p>会話を離れて使う知識や好みを確認できます。</p></div>
+  <div class="heading"><div><h2 bind:this={heading} tabindex="-1">意味記憶</h2><p>会話を離れて使う知識や好みを確認できます。</p></div>
     <button disabled={busy || loading} on:click={reload}>再読み込み</button></div>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if loading}<p role="status">意味記憶を読み込み中</p>
   {:else if !records.length && !error}<p>保存された意味記憶はありません。</p>{/if}
   {#each records as record (record.id)}
-    <article id={`semantic-${record.id}`} aria-label={`意味記憶 ${record.id}`}>
+    <article tabindex="-1" id={`semantic-${record.id}`} aria-label={`意味記憶 ${record.id}`}>
       <div class="heading">
         <h3>{record.proposition?.predicate ?? '本文を利用できない記憶'}</h3>
         <span>{statusLabels[record.status]}・第{record.content_version}版</span>
@@ -156,9 +170,9 @@
         </div>
       {:else}
         <div class="actions">
-          {#if record.can_correct}<button disabled={busy} on:click={(event) => beginEdit(record, event.currentTarget)}>自己申告を訂正</button>{/if}
-          {#if record.status !== 'DELETED'}<button disabled={busy} on:click={(event) => {
-            deleting = record; editing = null; trigger = event.currentTarget; error = ''
+          {#if record.can_correct}<button data-memory-action="correct" disabled={busy} on:click={() => beginEdit(record)}>自己申告を訂正</button>{/if}
+          {#if record.status !== 'DELETED'}<button data-memory-action="delete" disabled={busy} on:click={() => {
+            deleting = record; editing = null; error = ''
           }}>削除</button>{/if}
         </div>
       {/if}

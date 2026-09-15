@@ -128,19 +128,22 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 
 ## #341で追加した意味記憶の用語（設計）
 
-以下は2026-09-14の採用設計であり、上記の既存実装状態とは区別する。
+以下は2026-09-14の採用設計と#341 Epic上の実装状態であり、mainへの反映とは区別する。
 正本は[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md)。
 
-| 用語 | 意味・境界 |
-|---|---|
-| Semantic Memory / 意味記憶 | 特定の経験を離れて使える汎用的な知識・事実。現在の居住地など変化する知識も含む |
-| DIRECT_EXTRACTION | ユーザーの明示発言から直接抽出・検証した形成経路。自己申告以外の一般知識の明示発言もあり、全件がUI訂正可能という意味ではない |
-| EXPERIENCE_DERIVED | #100が独立した経験から一般化した形成経路。#341の共通正本で保持する |
-| 自己申告由来 | ユーザー本人の好み・属性・状態等についての明示発言を根拠とする知識。UI本文訂正の対象 |
-| 時間変化 | 以前の知識が誤りだったとはせず、適用される状態・時期が変わること。不明な日時を補完しない |
-| 明示訂正 | 元の内容の誤りを明示して置き換えること。時間変化とは別の関係 |
-| 矛盾保留 | 通常変化しない属性の食い違いを両根拠とともに保持し、どちらかを確定して断定しない状態 |
-| 増分抽出位置 | スレッド内で正常処理を完了した位置。知識の所有・参照範囲ではなく、他スレッドの知識と照合できる |
+| 用語 | 意味・境界 | 実装名 | 状態・参照先 |
+|---|---|---|---|
+| Semantic Memory / 意味記憶 | 特定の経験を離れて使える汎用知識・事実。変化する居住地等も含む | `SemanticRecord` | Epic実装済み。[型](../backend/app/memory/semantic/contracts.py) |
+| DIRECT_EXTRACTION | 明示発言から直接抽出・検証した形成経路。全件がUI訂正可能ではない | `FormationType.DIRECT_EXTRACTION` | Epic実装済み。[型](../backend/app/memory/semantic/contracts.py) |
+| EXPERIENCE_DERIVED | 独立した経験から一般化した形成経路 | `FormationType.EXPERIENCE_DERIVED` | 共通保存入口はEpic実装済み、一般化は#100。[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
+| 自己申告由来 | 本人の好み・属性・状態についての明示発言を根拠とする知識。UI本文訂正の対象 | `Proposition.self_report` / `can_correct` | Epic実装済み。[管理](../backend/app/memory/semantic/management.py) |
+| 時間変化 | 以前の知識を誤りとせず適用状態が変わること。不明な日時は補完しない | `SemanticOperation.CHANGE` | Epic実装済み。[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
+| 明示訂正 | 内容の誤りを明示して置き換える。時間変化とは別の関係 | `SemanticOperation.CORRECT` | Epic実装済み。[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
+| 矛盾保留 | 通常変わらない属性の食い違いを両根拠とともに保持し断定しない | `SemanticOperation.CONFLICT` / `SemanticStatus.CONFLICTED` | Epic実装済み。[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
+| 増分抽出位置 | スレッド内の正常処理済み出典と版。知識の所有範囲とは別 | `semantic_processed_sources` / `mark_processed` | Epic実装済み。[repository](../backend/app/memory/semantic/repository.py) |
+| 意味記憶の状態 | `ACTIVE`は有効、`HISTORICAL`は過去の状態、`SUPERSEDED`は訂正前、`CONFLICTED`は矛盾保留、`INACTIVE`は利用停止、`DELETED`は本文削除済み | `SemanticStatus` / API `status` | Epic実装済み。[型](../backend/app/memory/semantic/contracts.py) |
+| 意味記憶の関係 | 訂正`CORRECT`、時間変化`CHANGE`、矛盾`CONFLICT`、自己申告優先`SELF_REPORT`を記憶IDと版で結ぶ。`NEW`と`REAFFIRM`は作成・再言及の操作 | API `relations[].relation` / `SemanticOperation` | Epic実装済み。[repository](../backend/app/memory/semantic/repository.py) |
+| 再評価待ち | 根拠の変化で利用停止し再評価を待つ。自動再評価の完了を意味しない | API `reassessment_pending` | 状態公開はEpic実装済み、再評価は#100。[管理](../backend/app/memory/semantic/management.py) |
 
 #341の作業ブランチでは共通の型・SQLite正本・出典検証・保存入口に加え、
 `semantic-extraction` Targetによる増分workerと共通検索readerへ接続した。

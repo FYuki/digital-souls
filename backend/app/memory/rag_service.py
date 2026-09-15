@@ -197,11 +197,11 @@ def _include_lexical_semantics(
         character_id=character, query=query,
     ))
     verified = _verified_period_memories(snapshots, character=character, policy=policy,
-        scanner=scanner, approved_repository=approved_repository, now=now)
+        scanner=scanner, approved_repository=approved_repository, now=now, revalidate=False)
     by_id = {item.memory.id: item for item in ranked}
     supplemental = tuple(_VerifiedCandidate(
         by_id[memory.id].candidate if memory.id in by_id else MemorySearchCandidate(str(memory.id), float("inf")),
-        memory, RetrievalMatchKind.LEXICAL,
+        memory, by_id[memory.id].match_kind if memory.id in by_id else RetrievalMatchKind.LEXICAL,
     ) for memory in verified)
     selected_ids = {item.memory.id for item in supplemental}
     return (*supplemental, *(item for item in ranked if item.memory.id not in selected_ids))
@@ -248,7 +248,7 @@ def _include_current_self_reports(
     ]
     current = _verified_period_memories(
         snapshots, character=character, policy=policy, scanner=scanner,
-        approved_repository=approved_repository, now=now,
+        approved_repository=approved_repository, now=now, revalidate=False,
     )
     by_id = {item.memory.id: item for item in ranked}
     result: list[_VerifiedCandidate] = []
@@ -425,11 +425,13 @@ def _verified_period_memories(
     scanner: PrivacyScanner,
     approved_repository: MemoryReadRepository,
     now: datetime,
+    revalidate: bool = True,
 ) -> list[ReadableMemory]:
     verified: list[ReadableMemory] = []
     for snapshot in memories:
         # 期間候補の取得後にEmbeddingを待つため、本文・出典を返却直前に再検証する。
-        memory = approved_repository.get(character_id=character, memory_id=snapshot.id)
+        memory = (approved_repository.get(character_id=character, memory_id=snapshot.id)
+                  if revalidate else snapshot)
         if memory is None or not _is_retrieval_compatible(memory, character, policy, now):
             continue
         body_scan = scanner.scan(memory.normalized_text)
@@ -495,7 +497,11 @@ def _search_result(
         memory_type=memory.memory_type.value,
         raw_distance=candidate.candidate.raw_distance,
         temporal_text=(render_time(memory.five_w.when)
-                       if isinstance(memory, EpisodicMemoryView) and memory.five_w else None),
+                       if isinstance(memory, EpisodicMemoryView) and memory.five_w else (
+                           f"適用開始:{render_time(memory.proposition.valid_from)} / "
+                           f"適用終了:{render_time(memory.proposition.valid_until)}"
+                           if isinstance(memory, SemanticMemoryView) and memory.proposition
+                           and (memory.proposition.valid_from or memory.proposition.valid_until) else None)),
         content_version=memory.content_version,
         current_self_report=isinstance(memory, SemanticMemoryView) and memory.current_self_report,
     )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 import json
 import math
 import re
@@ -58,12 +58,16 @@ class OllamaAdapter:
         *,
         base_url: str,
         http_client: httpx.Client | None = None,
+        async_client_factory: Callable[[float], httpx.AsyncClient] | None = None,
     ) -> None:
         if not base_url.strip() or base_url.strip() != base_url:
             raise ValueError("Ollama base URL must be canonical")
         self._base_url = base_url.rstrip("/")
         self._http_client = http_client or httpx.Client(trust_env=False)
         self._owns_http_client = http_client is None
+        self._async_client_factory = async_client_factory or (
+            lambda seconds: httpx.AsyncClient(timeout=seconds, trust_env=False)
+        )
         self._token_counts = ExactTokenEstimateCache()
         self._model_digests: dict[str, str] = {}
         self._model_details: dict[str, Mapping[str, object]] = {}
@@ -165,6 +169,7 @@ class OllamaAdapter:
                     "options": dict(request.options),
                 },
                 timeout=httpx.Timeout(request.timeout_seconds),
+                async_client_factory=lambda: self._async_client_factory(request.timeout_seconds),
             )
             response.raise_for_status()
         except Exception as error:
@@ -361,6 +366,7 @@ class OllamaAdapter:
                 self._endpoint("/api/show"),
                 json={"model": model_id},
                 timeout=httpx.Timeout(timeout_seconds),
+                async_client_factory=lambda: self._async_client_factory(timeout_seconds),
             )
             response.raise_for_status()
         except Exception as error:
@@ -407,6 +413,7 @@ class OllamaAdapter:
                 self._endpoint("/api/chat"),
                 json=payload,
                 timeout=httpx.Timeout(request.timeout_seconds),
+                async_client_factory=lambda: self._async_client_factory(request.timeout_seconds),
             )
             response.raise_for_status()
             return response

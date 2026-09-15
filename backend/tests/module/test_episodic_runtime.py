@@ -23,6 +23,7 @@ class Model:
     def __init__(self):
         self.calls = []
         self.entered = threading.Event()
+        self.entered_at = None
         self.release = threading.Event()
         self.release.set()
 
@@ -35,6 +36,7 @@ class Model:
         else:
             properties = json.get("format", {}).get("properties", {})
             if "facts" in properties:
+                self.entered_at = datetime.now(UTC)
                 self.entered.set()
                 assert self.release.wait(timeout=5)
                 request = __import__("json").loads(json["messages"][-1]["content"])
@@ -121,7 +123,12 @@ def test_reply_does_not_wait_and_lifespan_forms_episode_fact_link(model, runtime
                     assert websocket.receive_json()["type"] == "text"
             # 会話直後の5秒の猶予中は開始せず、その後に抽出する。
             assert not model.entered.is_set()
-            assert model.entered.wait(timeout=7)
+            assert model.entered.wait(timeout=12)
+            with sqlite3.connect(runtime_paths.sqlite_path) as history:
+                from app.conversation_history._sqlite import parse_datetime
+                completed_at = parse_datetime(history.execute(
+                    "SELECT MAX(updated_at) FROM conversation_turns").fetchone()[0])
+            assert (model.entered_at - completed_at).total_seconds() >= 5
             assert not model.release.is_set()
             assert records(runtime_paths) == []
             with sqlite3.connect(runtime_paths.persona_memory_sqlite_path) as connection:
