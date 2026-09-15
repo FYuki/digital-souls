@@ -4,11 +4,15 @@
     "composite": false,
     "noEmit": true,
     "target": "ES2022",
-    "types": ["node", "@playwright/test"]
+    "types": [
+      "node",
+      "@playwright/test"
+    ]
   },
   "include": [
     "e2e/**/*.ts",
     "integration/**/*.ts",
+    "diagnostics/**/*.ts",
     "playwright/**/*.ts",
     "playwright.*.config.ts"
   ]

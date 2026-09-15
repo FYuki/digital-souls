@@ -677,3 +677,9 @@ fc43694の修正を含むFE／BEを同じ専用Environmentで起動し、実boot
 [匿名化記録](../artifacts/voice-backend-358-startup-cleanup-browser.json)に元の8証跡hashと初回失敗を保持する。初回はRoom一覧の参加者数0を事前assertで拾い、テスト側cleanupもTest endedで失敗した。初回専用DBの空会話1件を保持し、Environment所有FE／BEと専用LiveKitは停止した。成功runの会話・turn・memory job／receiptはcleanup後0件。両runとも共有サービスは停止・変更していない。
 
 これは起動失敗1ケースの実検証であり、全接続競合、FE／BE一括切替、性能比較、人の受入を完了した証拠ではない。GPU計測は#341実装後の確保時間帯で行う。
+
+### remote CIで判明した局所診断の分類修正
+
+e6e9398のremote CIで、追加したbootstrap-rejection／startup-cleanup診断が通常の実接続スイートの通信置換禁止に抵触した。両診断は実BE／SFUを使う一方、HTTPのversionまたは接続先を制御するため、frontend/diagnostics/voice-startup/と専用Playwright入口へ移した。禁止検査は緩和せず、通常のintegration-voiceが診断を収集しないことも検証する。
+
+過去artifactのsource path／hashは当時の版の証拠として保持する。実HTTP・SFUで確認した部分と、通信を制御した部分を区別し、これら5ケースを無変更clientの実接続受入の代用にしない。M5／M6の残条件は変更しない。
