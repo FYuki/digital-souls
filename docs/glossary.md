@@ -115,6 +115,12 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 |---|---|---|
 | Event / イベント、Event ingestion | 提供元の出来事とCoreへの取得・復旧。提供元が本文の正本を持ち、Coreの有限bufferや通知を正本の代わりにしない | 後続設計・#187：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | Notification / 通知 | ユーザーが出来事を確認するためのmetadataと出典参照。会話メッセージ・発話命令・Task状態そのものではない | 設計・#183／#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| Ingestion cursor / 取得位置 | sourceからCoreが取り込んだ位置。バッファと整合して保存し、個々のconsumer処理済み・ユーザー既読とは区別する | 設計・#187：[Event復旧ADR](decisions/addon-event-recovery-2026-09.md) |
+| Consumer / consumer cursor | Eventを受け取って処理する通知・会話等の機能と、その独立した処理進捗。ブラウザ接続そのものではない | 設計・#187/#158/#365：[Event復旧ADR](decisions/addon-event-recovery-2026-09.md) |
+| Sanitized Event buffer / 復旧用バッファ | 許可情報に限定したEventの有限な永続保管。処理位置と整合して未処理分を復旧する。提供元のdomain正本・通知履歴とは別 | 設計・#187：[Event復旧ADR](decisions/addon-event-recovery-2026-09.md) |
+| Event gap / 欠落、snapshot / 最新状態 | 欠落は正常処理を確認できない過去のEvent範囲。最新状態の取得だけではその過去を復元したことにならない | 設計・#187：[Event復旧ADR](decisions/addon-event-recovery-2026-09.md) |
+| Wake-up / 新着確認の契機 | 提供元の通知等を受けて履歴取得を促すこと。Event本文の唯一の配送路や正本ではない | 設計・#187：[Event復旧ADR](decisions/addon-event-recovery-2026-09.md) |
+| 通知履歴の保持 / 期限切れ | 通知metadata・出典参照の保持。Eventバッファ・提供元本文の寿命とは別で、期限切れをTask取消し・報告完了へ変換しない | 設計・#183/#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | 通知Policy、`ignore / state-only / notify` | 無視／管理metadataだけ更新／通知を作成・更新、の分類。notifyだけでは会話取込・発話を許可しない | 設計・#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | 登録時担当 / 担当キャラクター | 非同期処理を追加した時点の担当・呼出主体。依頼ユーザー、閲覧ユーザー、外部接続認証主体とは別で、画面切替に追従しない | 設計・#158／#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | 登録時対象 / 対象設定revision | 接続・認証主体参照・binding・Task／ruleの対象と版。会話の対象変更とは独立し、開始済みTaskへ新設定を遡及しない。現在権限は取得時に再検証する | 設計・#158／#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |

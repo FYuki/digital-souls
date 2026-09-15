@@ -372,6 +372,9 @@ ConfirmationPolicyPort
 
 ### Event
 
+2026-09-16に取得・有限永続バッファ・欠落復旧を[Event復旧ADR](addon-event-recovery-2026-09.md)で具体化した。
+本節の抽象方針を維持し、#187の詳細な取得・保持・再開条件は同ADRを優先する。
+
 - Event本文のdomain正本はAddon側。
 - cursor付きhistory Query/Resourceを復旧baselineとする。
 - notificationはwake-upに使えても唯一の正本配送路にしない。
