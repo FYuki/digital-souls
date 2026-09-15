@@ -723,8 +723,13 @@ def _rag_context_for_reply(
 
 
 def _memory_prompt_content(memory: MemorySearchResult, timezone: str) -> str:
-    if memory.current_self_report:
-        return "現在有効な自己申告: " + memory.normalized_text
+    if memory.memory_type in {"DIRECT_EXTRACTION", "EXPERIENCE_DERIVED"}:
+        text = memory.normalized_text
+        if memory.current_self_report:
+            text = "現在有効な自己申告: " + text
+        if memory.temporal_text is not None:
+            text += f" [{memory.temporal_text}]"
+        return text
     if memory.temporal_text is not None:
         # Episode/Factの本文は元のtimezone・精度・範囲を含む。config変更で再解釈しない。
         return memory.normalized_text

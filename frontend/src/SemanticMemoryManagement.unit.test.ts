@@ -30,7 +30,7 @@ beforeEach(() => {
     requests.push({ method: init.method, body })
     if (failure) return new Response('{}', { status: failure })
     if (init.method === 'PATCH') {
-      records = records.map(r => r.id === 'self' ? { ...r, proposition: { ...r.proposition!,
+      records = records.map(r => r.id === 'self' ? { ...r, id: 'corrected', proposition: { ...r.proposition!,
         value: String(body.value), content: 'ユーザーの紅茶の好みは苦手' } } : r)
       return new Response(JSON.stringify(records[0]))
     }
@@ -62,6 +62,8 @@ test('訂正する値と版だけを送り、自己申告や所有者は変更�
   expect(requests[0].body).toEqual({ expected_version: 1, value: '苦手', idempotency_key: expect.any(String) })
   await waitFor(() => expect(screen.queryByRole('form')).toBeNull())
   expect(await screen.findByText('ユーザーの紅茶の好みは苦手')).toBeTruthy()
+  await waitFor(() => expect(document.activeElement).toBe(
+    within(screen.getByRole('article', { name: '意味記憶 corrected' })).getByRole('button', { name: '自己申告を訂正' })))
 })
 
 test('一般化も削除でき、成功後は本文を画面に残さない', async () => {
@@ -71,6 +73,7 @@ test('一般化も削除でき、成功後は本文を画面に残さない', as
   await fireEvent.click(within(derived).getByRole('button', { name: '完全に削除' }))
   await waitFor(() => expect(within(screen.getByRole('article', { name: '意味記憶 derived' })).queryByText('ユーザーの紅茶の好みは好き')).toBeNull())
   expect(requests[0]).toEqual({ method: 'DELETE', body: { expected_version: 1 } })
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('article', { name: '意味記憶 derived' })))
 })
 
 test('訂正の再送キーを維持し、版競合では再読込を案内する', async () => {

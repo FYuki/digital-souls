@@ -524,3 +524,28 @@ def test_stream_latency_mode_is_per_request_and_keeps_target_options():
     assert requests[0].options == requests[1].options
     assert requests[0].max_input_tokens == requests[1].max_input_tokens
     assert requests[0].max_output_tokens == requests[1].max_output_tokens
+
+
+@pytest.mark.parametrize("cancel_outer", [False, True])
+def test_explicit_structured_cancellation_interrupts_slot_wait_and_preserves_outer_scope(cancel_outer):
+    from app.inference.cancellation import cancellation_scope
+    from app.inference.contracts import InferenceCancellationToken
+    adapter = _FakeAdapter()
+    router = _router(adapter)
+    explicit, outer = InferenceCancellationToken(), InferenceCancellationToken()
+    attempted = Event()
+    # 容量の占有中に明示tokenをキャンセルし、providerを呼ばずに抜ける。
+    with router._slot(InferenceTarget.MEMORY_EXTRACTION), ThreadPoolExecutor(1) as pool:
+        def call():
+            with cancellation_scope(outer):
+                attempted.set()
+                return router.generate_structured(caller=InferenceCaller.MEMORY_EXTRACTION,
+                    target=InferenceTarget.MEMORY_EXTRACTION, messages=_messages(),
+                    response_schema={"type": "object"}, cancellation_token=explicit)
+        pending = pool.submit(call)
+        assert attempted.wait(1)
+        (outer if cancel_outer else explicit).cancel()
+        with pytest.raises(InferenceError) as error:
+            pending.result(timeout=1)
+        assert error.value.category is InferenceErrorCategory.CANCELLED
+    assert adapter.structured_calls == 0

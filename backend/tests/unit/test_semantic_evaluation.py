@@ -41,3 +41,14 @@ def test_score_accepts_complete_saved_expectation_and_rejects_foreign_write():
     assert score(output, expected)["pass"]
     output["foreign_modified"] = True
     assert not score(output, expected)["pass"]
+
+
+
+def test_fixture_rejects_missing_empty_or_non_list_turns_before_writing():
+    import pytest
+    from evals.semantic_memory.fixtures import Fixture
+    # 初期化前の境界で失敗させ、既存知識のfixtureも書き込まない。
+    fixture = object.__new__(Fixture)
+    for data in ({}, {"turns": []}, {"turns": ()}, {"turns": "invalid"}):
+        with pytest.raises(ValueError, match="non-empty list"):
+            fixture.prepare(data)

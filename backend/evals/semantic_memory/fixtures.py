@@ -69,6 +69,8 @@ class Fixture:
                             start=0, end=len(turn.user_content), stated_at=turn.created_at))
 
     def prepare(self, data):
+        if not isinstance(data.get("turns"), list) or not data["turns"]:
+            raise ValueError("semantic fixture turns must be a non-empty list")
         for raw in data.get("existing", []):
             character = raw.get("character_id", "miori")
             conversation = self.history.create_conversation(character)

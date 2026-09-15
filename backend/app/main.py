@@ -755,6 +755,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 card = load_character_card(character_id)
                 return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
 
+            # 同じ自己申告の二重形成はUI訂正・削除を迂回するため、新旧の抽出は択一。
+            # 既存保存済みpreferenceの移行は#345で扱う。
             memory_formation_scheduler = CombinedFormationScheduler(
                 (build_semantic_scheduler(
                     store=semantic_store, runtime=inference_runtime, timezone=occurred_timezone,

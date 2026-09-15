@@ -33,7 +33,7 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
-from app.inference.cancellation import raise_if_cancelled
+from app.inference.cancellation import cancellation_scope, raise_if_cancelled
 from app.inference.images import image_parts, validate_multimodal_messages
 from app.inference.diagnostics import diagnostic, estimate_diagnostics
 from app.inference.observer import (
@@ -218,7 +218,7 @@ class InferenceRouter:
         external_request_count = 0
         try:
             self._raise_if_cancelled(cancellation_token)
-            with self._slot(target):
+            with cancellation_scope(cancellation_token), self._slot(target):
                 self._raise_if_cancelled(cancellation_token)
                 external_request_count = 1
                 provider_result = adapter.generate_structured(

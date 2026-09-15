@@ -87,3 +87,32 @@ async def test_semantic_preemption_does_not_advance_source_checkpoint(h):
     assert not recovered.process_next(should_stop=lambda: False)
     with h.repo.read() as tx:
         assert len(tx.list_records("miori")) == 1
+
+
+def test_episode_unrelated_error_is_not_hidden_by_simultaneous_stop(harness):
+    harness.turn("うどんを食べた")
+    stopped = [False]
+    def fail(*_):
+        stopped[0] = True
+        raise RuntimeError("synthetic unrelated failure")
+    with pytest.raises(RuntimeError, match="synthetic unrelated"):
+        worker(harness, EpisodeClient(callback=fail)).process_next(should_stop=lambda: stopped[0])
+    assert harness.queue.has_pending()
+    assert harness.records() == ()
+
+
+def test_semantic_unrelated_error_keeps_backoff_during_simultaneous_stop(h):
+    source(h)
+    stopped = [False]
+    client = SemanticClient()
+    def fail():
+        stopped[0] = True
+        raise RuntimeError("synthetic unrelated failure")
+    client.callback = fail
+    queue = SemanticWorkQueue(h.store)
+    instance = SemanticWorker(queue=queue, pipeline=pipeline(h, client), identity=lambda: IDENTITY,
+                              priority_available=lambda: True)
+    with pytest.raises(RuntimeError, match="synthetic unrelated"):
+        instance.process_next(should_stop=lambda: stopped[0])
+    assert instance.backoff
+    assert queue.has_pending()

@@ -7,6 +7,7 @@ from typing import Literal
 from uuid import UUID
 
 from app.conversation_history._sqlite import TURN_COLUMNS, turn_from_row
+from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.memory.episodic.contracts import ExtractionIdentity
 from app.memory.formation.priority import conversation_idle as conversation_idle
 from app.memory.formation.thread_chunks import ThreadFragment
@@ -116,8 +117,8 @@ class SemanticWorker:
             )
         except SemanticDeferred:
             return False
-        except Exception:
-            if should_stop():
+        except Exception as error:
+            if isinstance(error, InferenceError) and error.category is InferenceErrorCategory.CANCELLED:
                 return False
             self.backoff[pending.identity] = monotonic() + self.retry_seconds
             raise

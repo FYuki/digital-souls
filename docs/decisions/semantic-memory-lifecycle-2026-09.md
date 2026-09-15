@@ -34,3 +34,12 @@ SQLite正本、キャラクター境界は維持する。用語の入口は[用�
 削除の再処理防止には本文を残さない最小の識別情報が必要となる。
 一般化の再評価は#100へ委ね、#341で一般化推論を再実装しない。
 性能・実接続の受け入れ条件は[実行指示書](../epic-341-semantic-memory-requirements.md)へ分離する。
+
+## 既存の嗜好抽出との起動境界
+
+`semantic-extraction` Targetが有効な場合、会話通知は汎用Semantic workerとEpisode workerへ渡す。
+同じ自己申告を旧`USER_PREFERENCE` / `INTERACTION_PREFERENCE`へ新規に二重形成するschedulerは起動しない。
+両方を起動すると、Semantic UIで訂正・削除した値が別正本から通常会話へ残るため、この案は採用しない。
+Targetが無効な構成では既存の嗜好schedulerへフォールバックする。
+既存の保存済みpreferenceを削除・変換する移行は行わず、旧列と正本の整理は#345で扱う。
+形成型が別契約であることは維持し、旧preferenceを`SemanticRecord`と同一形式として扱わない。

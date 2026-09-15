@@ -303,3 +303,25 @@ Ollamaログにはメモリ不足予測によるモデル退避・再読込も�
 `chat-preemption-canonical-evidence.json`、`inference-activity.jsonl`、`chat-preemption-runtime-stop.json`。
 公開push・CI・Epic統合は未実施。EpicへのマージはCI greenで実施する許可を得ており、再確認は不要。
 mainへのマージはユーザーが行う。
+
+
+## main PR #405 の差分レビュー修正
+
+CodeRabbitの初回差分レビュー16件に対し、14件を修正した。
+明示キャンセルtokenをslot待機・HTTPへ伝え、外側のworker tokenも維持する。
+Ollama/OpenAIのキャンセル経路へ非同期client factoryを注入できるようにし、transport・認証・hookを検証した。
+停止と同時に発生した無関係のworker例外は中断として隠さず、再試行のbackoffを維持する。
+意味記憶の適用開始・終了を元の精度とtimezoneで提示し、語彙補完時のベクトル一致情報を保持する。
+語彙・現在値補完では取得直後の検証済みviewを使い、候補ごとの全件reconcileを省く。
+Embedding前に取得する期間候補は従来どおり返却前に再検証する。
+訂正・削除後のキーボードフォーカス、会話遷移の無効判定、用語・MVP境界を修正した。
+
+旧嗜好抽出の同時起動案は、別正本への二重形成がSemantic UIの訂正・削除を迂回するため採用しない。
+現在の起動境界と無効構成のフォールバックをADRへ追記した。CLI/startup factoryの共通化案も今回は採用しない。
+両者は既に同じsource reader/guard契約を利用し、起動側のStoreはprivacy採用と管理機能を追加するため、
+今回の不具合修正とは別の整理として扱う。
+
+回帰試験は実SQLite/Chromaで索引ID・削除outbox、5秒以上の猶予、例外と予約回復を確認する。
+HTTPの中断は既存の実TCP試験に加え、明示tokenの伝播・設定注入を合成transportでも検証する。
+この修正では抽出prompt・schema・privacy判定を変更していないため、Gemma 4の600件品質比較は再実行していない。
+先の実会話並走計測は当時のcommitでの証跡であり、今回の差分を実モデルで再計測した結果とは区別する。

@@ -1,7 +1,7 @@
 """抽出中断時は当該HTTP接続だけを閉じ、共有clientや推論サーバーは停止しない。"""
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import suppress
 
 import httpx
@@ -12,6 +12,7 @@ from app.inference.cancellation import current_cancellation_token, raise_if_canc
 def post(
     client: httpx.Client, url: str, *, json: object,
     timeout: httpx.Timeout, headers: Mapping[str, str] | None = None,
+    async_client_factory: Callable[[], httpx.AsyncClient] = lambda: httpx.AsyncClient(trust_env=False),
 ) -> httpx.Response:
     token = current_cancellation_token()
     if token is None:
@@ -22,7 +23,7 @@ def post(
     request = client.build_request("POST", url, json=json, timeout=timeout, headers=headers)
 
     async def run() -> httpx.Response:
-        async with httpx.AsyncClient(trust_env=False) as transport:
+        async with async_client_factory() as transport:
             pending = asyncio.create_task(transport.send(request))
             try:
                 while not pending.done():
