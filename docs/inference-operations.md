@@ -320,3 +320,24 @@ Factの行為者判定はLLMが行う。会話履歴から確定するspeaker/ad
 合成100件の固定正解を用いる[promptfoo評価](../backend/evals/episodic_actor/README.md)を実行し、
 行為者集合の完全一致が90件以上なら合格とする。人物IDと役割も照合し、推論失敗を分母から除かない。
 評価対象は本番Factの5W再検証段階であり、候補選定・privacy保存・検索応答を含む全受入とは区別する。
+
+
+### #341 最終受入で使用した用途別設定
+
+実接続受入では会話Targetも12bに設定した。e4b会話は、正しい自己申告を検索しても人格・経験を含む文脈で
+再申告を求めるケースがあり、同等の応答品質を確認していない。意味抽出の両モデル正式比較とは別の診断結果である。
+
+| Target | モデル | 入力上限 | 出力上限 |
+|---|---|---:|---:|
+| CHAT | `ollama/gemma4:12b` | 35840 | 1024 |
+| SEMANTIC_EXTRACTION | `ollama/gemma4:12b` | 32768 | 4096 |
+| MEMORY_EXTRACTION | `ollama/gemma4:e4b` | 32768 | 4096 |
+| PRIVACY / MEMORY_CONSOLIDATION | `ollama/gemma4:e4b` | 36352 | 512 |
+
+各行は`INFERENCE_TARGET_<TARGET>`、`_MAX_INPUT_TOKENS`、`_MAX_OUTPUT_TOKENS`に設定する。
+共通の検証値は`_TIMEOUT_SECONDS=120`、`_MAX_CONCURRENCY=1`、`_OPTIONS_JSON={"temperature":0,"think":false}`、
+`LLM_CONTEXT_TOKEN_LIMIT=36864`。既存設定を無条件に置き換えず、利用するGPU・他用途の負荷を確認する。
+同一モデルの入力+出力を揃え、Ollamaのcontext再確保を避ける。privacyのQUERY_GATE上限2秒は延長していない。
+
+この構成の会話優先は1標本で応答1.332秒、中断70.5ms、未処理・索引待ち0件。
+coldロード、GPUの他処理、自由文品質の制限は[最終受入記録](validation/semantic-memory-341-remaining-acceptance-2026-09-15.md)を参照。

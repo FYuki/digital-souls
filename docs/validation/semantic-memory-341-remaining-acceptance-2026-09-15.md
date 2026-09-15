@@ -1,8 +1,62 @@
 # #341 残受入条件の検証（2026-09-15）
 
 本書は子Issueのチェック項目と証跡を対応づける。mainへのマージ・dogfood配備は対象外。
-現在は追加の実会話で見つかった出来事の誤採用を修正し、semantic-v9の再評価中。
-この段階を子Issue全件完了として扱わない。
+semantic-v9の正式評価と、会話・意味抽出を12bにした実接続受入が完了した。
+以下の最終結果を現状とし、後半には失敗を含む先行試行を残す。
+GitHubへの統合・CI・レビューの状態はPR #409 / #405を正本とする。
+
+
+## 最終結果
+
+- 意味抽出の実行commit: `6c55e6d73ff3b3d12397369b4db2567603b1c212`。
+  追加4件を含む104件×3回・cacheなし。全3回が分類別90%以上、禁止保存/別character混入0件。
+  元100件の入力・期待値は変更していない。事前のv6両モデル比較600件とは別の、選定12bの回帰評価。
+- 各回の出来事除外・明示確認・固定属性矛盾は90%、他8分類は100%。
+  `event_exclusion-06`、`confirmation-10`、`fixed_conflict-10`の誤りが各回に残る。
+  **全312件正解という意味ではない。** 判定基準や禁止保存の扱いを緩めていない。
+- 1ケースの中央値は3.29〜3.30秒、p95は3.58〜3.60秒。
+  Ollama定期観測の合計VRAM最大は約11.80GB。GPU全体の使用量は他processを含み、専有量と区別する。
+  input/output tokens、model digest、設定、ファイルhash、資源観測は[機械可読結果](semantic-memory-341-remaining-results.json)に保存。
+- 実接続commit: `f887b3e9d83cc41225647862dff92118a153e9eb`。
+  root: `/tmp/ds-memory-341-gwcons0n`。会話・意味抽出は12b、privacy・Episode抽出はe4b、Embeddingは実nomic。
+  共通privacyのprompt・判定・QUERY_GATEの2秒上限は不変。
+
+| 最終の実接続シナリオ | 結果 / 根拠 |
+|---|---|
+| 通常会話の単一自己申告 | DIRECT_EXTRACTION、実SQLite、実Chromaへの保存を確認 |
+| 元発言の変更と古い索引 | 実version増加、古い実ベクトルを残して正本で失効・検索除外 |
+| #100の保存入口 | 実会話から抽出した2件のEpisodeを根拠に、一般化候補を契約入力。保存・冪等性・別character/古い版の拒否を確認 |
+| 自己申告と一般化の共存 | 正本では両方ACTIVE。別会話の応答は自己申告の否定的な好みを回答 |
+| 派生記憶の実UI削除 | 204、全版本文NULL、実索引除外、元Episode保持、同じ根拠からの再生成拒否 |
+| 削除直後の別会話 | 「コーヒーがお好きではない」と回答。自己申告の参照IDあり、削除IDなし |
+| 根拠Episode失効 | 古い実Chroma候補をSQLiteで排除、再評価待ち、outbox後の索引削除 |
+| character越境 | 別namespaceへ故障注入した実ベクトルでも所有検査で拒否。UI/APIも別characterのGET/DELETEは404、一覧は空 |
+| 保存拒否 | 通常発言は処理済みとなり、対象の意味記憶を形成しない |
+| 削除後の新しいEpisode根拠 | 新しい通常の出来事は自己申告を変更せず、意味記憶の追加/版増加もなし。新Episodeを含む一般化候補は受理 |
+| 新しい一般化との共存後 | 同じ質問に現在の自己申告を回答。応答参照は自己申告を含み、一般化IDを除外 |
+| 実UIの表示 | 自己申告だけに訂正ボタン、一般化に削除ボタン、削除後の本文消去・根拠保持を日本語表示のスクリーンショットでも確認 |
+
+3応答の本文と参照IDは`manual-review.json`、各phaseの正本/索引結果は`boundaries-*.json`、
+HTTP会話は`lifecycle-*.json`、実ブラウザは`ui-derived-*.json`に保存した。
+最初のheadless画像は日本語フォントが不足したため、既存Windowsフォントを専用fontconfigから参照し、
+`ui-japanese-*.png`で再確認した。アプリのDOMや返却値を置換していない。
+
+### 現構成での会話優先
+
+同commitの別root `/tmp/ds-memory-341-7tkfc709`で、12bの意味抽出呼出し開始から1.016秒後に通常会話を送った。
+抽出終了は会話送信後70.5ms、応答は1.332秒。再試行後は自己申告1件、意味抽出の未処理0件、index待ち0件。
+元の2会話を保持した。単一標本であり、常時1秒やcold起動の性能を保証しない。
+先行のe4b会話・12b抽出の並走実測も[先行記録](semantic-memory-341-2026-09-15.md)に保持する。
+
+### 残る制限
+
+- e4b会話は、正しい自己申告と優先指示が入力に含まれていても、人格と複数の経験を含む今回の文脈では再申告を求めた。
+  会話側を12bにした構成で受入した。e4bの同等品質、他の人格や自由文全般は未保証。
+- 同一モデルで異なる総contextを切り替えると繰返しQUERY_GATE timeoutが起きた。
+  最終構成は各用途の入力+出力を36,864に統一。coldロードや他処理との競合時のtimeoutは引き続き利用を見送る。
+- 一般化だけを想起した先行応答には、本人が述べたような出典表現の過剰な断定があった。
+  一般化の表出品質を受入完了とはしない。自己申告優先・保存/検索/失効の契約と区別する。
+- #100の一般化生成、内省の質問生成、外部活動学習、mainマージ、dogfood配備は対象外。
 
 ## 検証範囲の区別
 
@@ -23,10 +77,10 @@
 | #346 | 増分処理、明示発言・確認、会話優先、編集失効、予約回復、用途別Target、promptfoo本番経路 | `test_semantic_runtime.py`、`test_semantic_idle_recovery.py`、`test_semantic_catalog.py`、固定評価、先行の実並走・再起動証跡 |
 | #347 | 訂正・時間変化・矛盾・自己申告優先、出典/Episode失効、古い索引排除、削除再生成境界、競合・越境 | `test_semantic_retrieval.py`、`test_semantic_management.py`、先行実UI/居住地検証、本書の境界試験 |
 | #348 | 監査、出典遷移、自己申告限定訂正、全形成型削除、履歴消去、character分離 | 先行の実UI訂正/直接取得削除、本書の実UI派生削除、`SemanticMemoryManagement.unit.test.ts` |
-| #390 | 固定100件×両モデル各3回、設定・誤り・時間・tokens・資源・会話負荷を計測 | [v6比較](semantic-memory-341-v6-comparison.json)、[並走実測](semantic-memory-341-preemption.json)。変更後の12b評価を追加中 |
+| #390 | 固定100件×両モデル各3回、設定・誤り・時間・tokens・資源・会話負荷を計測 | [v6比較](semantic-memory-341-v6-comparison.json)、[並走実測](semantic-memory-341-preemption.json)。変更後の12bは104件×3回すべて基準達成 |
 | #349 | 通常会話→保存→別会話→UI→後続応答、source/privacy/character/失敗回復、#100契約 | [先行実接続](semantic-memory-341-2026-09-15.md)と本書を合わせて確認 |
 
-## 追加境界試験の結果
+## 先行の追加境界試験の結果
 
 実行アプリcommitは`cd4e37e92ce13c9277ebc193178b00e93cf2a57c`。
 専用rootは`/tmp/ds-memory-341-6rlfzxkn`。通常会話・privacy・Episodeはe4b、意味抽出は12b、
@@ -65,18 +119,20 @@ semantic-v6が肯定的な好みへCHANGEした。一般化候補の直接入力
   追加4件×3回、明示確認10件、訂正10件の診断がそれぞれ100%・90%・100%。
   全体1回目は矛盾保留80%で不合格。以降の繰返しは途中停止した。
 - v9はFIXEDの例示と既存属性の優先関係を明確にし、値の断定だけを過去の訂正とみなさないようにした。
-  矛盾保留10件は100%、明示確認10件は90%。全体評価と修正後の実会話受入は継続中。
+  矛盾保留10件は100%、明示確認10件は90%。後続の全体評価と実会話受入は上記の最終結果を参照。
 
 ## 自動テスト
 
-関連Backend 61件、schema移行・provenance 54件、Frontend意味記憶UI 5件が成功。
+関連Backend 61件、schema移行・provenance 54件、Frontend意味記憶UI 5件、character切替の遅延応答module 1件が成功。
+加えてchat prompt / RAG / prompt builder / semantic retrievalの関連70件が成功（前記と重複あり）。
+Svelte/TypeScript検査はエラー0・警告0。
 実行ログは`/tmp/ds341-admin/remaining-v7-regression.log`、`remaining-migrations.log`、`remaining-ui-unit.log`。
 これらのmoduleテストにはmock境界があり、上記の実サービス結果とは分ける。
 既存レコードを保持するschema更新を確認しており、旧preference本文を新Semanticへ自動変換した証明ではない。
 
 ## 再実行手順
 
-本番・dogfoodでは実行しない。既存の`acceptance_semantic_memory.py`で空の専用rootを作る。
+本番・dogfoodでは実行しない。`python scripts/acceptance_semantic_memory.py --model gemma4:12b --chat-model gemma4:12b`で空の専用rootを作る。
 `acceptance_semantic_scenario.py ROOT LABEL MESSAGE`は通常HTTP会話を行い、処理済み出典を待つ。
 以下のlabelは境界driverが読む。本文は固定した合成シナリオを使う。
 
@@ -88,7 +144,8 @@ semantic-v6が肯定的な好みへCHANGEした。一般化候補の直接入力
 5. `self-report-priority`でコーヒーは好きではないと明示し、別会話で応答を確認する。
 6. browser driverの`delete`で派生記憶を削除し、別会話の応答を確認する。
 7. 正常停止後にboundary driverの`deleted`、`invalid`、`foreign`を順に実行する。
-8. 再開後、`derived-new-source`で新たなコーヒーの出来事を通常会話へ送る。否定的な好みが変化しないことを確認する。
+8. 再開時も`--chat-model gemma4:12b`を明示する。再開後、`derived-new-source`で新たなコーヒーの出来事を通常会話へ送る。否定的な好みが変化しないことを確認する。
+   対象会話IDの新Episodeが完成したことを確認してから停止する。
    停止後の`priority`は新たなEpisodeを含む候補を受理し、一般化と自己申告の共存・検索優先を確認する。
 9. 再開後の別会話で自己申告の応答利用を確認し、正常停止と所有portの閉鎖を記録する。
 
