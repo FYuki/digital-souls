@@ -812,3 +812,17 @@ summaryとrawを保持し、受入合格にしない。CPU・memory・GPUのraw�
 
 実行引数 --isolated-normal-phase は補助runnerが単独試行へ指定するためのもの。
 単独試行のscopeは isolated_normal_trial であり、通常のpilot／controlled受入とは区別する。
+
+
+### 通常応答に失敗がある場合の診断集計
+
+既存の通常応答reporterが失敗試行を検出して拒否した場合は、その拒否を保持する。
+全105件のmanifestとtraceへ次の診断reporterを適用すると、測定100件を分母に残した時間指標を得る。
+
+~~~bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_normal_diagnostic.py --cohort-root frontend/test-results/livekit-quality/cohorts/COHORT_ID --output /path/to/new-diagnostic.json
+~~~
+
+固定音声、独立した試行、初期状態、時計、packetと全再生の証拠を既存validatorで確認する。
+失敗試行の時間は欠測、処理失敗は失敗として保持する。p50／p95は確認できた試行だけの参考分布であり、
+失敗・欠測を含む前後比較を受入合格へ変換しない。測定リビジョン、入力・reporter・schemaのhashを保持する。

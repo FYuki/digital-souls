@@ -6,12 +6,12 @@ import fcntl
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 from run_pilot import ROOT, measurement_revision, run_root
 
@@ -40,7 +40,7 @@ def verify_stopped(base: Path, revision: str) -> dict:
         cid = row.get("containerIdentity", {}).get("containerId", "")
         if row.get("owned") is not True or not re.fullmatch(r"[0-9a-f]{64}", cid):
             raise ValueError("owned container identity unavailable")
-        probe = subprocess.run(["docker", "inspect", cid], capture_output=True, text=True, timeout=15)
+        probe = subprocess.run(["docker", "inspect", cid], capture_output=True, text=True, timeout=15, check=False)
         if probe.returncode == 0 or not any(s in probe.stderr.lower() for s in ("no such object", "no such container")):
             raise ValueError("owned container deletion not verified")
     manifest = json.loads((base / "trial-manifest.json").read_text())
@@ -76,7 +76,7 @@ def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tupl
                         cid = (row.get("containerIdentity") or {}).get("containerId")
                         if service in images or row.get("owned") is not True or not cid:
                             continue
-                        found = subprocess.run(["docker", "inspect", cid], capture_output=True, text=True, timeout=5)
+                        found = subprocess.run(["docker", "inspect", cid], capture_output=True, text=True, timeout=5, check=False)
                         if found.returncode:
                             continue
                         item = json.loads(found.stdout)[0]
@@ -138,7 +138,7 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
                 "--manifest", str(target), "--trace", str(trace), "--output", str(directory / "report.json"),
                 "--schema", str(ROOT / "docs/schemas/voice-quality-artifact-v1.schema.json"),
                 "--profile-report", str(run_root(runs[0][0]) / "runtime-data/runtime/standalone/resolved-profile.json"),
-                "--run-id", directory.name], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT).returncode
+                "--run-id", directory.name], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=False).returncode
     summary["existing_reporter_exit"] = code
     summary["resources_note"] = "CPU・memory・GPU観測は各runに保持。複数containerを一つの累積CPU系列へ連結しない。"
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
