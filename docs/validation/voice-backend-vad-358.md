@@ -683,3 +683,12 @@ fc43694の修正を含むFE／BEを同じ専用Environmentで起動し、実boot
 e6e9398のremote CIで、追加したbootstrap-rejection／startup-cleanup診断が通常の実接続スイートの通信置換禁止に抵触した。両診断は実BE／SFUを使う一方、HTTPのversionまたは接続先を制御するため、frontend/diagnostics/voice-startup/と専用Playwright入口へ移した。禁止検査は緩和せず、通常のintegration-voiceが診断を収集しないことも検証する。
 
 過去artifactのsource path／hashは当時の版の証拠として保持する。実HTTP・SFUで確認した部分と、通信を制御した部分を区別し、これら5ケースを無変更clientの実接続受入の代用にしない。M5／M6の残条件は変更しない。
+
+
+## #341完了後のGPU測定再開（2026-09-15）
+
+[再開時の診断記録](../artifacts/voice-backend-358-gpu-resume-20260915.json)を保存した。GPUは開始時0%、約1.3GiB使用だった。移設前アプリ07b8b1e・測定ハーネス07269e5で少数試行を開始したが、最初の準備試行がSTT後のtoken見積もりで約30秒timeoutとなり、応答音声を得られず停止した。共有Ollama 0.24.0への直接推論も60秒timeoutとなった。
+
+既存キャッシュを読み取り専用にした専用Ollama 0.34.0では、同じmodel digestの短い直接推論が成功した。しかし2回目の会話試行はProfileが11434番を固定するため旧共有Ollamaへ接続しており、observerだけが11439番を観測していた。2回目を専用サーバーでの会話検証や比較値へ算入しない。この不一致を残して両runの失敗・trace・PCM観測・image ID・hashを保持した。
+
+移設後版と全100試行cohortは未着手。専用FE／BE、PCM observer、今回起動した専用OllamaとLiveKitは停止し、専用ポート閉鎖を確認した。共有Ollama、#341用Ollama、Whisper、VOICEVOXは変更していない。再開には固定接続先の共有Ollamaの推論復旧、または合意した専用Profileの整備が必要である。
