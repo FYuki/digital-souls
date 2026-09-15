@@ -1012,9 +1012,7 @@ class TestChatServiceRagContract:
         memory_id = "00000000-0000-4000-8000-000000000043"
         private_body = "PRIVATE_MEMORY_BODY_4C62"
         private_query = "PRIVATE_QUERY_BODY_9A17"
-        outcome = MagicMock()
-        outcome.memories = (_rag_memory(private_body, memory_id),)
-        outcome.no_match = False
+        outcome = _rag_outcome(_rag_memory(private_body, memory_id))
         service = _chat_service(True, policy)
         caplog.set_level("INFO")
 
@@ -1064,9 +1062,7 @@ class TestChatServiceRagContract:
         self,
     ) -> None:
         policy = object()
-        outcome = MagicMock()
-        outcome.memories = ()
-        outcome.no_match = True
+        outcome = _rag_outcome(no_match=True)
         service = _chat_service(True, policy)
 
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
@@ -1082,9 +1078,7 @@ class TestChatServiceRagContract:
 
     def test_unknown_occurrence_is_injected_without_a_date_label(self) -> None:
         policy = object()
-        outcome = MagicMock()
-        outcome.memories = (_rag_memory("日付不明の旅行", occurred_at=None),)
-        outcome.no_match = False
+        outcome = _rag_outcome(_rag_memory("日付不明の旅行", occurred_at=None))
         service = _chat_service(True, policy)
 
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):

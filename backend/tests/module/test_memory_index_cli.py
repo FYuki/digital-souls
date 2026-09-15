@@ -154,3 +154,41 @@ def test_cli_rejects_pending_restore_before_schema_initialization(
         index_cli.main(["worker"])
 
     assert len(observed) == 1
+
+
+@pytest.mark.parametrize("command", ["worker", "reconcile"])
+def test_cli_indexes_semantic_memory_and_reconciles_invalidated_source(tmp_path, monkeypatch, command):
+    from datetime import timedelta
+    from types import SimpleNamespace
+    from app.memory import index_cli
+    from app.memory.episodic.read_repository import EpisodicReadRepository
+    from app.memory.episodic.repository import EpisodicRepository
+    from app.memory.episodic.sources import ConversationSourceGuard
+    from app.memory.semantic.repository import SemanticRepository
+    from app.memory.semantic.service import SemanticStore
+    from app.runtime_paths import resolve_runtime_paths
+    from tests.conversation_history_test_support import create_repository
+    from tests.module.test_semantic_store import Reviewer, candidate, source
+
+    database_path, _ = _prepare_runtime(tmp_path, monkeypatch)
+    root = Path(index_cli.__file__).resolve().parents[3]
+    paths = resolve_runtime_paths(dict(index_cli.os.environ), root)
+    history = create_repository(paths.sqlite_path, now=NOW, uuid_factory=uuid4)
+    context = SimpleNamespace(paths=paths, history=history, conversation=history.create_conversation("miori"))
+    guard = ConversationSourceGuard(paths.sqlite_path, clock=lambda: NOW, retention=timedelta(days=365))
+    episodic = EpisodicReadRepository(EpisodicRepository(database_path), guard)
+    store = SemanticStore(repository=SemanticRepository(database_path), source_guard=guard,
+                          episode_reader=episodic, reviewer=Reviewer(), clock=lambda: NOW)
+    evidence = source(context)
+    memory = store.save(character_id="miori", candidate=candidate(evidence), receipt_key="semantic-cli")
+    records = _install_index_double(monkeypatch)
+
+    assert index_cli.main([command]) == 0
+    assert records[("miori", str(memory.id))]["normalized_text"] == memory.proposition.content
+    with sqlite3.connect(paths.sqlite_path) as connection:
+        connection.execute("UPDATE conversation_turns SET user_content='訂正' WHERE turn_id=?",
+                           (str(evidence.source_id),))
+    assert index_cli.main(["reconcile"]) == 0
+    assert ("miori", str(memory.id)) not in records
+    with store.repository.read() as tx:
+        assert tx.get("miori", memory.id).status.value == "INACTIVE"

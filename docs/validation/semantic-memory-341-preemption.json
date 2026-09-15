@@ -1,0 +1,295 @@
+{
+  "date": "2026-09-15",
+  "runtime_commit": "c06d3d36600e98fc8aabcdee3d3c7435d2d36d0e",
+  "run_id": "3c4932db-7788-4ea9-884a-6c679a1181f7",
+  "evidence_root": "/tmp/ds-memory-341-9fl_nbp7",
+  "models": {
+    "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+    "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+    "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+  },
+  "inference_settings": {
+    "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
+    "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+    "INFERENCE_TARGET_CHAT_TIMEOUT_SECONDS": "120",
+    "INFERENCE_TARGET_CHAT_MAX_CONCURRENCY": "1",
+    "INFERENCE_TARGET_CHAT_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+    "INFERENCE_TARGET_PRIVACY": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "7680",
+    "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_PRIVACY_TIMEOUT_SECONDS": "120",
+    "INFERENCE_TARGET_PRIVACY_MAX_CONCURRENCY": "1",
+    "INFERENCE_TARGET_PRIVACY_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_TIMEOUT_SECONDS": "120",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_CONCURRENCY": "1",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "7680",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_TIMEOUT_SECONDS": "120",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_CONCURRENCY": "1",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+    "INFERENCE_TARGET_SEMANTIC_EXTRACTION": "ollama/gemma4:12b",
+    "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+    "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+    "INFERENCE_TARGET_SEMANTIC_EXTRACTION_TIMEOUT_SECONDS": "120",
+    "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_CONCURRENCY": "1",
+    "INFERENCE_TARGET_SEMANTIC_EXTRACTION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+    "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+    "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192",
+    "INFERENCE_TARGET_EMBEDDING_TIMEOUT_SECONDS": "120"
+  },
+  "idle": {
+    "n": 3,
+    "median_seconds": 1.2350730890175328,
+    "p95_nearest_rank_seconds": 4.60880745301256,
+    "values_seconds": [
+      1.0527233869652264,
+      1.2350730890175328,
+      4.60880745301256
+    ]
+  },
+  "semantic_running": {
+    "n": 3,
+    "median_seconds": 6.415661342965905,
+    "p95_nearest_rank_seconds": 9.842909406987019,
+    "values_seconds": [
+      0.9070952250040136,
+      6.415661342965905,
+      9.842909406987019
+    ]
+  },
+  "after_one_second": {
+    "request_age_seconds": [
+      1.0321089579956606,
+      1.0166189460433088
+    ],
+    "response_seconds": 5.512656829960179
+  },
+  "interruptions": [
+    {
+      "condition": "semantic-running-after-one-second",
+      "target": "memory-extraction",
+      "invocation_id": "4ba0fc1e-4df8-447f-a1c8-f828aa3ddc18",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.028798968996852636
+    },
+    {
+      "condition": "semantic-running-after-one-second",
+      "target": "semantic-extraction",
+      "invocation_id": "16f5a4a0-1292-4d30-9bae-916ad848086a",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.025254912965465337
+    },
+    {
+      "condition": "semantic-running-1",
+      "target": "memory-extraction",
+      "invocation_id": "63fb042e-6586-45d4-b756-1472bdb36b2f",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.060889390006195754
+    },
+    {
+      "condition": "semantic-running-1",
+      "target": "semantic-extraction",
+      "invocation_id": "1e154566-a1cb-45d4-ba25-3872ae7a7706",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.0658228539978154
+    },
+    {
+      "condition": "semantic-running-2",
+      "target": "semantic-extraction",
+      "invocation_id": "7b51e22b-b533-48cd-8ed1-22f5354939f9",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.04758955800207332
+    },
+    {
+      "condition": "semantic-running-2",
+      "target": "memory-extraction",
+      "invocation_id": "4b347e26-f3a2-48bb-8a7c-7df3580f3e27",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.0348732850397937
+    },
+    {
+      "condition": "semantic-running-3",
+      "target": "memory-extraction",
+      "invocation_id": "4f9aa0fa-018a-4fa0-b7e6-d6279c134369",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.060095624008681625
+    },
+    {
+      "condition": "semantic-running-3",
+      "target": "semantic-extraction",
+      "invocation_id": "233bd0a5-60c4-4be5-88fb-8e55faa3b744",
+      "ended": true,
+      "success": false,
+      "seconds_after_chat": 0.05574308900395408
+    }
+  ],
+  "recovery": {
+    "preserved_original_turns": 11,
+    "completed_episode_jobs": 11,
+    "episode_pending": 0,
+    "semantic_pending": 0,
+    "index_pending": 0,
+    "semantic_records": 9,
+    "version_distribution": {
+      "3": 8,
+      "1": 1
+    },
+    "counts": {
+      "semantic_receipts": 25,
+      "semantic_versions": 25,
+      "episodic_records": 48,
+      "episodic_receipts": 48,
+      "episodic_versions": 48
+    },
+    "exact_semantic_source_content_duplicates": 0,
+    "exact_episode_source_content_duplicates": 0,
+    "formation_latency": [
+      {
+        "condition": "prepare-decode",
+        "seconds_after_chat_completed": 38.505911
+      },
+      {
+        "condition": "prepare-1",
+        "seconds_after_chat_completed": 272.366928
+      },
+      {
+        "condition": "prepare-2",
+        "seconds_after_chat_completed": 139.874764
+      },
+      {
+        "condition": "prepare-3",
+        "seconds_after_chat_completed": 95.605189
+      }
+    ]
+  },
+  "resources": {
+    "impact": {
+      "samples": 1502,
+      "interval_seconds": 0.5,
+      "ollama_observed_peak_total_vram_bytes": 12122712962,
+      "models": {
+        "gemma4:12b": {
+          "observed_peak_vram_bytes": 9104858807,
+          "context_lengths": [
+            36864
+          ]
+        },
+        "nomic-embed-text:latest": {
+          "observed_peak_vram_bytes": 323150151,
+          "context_lengths": [
+            2048
+          ]
+        },
+        "gemma4:e4b": {
+          "observed_peak_vram_bytes": 3367921253,
+          "context_lengths": [
+            8192,
+            36864
+          ]
+        }
+      },
+      "host_gpus": {
+        "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+          "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+          "total_mib": 16376,
+          "first_observed_used_mib": 15483,
+          "observed_peak_used_mib": 15919
+        }
+      },
+      "errors": {
+        "nvidia_smi:TimeoutExpired": 1
+      },
+      "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+      "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+      "nvidia_smi_available": true
+    },
+    "decode": {
+      "samples": 139,
+      "interval_seconds": 0.5,
+      "ollama_observed_peak_total_vram_bytes": 11691538511,
+      "models": {
+        "nomic-embed-text:latest": {
+          "observed_peak_vram_bytes": 323150151,
+          "context_lengths": [
+            2048
+          ]
+        },
+        "gemma4:e4b": {
+          "observed_peak_vram_bytes": 3367921253,
+          "context_lengths": [
+            8192,
+            36864
+          ]
+        },
+        "gemma4:12b": {
+          "observed_peak_vram_bytes": 8431641558,
+          "context_lengths": [
+            36864
+          ]
+        }
+      },
+      "host_gpus": {
+        "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+          "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+          "total_mib": 16376,
+          "first_observed_used_mib": 7000,
+          "observed_peak_used_mib": 15836
+        }
+      },
+      "errors": {},
+      "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+      "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+      "nvidia_smi_available": true
+    }
+  },
+  "shutdown": {
+    "http://127.0.0.1:50229": true,
+    "http://127.0.0.1:46605": true,
+    "http://127.0.0.1:39665": true,
+    "http://127.0.0.1:57061": true
+  },
+  "limitations": [
+    "各3標本と追加1標本の診断であり、p95は標本最大値。性能保証ではない。",
+    "初回のモデル常駐状態、共有GPUの他作業、履歴量が異なるため、先行25〜34秒との厳密な対照試験ではない。",
+    "生成API開始時刻を観測している。サーバー内のトークン生成開始時点は観測していない。",
+    "モデル退避・再読込とprivacy timeoutを観測。会話優先は保存完了時間の短縮を保証しない。",
+    "既存c3yq075l rootでは旧版検証を含む記憶に対するREAFFIRM内容不一致で再試行が継続。記録を保持し、新規rootで並走診断を実施。",
+    "prompt・schema・privacy条件・tokens上限は変更していない。固定600ケースの評価commitはee0a3ceで、この実測commitとは区別する。"
+  ],
+  "evidence_sha256": {
+    "runtime-manifest.json": "0f2015fc99b6344107ca477cc16cf9b89f8e5f95dfcbf49bf911865974f6b991",
+    "chat-preemption-impact-summary.json": "8b630d1364d99f355082019f9cef2125cc8d6843310d66c1ec16698196ae2283",
+    "chat-preemption-decode-summary.json": "b229aa45e24eeb8ce068c7554d3b645e284fa5563e7003b769261c2f5a05dcfd",
+    "chat-preemption-canonical-evidence.json": "3b00201b2c54ce3602cb5966bbddd10fa7686d6704bef26a9e31bad370f50d52",
+    "chat-preemption-impact-memory-summary.json": "fa3e2a481f066ba00cb6ef4d590e664403a660a9fbb7b1aa7a11e730b4f031fe",
+    "chat-preemption-decode-memory-summary.json": "4585486d8f6ee6dc59fb13bd1ace1f6a64368dac6e96abaddaa16af74b98ab98",
+    "inference-activity.jsonl": "80ca341e8ed5ef2e3c2821634dd6e1e358794a2777ce1db76d14644f3ed89d2e",
+    "chat-preemption-impact-events.jsonl": "9488be01b4e0b76b933f718098ce23cca0b8334c467f39c0c1d6cdbdcde314f9",
+    "chat-preemption-decode-events.jsonl": "efecab3875f06ed8d24d3046e81dc797d47f697bdfab17e2d7e7e1a1f2bf7fec",
+    "chat-preemption-runtime-stop.json": "af2fcaf1efbd0652ece1c9da053d6c623d2f61175131de15f3d361378d76b162",
+    "chat-preemption-index-evidence.json": "7e8de8704d4e865d6594bfac847faa7eb9038910b92cbdaf8c019c09fdd7a5f0"
+  },
+  "index": {
+    "run_id": "3c4932db-7788-4ea9-884a-6c679a1181f7",
+    "all_semantic_ids_indexed": true,
+    "semantic_count": 9,
+    "fingerprint": {
+      "provider_id": "ollama",
+      "model_id": "nomic-embed-text:latest",
+      "dimension": 768
+    }
+  }
+}

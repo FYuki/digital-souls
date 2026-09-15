@@ -23,6 +23,7 @@ class Model:
     def __init__(self):
         self.calls = []
         self.entered = threading.Event()
+        self.entered_at = None
         self.release = threading.Event()
         self.release.set()
 
@@ -35,6 +36,7 @@ class Model:
         else:
             properties = json.get("format", {}).get("properties", {})
             if "facts" in properties:
+                self.entered_at = datetime.now(UTC)
                 self.entered.set()
                 assert self.release.wait(timeout=5)
                 request = __import__("json").loads(json["messages"][-1]["content"])
@@ -73,7 +75,8 @@ def model(monkeypatch):
     fixture = Model()
     monkeypatch.setenv("INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS", "32768")
     monkeypatch.setenv("INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS", "4096")
-    monkeypatch.setattr(httpx.Client, "post", lambda client, url, **kwargs: fixture.post(client, url, **kwargs))
+    # HTTP転送は合成境界。実接続の中断はtest_cancellable_inference_httpで検証する。
+    monkeypatch.setattr("app.inference.adapters.ollama.cancellable_post", fixture.post)
     monkeypatch.setattr(main, "load_character_card", lambda _: _character_card())
     monkeypatch.setattr("app.llm.router.generate_response", lambda *args, **kwargs: "昼食のお話を聞きました")
     return fixture
@@ -85,7 +88,7 @@ def records(paths):
 
 
 def wait_for_records(paths, count=2):
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 8
     while time.monotonic() < deadline:
         if len(records(paths)) == count:
             return
@@ -94,7 +97,7 @@ def wait_for_records(paths, count=2):
 
 
 def wait_for_receipt(paths):
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 8
     while time.monotonic() < deadline:
         with sqlite3.connect(paths.sqlite_path) as connection:
             row = connection.execute("SELECT revision,completed_revision FROM memory_thread_jobs").fetchone()
@@ -118,7 +121,14 @@ def test_reply_does_not_wait_and_lifespan_forms_episode_fact_link(model, runtime
                 with client.websocket_connect(f"/ws/miori?conversation_id={CONVERSATION_ID}") as websocket:
                     websocket.send_json({"type": "text", "message": "今日うどんを食べた"})
                     assert websocket.receive_json()["type"] == "text"
-            assert model.entered.wait(timeout=2)
+            # 会話直後の5秒の猶予中は開始せず、その後に抽出する。
+            assert not model.entered.is_set()
+            assert model.entered.wait(timeout=12)
+            with sqlite3.connect(runtime_paths.sqlite_path) as history:
+                from app.conversation_history._sqlite import parse_datetime
+                completed_at = parse_datetime(history.execute(
+                    "SELECT MAX(updated_at) FROM conversation_turns").fetchone()[0])
+            assert (model.entered_at - completed_at).total_seconds() >= 5
             assert not model.release.is_set()
             assert records(runtime_paths) == []
             with sqlite3.connect(runtime_paths.persona_memory_sqlite_path) as connection:

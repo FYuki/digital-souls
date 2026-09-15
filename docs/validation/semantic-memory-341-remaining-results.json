@@ -1,0 +1,668 @@
+{
+  "schema_version": 1,
+  "scope": "#341 selected 12b regression and remaining acceptance",
+  "evaluation": {
+    "commit": "6c55e6d73ff3b3d12397369b4db2567603b1c212",
+    "prompt_version": "semantic-v9",
+    "cache": false,
+    "cases": 104,
+    "runs": [
+      {
+        "run": 1,
+        "passed": true,
+        "category_accuracy": {
+          "direct": 1.0,
+          "event_exclusion": 0.9,
+          "confirmation": 0.9,
+          "reaffirm": 1.0,
+          "change": 1.0,
+          "correction": 1.0,
+          "fixed_conflict": 0.9,
+          "self_report_priority": 1.0,
+          "grounding_exclusion": 1.0,
+          "safety": 1.0,
+          "event_existing_boundary": 1.0
+        },
+        "forbidden_cases": [],
+        "failures": {
+          "event_exclusion-06": "saved_count",
+          "confirmation-10": "saved_count,operation,value,source_turn",
+          "fixed_conflict-10": "operation"
+        },
+        "cli_exit": 0,
+        "count": 104,
+        "latency_median_seconds": 3.292896231490886,
+        "latency_p95_seconds": 3.5998421909753233,
+        "execution_errors": 0,
+        "input_tokens": 131214,
+        "output_tokens": 10096,
+        "model_memory": {
+          "samples": 548,
+          "interval_seconds": 0.5,
+          "ollama_observed_peak_total_vram_bytes": 11799562811,
+          "models": {
+            "gemma4:12b": {
+              "observed_peak_vram_bytes": 8431641558,
+              "context_lengths": [
+                36864
+              ]
+            },
+            "gemma4:e4b": {
+              "observed_peak_vram_bytes": 3367921253,
+              "context_lengths": [
+                8192
+              ]
+            }
+          },
+          "host_gpus": {
+            "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+              "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+              "total_mib": 16376,
+              "first_observed_used_mib": 15165,
+              "observed_peak_used_mib": 15187
+            }
+          },
+          "errors": {},
+          "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+          "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+          "nvidia_smi_available": true
+        },
+        "results_sha256": "94096ea7c3224bed8867c0688e7214e8e72defcc21a623d53dd8d8112f5cf8e3"
+      },
+      {
+        "run": 2,
+        "passed": true,
+        "category_accuracy": {
+          "direct": 1.0,
+          "event_exclusion": 0.9,
+          "confirmation": 0.9,
+          "reaffirm": 1.0,
+          "change": 1.0,
+          "correction": 1.0,
+          "fixed_conflict": 0.9,
+          "self_report_priority": 1.0,
+          "grounding_exclusion": 1.0,
+          "safety": 1.0,
+          "event_existing_boundary": 1.0
+        },
+        "forbidden_cases": [],
+        "failures": {
+          "event_exclusion-06": "saved_count",
+          "confirmation-10": "saved_count,operation,value,source_turn",
+          "fixed_conflict-10": "operation"
+        },
+        "cli_exit": 0,
+        "count": 104,
+        "latency_median_seconds": 3.3025092990428675,
+        "latency_p95_seconds": 3.5842518390272744,
+        "execution_errors": 0,
+        "input_tokens": 131214,
+        "output_tokens": 10094,
+        "model_memory": {
+          "samples": 546,
+          "interval_seconds": 0.5,
+          "ollama_observed_peak_total_vram_bytes": 11799562811,
+          "models": {
+            "gemma4:12b": {
+              "observed_peak_vram_bytes": 8431641558,
+              "context_lengths": [
+                36864
+              ]
+            },
+            "gemma4:e4b": {
+              "observed_peak_vram_bytes": 3367921253,
+              "context_lengths": [
+                8192
+              ]
+            }
+          },
+          "host_gpus": {
+            "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+              "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+              "total_mib": 16376,
+              "first_observed_used_mib": 15182,
+              "observed_peak_used_mib": 15187
+            }
+          },
+          "errors": {},
+          "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+          "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+          "nvidia_smi_available": true
+        },
+        "results_sha256": "0533c4a050adb2baf0fd5d2f932fe824f289c13c0147d6370a3e2029528287ea"
+      },
+      {
+        "run": 3,
+        "passed": true,
+        "category_accuracy": {
+          "direct": 1.0,
+          "event_exclusion": 0.9,
+          "confirmation": 0.9,
+          "reaffirm": 1.0,
+          "change": 1.0,
+          "correction": 1.0,
+          "fixed_conflict": 0.9,
+          "self_report_priority": 1.0,
+          "grounding_exclusion": 1.0,
+          "safety": 1.0,
+          "event_existing_boundary": 1.0
+        },
+        "forbidden_cases": [],
+        "failures": {
+          "event_exclusion-06": "saved_count",
+          "confirmation-10": "saved_count,operation,value,source_turn",
+          "fixed_conflict-10": "operation"
+        },
+        "cli_exit": 0,
+        "count": 104,
+        "latency_median_seconds": 3.2891213999828324,
+        "latency_p95_seconds": 3.592221257975325,
+        "execution_errors": 0,
+        "input_tokens": 131214,
+        "output_tokens": 10094,
+        "model_memory": {
+          "samples": 547,
+          "interval_seconds": 0.5,
+          "ollama_observed_peak_total_vram_bytes": 11799562811,
+          "models": {
+            "gemma4:12b": {
+              "observed_peak_vram_bytes": 8431641558,
+              "context_lengths": [
+                36864
+              ]
+            },
+            "gemma4:e4b": {
+              "observed_peak_vram_bytes": 3367921253,
+              "context_lengths": [
+                8192
+              ]
+            }
+          },
+          "host_gpus": {
+            "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+              "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+              "total_mib": 16376,
+              "first_observed_used_mib": 15182,
+              "observed_peak_used_mib": 15195
+            }
+          },
+          "errors": {},
+          "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+          "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+          "nvidia_smi_available": true
+        },
+        "results_sha256": "6207bab2077391acb02de012a29488d79f50f51e09565a130263adb70d41f695"
+      }
+    ],
+    "passed": true,
+    "model": {
+      "name": "gemma4:12b",
+      "model": "gemma4:12b",
+      "modified_at": "2026-09-14T15:43:49.707717541Z",
+      "size": 7556508396,
+      "digest": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c",
+      "details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "gemma4",
+        "families": [
+          "gemma4"
+        ],
+        "parameter_size": "11.9B",
+        "quantization_level": "Q4_K_M",
+        "context_length": 262144,
+        "embedding_length": 3840
+      },
+      "capabilities": [
+        "completion",
+        "tools",
+        "thinking",
+        "vision"
+      ]
+    },
+    "privacy_model": {
+      "name": "gemma4:e4b",
+      "model": "gemma4:e4b",
+      "modified_at": "2026-09-14T15:45:59.469086515Z",
+      "size": 9608350718,
+      "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+      "details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "gemma4",
+        "families": [
+          "gemma4"
+        ],
+        "parameter_size": "8.0B",
+        "quantization_level": "Q4_K_M"
+      },
+      "capabilities": [
+        "completion",
+        "tools",
+        "thinking"
+      ]
+    },
+    "inference_settings": {
+      "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
+      "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7680",
+      "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+      "INFERENCE_TARGET_CHAT_TIMEOUT_SECONDS": "120",
+      "INFERENCE_TARGET_CHAT_MAX_CONCURRENCY": "1",
+      "INFERENCE_TARGET_CHAT_OPTIONS_JSON": "{\"temperature\":0,\"think\":false}",
+      "INFERENCE_TARGET_PRIVACY": "ollama/gemma4:e4b",
+      "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "7680",
+      "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+      "INFERENCE_TARGET_PRIVACY_TIMEOUT_SECONDS": "120",
+      "INFERENCE_TARGET_PRIVACY_MAX_CONCURRENCY": "1",
+      "INFERENCE_TARGET_PRIVACY_OPTIONS_JSON": "{\"temperature\":0,\"think\":false}",
+      "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/gemma4:e4b",
+      "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "7680",
+      "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+      "INFERENCE_TARGET_MEMORY_EXTRACTION_TIMEOUT_SECONDS": "120",
+      "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_CONCURRENCY": "1",
+      "INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON": "{\"temperature\":0,\"think\":false}",
+      "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/gemma4:e4b",
+      "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "7680",
+      "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+      "INFERENCE_TARGET_MEMORY_CONSOLIDATION_TIMEOUT_SECONDS": "120",
+      "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_CONCURRENCY": "1",
+      "INFERENCE_TARGET_MEMORY_CONSOLIDATION_OPTIONS_JSON": "{\"temperature\":0,\"think\":false}",
+      "INFERENCE_TARGET_SEMANTIC_EXTRACTION": "ollama/gemma4:12b",
+      "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+      "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+      "INFERENCE_TARGET_SEMANTIC_EXTRACTION_TIMEOUT_SECONDS": "120",
+      "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_CONCURRENCY": "1",
+      "INFERENCE_TARGET_SEMANTIC_EXTRACTION_OPTIONS_JSON": "{\"temperature\":0,\"think\":false}",
+      "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+      "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192"
+    },
+    "case_hashes": {
+      "backend/evals/semantic_memory/cases.jsonl": "1603788df455b6598ab328468c9fe048692efce51c851b87ab0749efc6fdd676",
+      "backend/evals/semantic_memory/boundary-cases.jsonl": "d2546ace86fcdf6f86d4309dc393cfdc47b6bba5c0cdaddd49a2e0a80cdd1df7"
+    },
+    "root": "/tmp/ds341-formal-v9-12b"
+  },
+  "real_acceptance": {
+    "runtime": {
+      "commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+      "runId": "a14ea080-7363-464c-a1a0-df1f9845d66e",
+      "environmentId": "test",
+      "models": {
+        "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+        "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+      },
+      "inferenceSettings": {
+        "INFERENCE_TARGET_CHAT": "ollama/gemma4:12b",
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "35840",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+        "INFERENCE_TARGET_CHAT_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_CHAT_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_CHAT_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_PRIVACY": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "36352",
+        "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_PRIVACY_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_PRIVACY_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_PRIVACY_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "36352",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION": "ollama/gemma4:12b",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+        "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192",
+        "INFERENCE_TARGET_EMBEDDING_TIMEOUT_SECONDS": "120"
+      },
+      "status": "stopped"
+    },
+    "root": "/tmp/ds-memory-341-gwcons0n",
+    "summary": {
+      "passed": true,
+      "steps": [
+        "source-edit",
+        "derived-source",
+        "derived-source-two",
+        "boundary-prepare",
+        "browser-inspect",
+        "derived-recall",
+        "self-report-priority",
+        "self-report-recall",
+        "browser-delete",
+        "after-derived-delete",
+        "privacy-optout",
+        "boundary-deleted",
+        "boundary-invalid",
+        "boundary-foreign",
+        "derived-new-source",
+        "boundary-priority",
+        "priority-recall"
+      ],
+      "root": "/tmp/ds-memory-341-gwcons0n",
+      "commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+      "selected_self_report_id": "e6f80a0e-df56-418a-9227-e448db0f6eae",
+      "excluded_derived_id": "e6c55b93-6dc1-4433-a3bb-4b4a6915dca2",
+      "response_turn_id": "dea749e1-3f21-4da9-b711-70cb3cccf80b",
+      "final_response_uses_self_report": true,
+      "query": "same fixed coffee preference question",
+      "services_stopped": true
+    },
+    "phases": {
+      "prepare": {
+        "phase": "prepare",
+        "runtime_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_sha256": "3fb34fb2b71a5452fab470d00aee60ea84594529f212ff21ef147d8ba113bbd1",
+        "run_id": "63dbde23-a408-4fc9-9cde-7f1dec6816c9",
+        "models": {
+          "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+          "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+          "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+        },
+        "environment": "test",
+        "generalization_generation": "out_of_scope_contract_input",
+        "source_edit": {
+          "record_id": "a04f919b-2744-4b56-9427-2b2754bcf0e9",
+          "revision_before": 2,
+          "revision_after": 3,
+          "raw_chroma_contains_old_id": true,
+          "retrieval_excludes_old_id": true,
+          "status": "INACTIVE",
+          "foreign_results": []
+        },
+        "derived": {
+          "delete_id": "56a77abf-7c49-4688-87d2-996217b0ae7c",
+          "invalidate_id": "232a5ed6-d546-412b-8ab5-fdb66fb1b600",
+          "sources": [
+            {
+              "kind": "EPISODE",
+              "source_id": "86ba7b00-379e-42cb-ad84-d833f2bae5a5",
+              "revision": 1,
+              "conversation_id": null,
+              "span": null
+            },
+            {
+              "kind": "EPISODE",
+              "source_id": "31bf8c6a-d7e8-4fbe-9109-6514d7c808fe",
+              "revision": 1,
+              "conversation_id": null,
+              "span": null
+            }
+          ],
+          "real_privacy_stamp": {
+            "extraction": null,
+            "policy_version": "2026-09-semantic-v1",
+            "classifier_version": "semantic-privacy-classifier-v2",
+            "model_id": "gemma4:e4b",
+            "model_digest": "sha256:4c27e0f5b5adf02ac956c7322bd2ee7636fe3f45a8512c9aba5385242cb6e09a",
+            "prompt_version": "semantic-privacy-prompt-v12"
+          },
+          "retrieved_ids": [
+            "232a5ed6-d546-412b-8ab5-fdb66fb1b600",
+            "56a77abf-7c49-4688-87d2-996217b0ae7c"
+          ],
+          "duplicate_receipt_is_same_record": true,
+          "foreign_and_stale_source_rejected": true
+        }
+      },
+      "deleted": {
+        "phase": "deleted",
+        "runtime_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_sha256": "3fb34fb2b71a5452fab470d00aee60ea84594529f212ff21ef147d8ba113bbd1",
+        "run_id": "b405ffbd-8f91-4606-8727-4f85be0bde01",
+        "models": {
+          "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+          "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+          "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+        },
+        "environment": "test",
+        "generalization_generation": "out_of_scope_contract_input",
+        "record_id": "56a77abf-7c49-4688-87d2-996217b0ae7c",
+        "all_version_bodies_erased": true,
+        "source_episodes_preserved": true,
+        "removed_from_real_chroma": true,
+        "same_evidence_regeneration_rejected": true
+      },
+      "invalid": {
+        "phase": "invalid",
+        "runtime_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_sha256": "3fb34fb2b71a5452fab470d00aee60ea84594529f212ff21ef147d8ba113bbd1",
+        "run_id": "b405ffbd-8f91-4606-8727-4f85be0bde01",
+        "models": {
+          "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+          "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+          "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+        },
+        "environment": "test",
+        "generalization_generation": "out_of_scope_contract_input",
+        "record_id": "232a5ed6-d546-412b-8ab5-fdb66fb1b600",
+        "episode_id": "86ba7b00-379e-42cb-ad84-d833f2bae5a5",
+        "raw_stale_index_rejected": true,
+        "reassessment_pending": true,
+        "eventually_removed_from_chroma": true
+      },
+      "foreign": {
+        "phase": "foreign",
+        "runtime_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_sha256": "3fb34fb2b71a5452fab470d00aee60ea84594529f212ff21ef147d8ba113bbd1",
+        "run_id": "b405ffbd-8f91-4606-8727-4f85be0bde01",
+        "models": {
+          "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+          "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+          "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+        },
+        "environment": "test",
+        "generalization_generation": "out_of_scope_contract_input",
+        "foreign_namespace_contains_target": true,
+        "rejected_by_canonical_owner": true,
+        "record_id": "e6f80a0e-df56-418a-9227-e448db0f6eae",
+        "selected_foreign_ids": []
+      },
+      "priority": {
+        "phase": "priority",
+        "runtime_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+        "driver_sha256": "3fb34fb2b71a5452fab470d00aee60ea84594529f212ff21ef147d8ba113bbd1",
+        "run_id": "4be81487-f304-418e-9ac2-04ac3a254397",
+        "models": {
+          "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+          "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+          "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+        },
+        "environment": "test",
+        "generalization_generation": "out_of_scope_contract_input",
+        "derived_id": "e6c55b93-6dc1-4433-a3bb-4b4a6915dca2",
+        "self_report_id": "e6f80a0e-df56-418a-9227-e448db0f6eae",
+        "canonical_both_active": true,
+        "derived_excluded_from_retrieval": true,
+        "new_episode_source_after_deletion_accepted": true
+      }
+    },
+    "artifacts_sha256": {
+      "backend.log": "398a7726f4979c94245e7db66da1d0c4f9a505573484874e1f426a3c6e9f8602",
+      "boundaries-deleted.json": "6c5067c694e6288b1e3509a51c3636eff01c4ec05e81d06c32083932962539a5",
+      "boundaries-foreign.json": "fe93f332395e9f7bba19e5cf16189a5bc4f89e6463d42cb50fcb1a21f1feb13e",
+      "boundaries-invalid.json": "f46abae67566074c0399ee0b49447b96f40577d71324133fd6c315f6c6f56db0",
+      "boundaries-prepare.json": "6e0ea3490198d35fcbdcd1e176f3c97093eaf66005df2cb7d663c4249049014d",
+      "boundaries-priority.json": "7c087af1afccb572eadec501a488b2f4e3d6d7c2b6fff67a6df536f0a8fa6197",
+      "full-boundary-summary.json": "2a1534e1ab47f8d7e90e681b3185640f9bd8da3725eddae87500ce471f3a8c3b",
+      "inference-activity.jsonl": "df2bda64e1406abeb982dfec89a6b8060c2aa96eaa4e9a0441f885bd5bcb8878",
+      "lifecycle-after-derived-delete.json": "a7546c1affd64fde6387290dd4997b14257cca5d81aae080a57115d9511757ae",
+      "lifecycle-derived-new-source.json": "7558a42787c748684a860095feae8ced67c69bdbffa52d78b51a3c6388a30241",
+      "lifecycle-derived-recall.json": "241cbccd93685e71be4c5e3a4dcc7c043d4dc60f3f5dac47968955cfc9a51f3a",
+      "lifecycle-derived-source-two.json": "f22bf60a5ba0036d6b205361068915c262273fbc3d86274b1f194764eb216376",
+      "lifecycle-derived-source.json": "16fc35545e2e45f58cc4ce17bfc9cc57bebb4a02974340c394ec6918cc7d296a",
+      "lifecycle-priority-recall.json": "a30fea3caed97cf3777d357d5aa71f90ce431408b7410bbffefb8e9df281db31",
+      "lifecycle-privacy-optout.json": "db3e0fd817b336dfa2c4ea7989738eab497b5249e5a41daeef739acb21a830ca",
+      "lifecycle-self-report-priority.json": "3ceb5c6d6c16a7583963c1d4e4cb338354f0fb8568c79186b0b5a9d09638b2de",
+      "lifecycle-self-report-recall.json": "34c55495e0a8c7fe6fc1e5fa2d039c3e3a064a9f5124c4312e90abd0a0c443ca",
+      "lifecycle-source-edit.json": "e236dfa31f81b997e064042df5045beb3cb221ed460bc119f5cd37c384b8c9ae",
+      "manual-review.json": "8ebea29f409120a75e358cc8f7abc78be2508231a681f24c10b6d5b6c052e433",
+      "runtime-manifest-4be81487-f304-418e-9ac2-04ac3a254397.json": "2990b370f96f127b90eedc52ab15eb118cdb6a9cb59a2013fca6dfaa4161a8f0",
+      "runtime-manifest-63dbde23-a408-4fc9-9cde-7f1dec6816c9.json": "f8f64696e158262964e7990a53c49beae24e937be84e7372d3ead4a7bfb4207f",
+      "runtime-manifest-7dcb7818-0499-42ba-be81-754ee374d10c.json": "dcca8523312d1c2546e6ae1b3bed6e92a3e8fc2e543c5ba70d7035726ca334f9",
+      "runtime-manifest-b405ffbd-8f91-4606-8727-4f85be0bde01.json": "38e5bb1b524a1029e36f1d3e30dc27c56d522f414e9dd3b93f44fbe118603edd",
+      "runtime-manifest.json": "a75d83e18539d3a22469bfb9b5108259e8c50bf763b0b49875f218df15661fb3",
+      "ui-derived-delete-review.png": "5eb8ddef11aad5fdb70ed682dd754ed90b67c3c02672cc0fdb09aa40627fec69",
+      "ui-derived-delete.json": "3ed4055351fa72fde6eab8cf6c72092ffa6969cae7687178cb1bb09dcb2d18f2",
+      "ui-derived-delete.png": "6c15f94e1bed5ec2786d5781de924afc263100c1af905a9e6a7f89b84bc4f502",
+      "ui-derived-inspect.json": "bf3b128387b77913e67f331d46f2137ddf228d52c838d8cf1f2627f356f789bb",
+      "ui-derived-inspect.png": "9896f6a9488a4a79c1efef0c89deaa0d8e6e6d22e3815993d0d2c10e41b18cac",
+      "ui-japanese-deleted.png": "1be27c0fbbdce9331154f5126b8e59c3ebd2a87961ebe2bf6decf5ea39c396f6",
+      "ui-japanese-derived-active.png": "8da13f1e442be7a469f3e8564bae14461701d9c3f671503388205f2c07655003",
+      "ui-japanese-self-report.png": "9b53bfed566396406df41ac4a60fd30747188a75c0a60320e8e0853cc2adc304"
+    },
+    "manual_review": {
+      "passed": true,
+      "scope": "self-report priority, post-delete response, new source regeneration, UI DOM and contract checks",
+      "responses": {
+        "self-report-recall": "コーヒーがお好きではないとおっしゃっていましたね。",
+        "after-derived-delete": "コーヒーがお好きではないとおっしゃっていましたね。",
+        "priority-recall": "コーヒーがお好きではないと、おっしゃっていましたね。"
+      },
+      "new_event_no_added_semantic_records_or_versions": true,
+      "limitations": [
+        "derived first reply falsely attributed inference to user statement; expression calibration not verified"
+      ],
+      "japanese_screenshot_review": {
+        "passed": true,
+        "font_source": "existing Windows fonts via isolated fontconfig",
+        "deleted_body_absent": true,
+        "derived_active_no_correction_button": true,
+        "self_report_correctable": true
+      }
+    }
+  },
+  "current_preemption": {
+    "passed": true,
+    "runtime": {
+      "previousRunId": null,
+      "schemaVersion": 1,
+      "runId": "5b623b54-bd9a-4ea8-9835-9cf427d82d8b",
+      "status": "stopped",
+      "commit": "f887b3e9d83cc41225647862dff92118a153e9eb",
+      "environmentId": "test",
+      "dataRoot": "/tmp/ds-memory-341-7tkfc709/data",
+      "models": {
+        "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+        "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+        "gemma4:12b": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c"
+      },
+      "semanticExtractionModel": "gemma4:12b",
+      "chatModel": "gemma4:12b",
+      "inferenceSettings": {
+        "INFERENCE_TARGET_CHAT": "ollama/gemma4:12b",
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "35840",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+        "INFERENCE_TARGET_CHAT_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_CHAT_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_CHAT_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_PRIVACY": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "36352",
+        "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_PRIVACY_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_PRIVACY_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_PRIVACY_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "36352",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION": "ollama/gemma4:12b",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_INPUT_TOKENS": "32768",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_OUTPUT_TOKENS": "4096",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_TIMEOUT_SECONDS": "120",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_MAX_CONCURRENCY": "1",
+        "INFERENCE_TARGET_SEMANTIC_EXTRACTION_OPTIONS_JSON": "{\"temperature\": 0, \"think\": false}",
+        "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+        "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192",
+        "INFERENCE_TARGET_EMBEDDING_TIMEOUT_SECONDS": "120"
+      },
+      "tokenLimits": {
+        "CHAT": {
+          "input": 35840,
+          "output": 1024
+        },
+        "PRIVACY": {
+          "input": 36352,
+          "output": 512
+        },
+        "MEMORY_EXTRACTION": {
+          "input": 32768,
+          "output": 4096
+        },
+        "MEMORY_CONSOLIDATION": {
+          "input": 36352,
+          "output": 512
+        },
+        "SEMANTIC_EXTRACTION": {
+          "input": 32768,
+          "output": 4096
+        }
+      },
+      "backend": "http://127.0.0.1:39575",
+      "frontend": "http://127.0.0.1:38201",
+      "externalOllama": "http://127.0.0.1:11438",
+      "ownedProcesses": {
+        "backend": 2474176,
+        "frontend": 2474189
+      },
+      "acceptanceStatus": "unverified"
+    },
+    "interrupted": [
+      {
+        "target": "semantic-extraction",
+        "active_for_seconds": 1.0164645990007557,
+        "ended_after_request_seconds": 0.07053027499932796,
+        "success": false
+      }
+    ],
+    "chat_latency_seconds": 1.3318035979755223,
+    "semantic_records": 1,
+    "pending": 0,
+    "outbox_pending": 0,
+    "root": "/tmp/ds-memory-341-7tkfc709",
+    "services_stopped": true,
+    "samples": 1,
+    "real_chroma_contains_all_semantic_ids": true,
+    "source_turns_preserved": 2,
+    "artifacts_sha256": {
+      "chat-preemption-decode-memory.jsonl": "e16cb66cb7c4cd4cba6fceb8ebfd46b37c314ee1bd20dd5eab581bf09901dade",
+      "chat-preemption-decode-events.jsonl": "9ab50594c5744f663587ba8e00b6570de37c1de41c1eff856bc26531e96243fe",
+      "chat-preemption-decode-memory-summary.json": "2bcd69dd4500e62eaf0b7b7c929a8361c05c741a0423d4355665e174e66a68d1",
+      "chat-preemption-decode-summary.json": "af34b4eff6c3889fe67ce8d94b8d16e487ab0840634ee34aeb081ef656d52a52"
+    }
+  },
+  "limitations": [
+    "#100 generalization is supplied as a contract candidate, not generated by an LLM",
+    "source edit and Episode invalidation are isolated fault injections",
+    "e4b chat failed to answer the current self-report with the character prompt; final chat and extraction use 12b",
+    "query gate cold timeouts remain possible; shared context removes recurring resizing in the measured environment",
+    "derived-memory first reply overstated attribution as a user statement; expression calibration is not verified",
+    "v6 comparative model selection is an earlier commit; current preemption is one sample",
+    "main merge and dogfood deployment are not performed"
+  ]
+}

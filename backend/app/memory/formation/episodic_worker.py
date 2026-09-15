@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Callable, Mapping
 import threading
 
+from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.memory.episodic.contracts import ExtractionIdentity
 from app.memory.episodic.registration import EpisodicRegistrationService
 from app.memory.formation.episodic_extractor import (
@@ -86,6 +87,11 @@ class EpisodicFormationWorker:
                 self._queue.finish(connection, snapshot, saved_count=saved, rejected_count=rejected)
         except (StaleThreadSnapshot, ExtractionInterrupted):
             self._queue.release(lease, failed=False)
+        except InferenceError as error:
+            interrupted = error.category is InferenceErrorCategory.CANCELLED
+            self._queue.release(lease, failed=not interrupted)
+            if not interrupted:
+                raise
         except Exception:
             self._queue.release(lease, failed=True)
             raise

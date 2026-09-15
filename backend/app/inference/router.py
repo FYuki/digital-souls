@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Iterator, Mapping
+from contextlib import contextmanager
 import json
 import logging
 from threading import BoundedSemaphore
@@ -32,6 +33,7 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.cancellation import cancellation_scope, raise_if_cancelled
 from app.inference.images import image_parts, validate_multimodal_messages
 from app.inference.diagnostics import diagnostic, estimate_diagnostics
 from app.inference.observer import (
@@ -79,7 +81,7 @@ class InferenceRouter:
         request_id = str(uuid4())
         started_at = perf_counter()
         try:
-            with self._capacity[target]:
+            with self._slot(target):
                 provider_result = adapter.generate_text(
                     TextGenerationRequest(
                         messages=messages,
@@ -92,6 +94,7 @@ class InferenceRouter:
                         ),
                     )
                 )
+            raise_if_cancelled()
             self._validate_text(provider_result)
         except Exception as error:
             self._observe_error(
@@ -215,7 +218,7 @@ class InferenceRouter:
         external_request_count = 0
         try:
             self._raise_if_cancelled(cancellation_token)
-            with self._capacity[target]:
+            with cancellation_scope(cancellation_token), self._slot(target):
                 self._raise_if_cancelled(cancellation_token)
                 external_request_count = 1
                 provider_result = adapter.generate_structured(
@@ -292,7 +295,7 @@ class InferenceRouter:
         request_id = str(uuid4())
         started_at = perf_counter()
         try:
-            with self._capacity[target]:
+            with self._slot(target):
                 result = adapter.embed(
                     EmbeddingRequest(
                         inputs=inputs,
@@ -304,6 +307,7 @@ class InferenceRouter:
                         ),
                     )
                 )
+            raise_if_cancelled()
         except Exception as error:
             self._observe(
                 request_id,
@@ -352,7 +356,7 @@ class InferenceRouter:
         started_at = perf_counter()
         diagnostic("token_estimate_requests", 1)
         try:
-            with estimate_diagnostics(), self._capacity[target]:
+            with estimate_diagnostics(), self._slot(target):
                 diagnostic("token_estimate_queue_ms", (perf_counter() - started_at) * 1000)
                 estimate = adapter.estimate_input_tokens(
                     TokenEstimateRequest(
@@ -373,6 +377,7 @@ class InferenceRouter:
                         ),
                     )
                 )
+            raise_if_cancelled()
             if estimate.count > request_input_tokens:
                 raise InferenceError(
                     InferenceErrorCategory.INVALID_REQUEST,
@@ -444,11 +449,19 @@ class InferenceRouter:
     def _raise_if_cancelled(
         cancellation_token: InferenceCancellationToken | None,
     ) -> None:
-        if cancellation_token is not None and cancellation_token.is_cancelled:
-            raise InferenceError(
-                InferenceErrorCategory.CANCELLED,
-                retryable=False,
-            )
+        raise_if_cancelled(cancellation_token)
+
+    @contextmanager
+    def _slot(self, target: InferenceTarget) -> Iterator[None]:
+        capacity = self._capacity[target]
+        raise_if_cancelled()
+        while not capacity.acquire(timeout=0.025):
+            raise_if_cancelled()
+        try:
+            raise_if_cancelled()
+            yield
+        finally:
+            capacity.release()
 
     def _observe(
         self,

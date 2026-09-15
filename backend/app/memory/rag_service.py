@@ -1,3 +1,4 @@
+import json
 import logging
 import sqlite3
 from collections.abc import Callable
@@ -17,7 +18,7 @@ from app.memory.chroma_store import (
     query_memories,
 )
 from app.memory.memory_policy import MemoryPolicy, rag_service_policy
-from app.memory.read_contracts import EpisodicMemoryView, MemoryReadRepository, ReadableMemory
+from app.memory.read_contracts import EpisodicMemoryView, MemoryReadRepository, ReadableMemory, SemanticMemoryView
 from app.memory.episodic.temporal import render_time
 from app.memory.episodic.time_search import matches_time
 from app.memory.persistence.contracts import (
@@ -25,6 +26,7 @@ from app.memory.persistence.contracts import (
     TemporalPrecision,
 )
 from app.memory.ranking import RetrievalRankingCandidate, rank_retrieval_candidates
+from app.memory.semantic.read_repository import WithSemanticReadRepository
 from app.memory.temporal_query import (
     TemporalQuery,
     TemporalQueryKind,
@@ -55,12 +57,14 @@ RAG_OPERATION_ERRORS = (
 class _VerifiedCandidate:
     candidate: MemorySearchCandidate
     memory: ReadableMemory
+    match_kind: RetrievalMatchKind | None = None
 
 
 @dataclass(frozen=True)
 class RetrievalOutcome:
     memories: tuple[MemorySearchResult, ...]
     no_match: bool
+    response_cautions: tuple[str, ...] = ()
 
 
 def embed_text(_text: str) -> list[float]:
@@ -100,6 +104,10 @@ def retrieve_prompt_memories(
                 assessment.reason_code.value,
             )
             return RetrievalOutcome((), False)
+        cautions = _semantic_response_cautions(
+            approved_repository, character=character, query=user_message,
+            policy=policy, scanner=scanner,
+        )
         ranking_policy = rag_service_policy(policy)
         temporal_query = parse_temporal_query(
             user_message,
@@ -141,12 +149,21 @@ def retrieve_prompt_memories(
             equivalence_margin=ranking_policy.equivalence_margin,
         )
         if temporal_query is None:
+            ranked = _include_lexical_semantics(
+                ranked, character=character, query=user_message, policy=policy, scanner=scanner,
+                approved_repository=approved_repository, now=now.astimezone(UTC),
+            )
+            ranked = _include_current_self_reports(
+                ranked, character=character, policy=policy, scanner=scanner,
+                approved_repository=approved_repository, now=now.astimezone(UTC),
+            )
             return RetrievalOutcome(
                 tuple(
                     _search_result(item, RetrievalMatchKind.SEMANTIC)
                     for item in ranked[: ranking_policy.max_retrieved_memories]
                 ),
                 False,
+                cautions,
             )
         period_memories = _verified_period_memories(
             period_memories,
@@ -164,11 +181,99 @@ def retrieve_prompt_memories(
                 : ranking_policy.max_retrieved_memories
             ]
         )
-        return RetrievalOutcome(memories, not memories)
+        return RetrievalOutcome(memories, not memories, cautions)
     except RAG_OPERATION_ERRORS as exc:
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
         return RetrievalOutcome((), False)
 
+
+def _include_lexical_semantics(
+    ranked: tuple[_VerifiedCandidate, ...], *, character: str, query: str,
+    policy: MemoryPolicy, scanner: PrivacyScanner, approved_repository: MemoryReadRepository, now: datetime,
+) -> tuple[_VerifiedCandidate, ...]:
+    if not isinstance(approved_repository, WithSemanticReadRepository):
+        return ranked
+    snapshots: list[ReadableMemory] = list(approved_repository.semantic.search_by_text(
+        character_id=character, query=query,
+    ))
+    verified = _verified_period_memories(snapshots, character=character, policy=policy,
+        scanner=scanner, approved_repository=approved_repository, now=now, revalidate=False)
+    by_id = {item.memory.id: item for item in ranked}
+    supplemental = tuple(_VerifiedCandidate(
+        by_id[memory.id].candidate if memory.id in by_id else MemorySearchCandidate(str(memory.id), float("inf")),
+        memory, by_id[memory.id].match_kind if memory.id in by_id else RetrievalMatchKind.LEXICAL,
+    ) for memory in verified)
+    selected_ids = {item.memory.id for item in supplemental}
+    return (*supplemental, *(item for item in ranked if item.memory.id not in selected_ids))
+
+def _semantic_response_cautions(
+    repository: MemoryReadRepository, *, character: str, query: str,
+    policy: MemoryPolicy, scanner: PrivacyScanner,
+) -> tuple[str, ...]:
+    if not isinstance(repository, WithSemanticReadRepository):
+        return ()
+    cautions: list[str] = []
+    for record in repository.semantic.list_conflicted(character_id=character):
+        value = record.proposition
+        if (value is None or record.character_id != character
+                or record.stamp.policy_version not in policy.retrieval_compatible_policy_versions
+                or value.predicate.casefold() not in query.casefold()):
+            continue
+        caution = json.dumps({"subject": value.subject, "attribute": value.predicate}, ensure_ascii=False)
+        scan = scanner.scan(caution)
+        if isinstance(scan, ScanSuccess) and not _scan_blocks_retrieval(scan, policy):
+            if caution not in cautions:
+                cautions.append(caution)
+    return tuple(cautions)
+
+def _include_current_self_reports(
+    ranked: tuple[_VerifiedCandidate, ...], *, character: str, policy: MemoryPolicy,
+    scanner: PrivacyScanner, approved_repository: MemoryReadRepository, now: datetime,
+) -> tuple[_VerifiedCandidate, ...]:
+    # 過去の自己申告だけが類似検索に当たっても、同じ属性の現在値を取り落とさない。
+    historical_keys = {
+        (item.memory.proposition.subject, item.memory.proposition.predicate)
+        for item in ranked
+        if isinstance(item.memory, SemanticMemoryView)
+        and item.memory.proposition is not None and item.memory.proposition.self_report
+        and not item.memory.current_self_report
+    }
+    if not historical_keys:
+        return ranked
+    snapshots: list[ReadableMemory] = [
+        memory for memory in approved_repository.list_active(character_id=character)
+        if isinstance(memory, SemanticMemoryView) and memory.current_self_report
+        and memory.proposition is not None
+        and (memory.proposition.subject, memory.proposition.predicate) in historical_keys
+    ]
+    current = _verified_period_memories(
+        snapshots, character=character, policy=policy, scanner=scanner,
+        approved_repository=approved_repository, now=now, revalidate=False,
+    )
+    by_id = {item.memory.id: item for item in ranked}
+    result: list[_VerifiedCandidate] = []
+    seen: set[UUID] = set()
+    for item in ranked:
+        memory = item.memory
+        related = [
+            value for value in current
+            if isinstance(value, SemanticMemoryView) and value.current_self_report
+            and value.proposition is not None and isinstance(memory, SemanticMemoryView)
+            and memory.proposition is not None and not memory.current_self_report
+            and (value.proposition.subject, value.proposition.predicate)
+            == (memory.proposition.subject, memory.proposition.predicate)
+        ]
+        for value in related:
+            if value.id not in seen:
+                # 正本から補う場合はベクトル距離を捏造しない。
+                result.append(by_id.get(value.id) or _VerifiedCandidate(
+                    MemorySearchCandidate(str(value.id), float("inf")), value, RetrievalMatchKind.RELATED,
+                ))
+                seen.add(value.id)
+        if memory.id not in seen:
+            result.append(item)
+            seen.add(memory.id)
+    return tuple(result)
 
 def _embedding_fingerprint(
     embedder: Callable[[str], list[float]], embedding: list[float]
@@ -320,11 +425,13 @@ def _verified_period_memories(
     scanner: PrivacyScanner,
     approved_repository: MemoryReadRepository,
     now: datetime,
+    revalidate: bool = True,
 ) -> list[ReadableMemory]:
     verified: list[ReadableMemory] = []
     for snapshot in memories:
         # 期間候補の取得後にEmbeddingを待つため、本文・出典を返却直前に再検証する。
-        memory = approved_repository.get(character_id=character, memory_id=snapshot.id)
+        memory = (approved_repository.get(character_id=character, memory_id=snapshot.id)
+                  if revalidate else snapshot)
         if memory is None or not _is_retrieval_compatible(memory, character, policy, now):
             continue
         body_scan = scanner.scan(memory.normalized_text)
@@ -386,12 +493,17 @@ def _search_result(
         normalized_text=memory.normalized_text,
         occurred_at=_format_occurred_at(memory),
         occurred_precision=memory.occurred_precision,
-        match_kind=match_kind,
+        match_kind=candidate.match_kind or match_kind,
         memory_type=memory.memory_type.value,
         raw_distance=candidate.candidate.raw_distance,
         temporal_text=(render_time(memory.five_w.when)
-                       if isinstance(memory, EpisodicMemoryView) and memory.five_w else None),
+                       if isinstance(memory, EpisodicMemoryView) and memory.five_w else (
+                           f"適用開始:{render_time(memory.proposition.valid_from)} / "
+                           f"適用終了:{render_time(memory.proposition.valid_until)}"
+                           if isinstance(memory, SemanticMemoryView) and memory.proposition
+                           and (memory.proposition.valid_from or memory.proposition.valid_until) else None)),
         content_version=memory.content_version,
+        current_self_report=isinstance(memory, SemanticMemoryView) and memory.current_self_report,
     )
 
 

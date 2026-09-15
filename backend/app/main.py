@@ -81,6 +81,13 @@ from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExt
 from app.memory.formation.scheduler import MemoryFormationScheduler
 from app.memory.formation.combined_scheduler import CombinedFormationScheduler
 from app.memory.formation.runtime import build_episodic_scheduler
+from app.memory.semantic.privacy import SemanticPrivacyReviewer
+from app.memory.semantic.management import SemanticMemoryManagement
+from app.routers.semantic_memories import router as semantic_memories_router
+from app.memory.semantic.read_repository import SemanticReadRepository, WithSemanticReadRepository
+from app.memory.semantic.repository import SemanticRepository
+from app.memory.semantic.runtime import build_semantic_scheduler
+from app.memory.semantic.service import SemanticStore
 from app.memory.episodic.privacy import EpisodicPrivacyReviewer
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
@@ -517,7 +524,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
 
         episodic_repository = EpisodicRepository(runtime_paths.persona_memory_sqlite_path)
-        memory_read_repository = CombinedMemoryReadRepository(
+        legacy_read_repository = CombinedMemoryReadRepository(
             approved_memory_repository,
             EpisodicReadRepository(
                 episodic_repository,
@@ -527,8 +534,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ),
             ),
         )
+        memory_read_repository = WithSemanticReadRepository(legacy_read_repository)
         response_provenance_recorder = ResponseProvenanceRecorder(
-            runtime_paths.persona_memory_sqlite_path, reader=memory_read_repository.episodic,
+            runtime_paths.persona_memory_sqlite_path, reader=legacy_read_repository.episodic,
         )
         outbox_repository = IndexOutboxRepository(
             database_path=runtime_paths.persona_memory_sqlite_path,
@@ -564,6 +572,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_service_state_set = False
         audio_pipeline_state_set = False
         semantic_classifier_state_set = False
+        semantic_store_state_set = False
         inference_router_state_set = False
         inference_router_registered = False
         persona_memory_provider_state_set = False
@@ -647,6 +656,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             app.state.semantic_privacy_classifier = semantic_privacy_classifier
             semantic_classifier_state_set = True
+            semantic_store = SemanticStore(
+                repository=SemanticRepository(runtime_paths.persona_memory_sqlite_path),
+                source_guard=legacy_read_repository.episodic.source_guard,
+                episode_reader=legacy_read_repository.episodic,
+                reviewer=SemanticPrivacyReviewer(
+                    scanner=privacy_scanner, classifier=semantic_privacy_classifier, policy=policy.privacy,
+                ), clock=clock,
+            )
+            memory_read_repository.bind(SemanticReadRepository(semantic_store))
+            app.state.semantic_memory_management = SemanticMemoryManagement(semantic_store, memory_index_sync)
+            app.state.semantic_store = semantic_store
+            semantic_store_state_set = True
             app.state.persona_memory_provider = PersonaMemoryProvider(
                 approved_repository=approved_memory_repository,
                 scanner=privacy_scanner,
@@ -657,7 +678,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             persona_memory_provider_state_set = True
             app.state.episodic_memory_management = EpisodicMemoryManagement(
-                reader=memory_read_repository.episodic,
+                reader=legacy_read_repository.episodic,
                 reviewer=EpisodicPrivacyReviewer(
                     scanner=privacy_scanner, classifier=semantic_privacy_classifier, policy=policy.privacy,
                 ),
@@ -734,8 +755,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 card = load_character_card(character_id)
                 return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
 
+            # 同じ自己申告の二重形成はUI訂正・削除を迂回するため、新旧の抽出は択一。
+            # 既存保存済みpreferenceの移行は#345で扱う。
             memory_formation_scheduler = CombinedFormationScheduler(
-                preference_formation_scheduler,
+                (build_semantic_scheduler(
+                    store=semantic_store, runtime=inference_runtime, timezone=occurred_timezone,
+                    stale_after=conversation_history_config.stale_after,
+                ) if InferenceTarget.SEMANTIC_EXTRACTION in inference_runtime.settings.targets
+                 else preference_formation_scheduler),
                 build_episodic_scheduler(
                     history_path=conversation_history_config.database_path,
                     repository=episodic_repository, clock=clock,
@@ -1101,6 +1128,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         llm_router.clear_inference_router,
                         inference_runtime.router,
                     )
+                if semantic_store_state_set:
+                    cleanup.callback(delattr, app.state, "semantic_store")
+                    cleanup.callback(delattr, app.state, "semantic_memory_management")
                 if episodic_memory_management_state_set:
                     cleanup.callback(delattr, app.state, "episodic_memory_management")
                 if persona_memory_provider_state_set:
@@ -1141,6 +1171,7 @@ app.include_router(character_catalog_router)
 app.include_router(conversations_router)
 app.include_router(memory_management_router)
 app.include_router(episodic_memories_router)
+app.include_router(semantic_memories_router)
 app.include_router(ui_settings_router)
 app.include_router(livekit_router)
 app.include_router(screen_perception_router)

@@ -35,3 +35,8 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 ## Archive
 
 archiveの一覧と置換先は[`archive/README.md`](archive/README.md)を参照する。
+
+## 意味記憶の追加契約
+
+[意味記憶の訂正・時間変化・矛盾](semantic-memory-lifecycle-2026-09.md)は#341の採用設計である。
+意味記憶の時間変化・矛盾・UI操作の範囲で共通境界ADRに優先し、privacy・根拠失効は維持する。
