@@ -8,6 +8,9 @@ import os
 from pathlib import Path
 import tempfile
 import time
+import traceback
+
+from pydantic import ValidationError
 from urllib.request import urlopen
 
 from app.inference import InferenceCaller, InferenceTarget
@@ -117,6 +120,12 @@ def call_api(prompt, options, context):
                                        if s.span and s.span.role == "user"] for r in result.saved]
         except Exception as error:
             output["error_type"] = type(error).__name__
+            output["error_frames"] = [{"file": Path(frame.filename).name, "line": frame.lineno,
+                                       "function": frame.name} for frame in traceback.extract_tb(error.__traceback__)]
+            if isinstance(error, ValidationError):
+                output["validation_errors"] = error.errors(include_input=False, include_context=False, include_url=False)
+            elif type(error).__name__ == "SemanticConflict":
+                output["error_reason"] = str(error)
         finally:
             if fixture is not None:
                 with fixture.repository.read() as tx:

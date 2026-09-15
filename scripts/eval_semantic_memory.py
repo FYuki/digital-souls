@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--endpoint", default="http://localhost:11438")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--case-prefix", help="失敗分類の調査用。正式評価には使用しない")
     parser.add_argument("--limit", type=int, default=100, help="部分実行は調査専用、正式合格には使用しない")
     args = parser.parse_args()
     url = urlparse(args.endpoint)
@@ -61,6 +62,10 @@ def main():
     with urlopen(args.endpoint + "/api/version", timeout=10) as response:
         version = json.load(response)
     cases = [json.loads(line) for line in (SUITE / "cases.jsonl").read_text().splitlines()][:args.limit]
+    if args.case_prefix:
+        cases = [case for case in cases if case["id"].startswith(args.case_prefix)]
+        if not cases:
+            raise ValueError("no diagnostic cases matched")
     tests = [{"vars": {"case_id": c["id"], "category": c["category"],
                        "input_json": json.dumps({k: c[k] for k in ("turns", "existing")}, ensure_ascii=False),
                        "expected_json": json.dumps(c["expected"], ensure_ascii=False)}} for c in cases]
@@ -73,7 +78,9 @@ def main():
     config_path = output / "config.json"
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2))
     tracked = [*SUITE.glob("*.py"), SUITE / "cases.jsonl",
-               * (ROOT / "backend/app/memory/semantic").glob("*.py")]
+               * (ROOT / "backend/app/memory/semantic").glob("*.py"),
+               ROOT / "backend/app/memory/memory_policy.json",
+               * (ROOT / "backend/app/privacy/semantic").glob("*.py"), Path(__file__).resolve()]
     manifest = {
         "model": models[args.model], "privacy_model": models["gemma4:e4b"], "ollama": version,
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -83,19 +90,24 @@ def main():
         "cache": False, "case_count": len(cases), "runs": args.runs,
         "acceptance_eligible": args.runs == 3 and len(cases) == 100,
     }
+    if manifest["acceptance_eligible"] and manifest["dirty"]:
+        raise ValueError("commit the worktree before the full three-run evaluation")
     (output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
     sys.path.insert(0, str(ROOT / "backend"))
     from evals.semantic_memory.score import score
+    from evals.semantic_memory.telemetry import MemorySampler
     print(f"評価証跡: {output}", flush=True)
     summaries = []
     for run in range(1, args.runs + 1):
         progress = output / f"run-{run}.jsonl"
         environment["SEMANTIC_EVAL_PROGRESS"] = str(progress)
-        with (output / f"run-{run}.log").open("w") as log:
+        with MemorySampler(args.endpoint, output / f"run-{run}-memory.jsonl") as memory, \
+                (output / f"run-{run}.log").open("w") as log:
             result = subprocess.run([str(ROOT / "node_modules/.bin/promptfoo"), "eval",
                 "--config", str(config_path), "--no-cache", "--max-concurrency", "1", "--no-table",
                 "--output", str(output / f"run-{run}.json")],
                 cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT, check=False)
+        (output / f"run-{run}-memory-summary.json").write_text(json.dumps(memory.summary(), ensure_ascii=False, indent=2))
         rows = [json.loads(line) for line in progress.read_text().splitlines()] if progress.exists() else []
         by_id = {r["case_id"]: r for r in rows}
         categories = defaultdict(list)

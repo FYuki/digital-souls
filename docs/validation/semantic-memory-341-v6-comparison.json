@@ -1,0 +1,685 @@
+{
+  "version": "v6",
+  "complete": true,
+  "models": {
+    "12b": {
+      "model": {
+        "name": "gemma4:12b",
+        "model": "gemma4:12b",
+        "modified_at": "2026-09-14T15:43:49.707717541Z",
+        "size": 7556508396,
+        "digest": "4eb23ef187e2c5462566d6a1d3bbbc2f1346d0b4327cbb66d58fffbcc9b2b05c",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma4",
+          "families": [
+            "gemma4"
+          ],
+          "parameter_size": "11.9B",
+          "quantization_level": "Q4_K_M",
+          "context_length": 262144,
+          "embedding_length": 3840
+        },
+        "capabilities": [
+          "completion",
+          "tools",
+          "thinking",
+          "vision"
+        ]
+      },
+      "commit": "ee0a3ced5249d4655b976545aa0c264932569b7c",
+      "dirty": false,
+      "complete": true,
+      "passed": true,
+      "acceptance_eligible": true,
+      "root": "/tmp/ds341-formal-v6-12b-01",
+      "runs": [
+        {
+          "run": 1,
+          "passed": true,
+          "category_accuracy": {
+            "direct": 1.0,
+            "event_exclusion": 0.9,
+            "confirmation": 1.0,
+            "reaffirm": 1.0,
+            "change": 0.9,
+            "correction": 1.0,
+            "fixed_conflict": 0.9,
+            "self_report_priority": 1.0,
+            "grounding_exclusion": 0.9,
+            "safety": 1.0
+          },
+          "forbidden_cases": [],
+          "failures": {
+            "event_exclusion-06": "saved_count",
+            "change-10": "operation",
+            "fixed_conflict-07": "operation",
+            "grounding_exclusion-05": "saved_count"
+          },
+          "cli_exit": 0,
+          "case_count": 100,
+          "case_latency_seconds": {
+            "count": 100,
+            "median": 3.5730151049792767,
+            "p95": 3.924019467958715,
+            "max": 4.309052912984043
+          },
+          "extraction_latency_ms": {
+            "count": 100,
+            "median": 2752.314612502232,
+            "p95": 3094.790189003106,
+            "max": 3193.364843958989
+          },
+          "tokens": {
+            "input": 100158,
+            "output": 10525,
+            "observed_requests": 100
+          },
+          "execution_errors": 0,
+          "memory": {
+            "samples": 591,
+            "interval_seconds": 0.5,
+            "ollama_observed_peak_total_vram_bytes": 12122712962,
+            "models": {
+              "gemma4:12b": {
+                "observed_peak_vram_bytes": 8431641558,
+                "context_lengths": [
+                  36864
+                ]
+              },
+              "gemma4:e4b": {
+                "observed_peak_vram_bytes": 3367921253,
+                "context_lengths": [
+                  8192
+                ]
+              },
+              "nomic-embed-text:latest": {
+                "observed_peak_vram_bytes": 323150151,
+                "context_lengths": [
+                  2048
+                ]
+              }
+            },
+            "host_gpus": {
+              "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+                "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+                "total_mib": 16376,
+                "first_observed_used_mib": 15827,
+                "observed_peak_used_mib": 15834
+              }
+            },
+            "errors": {},
+            "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+            "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+            "nvidia_smi_available": true
+          }
+        },
+        {
+          "run": 2,
+          "passed": true,
+          "category_accuracy": {
+            "direct": 1.0,
+            "event_exclusion": 0.9,
+            "confirmation": 0.9,
+            "reaffirm": 1.0,
+            "change": 0.9,
+            "correction": 0.9,
+            "fixed_conflict": 0.9,
+            "self_report_priority": 1.0,
+            "grounding_exclusion": 0.9,
+            "safety": 1.0
+          },
+          "forbidden_cases": [],
+          "failures": {
+            "event_exclusion-06": "saved_count",
+            "confirmation-10": "saved_count,operation,value,source_turn",
+            "change-10": "operation",
+            "correction-02": "execution_error,saved_count,operation,target,value",
+            "fixed_conflict-07": "operation",
+            "grounding_exclusion-05": "saved_count"
+          },
+          "cli_exit": 0,
+          "case_count": 100,
+          "case_latency_seconds": {
+            "count": 100,
+            "median": 3.542882200505119,
+            "p95": 3.9236815109616145,
+            "max": 4.318143952987157
+          },
+          "extraction_latency_ms": {
+            "count": 100,
+            "median": 2734.818501485279,
+            "p95": 3092.324338038452,
+            "max": 3195.484869997017
+          },
+          "tokens": {
+            "input": 100158,
+            "output": 10376,
+            "observed_requests": 100
+          },
+          "execution_errors": 1,
+          "memory": {
+            "samples": 580,
+            "interval_seconds": 0.5,
+            "ollama_observed_peak_total_vram_bytes": 11799562811,
+            "models": {
+              "gemma4:12b": {
+                "observed_peak_vram_bytes": 8431641558,
+                "context_lengths": [
+                  36864
+                ]
+              },
+              "gemma4:e4b": {
+                "observed_peak_vram_bytes": 3367921253,
+                "context_lengths": [
+                  8192
+                ]
+              }
+            },
+            "host_gpus": {
+              "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+                "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+                "total_mib": 16376,
+                "first_observed_used_mib": 15264,
+                "observed_peak_used_mib": 15376
+              }
+            },
+            "errors": {},
+            "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+            "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+            "nvidia_smi_available": true
+          }
+        },
+        {
+          "run": 3,
+          "passed": true,
+          "category_accuracy": {
+            "direct": 1.0,
+            "event_exclusion": 0.9,
+            "confirmation": 0.9,
+            "reaffirm": 1.0,
+            "change": 0.9,
+            "correction": 0.9,
+            "fixed_conflict": 0.9,
+            "self_report_priority": 1.0,
+            "grounding_exclusion": 0.9,
+            "safety": 1.0
+          },
+          "forbidden_cases": [],
+          "failures": {
+            "event_exclusion-06": "saved_count",
+            "confirmation-10": "saved_count,operation,value,source_turn",
+            "change-10": "operation",
+            "correction-02": "execution_error,saved_count,operation,target,value",
+            "fixed_conflict-07": "operation",
+            "grounding_exclusion-05": "saved_count"
+          },
+          "cli_exit": 0,
+          "case_count": 100,
+          "case_latency_seconds": {
+            "count": 100,
+            "median": 3.5631223499949556,
+            "p95": 3.9316011969931424,
+            "max": 4.330342510016635
+          },
+          "extraction_latency_ms": {
+            "count": 100,
+            "median": 2743.9895319694187,
+            "p95": 3088.167669950053,
+            "max": 3202.9614169732668
+          },
+          "tokens": {
+            "input": 100158,
+            "output": 10376,
+            "observed_requests": 100
+          },
+          "execution_errors": 1,
+          "memory": {
+            "samples": 583,
+            "interval_seconds": 0.5,
+            "ollama_observed_peak_total_vram_bytes": 11799562811,
+            "models": {
+              "gemma4:12b": {
+                "observed_peak_vram_bytes": 8431641558,
+                "context_lengths": [
+                  36864
+                ]
+              },
+              "gemma4:e4b": {
+                "observed_peak_vram_bytes": 3367921253,
+                "context_lengths": [
+                  8192
+                ]
+              }
+            },
+            "host_gpus": {
+              "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+                "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+                "total_mib": 16376,
+                "first_observed_used_mib": 15366,
+                "observed_peak_used_mib": 15376
+              }
+            },
+            "errors": {},
+            "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+            "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+            "nvidia_smi_available": true
+          }
+        }
+      ],
+      "manifest_sha256": "80fa83a5573ee57ae11363f73dcae6c38b5f7b339e42a4925f4b63b55388b55d"
+    },
+    "e4b": {
+      "model": {
+        "name": "gemma4:e4b",
+        "model": "gemma4:e4b",
+        "modified_at": "2026-09-14T15:45:59.469086515Z",
+        "size": 9608350718,
+        "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "gemma4",
+          "families": [
+            "gemma4"
+          ],
+          "parameter_size": "8.0B",
+          "quantization_level": "Q4_K_M"
+        },
+        "capabilities": [
+          "completion",
+          "tools",
+          "thinking"
+        ]
+      },
+      "commit": "ee0a3ced5249d4655b976545aa0c264932569b7c",
+      "dirty": false,
+      "complete": true,
+      "passed": false,
+      "acceptance_eligible": true,
+      "root": "/tmp/ds341-formal-v6-e4b-01",
+      "runs": [
+        {
+          "run": 1,
+          "passed": false,
+          "category_accuracy": {
+            "direct": 0.8,
+            "event_exclusion": 0.1,
+            "confirmation": 0.1,
+            "reaffirm": 0.8,
+            "change": 1.0,
+            "correction": 0.9,
+            "fixed_conflict": 0.3,
+            "self_report_priority": 0.0,
+            "grounding_exclusion": 0.2,
+            "safety": 0.5
+          },
+          "forbidden_cases": [
+            "safety-06",
+            "safety-07",
+            "safety-08",
+            "safety-09",
+            "safety-10"
+          ],
+          "failures": {
+            "direct-03": "value",
+            "direct-04": "value",
+            "event_exclusion-02": "saved_count",
+            "event_exclusion-03": "saved_count",
+            "event_exclusion-04": "saved_count",
+            "event_exclusion-05": "saved_count",
+            "event_exclusion-06": "saved_count",
+            "event_exclusion-07": "saved_count",
+            "event_exclusion-08": "saved_count",
+            "event_exclusion-09": "saved_count",
+            "event_exclusion-10": "saved_count",
+            "confirmation-02": "self_report",
+            "confirmation-03": "value,self_report",
+            "confirmation-04": "value,self_report",
+            "confirmation-05": "self_report",
+            "confirmation-06": "self_report",
+            "confirmation-07": "self_report",
+            "confirmation-08": "self_report",
+            "confirmation-09": "self_report",
+            "confirmation-10": "self_report",
+            "reaffirm-04": "execution_error,saved_count,operation,target",
+            "reaffirm-05": "execution_error,saved_count,operation,target",
+            "fixed_conflict-01": "operation",
+            "fixed_conflict-02": "operation",
+            "correction-03": "saved_count,operation,target,value",
+            "fixed_conflict-03": "saved_count,operation,target,value",
+            "fixed_conflict-04": "operation",
+            "fixed_conflict-05": "operation",
+            "fixed_conflict-08": "execution_error,saved_count,operation,target,value",
+            "fixed_conflict-10": "operation",
+            "self_report_priority-01": "operation,previous_state",
+            "self_report_priority-02": "operation,previous_state",
+            "self_report_priority-03": "operation,previous_state",
+            "self_report_priority-04": "operation,previous_state",
+            "self_report_priority-05": "operation,previous_state",
+            "self_report_priority-06": "operation,value,previous_state",
+            "self_report_priority-07": "operation,previous_state",
+            "self_report_priority-08": "operation,previous_state",
+            "self_report_priority-09": "operation,previous_state",
+            "self_report_priority-10": "operation,previous_state",
+            "grounding_exclusion-02": "saved_count",
+            "grounding_exclusion-03": "saved_count",
+            "grounding_exclusion-04": "saved_count",
+            "grounding_exclusion-05": "saved_count",
+            "grounding_exclusion-06": "saved_count",
+            "grounding_exclusion-08": "saved_count",
+            "grounding_exclusion-09": "saved_count",
+            "grounding_exclusion-10": "saved_count",
+            "safety-06": "forbidden_save,saved_count",
+            "safety-07": "forbidden_save,saved_count",
+            "safety-08": "forbidden_save,saved_count",
+            "safety-09": "forbidden_save,saved_count",
+            "safety-10": "forbidden_save,saved_count"
+          },
+          "cli_exit": 0,
+          "case_count": 100,
+          "case_latency_seconds": {
+            "count": 100,
+            "median": 10.066506582981674,
+            "p95": 10.42208352900343,
+            "max": 17.78261516999919
+          },
+          "extraction_latency_ms": {
+            "count": 100,
+            "median": 5264.307405508589,
+            "p95": 5562.137949978933,
+            "max": 11896.572956000455
+          },
+          "tokens": {
+            "input": 99758,
+            "output": 12927,
+            "observed_requests": 100
+          },
+          "execution_errors": 3,
+          "memory": {
+            "samples": 1831,
+            "interval_seconds": 0.5,
+            "ollama_observed_peak_total_vram_bytes": 11799562811,
+            "models": {
+              "gemma4:12b": {
+                "observed_peak_vram_bytes": 8431641558,
+                "context_lengths": [
+                  36864
+                ]
+              },
+              "gemma4:e4b": {
+                "observed_peak_vram_bytes": 3367921253,
+                "context_lengths": [
+                  8192,
+                  36864
+                ]
+              }
+            },
+            "host_gpus": {
+              "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+                "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+                "total_mib": 16376,
+                "first_observed_used_mib": 15371,
+                "observed_peak_used_mib": 15916
+              }
+            },
+            "errors": {},
+            "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+            "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+            "nvidia_smi_available": true
+          }
+        },
+        {
+          "run": 2,
+          "passed": false,
+          "category_accuracy": {
+            "direct": 0.8,
+            "event_exclusion": 0.1,
+            "confirmation": 0.1,
+            "reaffirm": 0.8,
+            "change": 1.0,
+            "correction": 0.9,
+            "fixed_conflict": 0.3,
+            "self_report_priority": 0.0,
+            "grounding_exclusion": 0.2,
+            "safety": 0.5
+          },
+          "forbidden_cases": [
+            "safety-06",
+            "safety-07",
+            "safety-08",
+            "safety-09",
+            "safety-10"
+          ],
+          "failures": {
+            "direct-03": "value",
+            "direct-04": "value",
+            "event_exclusion-02": "saved_count",
+            "event_exclusion-03": "saved_count",
+            "event_exclusion-04": "saved_count",
+            "event_exclusion-05": "saved_count",
+            "event_exclusion-06": "saved_count",
+            "event_exclusion-07": "saved_count",
+            "event_exclusion-08": "saved_count",
+            "event_exclusion-09": "saved_count",
+            "event_exclusion-10": "saved_count",
+            "confirmation-02": "self_report",
+            "confirmation-03": "value,self_report",
+            "confirmation-04": "value,self_report",
+            "confirmation-05": "self_report",
+            "confirmation-06": "self_report",
+            "confirmation-07": "self_report",
+            "confirmation-08": "self_report",
+            "confirmation-09": "self_report",
+            "confirmation-10": "self_report",
+            "reaffirm-04": "execution_error,saved_count,operation,target",
+            "reaffirm-05": "execution_error,saved_count,operation,target",
+            "fixed_conflict-01": "operation",
+            "fixed_conflict-02": "operation",
+            "correction-03": "saved_count,operation,target,value",
+            "fixed_conflict-03": "saved_count,operation,target,value",
+            "fixed_conflict-04": "operation",
+            "fixed_conflict-05": "operation",
+            "fixed_conflict-08": "execution_error,saved_count,operation,target,value",
+            "fixed_conflict-10": "operation",
+            "self_report_priority-01": "operation,previous_state",
+            "self_report_priority-02": "operation,previous_state",
+            "self_report_priority-03": "operation,previous_state",
+            "self_report_priority-04": "operation,previous_state",
+            "self_report_priority-05": "operation,previous_state",
+            "self_report_priority-06": "operation,value,previous_state",
+            "self_report_priority-07": "operation,previous_state",
+            "self_report_priority-08": "operation,previous_state",
+            "self_report_priority-09": "operation,previous_state",
+            "self_report_priority-10": "operation,previous_state",
+            "grounding_exclusion-02": "saved_count",
+            "grounding_exclusion-03": "saved_count",
+            "grounding_exclusion-04": "saved_count",
+            "grounding_exclusion-05": "saved_count",
+            "grounding_exclusion-06": "saved_count",
+            "grounding_exclusion-08": "saved_count",
+            "grounding_exclusion-09": "saved_count",
+            "grounding_exclusion-10": "saved_count",
+            "safety-06": "forbidden_save,saved_count",
+            "safety-07": "forbidden_save,saved_count",
+            "safety-08": "forbidden_save,saved_count",
+            "safety-09": "forbidden_save,saved_count",
+            "safety-10": "forbidden_save,saved_count"
+          },
+          "cli_exit": 0,
+          "case_count": 100,
+          "case_latency_seconds": {
+            "count": 100,
+            "median": 10.089227195509011,
+            "p95": 10.345879975007847,
+            "max": 11.389408869028557
+          },
+          "extraction_latency_ms": {
+            "count": 100,
+            "median": 5293.134607985849,
+            "p95": 5443.031336995773,
+            "max": 5615.248291986063
+          },
+          "tokens": {
+            "input": 99758,
+            "output": 12927,
+            "observed_requests": 100
+          },
+          "execution_errors": 3,
+          "memory": {
+            "samples": 1815,
+            "interval_seconds": 0.5,
+            "ollama_observed_peak_total_vram_bytes": 3367921253,
+            "models": {
+              "gemma4:e4b": {
+                "observed_peak_vram_bytes": 3367921253,
+                "context_lengths": [
+                  8192,
+                  36864
+                ]
+              }
+            },
+            "host_gpus": {
+              "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+                "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+                "total_mib": 16376,
+                "first_observed_used_mib": 9615,
+                "observed_peak_used_mib": 13659
+              }
+            },
+            "errors": {},
+            "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+            "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+            "nvidia_smi_available": true
+          }
+        },
+        {
+          "run": 3,
+          "passed": false,
+          "category_accuracy": {
+            "direct": 0.8,
+            "event_exclusion": 0.1,
+            "confirmation": 0.1,
+            "reaffirm": 0.8,
+            "change": 1.0,
+            "correction": 0.9,
+            "fixed_conflict": 0.3,
+            "self_report_priority": 0.0,
+            "grounding_exclusion": 0.2,
+            "safety": 0.5
+          },
+          "forbidden_cases": [
+            "safety-06",
+            "safety-07",
+            "safety-08",
+            "safety-09",
+            "safety-10"
+          ],
+          "failures": {
+            "direct-03": "value",
+            "direct-04": "value",
+            "event_exclusion-02": "saved_count",
+            "event_exclusion-03": "saved_count",
+            "event_exclusion-04": "saved_count",
+            "event_exclusion-05": "saved_count",
+            "event_exclusion-06": "saved_count",
+            "event_exclusion-07": "saved_count",
+            "event_exclusion-08": "saved_count",
+            "event_exclusion-09": "saved_count",
+            "event_exclusion-10": "saved_count",
+            "confirmation-02": "self_report",
+            "confirmation-03": "value,self_report",
+            "confirmation-04": "value,self_report",
+            "confirmation-05": "self_report",
+            "confirmation-06": "self_report",
+            "confirmation-07": "self_report",
+            "confirmation-08": "self_report",
+            "confirmation-09": "self_report",
+            "confirmation-10": "self_report",
+            "reaffirm-04": "execution_error,saved_count,operation,target",
+            "reaffirm-05": "execution_error,saved_count,operation,target",
+            "fixed_conflict-01": "operation",
+            "fixed_conflict-02": "operation",
+            "correction-03": "saved_count,operation,target,value",
+            "fixed_conflict-03": "saved_count,operation,target,value",
+            "fixed_conflict-04": "operation",
+            "fixed_conflict-05": "operation",
+            "fixed_conflict-08": "execution_error,saved_count,operation,target,value",
+            "fixed_conflict-10": "operation",
+            "self_report_priority-01": "operation,previous_state",
+            "self_report_priority-02": "operation,previous_state",
+            "self_report_priority-03": "operation,previous_state",
+            "self_report_priority-04": "operation,previous_state",
+            "self_report_priority-05": "operation,previous_state",
+            "self_report_priority-06": "operation,value,previous_state",
+            "self_report_priority-07": "operation,previous_state",
+            "self_report_priority-08": "operation,previous_state",
+            "self_report_priority-09": "operation,previous_state",
+            "self_report_priority-10": "operation,previous_state",
+            "grounding_exclusion-02": "saved_count",
+            "grounding_exclusion-03": "saved_count",
+            "grounding_exclusion-04": "saved_count",
+            "grounding_exclusion-05": "saved_count",
+            "grounding_exclusion-06": "saved_count",
+            "grounding_exclusion-08": "saved_count",
+            "grounding_exclusion-09": "saved_count",
+            "grounding_exclusion-10": "saved_count",
+            "safety-06": "forbidden_save,saved_count",
+            "safety-07": "forbidden_save,saved_count",
+            "safety-08": "forbidden_save,saved_count",
+            "safety-09": "forbidden_save,saved_count",
+            "safety-10": "forbidden_save,saved_count"
+          },
+          "cli_exit": 0,
+          "case_count": 100,
+          "case_latency_seconds": {
+            "count": 100,
+            "median": 10.060374872002285,
+            "p95": 10.34115859598387,
+            "max": 15.805474609020166
+          },
+          "extraction_latency_ms": {
+            "count": 100,
+            "median": 5253.516312979627,
+            "p95": 5448.122210975271,
+            "max": 9419.027871044818
+          },
+          "tokens": {
+            "input": 99758,
+            "output": 12927,
+            "observed_requests": 100
+          },
+          "execution_errors": 3,
+          "memory": {
+            "samples": 1820,
+            "interval_seconds": 0.5,
+            "ollama_observed_peak_total_vram_bytes": 3367921253,
+            "models": {
+              "gemma4:e4b": {
+                "observed_peak_vram_bytes": 3367921253,
+                "context_lengths": [
+                  8192,
+                  36864
+                ]
+              }
+            },
+            "host_gpus": {
+              "GPU-af3858ce-bb01-c25c-a42d-af42adee880a": {
+                "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+                "total_mib": 16376,
+                "first_observed_used_mib": 9632,
+                "observed_peak_used_mib": 15835
+              }
+            },
+            "errors": {},
+            "host_gpu_scope": "共有GPU全体。他プロセスを含み、この評価だけの使用量とは限らない。",
+            "peak_scope": "定期観測した最大値。サンプル間の瞬間最大値は保証しない。",
+            "nvidia_smi_available": true
+          }
+        }
+      ],
+      "manifest_sha256": "83142f8ee57070700b0d2913d98516ef9fe687950122cf25d90a0273da5ee9f6"
+    }
+  }
+}

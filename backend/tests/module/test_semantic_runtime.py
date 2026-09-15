@@ -179,3 +179,58 @@ def test_input_chunks_cover_all_primary_text_and_overlap(h):
     assert primary[0].start == 0 and primary[-1].end == len(text)
     assert all(left.end > right.start for left, right in zip(primary, primary[1:]))
     assert all(p.end - p.start <= 1000 for p in primary)
+
+
+def test_response_schema_restricts_operation_and_target_pairs():
+    from jsonschema import Draft202012Validator
+    from app.memory.semantic.extractor import _response_schema
+    item = {"operation": "NEW", "target_key": None, "subject": "ユーザー", "predicate": "居住地",
+            "value": "大阪", "mutability": "CHANGEABLE", "self_report": True, "confidence": 1,
+            "sources": [{"source_key": "u0", "quote": "大阪に住んでいます"}]}
+    empty = Draft202012Validator(_response_schema(()))
+    assert empty.is_valid({"items": [item]})
+    assert not empty.is_valid({"items": [{**item, "operation": "REAFFIRM", "target_key": "c0:assistant"}]})
+    known = Draft202012Validator(_response_schema(("m0",)))
+    assert known.is_valid({"items": [{**item, "operation": "REAFFIRM", "target_key": "m0"}]})
+    assert not known.is_valid({"items": [{**item, "operation": "REAFFIRM", "target_key": None}]})
+    assert not known.is_valid({"items": [{**item, "operation": "NEW", "target_key": "m0"}]})
+    assert not known.is_valid({"items": [{**item, "operation": "CORRECT", "target_key": "m1"}]})
+
+
+@pytest.mark.parametrize("operation,target,keys", [("NEW", None, ()), ("CHANGE", "m0", ("m0",))])
+def test_self_report_subject_is_user_in_schema_and_decoded_output(operation, target, keys):
+    from jsonschema import Draft202012Validator
+    from app.memory.semantic.extractor import SemanticBatch, _response_schema
+
+    item = {"operation": operation, "target_key": target, "subject": "居住地", "predicate": "居住地",
+            "value": "大阪", "mutability": "CHANGEABLE", "self_report": True, "confidence": 1,
+            "sources": [{"source_key": "u0", "quote": "大阪に住んでいます"}]}
+    validator = Draft202012Validator(_response_schema(keys))
+    assert not validator.is_valid({"items": [item]})
+    with pytest.raises(ValidationError, match="self report must describe the user"):
+        SemanticBatch.model_validate({"items": [item]})
+    for valid in ({**item, "subject": "ユーザー"}, {**item, "subject": "富士山", "self_report": False}):
+        assert validator.is_valid({"items": [valid]})
+        assert SemanticBatch.model_validate({"items": [valid]}).items[0].subject == valid["subject"]
+
+def test_unique_exact_quote_uses_actual_span_when_model_offset_is_wrong(h):
+    from app.memory.semantic.extractor import EvidenceQuote, _resolve_quote
+    source(h, "最近のことですが、大阪に住んでいます。")
+    part = input_batches(SemanticWorkQueue(h.store).peek())[0][-1]
+    quote = EvidenceQuote(source_key=part.key, quote="大阪に住んでいます。", start=0)
+    resolved = _resolve_quote(quote, {part.key: part})
+    assert resolved.span.start == len("最近のことですが、")
+    assert resolved.span.end == len("最近のことですが、大阪に住んでいます。")
+
+
+def test_ambiguous_quote_still_needs_valid_exact_offset_and_no_fuzzy_matching(h):
+    from app.memory.semantic.extractor import EvidenceQuote, _resolve_quote
+    source(h, "大阪です。大阪です。")
+    part = input_batches(SemanticWorkQueue(h.store).peek())[0][-1]
+    for quote in (EvidenceQuote(source_key=part.key, quote="大阪", start=1),
+                  EvidenceQuote(source_key=part.key, quote="大阪"),
+                  EvidenceQuote(source_key=part.key, quote="東京", start=0)):
+        with pytest.raises(ValueError):
+            _resolve_quote(quote, {part.key: part})
+    exact = _resolve_quote(EvidenceQuote(source_key=part.key, quote="大阪", start=5), {part.key: part})
+    assert exact.span.start == 5 and exact.span.end == 7

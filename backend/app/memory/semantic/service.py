@@ -25,14 +25,40 @@ class SemanticRejected(ValueError):
     """候補は正本へ保存せず、許可されたreasonのみ返す。"""
 
 
-class SemanticStore:
+class SemanticSourceReader:
+    """既存の意味記憶と根拠を読み、失効状態を照合する。候補の採用機能は持たない。"""
+
+    def __init__(
+        self, *, repository: SemanticRepository, source_guard: ConversationSourceGuard,
+        episode_reader: EpisodicReadRepository,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self.repository, self.source_guard = repository, source_guard
+        self.episode_reader, self.clock = episode_reader, clock
+
+    def reconcile(self, character_id: str) -> tuple[SemanticRecord, ...]:
+        """出典更新のworkerを待たず、読み取り時にも現在版で失効させる。"""
+        with self.source_guard.snapshot() as (history, cutoff), self.repository.transaction(now=self.clock()) as tx:
+            for record in tx.list_records(character_id):
+                if record.status in {SemanticStatus.DELETED, SemanticStatus.INACTIVE}:
+                    continue
+                try:
+                    validate_sources(history, cutoff, tx, character_id=character_id,
+                                     sources=record.sources, episode_reader=self.episode_reader)
+                except (InvalidConversationSource, SemanticConflict):
+                    tx.invalidate(record, reason="SOURCE_INVALID")
+            return tx.list_records(character_id)
+
+
+class SemanticStore(SemanticSourceReader):
     def __init__(
         self, *, repository: SemanticRepository, source_guard: ConversationSourceGuard,
         episode_reader: EpisodicReadRepository, reviewer: Reviewer,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
-        self.repository, self.source_guard = repository, source_guard
-        self.episode_reader, self.reviewer, self.clock = episode_reader, reviewer, clock
+        super().__init__(repository=repository, source_guard=source_guard,
+                         episode_reader=episode_reader, clock=clock)
+        self.reviewer = reviewer
 
     def save(
         self, *, character_id: str, candidate: SemanticCandidate, receipt_key: str,
@@ -86,6 +112,19 @@ class SemanticStore:
         proposition: Proposition, receipt_id: UUID,
     ) -> SemanticRecord:
         with self.repository.read() as tx:
+            replay = tx.replay(character_id, "manual:"+str(receipt_id))
+            if replay is not None:
+                bound_target = tx.replay(character_id, "manual-target:" + str(receipt_id))
+                if bound_target is not None:
+                    matching = bound_target.id == record_id
+                else:
+                    # 旧版の単一対象receiptも読める。複数候補なら対象を推測しない。
+                    relations = [r for r in tx.relations(character_id)
+                                 if r.target_id == replay.id and r.relation is SemanticOperation.CORRECT]
+                    matching = len(relations) == 1 and relations[0].source_id == record_id
+                if not matching or (replay.proposition is not None and replay.proposition != proposition):
+                    raise SemanticConflict("manual receipt was used for another correction")
+                return replay
             current = tx.get(character_id, record_id)
             if (current is None or current.formation_type is not FormationType.DIRECT_EXTRACTION
                     or current.proposition is None or not current.proposition.self_report):
@@ -101,19 +140,6 @@ class SemanticStore:
             character_id=character_id, candidate=candidate, receipt_key="manual:"+str(receipt_id),
             operation=SemanticOperation.CORRECT, target_id=record_id, target_version=version, manual=True,
         )
-
-    def reconcile(self, character_id: str) -> tuple[SemanticRecord, ...]:
-        """出典更新のworkerを待たず、読み取り時にも現在版で失効させる。"""
-        with self.source_guard.snapshot() as (history, cutoff), self.repository.transaction(now=self.clock()) as tx:
-            for record in tx.list_records(character_id):
-                if record.status in {SemanticStatus.DELETED, SemanticStatus.INACTIVE}:
-                    continue
-                try:
-                    validate_sources(history, cutoff, tx, character_id=character_id,
-                                     sources=record.sources, episode_reader=self.episode_reader)
-                except (InvalidConversationSource, SemanticConflict):
-                    tx.invalidate(record, reason="SOURCE_INVALID")
-            return tx.list_records(character_id)
 
     def delete(self, *, character_id: str, record_id: UUID, version: int) -> None:
         with self.repository.transaction(now=self.clock()) as tx:

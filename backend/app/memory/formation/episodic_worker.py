@@ -87,8 +87,10 @@ class EpisodicFormationWorker:
         except (StaleThreadSnapshot, ExtractionInterrupted):
             self._queue.release(lease, failed=False)
         except Exception:
-            self._queue.release(lease, failed=True)
-            raise
+            interrupted = should_stop() or lost.is_set()
+            self._queue.release(lease, failed=not interrupted)
+            if not interrupted:
+                raise
         finally:
             finished.set()
             renewal.join()

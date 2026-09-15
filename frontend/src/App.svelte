@@ -643,7 +643,11 @@
     </section>
   {:else if showingMemoryManagement}
     <section class="content-panel memory-panel">
-      <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }} />
+      <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }}
+        onOpenConversation={(conversationId) => {
+          showingMemoryManagement = false
+          void handleSelectConversation($conversationController.character, conversationId)
+        }} />
     </section>
   {/if}
   {#if !showingMemoryManagement}

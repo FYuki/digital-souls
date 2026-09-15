@@ -9,6 +9,9 @@ from collections.abc import Callable
 import threading
 
 from app.memory.formation.contracts import MemoryFormationJob
+from app.inference.cancellation import cancellation_scope
+from app.inference.contracts import InferenceCancellationToken
+from app.inference.errors import InferenceError, InferenceErrorCategory
 
 
 logger = logging.getLogger(__name__)
@@ -23,9 +26,13 @@ class DurableWorker(Protocol):
 
 
 class DurableMemoryFormationScheduler:
-    def __init__(self, *, worker: DurableWorker, queue: PendingWork, poll_seconds: float = 1) -> None:
+    def __init__(
+        self, *, worker: DurableWorker, queue: PendingWork, poll_seconds: float = 1,
+        priority_available: Callable[[], bool] | None = None,
+    ) -> None:
         if not math.isfinite(poll_seconds) or poll_seconds <= 0:
             raise ValueError("poll interval must be positive")
+        self._priority_available = priority_available
         self._worker = worker
         self._queue = queue
         self._poll_seconds = poll_seconds
@@ -73,7 +80,7 @@ class DurableMemoryFormationScheduler:
             self._wake.clear()
             self._active.set()
             try:
-                worked = await asyncio.to_thread(self._worker.process_next, should_stop=self._stop.is_set)
+                worked = await self._process_next()
             except Exception as error:
                 trace = error.__traceback__
                 while trace is not None and trace.tb_next is not None:
@@ -94,3 +101,35 @@ class DurableMemoryFormationScheduler:
                 await asyncio.wait_for(self._wake.wait(), timeout=self._poll_seconds)
             except TimeoutError:
                 pass
+
+    async def _process_next(self) -> bool:
+        if self._priority_available is not None and not await asyncio.to_thread(self._priority_available):
+            return False
+        token = InferenceCancellationToken()
+
+        def run() -> bool:
+            with cancellation_scope(token):
+                return self._worker.process_next(
+                    should_stop=lambda: self._stop.is_set() or token.is_cancelled,
+                )
+
+        pending = asyncio.create_task(asyncio.to_thread(run))
+        try:
+            while not pending.done():
+                if not token.is_cancelled:
+                    if self._stop.is_set() or (
+                        self._priority_available is not None
+                        and not await asyncio.to_thread(self._priority_available)
+                    ):
+                        token.cancel()
+                await asyncio.wait({pending}, timeout=0.05)
+            return await pending
+        except InferenceError as error:
+            if token.is_cancelled and error.category is InferenceErrorCategory.CANCELLED:
+                return False
+            raise
+        finally:
+            if not pending.done():
+                token.cancel()
+                # 監視側の失敗でもworkerを放置せず、予約の解放まで待つ。
+                await pending

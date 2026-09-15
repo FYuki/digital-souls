@@ -1,6 +1,6 @@
 {
-  "policy_version": "2026-08-wave2-v1",
-  "retrieval_compatible_policy_versions": ["2026-08-wave2-v1"],
+  "policy_version": "2026-09-semantic-v1",
+  "retrieval_compatible_policy_versions": ["2026-08-wave2-v1", "2026-09-semantic-v1"],
   "common": {
     "do_not_store_terms": [
       "保存しないで",
@@ -104,7 +104,7 @@
     "storage_opt_out_rules": [
       {
         "scope": "RAG",
-        "phrases": ["覚えないで", "記憶しないで"],
+        "phrases": ["覚えないで", "記憶しないで", "記憶に残さないで", "記憶には残さないで", "記憶しないでください"],
         "patterns": ["(?:do not|don't) remember"]
       },
       {
@@ -112,6 +112,7 @@
         "phrases": [
           "履歴に残さないで",
           "履歴にも残さないで",
+          "保存禁止",
           "保存しないで",
           "記録しないで"
         ],

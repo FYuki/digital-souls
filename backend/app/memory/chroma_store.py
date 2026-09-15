@@ -20,6 +20,8 @@ class RetrievalMatchKind(str, Enum):
     BOTH = "BOTH"
     SEMANTIC = "SEMANTIC"
     PERIOD = "PERIOD"
+    LEXICAL = "LEXICAL"
+    RELATED = "RELATED"
 
 
 COLLECTION_NAME_PREFIX = "character"
@@ -89,6 +91,7 @@ class MemorySearchResult:
     match_kind: RetrievalMatchKind = RetrievalMatchKind.SEMANTIC
     temporal_text: str | None = None
     content_version: int | None = None
+    current_self_report: bool = False
 
 
 class _ChromaCollection(Protocol):

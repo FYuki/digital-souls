@@ -1,5 +1,7 @@
 """意味記憶専用Targetを既存の推論ルーターと永続ワーカーへ接続する。"""
 
+from datetime import timedelta
+
 from app.inference import InferenceCaller, InferenceTarget
 from app.inference.runtime import InferenceRuntime
 from app.memory.episodic.contracts import ExtractionIdentity
@@ -13,6 +15,7 @@ from app.memory.semantic.worker import SemanticWorkQueue, SemanticWorker, conver
 
 def build_semantic_scheduler(
     *, store: SemanticStore, runtime: InferenceRuntime, timezone: str,
+    stale_after: timedelta = timedelta(minutes=5),
 ) -> DurableMemoryFormationScheduler:
     target = runtime.settings.target(InferenceTarget.SEMANTIC_EXTRACTION)
     assert target.max_output_tokens is not None
@@ -36,9 +39,9 @@ def build_semantic_scheduler(
 
     def priority_available() -> bool:
         with store.source_guard.snapshot() as (history, _):
-            return conversation_idle(history, now=store.clock())
+            return conversation_idle(history, now=store.clock(), stale_after=stale_after)
 
-    return DurableMemoryFormationScheduler(queue=queue, worker=SemanticWorker(
+    return DurableMemoryFormationScheduler(queue=queue, priority_available=priority_available, worker=SemanticWorker(
         queue=queue, identity=identity, priority_available=priority_available,
         pipeline=SemanticPipeline(store, SemanticExtractor(
             client, timeout_seconds=target.timeout_seconds, max_output_tokens=target.max_output_tokens,
