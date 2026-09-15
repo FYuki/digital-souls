@@ -211,7 +211,8 @@ class EventRuntime:
             events: tuple[Event, ...] = ()
             epoch, cursor, pos, stream = (current[k] for k in ("epoch", "cursor", "position", "stream"))
             if epoch == state["epoch"] and stream == state["stream"] and pos >= state["floor"]:
-                events = self.store.buffered(source, pos)
+                # 同期区間の最初の期限判定と同じfloorで読む。再判定で欠落範囲を飛ばさない。
+                events = self.store.buffered(source, pos, prune=False)
                 if events:
                     cursor, pos = events[-1].cursor, events[-1].position
             else:

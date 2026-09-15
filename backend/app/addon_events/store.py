@@ -190,8 +190,9 @@ class EventStore:
         with self.transaction() as db:
             self._prune(source, db)
 
-    def buffered(self, source: Source, after: int) -> tuple[Event, ...]:
-        self.prune(source)
+    def buffered(self, source: Source, after: int, *, prune: bool = True) -> tuple[Event, ...]:
+        if prune:
+            self.prune(source)
         return tuple(
             Event(r["position"], r["cursor"], r["event_key"], r["metadata"], r["reason"])
             for r in self.db.execute(

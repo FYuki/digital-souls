@@ -429,3 +429,35 @@ def test_background_tool_permission_and_egress_are_rechecked(tmp_path):
             finally:
                 await service.close()
     asyncio.run(run())
+
+def test_retention_boundary_uses_one_consistent_window(tmp_path, monkeypatch):
+    """期限の直前・直後を同じread内で混ぜ、間のEventを正常処理扱いにしない。"""
+    async def run():
+        async with connected(tmp_path) as (control, gate, client):
+            clock = Clock()
+            source = profile(gate)
+            service = runtime(gate, source, tmp_path, clock)
+            try:
+                await service.subscribe(source.id, "consumer", source.context)
+                control.update(position=11)
+                await service.poll_once(source.id)
+                clock.advance(1)
+                control.update(position=12)
+                await service.poll_once(source.id)
+                clock.advance(72 * 3600 - 2)
+                def crossing_clock():
+                    observed = clock()
+                    clock.advance(1)
+                    return observed
+                monkeypatch.setattr(service.store, "clock", crossing_clock)
+                delivery = await service.read(source.id, "consumer", source.context)
+                assert [event["position"] for event in delivery.events] == [11, 12]
+                assert service.store.consumer(source.id, "consumer")["position"] == 10
+                monkeypatch.setattr(service.store, "clock", clock)
+                # 次のreadでは期限切れを正式に判定し、source replayを明示する。
+                replay = await service.read(source.id, "consumer", source.context)
+                assert replay.recovery["reason"] == "buffer_unavailable"
+                assert [event["position"] for event in replay.events] == [11, 12]
+            finally:
+                await service.close()
+    asyncio.run(run())
