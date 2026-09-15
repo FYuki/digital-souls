@@ -1,9 +1,28 @@
-# #358 BE VAD基盤の局所検証
+# #358 音声入力移設の検証記録
 
-## 範囲と未完了事項
+## 現在の範囲と未完了事項
 
-#394の部分実装。連続16kHz mono PCM16から、既存Silero legacyとlibfvadでcandidate／confirmed／ended／misfireを得る処理をBEへ実装した。
-既存LiveKit経路の切替、正式utterance ID・入力世代、track欠落統計、Core／FEの新protocolは後続作業。本書をM2全体、音声会話、性能受入の完了証跡として扱わない。
+本Epicの受入は未完了。以下はda7172fまでのコード・保存済み証跡を照合した状態である。
+後続の各節は実行時点の記録であり、過去の「後続作業」「未移行」や失敗を、現在の実装状態や解消済みの証明へ読み替えない。
+
+| 対象 | 現在の証拠と残条件 |
+|---|---|
+| M1の移設契約 | [設定・protocol・測定条件](../voice-backend-migration-contract.md)を固定。移設前アプリ基準は07b8b1e。基準の確定と性能測定の合格は別 |
+| M2〜M4の責務移設 | BE VAD、正式発話・入力世代、音声欠落検証、Core/private 2.0、FEの継続マイクとACK認可を実装。局所試験と限定した実会話を確認。全受入シナリオの実検証完了ではない |
+| M5の観測・集計 | 固定音声起点、BE sample／実STT PCMの相関、割り込み・相槌・pauseの集計を移行。通常応答・相槌・take-turn・pause／雑音・再接続の合意済み全cohort比較は未完了 |
+| 完全100試行の証跡 | [移設前相槌100件](../artifacts/voice-backend-358-before-backchannel-run-100.json)を完走したが68成功・32失敗、継続の欠測16件。品質合格・回帰なしの証拠には使わない。中止runと失敗は保持 |
+| M6の局所実接続 | 固定音声の3往復、旧version拒否、[開始失敗後のSession／Room解放](../artifacts/voice-backend-358-startup-cleanup-browser.json)などを限定確認。個別の対象版と範囲は各節・artifactを参照 |
+| 更新・切り戻し | [履歴Repository往復](../artifacts/voice-backend-358-history-roundtrip.json)は成功。[FE／BE一括更新・切り戻し手順](../voice-backend-rollout.md)の通し実行は未実施 |
+| 人の受入 | 実マイク・聴感は未実施。固定WAVやAPI成功で代用しない |
+| 検査・統合 | 全体ローカルCIは908f966時点。その後のfc43694は関連94件・型検査、da7172fは実ブラウザ開始失敗1件・型検査を確認。最終版のremote CI成功とEpic統合は未達。main向けCodeRabbit差分レビュー・修正も必要 |
+
+GPUを使う残測定は、ユーザーが#341実装後に確保する時間帯で行う。共有推論の設定や背景記憶抽出を変更して測定条件を軽くしない。
+失敗・欠測・未実行を元の分母に残し、#150の既存目標・WebSocket比較、#350の既存未達と今回の回帰を区別する。
+
+## 初期M2局所検証の範囲
+
+以下は#394の部分実装時点の記録。連続16kHz mono PCM16から、既存Silero legacyとlibfvadでcandidate／confirmed／ended／misfireを得る処理をBEへ実装した。
+この時点ではLiveKit接続・正式発話・入力世代・欠落統計・新protocolは後続作業だった。後の実装・検証を含めても、本書全体を性能受入の完了証跡とは扱わない。
 
 ## 固定音声比較
 
