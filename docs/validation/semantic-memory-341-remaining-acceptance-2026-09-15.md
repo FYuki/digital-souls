@@ -93,3 +93,11 @@ semantic-v6が肯定的な好みへCHANGEした。一般化候補の直接入力
 9. 再開後の別会話で自己申告の応答利用を確認し、正常停止と所有portの閉鎖を記録する。
 
 root・モデル・commitが異なる試行は別のmanifestで記録する。途中の失敗を既存の成功証跡へ上書きしない。
+
+## 追加の実行設定診断
+
+semantic-v9の104件×3回は各カテゴリ90%以上・禁止保存/越境0で合格した。
+続く`/tmp/ds-memory-341-ccosx_dx`ではQUERY_GATEの2秒timeoutで通常応答の参照が空となった。
+また検証driverが新Episodeの完了前に停止し、priority段階は未完了。
+この試行を受入成功には数えない。専用runnerでは同一e4bの会話・privacy・Episodeの
+総contextを36,864へ統一して再測定する。query gateの2秒上限、privacy判定、出力上限は変更しない。

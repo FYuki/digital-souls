@@ -115,8 +115,9 @@ def main() -> int:
     for target, output in (("CHAT", 1024), ("PRIVACY", 512),
                            ("MEMORY_EXTRACTION", 4096), ("MEMORY_CONSOLIDATION", 512),
                            ("SEMANTIC_EXTRACTION", 4096)):
-        input_tokens = (32768 if target in {"SEMANTIC_EXTRACTION", "MEMORY_EXTRACTION"}
-                        else 7168 if target == "CHAT" else 7680)
+        # 同一e4bの用途切替でOllamaがcontextを再確保し、2秒のquery gateを
+        # 消費しないよう全用途の総contextを揃える。出力上限は用途別に保持する。
+        input_tokens = 36864 - output
         model = args.model if target == "SEMANTIC_EXTRACTION" else "gemma4:e4b"
         token_limits[target] = {"input": input_tokens, "output": output}
         environment.update({
