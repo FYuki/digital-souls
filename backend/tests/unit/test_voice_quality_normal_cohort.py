@@ -29,7 +29,7 @@ def test_unverified_environment_teardown_prevents_next_trial(tmp_path):
     path.mkdir(parents=True)
     (path / "environment-run.json").write_text(json.dumps({
         "runtime": {"environmentId": "test", "dataRoot": str(tmp_path / "runtime-data")},
-        "effectiveProfile": {"effectiveProfile": "integration-voice-pcm"},
+        "effectiveProfile": {"effectiveProfile": "integration-voice"},
         "teardown": {"status": "failed"},
     }))
     with pytest.raises(ValueError, match="teardown"):
@@ -55,3 +55,29 @@ def test_failed_isolated_trials_stay_in_summary_and_do_not_create_acceptance_rep
     assert summary["success"] == 0
     assert summary["full_acceptance_passed"] is False
     assert not (output / "report.json").exists()
+
+
+def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standard(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    path = tmp_path / "runtime-data/runtime/standalone"
+    path.mkdir(parents=True)
+    report = {
+        "runtime": {"environmentId": "test", "dataRoot": str((tmp_path / "runtime-data").resolve())},
+        "effectiveProfile": {"effectiveProfile": "integration-voice"},
+        "teardown": {"status": "completed"},
+        "services": {name: {"owned": True, "containerIdentity": {"containerId": letter * 64}}
+                     for name, letter in [("backend", "a"), ("frontend", "b")]},
+    }
+    (path / "environment-run.json").write_text(json.dumps(report))
+    (tmp_path / "native-sdk.json").write_text(json.dumps({"status": "verified"}))
+    (tmp_path / "trial-manifest.json").write_text(json.dumps({
+        "measurement_revision": "revision", "measurement_scope": "isolated_normal_trial",
+    }))
+    monkeypatch.setattr(cohort.subprocess, "run",
+                        lambda *a, **kw: SimpleNamespace(returncode=1, stderr="No such object"))
+    assert cohort.verify_stopped(tmp_path, "revision")["measurement_scope"] == "isolated_normal_trial"
+    report["effectiveProfile"]["effectiveProfile"] = "integration-voice-pcm"
+    (path / "environment-run.json").write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="teardown"):
+        cohort.verify_stopped(tmp_path, "revision")
