@@ -640,3 +640,11 @@ raw manifest・trace・PCM観測・資源観測・開始終了identity等のhash
 frontend/integration/voice/bootstrap-rejection.spec.tsを追加。新FEのbootstrap version提示だけをCore 1.1／private省略・1.0・0.0へ変更し、実BEの409、汎用エラーと入力停止、拒否後1秒のマイク取得・VAD asset要求・新WebSocket 0件を4ケースで確認した。HTTP応答・音声clientはmockへ置換していない。型検査も成功。
 
 [匿名化記録](../artifacts/voice-backend-358-bootstrap-browser.json)に4件のattachment、run／テストsource hash、途中の試験失敗とcleanupを保持した。旧FE bundleそのものの操作と、実SFU内部の資源作成呼び出し数は別の確認範囲である。全cohort比較と人の受入、FE／BE一括更新・切り戻しを完了した扱いにはしない。GPU計測はユーザーが#341の実装完了後に確保する時間帯で行う。
+
+### 接続開始中の取消・失敗に対する資源所有
+
+GPUを伴わない終了境界の確認で、token取得後のRoom生成／接続／開始event送信に失敗した場合と、終了操作後にtokenが届く場合に、開始処理が予約Sessionへの終了APIを呼ばない経路を確認した。また、終了後の遅延成功が呼び出し元へ成功を返し、マイク取得へ進める経路があった。
+
+接続確定前のbindingとRoomを開始処理が所有するようにし、失敗・取消後はその資源だけを回収する。controllerへ所有を移した後に終了操作が走った場合は二重解放しない。取消は失敗として返し、接続失敗後の古いobserverでerrorから再接続中へ戻さない。終了API自体が失敗した場合は元の開始失敗を保ち、終了成功と扱わない。
+
+controllerの新規8ケースを含む48件、AudioRecorderの取消後マイク取得／VAD／publish 0回を含む2件、Appの44件が成功した。修正前は取消2ケースが成功を返し、Room生成／接続／開始event失敗の3ケースで終了APIが0回となることを再現した。Svelte／TypeScript検査はエラー・警告0件。これらはunitの呼び出し・状態検証であり、実SFUの障害注入や実マイク受入の証拠ではない。実接続試験と次回性能計測には、この修正を含む新版FE／BEを使用する。

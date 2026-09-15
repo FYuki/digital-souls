@@ -860,3 +860,104 @@ test('入力開始ACK直後、送信完了待ち中の停止通知でもマイ�
   expect(controller.snapshot().phase).toBe('muted')
   await controller.end()
 })
+
+describe('接続開始中の取消と資源解放', () => {
+  const context = {characterId: 'miori', conversationId: 'opening'}
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void
+    let reject!: (error: Error) => void
+    const promise = new Promise<T>((yes, no) => {resolve = yes; reject = no})
+    return {promise, resolve, reject}
+  }
+
+  test('終了後に届くtokenのSessionを終了し、マイク開始へ成功を返さない', async () => {
+    const {controller, dependencies, room} = setup()
+    const binding = await dependencies.requestToken('miori', 'opening')
+    vi.mocked(dependencies.requestToken).mockClear()
+    const pending = deferred<typeof binding>()
+    vi.mocked(dependencies.requestToken).mockReturnValueOnce(pending.promise)
+    const started = controller.ensureSession(context)
+    const rejected = expect(started).rejects.toThrow()
+    await controller.end()
+    pending.resolve(binding)
+    await rejected
+    expect(dependencies.endSession).toHaveBeenCalledTimes(1)
+    expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+    expect(room.connect).not.toHaveBeenCalled()
+    expect(controller.snapshot()).toMatchObject({phase: 'idle', sessionId: null, input: 'inactive'})
+  })
+
+  test.each(['factory', 'connect', 'start_event'] as const)('%s失敗でも予約Sessionと作成済みRoomを解放する', async stage => {
+    const {controller, dependencies, room, observations} = setup()
+    const failure = new Error('opening failed')
+    if (stage === 'factory') vi.spyOn(dependencies, 'roomFactory').mockImplementation(() => {throw failure})
+    if (stage === 'connect') vi.mocked(room.connect).mockRejectedValueOnce(failure)
+    if (stage === 'start_event') vi.mocked(room.publishControlEvent).mockRejectedValueOnce(failure)
+    await expect(controller.ensureSession(context)).rejects.toThrow('opening failed')
+    expect(dependencies.endSession).toHaveBeenCalledTimes(1)
+    expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+    expect(room.disconnect).toHaveBeenCalledTimes(stage === 'factory' ? 0 : 1)
+    expect(controller.snapshot()).toMatchObject({phase: 'error', sessionId: null, input: 'inactive'})
+    observations[0]?.({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
+    expect(controller.snapshot().phase).toBe('error')
+  })
+
+  test('遅れて成功した旧Roomだけを解放し、新Sessionの接続と状態を保持する', async () => {
+    const {controller, dependencies, room: oldRoom} = setup()
+    const binding = await dependencies.requestToken('miori', 'opening')
+    const newSessionId = '20000000-0000-4000-8000-000000000002'
+    vi.mocked(dependencies.requestToken).mockResolvedValueOnce(binding)
+      .mockResolvedValueOnce({...binding, session_id: newSessionId})
+    const pending = deferred<void>()
+    vi.mocked(oldRoom.connect).mockReturnValueOnce(pending.promise)
+    const newRoom: VoiceSessionRoom = {
+      ...oldRoom, connect: vi.fn(async () => undefined), disconnect: vi.fn(),
+      publishControlEvent: vi.fn(async () => undefined),
+    }
+    const originalFactory = dependencies.roomFactory
+    let factories = 0
+    vi.spyOn(dependencies, 'roomFactory').mockImplementation((...args) => ++factories === 1 ? originalFactory(...args) : newRoom)
+    const oldStarted = controller.ensureSession(context)
+    const rejected = expect(oldStarted).rejects.toThrow()
+    await vi.waitFor(() => expect(oldRoom.connect).toHaveBeenCalledTimes(1))
+    await controller.end()
+    await controller.ensureSession({...context, conversationId: 'next'})
+    pending.resolve()
+    await rejected
+    expect(dependencies.endSession).toHaveBeenCalledTimes(1)
+    expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+    expect(oldRoom.disconnect).toHaveBeenCalledTimes(1)
+    expect(newRoom.disconnect).not.toHaveBeenCalled()
+    expect(controller.snapshot()).toMatchObject({phase: 'muted', sessionId: newSessionId})
+    await controller.end()
+  })
+
+  test.each(['success', 'failure'] as const)('開始event待ちの終了後に%sが届いても二重終了・成功扱いにしない', async outcome => {
+    const {controller, dependencies, room} = setup()
+    const pending = deferred<void>()
+    vi.mocked(room.publishControlEvent).mockReturnValueOnce(pending.promise)
+    const started = controller.ensureSession(context)
+    const rejected = expect(started).rejects.toThrow()
+    await vi.waitFor(() => expect(room.publishControlEvent).toHaveBeenCalledTimes(1))
+    const ended = controller.end()
+    if (outcome === 'success') pending.resolve()
+    else pending.reject(new Error('start delivery failed'))
+    await rejected
+    await ended
+    expect(dependencies.endSession).toHaveBeenCalledTimes(1)
+    expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+    expect(room.disconnect).toHaveBeenCalledTimes(1)
+    expect(controller.snapshot().phase).toBe('ended')
+  })
+
+  test('接続失敗の後始末で終了APIも失敗しても、元の接続失敗を返す', async () => {
+    const {controller, dependencies, room} = setup()
+    vi.mocked(room.connect).mockRejectedValueOnce(new Error('connection failed'))
+    vi.mocked(dependencies.endSession).mockRejectedValueOnce(new Error('cleanup failed'))
+    await expect(controller.ensureSession(context)).rejects.toThrow('connection failed')
+    expect(room.disconnect).toHaveBeenCalledTimes(1)
+    expect(dependencies.endSession).toHaveBeenCalledTimes(1)
+    expect(controller.snapshot()).toMatchObject({phase: 'error', sessionId: null})
+  })
+
+})

@@ -295,15 +295,19 @@ export class LiveKitVoiceSessionController {
     this.microphoneStream = null
     this.context = context
     this.setPhase('connecting')
+    // 接続確定前の資源はこの開始処理が所有し、終了・別Session開始後も回収する。
+    let openingBinding: TokenResponse | null = null
+    let openingRoom: VoiceSessionRoom | null = null
+    let handedOff = false
     try {
-      const binding = await this.dependencies.requestToken(
+      const binding = openingBinding = await this.dependencies.requestToken(
         context.characterId,
         context.conversationId,
         undefined,
         this.screenClientSessionId,
       )
-      if (version !== this.operationVersion) return
-      const room = this.dependencies.roomFactory(
+      if (version !== this.operationVersion) throw new Error('音声Sessionの開始は取り消されました')
+      const room = openingRoom = this.dependencies.roomFactory(
         (observation) => this.receiveRoomObservation(version, observation),
         (event) => {
           if (version === this.operationVersion) this.receiveRoomCoreEvent(event)
@@ -313,13 +317,12 @@ export class LiveKitVoiceSessionController {
         },
       )
       await room.connect(binding.livekit_url, binding.token, binding.session_id)
-      if (version !== this.operationVersion) {
-        room.disconnect()
-        return
-      }
+      if (version !== this.operationVersion) throw new Error('音声Sessionの開始は取り消されました')
       this.binding = binding
       this.textInputs.releaseResolvedSessions(binding.session_id)
       this.room = room
+      // ここからはend()／transport終端処理がSessionを所有する。
+      handedOff = true
       this.sessionSummary = {
         sequence: 0, microphone_activation_attempts: 0, mute_attempts: 0,
         retry_attempts: this.pendingRetryAttempts, operation_tracking_started: this.pendingRetryAttempts > 0, end_requested: false,
@@ -329,20 +332,37 @@ export class LiveKitVoiceSessionController {
         type: 'session_start_requested',
         requested_reconnect_grace_ms: binding.reconnect_grace_ms,
       }))
-      if (version === this.operationVersion) {
-        this.microphoneEnabled = false
-        this.input = 'muted'
-        this.setPhase('muted')
-      }
+      // 取消を成功扱いすると呼び出し元がgetUserMediaへ進んでしまう。
+      if (version !== this.operationVersion) throw new Error('音声Sessionの開始は取り消されました')
+      this.microphoneEnabled = false
+      this.input = 'muted'
+      this.setPhase('muted')
     } catch (error) {
       if (version === this.operationVersion) {
-        this.room?.disconnect()
+        // 接続失敗後の遅延observerでerrorから再接続中へ戻さない。
+        ++this.operationVersion
+        this.clearReconnectTimer()
+        this.invalidateInputGate()
+        handedOff = false
         this.room = null
         this.binding = null
+        this.controlTail = Promise.resolve()
         this.microphoneEnabled = false
+        this.input = 'inactive'
         this.setPhase('error')
       }
       throw error
+    } finally {
+      if (!handedOff) {
+        try {
+          openingRoom?.disconnect()
+        } finally {
+          // 終了API失敗で元の開始失敗を置換せず、未処理rejectionも残さない。
+          if (openingBinding !== null) {
+            await this.dependencies.endSession(openingBinding.session_id).catch(() => undefined)
+          }
+        }
+      }
     }
   }
 
