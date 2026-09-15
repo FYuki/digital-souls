@@ -61,7 +61,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 | 内容版 | Episode / Factの内容と出典・形成設定を対応づけた履歴。識別子・版番号・出典・設定は変更せず、削除時は本文だけを消去できる。消去の再試行は許可する | 実装：[版の保存制約](../backend/app/memory/episodic/schema.py)、[移行](../backend/app/memory/persistence/schema.py) |
 | Episode–Fact参照 / Fact統合関係 | 経験から情報への取得経緯と、同一Factを指すID間の関係。双方の版・根拠・有効状態を保持し、訂正・削除で無効化する | 実装：[schema](../backend/app/memory/episodic/schema.py)、[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
 | SELF Episode / 本人経験 | キャラクター自身の会話外活動・観測の記憶。活動handoffや実行ログを保存しただけではSELF Episode形成済みとはしない | 設計・未接続：[共通契約](decisions/character-life-memory-personality-autonomy-2026-09.md)、[Life運用](character-life-operations.md) |
-| Semantic Memory / 意味記憶 | 特定の一出来事ではなく、事実・安定した好み等。現行の直接形成型は`USER_PREFERENCE / INTERACTION_PREFERENCE` | 一部実装：[admission型](../backend/app/memory/admission/contracts.py)、[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
+| 旧嗜好記憶（legacy） | `USER_PREFERENCE / INTERACTION_PREFERENCE`を旧`approved_memories`へ直接形成する経路。#341の`SemanticRecord`正本とは別契約。意味記憶Target無効時のフォールバックとして維持し、保存済みデータの整理は#345で扱う | 実装：[admission型](../backend/app/memory/admission/contracts.py)、[起動境界ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
 | Derived Semantic Memory / 派生意味記憶 | 複数Episodeから根拠付きで一般化した記憶。元Episodeの削除・置換ではない | 設計：[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
 | Reflection / 内省、Reflective Memory / 内省記憶 | 本人が経験をどう認知・意味付けしたかを形成する処理と、その永続的な結果。客観的な一般化を目指すSemantic Memoryとは別 | 設計：[用語ADR](decisions/memory-personality-terminology-2026-09.md)。通常会話のRAGへ原則直接注入しない |
 | Memory Formation / 記憶形成 | 保存済み会話履歴から候補を抽出し、検証・保存する非同期処理。抽出成功だけでは保存承認ではない | 実装：[formation](../backend/app/memory/formation/)、[Wave 2契約](decisions/wave2-memory-formation-retrieval-2026-08.md) |
@@ -91,7 +91,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
 |---|---|---|
-| Inference Target | Coreが指定する推論用途。現在は`chat / privacy / memory-extraction / memory-consolidation / embedding / vision / heavy-reasoning / tool-routing / character-life` | 実装：[Target型](../backend/app/inference/contracts.py) |
+| Inference Target | Coreが指定する推論用途。現在は`chat / privacy / memory-extraction / semantic-extraction / memory-consolidation / embedding / vision / heavy-reasoning / tool-routing / character-life` | 実装：[Target型](../backend/app/inference/contracts.py) |
 | Provider / Model / Adapter | 推論の接続先・使用モデル・接続先固有の実装境界。用途Targetへ`provider/model`を割り当てる。環境Profileや人格とは別 | 実装：[Inference運用](inference-operations.md)、[inference](../backend/app/inference/) |
 | Inference Caller | 同じTargetを呼ぶ処理の識別。`screen-reference`はChat Targetのcallerであり、独立したTargetではない | 実装：[画面契約](decisions/browser-screen-perception-2026-09.md)、[アーキテクチャ](system-architecture.md) |
 | Capability | Inferenceでは画像・構造化出力等の推論能力、MCPでは公開されるTool・Resource等。権限と能力は同義ではない | 実装：[Inference型](../backend/app/inference/contracts.py)、[MCP基盤](external-mcp-foundation.md) |
