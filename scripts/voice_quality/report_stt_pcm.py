@@ -59,6 +59,41 @@ def valid_edges(row: dict, start: int, end: int) -> bool:
     return valid_bounded_pcm_edges(row.get('bounded_edge_alignment'), start, end, row.get('input_sample_count'))
 
 
+def correlate_final_pcm(trial: dict, observed: list[dict], events: list[dict], *,
+                        session: str, utterance: str, digest: str, ordinal: int, phase: str) -> dict:
+    """最終STTのtrace・HTTP入力・終了時snapshotを同じ規則で照合する。"""
+    trace = [e for e in events if e.get("session_id") == session and e.get("utterance_id") == utterance]
+    other = 0
+    def failed(reason):
+        return {"missing": reason, "other_stt_requests": other, "row": None, "trace": trace}
+    def values(name):
+        return [e.get("value") for e in trace if e.get("name") == name]
+    prepared = values("stt_input_prepared_sample_count")
+    if (len(prepared) != 1 or not number(prepared[0]) or prepared[0] <= 0
+            or values("stt_input_suffix_preserved") != [1]
+            or values("stt_capture_received_span_valid") != [1]):
+        return failed("final_stt_capture_evidence_unavailable")
+    snapshot = trial.get("pcm_input_observation")
+    if (not isinstance(snapshot, dict) or snapshot.get("overflow") is not False
+            or snapshot.get("active_requests") != 0):
+        return failed("input_observer_not_closed")
+    rows = [r for r in observed if r.get("trial_ordinal") == ordinal and r.get("phase") == phase]
+    saved = [r for r in snapshot.get("rows", []) if r.get("phase") == phase]
+    if sorted(rows, key=lambda r: r["request_ordinal"]) != sorted(saved, key=lambda r: r["request_ordinal"]):
+        return failed("observer_snapshot_mismatch")
+    candidates = [r for r in rows if r.get("preparation_silence") is False
+                  and r.get("input_sample_count") == prepared[0]]
+    other = sum(r.get("preparation_silence") is False for r in rows) - len(candidates)
+    if len(candidates) != 1:
+        return failed("final_http_input_not_unique")
+    row = candidates[0]
+    if (row.get("fixture_sha256") != digest or row.get("upstream_status") != 200
+            or not number(row.get("started_ns")) or not number(row.get("completed_ns"))
+            or row["completed_ns"] < row["started_ns"]):
+        return failed("final_http_input_incomplete")
+    return {"missing": None, "other_stt_requests": other, "row": row, "trace": trace}
+
+
 def summarize(manifest: dict, observed: list[dict], events: list[dict], catalog: dict[str, tuple[int, int]]) -> dict:
     cohort = manifest.get('cohort', 'normal')
     if cohort not in ('normal', 'pause', 'backchannel', 'take_turn'):
@@ -116,37 +151,13 @@ def summarize(manifest: dict, observed: list[dict], events: list[dict], catalog:
             phase = 'labeled'
         if digest not in catalog:
             raise ValueError('fixture not in verified catalog')
-        trace = [e for e in events if e.get('session_id') == session and e.get('utterance_id') == utterance]
-        def values(name):
-            return [e.get('value') for e in trace if e.get('name') == name]
-        prepared = values('stt_input_prepared_sample_count')
-        if (len(prepared) != 1 or not number(prepared[0]) or prepared[0] <= 0
-                or values('stt_input_suffix_preserved') != [1]
-                or values('stt_capture_received_span_valid') != [1]):
-            missing['final_stt_capture_evidence_unavailable'] += 1
+        matched = correlate_final_pcm(trial, observed, events, session=session, utterance=utterance,
+                                      digest=digest, ordinal=index + 1, phase=phase)
+        counts.other_stt_requests += matched["other_stt_requests"]
+        if matched["missing"] is not None:
+            missing[matched["missing"]] += 1
             continue
-        snapshot = trial.get('pcm_input_observation')
-        if (not isinstance(snapshot, dict) or snapshot.get('overflow') is not False
-                or snapshot.get('active_requests') != 0):
-            missing['input_observer_not_closed'] += 1
-            continue
-        rows = [r for r in observed if r.get('trial_ordinal') == index + 1 and r.get('phase') == phase]
-        saved = [r for r in snapshot.get('rows', []) if r.get('phase') == phase]
-        if sorted(rows, key=lambda r: r['request_ordinal']) != sorted(saved, key=lambda r: r['request_ordinal']):
-            missing['observer_snapshot_mismatch'] += 1
-            continue
-        candidates = [r for r in rows if r.get('preparation_silence') is False
-                      and r.get('input_sample_count') == prepared[0]]
-        counts.other_stt_requests += sum(r.get('preparation_silence') is False for r in rows) - len(candidates)
-        if len(candidates) != 1:
-            missing['final_http_input_not_unique'] += 1
-            continue
-        row = candidates[0]
-        if (row.get('fixture_sha256') != digest or row.get('upstream_status') != 200
-                or not number(row.get('started_ns')) or not number(row.get('completed_ns'))
-                or row['completed_ns'] < row['started_ns']):
-            missing['final_http_input_incomplete'] += 1
-            continue
+        row = matched["row"]
         counts.final_inputs_correlated += 1
         global_alignment = row.get('alignment') or {}
         counts.nonuniform_global_alignment += global_alignment.get('reason') == 'inconsistent_anchor_offsets'

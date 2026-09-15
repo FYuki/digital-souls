@@ -225,6 +225,12 @@ class VoiceInputWorker:
             if not self._closed and epoch == self._epoch:
                 self._fault("vad_processing_cancelled")
             raise
+        except AudioInputFault:
+            raise
+        except Exception as error:
+            # native推論の例外をtransport全体の障害へ拡散させない。
+            # completedが失敗epochを無効化し、呼出側が発話破棄とresetを行う。
+            raise AudioInputFault("vad_processing_failed") from error
 
     async def reset(
         self, next_sample: int | None = None, *, quarantine: bool = False
@@ -237,12 +243,16 @@ class VoiceInputWorker:
         async with self._reset_lock:
             if self._closed:
                 return
-            await asyncio.shield(
-                asyncio.get_running_loop().run_in_executor(
-                    self._executor,
-                    lambda: self._pipeline.reset(next_sample, quarantine=quarantine),
+            try:
+                await asyncio.shield(
+                    asyncio.get_running_loop().run_in_executor(
+                        self._executor,
+                        lambda: self._pipeline.reset(next_sample, quarantine=quarantine),
+                    )
                 )
-            )
+            except Exception as error:
+                # 部分的にresetされた状態を利用可能とは扱わない。
+                raise AudioInputFault("vad_unavailable") from error
             if epoch == self._epoch:
                 self._needs_reset = False
 

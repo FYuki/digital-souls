@@ -10,7 +10,7 @@ import pytest
 
 
 SESSION_STARTED_PAYLOAD = (
-    b'{"protocol_version":"1.1","event_id":'
+    b'{"protocol_version":"2.0","event_id":'
     b'"10000000-0000-4000-8000-000000000010","type":"session_started",'
     b'"session_id":"20000000-0000-4000-8000-000000000010",'
     b'"monotonic_timestamp_ms":1000,"reconnect_grace_ms":60000}'
@@ -21,7 +21,7 @@ def _playback_payload(
     *, event_id: str, event_type: str = "playback_completed", sequence: int = 1
 ) -> bytes:
     event = {
-        "protocol_version": "1.1",
+        "protocol_version": "2.0",
         "event_id": event_id,
         "type": event_type,
         "session_id": "20000000-0000-4000-8000-000000000010",
@@ -143,13 +143,13 @@ def test_conflicting_duplicate_cleans_up_the_terminal_session() -> None:
     "payload",
     [
         (
-            b'{"protocol_version":"1.1","event_id":'
+            b'{"protocol_version":"2.0","event_id":'
             b'"10000000-0000-4000-8000-000000000011","type":"unknown_event",'
             b'"session_id":"20000000-0000-4000-8000-000000000010",'
             b'"monotonic_timestamp_ms":1000}'
         ),
         (
-            b'{"protocol_version":"1.1","event_id":'
+            b'{"protocol_version":"2.0","event_id":'
             b'"10000000-0000-4000-8000-000000000012","type":"session_started",'
             b'"session_id":"20000000-0000-4000-8000-000000000010",'
             b'"monotonic_timestamp_ms":1000}'
@@ -183,7 +183,7 @@ def test_core_sequence_gap_is_terminal_before_core_notification() -> None:
     )
     payload = json.dumps(
         {
-            "protocol_version": "1.1",
+            "protocol_version": "2.0",
             "event_id": "10000000-0000-4000-8000-000000000013",
             "type": "response_delta",
             "session_id": "20000000-0000-4000-8000-000000000010",
@@ -402,9 +402,9 @@ def test_text_input_is_bound_to_authenticated_user_before_delivery_ack(case: str
         identity = "user-20000000-0000-4000-8000-000000000010"
         coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
         event = {
-            "type": "user_text_submitted", "protocol_version": "1.1",
+            "type": "user_text_submitted", "protocol_version": "2.0",
             "event_id": str(uuid4()), "session_id": coordinator.session_id,
-            "monotonic_timestamp_ms": 1, "text": "同じスレッドへの入力",
+            "monotonic_timestamp_ms": 1, "input_revision": 1, "text": "同じスレッドへの入力",
             "speaker": {"role": "user", "participant_id": "40000000-0000-4000-8000-000000000010"},
         }
         if case == "participant":
@@ -414,10 +414,12 @@ def test_text_input_is_bound_to_authenticated_user_before_delivery_ack(case: str
         elif case == "backend_result":
             event.pop("speaker")
             event.pop("text")
+            event.pop("input_revision")
             event.update(type="user_input_result", input_event_id=str(uuid4()), status="accepted")
         elif case == "backend_privacy":
             event.pop("speaker")
             event.pop("text")
+            event.pop("input_revision")
             event.update(type="response_privacy_skipped", response_id=str(uuid4()),
                          source_inputs=[{"input_id": str(uuid4()), "source": "text"}])
         receive = coordinator.receive_data(
@@ -516,7 +518,7 @@ def test_coordinator_sends_valid_logical_audio_metadata_on_private_topic() -> No
         payload, topic = published[0]
         assert topic == module.PRIVATE_TOPIC
         assert json.loads(payload) == {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "logical_audio_segment",
             "response_id": "30000000-0000-4000-8000-000000000010",
             "audio_sequence": 0,
@@ -587,7 +589,7 @@ def test_disconnect_resynchronizes_the_acknowledged_terminal_outcome() -> None:
             if topic == module.PRIVATE_TOPIC
         ]
         assert private_frames[-1] == {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "authoritative_state",
             "generation": 1,
             "session_phase": "available",
@@ -630,7 +632,7 @@ def test_state_sync_request_interrupts_once_before_authoritative_state() -> None
         )
         sync_request = json.dumps(
             {
-                "protocol_version": "1.0",
+                "protocol_version": "2.0",
                 "type": "state_sync_request",
                 "generation": 0,
             },
@@ -677,7 +679,7 @@ def test_production_data_handler_acknowledges_and_stops_retry() -> None:
         event_id = "10000000-0000-4000-8000-000000000010"
         ack = json.dumps(
             {
-                "protocol_version": "1.0",
+                "protocol_version": "2.0",
                 "type": "ack",
                 "event_id": event_id,
                 "generation": 0,
@@ -906,7 +908,7 @@ def test_ack_after_first_retry_stops_remaining_retries(monkeypatch) -> None:
 
         ack = json.dumps(
             {
-                "protocol_version": "1.0",
+                "protocol_version": "2.0",
                 "type": "ack",
                 "event_id": "10000000-0000-4000-8000-000000000010",
                 "generation": 0,
@@ -981,6 +983,10 @@ def test_old_sid_data_is_ignored_after_duplicate_join() -> None:
         published: list[tuple[bytes, str]] = []
         core_port = RecordingCorePort()
         coordinator = _coordinator(module, published, [], core_port)
+        resumed = json.loads(SESSION_STARTED_PAYLOAD)
+        resumed.pop("reconnect_grace_ms")
+        resumed.update(type="session_resumed", input_revision=1)
+        client_payload = json.dumps(resumed).encode()
         identity = "user-20000000-0000-4000-8000-000000000010"
         coordinator.participant_connected(
             identity=identity, participant_sid="PA_old", room_sid="RM_one"
@@ -993,7 +999,7 @@ def test_old_sid_data_is_ignored_after_duplicate_join() -> None:
             identity=identity,
             participant_sid="PA_old",
             topic=module.APPLICATION_TOPIC,
-            payload=SESSION_STARTED_PAYLOAD,
+            payload=client_payload,
         )
 
         assert core_port.notifications == []
@@ -1003,10 +1009,10 @@ def test_old_sid_data_is_ignored_after_duplicate_join() -> None:
             identity=identity,
             participant_sid="PA_new",
             topic=module.APPLICATION_TOPIC,
-            payload=SESSION_STARTED_PAYLOAD,
+            payload=client_payload,
         )
 
-        assert core_port.notifications == [SESSION_STARTED_PAYLOAD]
+        assert core_port.notifications == [client_payload]
         assert len(published) == 1
         assert published[0][1] == module.PRIVATE_TOPIC
         await coordinator.cleanup("test_complete")
@@ -1088,7 +1094,7 @@ def test_response_track_readiness_requires_current_participant_and_generation():
         )
         coordinator.participant_connected(identity="user-one", participant_sid="PA_current", room_sid="RM_one")
         response_id = "50000000-0000-4000-8000-000000000001"
-        frame = {"protocol_version": "1.0", "type": "response_track_ready", "response_id": response_id,
+        frame = {"protocol_version": "2.0", "type": "response_track_ready", "response_id": response_id,
                  "track_sid": "TR_one", "generation": 0}
         for identity, participant, generation in [("other", "PA_current", 0), ("user-one", "PA_old", 0), ("user-one", "PA_current", 1)]:
             await coordinator.receive_data(identity=identity, participant_sid=participant, topic=module.PRIVATE_TOPIC,
@@ -1111,7 +1117,7 @@ def test_source_completion_reports_conserved_samples_on_private_topic() -> None:
             input_sample_count=1234, captured_sample_count=2880, padding_sample_count=1646)
         payload, topic = published[0]
         assert topic == module.PRIVATE_TOPIC
-        assert json.loads(payload) == {"protocol_version": "1.0", "type": "response_audio_finished",
+        assert json.loads(payload) == {"protocol_version": "2.0", "type": "response_audio_finished",
             "response_id": "30000000-0000-4000-8000-000000000010", "generation": 0,
             "input_sample_count": 1234, "captured_sample_count": 2880, "padding_sample_count": 1646}
         with pytest.raises(ValueError):
@@ -1137,11 +1143,11 @@ def test_control_probe_round_trip_does_not_change_generation_or_interrupt_respon
             probe_id = f"10000000-0000-4000-8000-{index:012d}"
             await coordinator.receive_data(
                 identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
-                payload=json.dumps({"protocol_version": "1.0", "type": "control_probe",
+                payload=json.dumps({"protocol_version": "2.0", "type": "control_probe",
                                     "probe_id": probe_id, "generation": 0}).encode(),
             )
             assert json.loads(published[-1][0]) == {
-                "protocol_version": "1.0", "type": "control_probe_ack",
+                "protocol_version": "2.0", "type": "control_probe_ack",
                 "probe_id": probe_id, "generation": 0,
             }
             assert published[-1][1] == module.PRIVATE_TOPIC
@@ -1177,7 +1183,7 @@ def test_control_probe_does_not_acknowledge_invalid_or_unavailable_connection(ca
             identity="unrelated" if case == "wrong_identity" else identity,
             participant_sid="PA_old" if case == "old_connection" else "PA_current",
             topic=module.PRIVATE_TOPIC,
-            payload=json.dumps({"protocol_version": "1.0", "type": "control_probe",
+            payload=json.dumps({"protocol_version": "2.0", "type": "control_probe",
                                 "probe_id": "10000000-0000-4000-8000-000000000001",
                                 "generation": generation, **({"observe_clock": True} if observe_clock else {})}).encode(),
         )
@@ -1210,7 +1216,7 @@ def test_audio_probe_uses_only_current_authenticated_available_connection(case):
         notifications = list(core.notifications)
         probe_id = '10000000-0000-4000-8000-000000000001'
         for kind in ['audio_probe_request', 'audio_probe_ready', 'audio_probe_complete']:
-            frame = dict(protocol_version='1.0', type=kind, probe_id=probe_id, generation=generation)
+            frame = dict(protocol_version='2.0', type=kind, probe_id=probe_id, generation=generation)
             if kind != 'audio_probe_request':
                 frame['track_sid'] = 'TR_probe'
             if case == 'wrong_direction':
@@ -1245,7 +1251,7 @@ def test_repeated_sync_waits_for_generation_readiness_without_restarting_it() ->
 
         async def sync() -> None:
             await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
-                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+                payload=json.dumps({"protocol_version": "2.0", "type": "state_sync_request", "generation": 0}).encode())
 
         first = asyncio.create_task(sync())
         await asyncio.wait_for(entered.wait(), timeout=0.5)
@@ -1282,7 +1288,7 @@ def test_sync_retries_failed_readiness_before_publishing_available() -> None:
 
         async def sync() -> None:
             await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
-                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+                payload=json.dumps({"protocol_version": "2.0", "type": "state_sync_request", "generation": 0}).encode())
 
         try:
             await sync()
@@ -1310,7 +1316,7 @@ def test_state_sync_observations_separate_receive_readiness_and_send() -> None:
         coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
         for _ in range(2):
             await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
-                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+                payload=json.dumps({"protocol_version": "2.0", "type": "state_sync_request", "generation": 0}).encode())
         assert [row[0] for row in rows] == ["request_received", "lock_acquired", "ready_started",
             "ready_completed", "send_started", "send_completed", "request_received", "lock_acquired",
             "send_started", "send_completed"]
@@ -1332,7 +1338,7 @@ def test_control_probe_diagnostic_has_numeric_stages_without_probe_identity() ->
         coordinator.participant_connected(identity=identity, participant_sid='PA_current', room_sid='RM_one')
         probe_id = '10000000-0000-4000-8000-000000000001'
         await coordinator.receive_data(identity=identity, participant_sid='PA_current', topic=module.PRIVATE_TOPIC,
-            payload=json.dumps({'protocol_version': '1.0', 'type': 'control_probe',
+            payload=json.dumps({'protocol_version': '2.0', 'type': 'control_probe',
                                 'probe_id': probe_id, 'generation': 0}).encode())
         assert [row[0] for row in rows] == ['probe_received', 'probe_ack_started', 'probe_ack_completed']
         assert all(row[1] == 0 and type(row[2]) is int for row in rows)
@@ -1340,7 +1346,7 @@ def test_control_probe_diagnostic_has_numeric_stages_without_probe_identity() ->
         assert probe_id not in json.dumps(rows) and identity not in json.dumps(rows)
         rows.clear()
         await coordinator.receive_data(identity=identity, participant_sid='PA_current', topic=module.PRIVATE_TOPIC,
-            payload=json.dumps({'protocol_version': '1.0', 'type': 'control_probe',
+            payload=json.dumps({'protocol_version': '2.0', 'type': 'control_probe',
                                 'probe_id': probe_id, 'generation': 1}).encode())
         assert [row[0] for row in rows] == ['probe_received', 'probe_generation_rejected']
         assert len(published) == 1
@@ -1358,7 +1364,7 @@ def test_clock_probe_reports_server_receive_and_send_without_changing_state() ->
         identity = "user-20000000-0000-4000-8000-000000000010"
         coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
         await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
-            payload=json.dumps({"protocol_version": "1.0", "type": "control_probe", "observe_clock": True,
+            payload=json.dumps({"protocol_version": "2.0", "type": "control_probe", "observe_clock": True,
                 "probe_id": "10000000-0000-4000-8000-000000000010", "generation": 0}).encode())
         frame = json.loads(published[-1][0])
         assert frame["server_received_us"] == 5_000_001

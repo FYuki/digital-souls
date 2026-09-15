@@ -1,0 +1,49 @@
+{
+  "scope": "repository_history_cross_revision_roundtrip",
+  "before_application_commit": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+  "before_worktree_commit": "67e1a03e232a5e75ca717ec28bc720e00f267849",
+  "after_commit": "09653c5127b31cf7de6f8f0ba705438438b1831e",
+  "worker_sha256": "d0d6126911ec9dd12c9a08f1a3b4003bb0fe62ed84fab3c8f7873f0f4752ea89",
+  "runs": [
+    {
+      "phase": "before",
+      "schema_version": 9,
+      "turn_count": 3,
+      "pre_rows_sha256": "f56c0b7fba1ce7528402950b37e1a3dba166c125335da4d26845cb5f7f35c676",
+      "post_rows_sha256": "dd9bf8fa5202de21aa709b1f6f1019fc7f1e31ce51fa866abb4be000e11fdabc",
+      "checks_passed": true
+    },
+    {
+      "phase": "after",
+      "schema_version": 9,
+      "turn_count": 4,
+      "pre_rows_sha256": "dd9bf8fa5202de21aa709b1f6f1019fc7f1e31ce51fa866abb4be000e11fdabc",
+      "post_rows_sha256": "983c0f60eedae5e5fc273d2af5a1366cc6cb809468c58601f858284414504191",
+      "checks_passed": true
+    },
+    {
+      "phase": "rollback",
+      "schema_version": 9,
+      "turn_count": 5,
+      "pre_rows_sha256": "983c0f60eedae5e5fc273d2af5a1366cc6cb809468c58601f858284414504191",
+      "post_rows_sha256": "de598f6ee6f640df4a7f7c66cc9691b24de2d0135675d65452d079784979f252",
+      "checks_passed": true
+    },
+    {
+      "phase": "verify",
+      "schema_version": 9,
+      "turn_count": 5,
+      "pre_rows_sha256": "de598f6ee6f640df4a7f7c66cc9691b24de2d0135675d65452d079784979f252",
+      "post_rows_sha256": "de598f6ee6f640df4a7f7c66cc9691b24de2d0135675d65452d079784979f252",
+      "checks_passed": true
+    }
+  ],
+  "new_temporary_database_only": true,
+  "existing_runtime_data_accessed": false,
+  "application_history_storage_diff": false,
+  "passed": true,
+  "limits": [
+    "実SQLiteとRepositoryの互換性確認であり、稼働中Sessionの移行ではない",
+    "FE/BE一括配備・旧client拒否・実マイク受入は別途必要"
+  ]
+}

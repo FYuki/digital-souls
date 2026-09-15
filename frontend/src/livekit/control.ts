@@ -94,7 +94,7 @@ export class PlaybackConfirmationTracker {
     if (this.finishedResponses.has(responseId)) return null
     if (previous !== undefined && (continuousPrefix < previous || (!responseFinished && continuousPrefix === previous))) return null
     const event = parseVoiceSessionEvent({
-      protocol_version: '1.1',
+      protocol_version: '2.0',
       event_id: this.eventId(),
       type: 'playback_completed',
       session_id: this.sessionId,

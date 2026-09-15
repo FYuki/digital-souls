@@ -1,22 +1,15 @@
 import asyncio
-import json
 
 import pytest
 
 import app.livekit_transport.production as production
 
 
+from tests.voice_capture_test_support import begin_capture
+
+
 def start(bridge):
-    bridge.notify(
-        json.dumps(
-            {
-                "type": "speech_started",
-                "speaker": {"role": "user"},
-                "utterance_id": "retry",
-                "response_id": "old",
-            }
-        ).encode()
-    )
+    begin_capture(bridge, "retry", response_id="old")
 
 
 @pytest.mark.parametrize("initial", ["backchannel", "indeterminate"])

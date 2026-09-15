@@ -37,10 +37,6 @@ export const installMockLiveKit = async (
     const existingPort = target.__digitalSoulsVoiceSessionTestPort as Record<string, unknown> | undefined
     target.__digitalSoulsVoiceSessionTestPort = {
       ...existingPort,
-      bindController(controller: unknown) {
-        ;(window as unknown as { __mockVoiceController?: unknown })
-          .__mockVoiceController = controller
-      },
       createRoom(
         observe: (value: unknown) => void,
         receiveCoreEvent: (value: Record<string, unknown>) => void,
@@ -52,6 +48,58 @@ export const installMockLiveKit = async (
         const emittedUtterances = new Set<string>()
         const controlEvents: Record<string, unknown>[] = []
         let microphoneStream: MediaStream | null = null
+        let trackSid = ''
+        let inputGeneration = 0
+        let inputRevision = 0
+        const interruptions: Array<{
+          responseId: string
+          backendDecisionAtMs: number
+          localPlaybackStoppedAtMs: number | null
+          cancelConfirmedAtMs: number | null
+        }> = []
+        const speechBoundary = (type: 'speech_started' | 'speech_stopped', utteranceId: string) => {
+          if (!microphoneStream?.getAudioTracks().some(track => track.enabled)) {
+            throw new Error('mock speech requires an acknowledged, enabled microphone')
+          }
+          receiveCoreEvent({
+            protocol_version: '2.0', event_id: crypto.randomUUID(),
+            type, session_id: sessionId, utterance_id: utteranceId,
+            track_sid: trackSid, input_generation: inputGeneration,
+            start_sample: 0, detected_sample: 1536, active_end_sample: 1536,
+            monotonic_timestamp_ms: Math.floor(performance.now()),
+            speaker: {role: 'user', participant_id: '40000000-0000-4000-8000-000000000010'},
+            sample_rate: 16000, clock_domain: 'server_monotonic',
+          })
+          if (type === 'speech_started') {
+            const now = performance.now()
+            // モック通知起点。実PCM送信・VAD検出の測定証跡ではない。
+            window.__voiceChatE2E?.cycles.push({
+              fixtureStartedAt: now, sendAt: now,
+              audioReceivedAt: null, audioDecodeAt: null, startedAt: null,
+              sessionId, utteranceId, responseId: null, conversationId,
+              sentBytes: null, receivedBytes: null,
+            })
+          }
+        }
+        const cancelResponse = (responseId: string) => {
+          receiveCoreEvent({
+            type: 'response_cancelled', session_id: sessionId,
+            response_id: responseId, reason: 'barge_in',
+          })
+          const evidence = [...interruptions].reverse().find(row => row.responseId === responseId)
+          if (evidence) evidence.cancelConfirmedAtMs = performance.now()
+          receiveCoreEvent({
+            type: 'response_delta', session_id: sessionId,
+            response_id: responseId, text_sequence: 2, text: '破棄対象',
+            text_range: {start: responseText.length, end: responseText.length + 4},
+          })
+          receiveCoreEvent({
+            type: 'response_audio_segment', session_id: sessionId,
+            response_id: responseId, audio_sequence: 2,
+            text_range: {start: responseText.length, end: responseText.length + 4},
+          })
+          if (activeResponseId === responseId) activeResponseId = null
+        }
         const lifecycle = {
           publishMicrophoneCount: 0,
           muteMicrophoneCount: 0,
@@ -114,6 +162,29 @@ export const installMockLiveKit = async (
         }
         ;(window as unknown as { __mockLiveKit?: Record<string, unknown> }).__mockLiveKit = {
           controlEvents,
+          interruptions,
+          beginSpeech: () => {
+            const id = crypto.randomUUID()
+            speechBoundary('speech_started', id)
+            return id
+          },
+          finishSpeech: (id: string) => speechBoundary('speech_stopped', id),
+          interruptFromBackend: () => {
+            if (activeResponseId === null) throw new Error('no response to interrupt')
+            const responseId = activeResponseId
+            const utteranceId = crypto.randomUUID()
+            speechBoundary('speech_started', utteranceId)
+            interruptions.push({
+              responseId, backendDecisionAtMs: performance.now(),
+              localPlaybackStoppedAtMs: null, cancelConfirmedAtMs: null,
+            })
+            receiveCoreEvent({
+              type: 'turn_decision', session_id: sessionId, utterance_id: utteranceId,
+              response_id: responseId, decision: 'take_turn', final: false,
+            })
+            cancelResponse(responseId)
+            speechBoundary('speech_stopped', utteranceId)
+          },
           microphoneEnabled: () => microphoneStream?.getAudioTracks().some(track => track.enabled) ?? false,
           resolveTextInput: (status: 'accepted' | 'rejected') => {
             const input = [...controlEvents].reverse().find(event => event.type === 'user_text_submitted')
@@ -146,6 +217,8 @@ export const installMockLiveKit = async (
           },
           submitUtterance: async () => {
             const utteranceId = crypto.randomUUID()
+            speechBoundary('speech_started', utteranceId)
+            speechBoundary('speech_stopped', utteranceId)
             await emitResponse(utteranceId)
           },
           beginInterruptibleResponse: () => {
@@ -194,137 +267,41 @@ export const installMockLiveKit = async (
           async publishMicrophone(stream: MediaStream) {
             microphoneStream = stream
             lifecycle.publishMicrophoneCount += 1
+            trackSid = 'TR_mock_' + lifecycle.publishMicrophoneCount
+            return trackSid
           },
           async muteMicrophone() {
             lifecycle.muteMicrophoneCount += 1
           },
-          stopPlayback(responseId: string, speechStartedAtMs: number) {
+          stopPlayback(responseId: string) {
             const stoppedAt = performance.now()
             observe({
               transport: 'available', control: 'available', audio: 'unavailable',
-              activeResponseId: responseId,
-              speechStartedAtMs,
-              localPlaybackStoppedAtMs: stoppedAt,
+              activeResponseId: responseId, localPlaybackStoppedAtMs: stoppedAt,
             })
-            const probe = (window as unknown as { __voiceChatE2E?: {
-              localStopAt?: number
-              stoppedResponseId?: string
-              interruptions: {
-                responseId: string
-                speechStartedAtMs: number
-                localPlaybackStoppedAtMs: number
-                cancelConfirmedAtMs: number | null
-              }[]
-            } }).__voiceChatE2E
-            if (probe !== undefined) {
-              probe.localStopAt = stoppedAt
-              probe.stoppedResponseId = responseId
-              probe.interruptions.push({
-                responseId,
-                speechStartedAtMs,
-                localPlaybackStoppedAtMs: stoppedAt,
-                cancelConfirmedAtMs: null,
-              })
-            }
+            const evidence = [...interruptions].reverse().find(row => row.responseId === responseId)
+            if (evidence) evidence.localPlaybackStoppedAtMs = stoppedAt
             return 0
           },
           async publishControlEvent(event: Record<string, unknown>) {
             controlEvents.push(event)
+            if (event.type === 'speech_started' || event.type === 'speech_stopped') {
+              throw new Error('client must not publish authoritative speech boundaries')
+            }
+            if (event.type === 'audio_input_open_requested') {
+              if (event.track_sid !== trackSid) throw new Error('opening an unpublished track')
+              inputRevision = Number(event.input_revision)
+              inputGeneration += 1
+              receiveCoreEvent({
+                protocol_version: '2.0', event_id: crypto.randomUUID(),
+                type: 'audio_input_opened', session_id: sessionId,
+                request_event_id: event.event_id, track_sid: trackSid,
+                input_revision: inputRevision, input_generation: inputGeneration,
+              })
+            }
             if (event.type === 'response_cancel_requested') {
-              const responseId = String(event.response_id)
-              const probe = (window as unknown as { __voiceChatE2E?: {
-                cancelRequestedAt?: number
-                interruptions: {
-                  responseId: string
-                  cancelConfirmedAtMs: number | null
-                }[]
-              } }).__voiceChatE2E
-              if (probe !== undefined) probe.cancelRequestedAt = performance.now()
-              receiveCoreEvent({
-                type: 'response_cancelled', session_id: sessionId,
-                response_id: responseId, reason: 'barge_in',
-              })
-              observe({
-                transport: 'available', control: 'available', audio: 'unavailable',
-                activeResponseId: responseId,
-                cancelConfirmedAtMs: performance.now(),
-              })
-              const interruption = probe?.interruptions.find(
-                (candidate) => candidate.responseId === responseId,
-              )
-              if (interruption !== undefined) {
-                interruption.cancelConfirmedAtMs = performance.now()
-              }
-              receiveCoreEvent({
-                type: 'response_delta', session_id: sessionId,
-                response_id: responseId, text_sequence: 2,
-                text: '破棄対象', text_range: { start: responseText.length, end: responseText.length + 4 },
-              })
-              receiveCoreEvent({
-                type: 'response_audio_segment', session_id: sessionId,
-                response_id: responseId, audio_sequence: 2,
-                text_range: { start: responseText.length, end: responseText.length + 4 },
-              })
-              if (activeResponseId === responseId) activeResponseId = null
-              return
+              cancelResponse(String(event.response_id))
             }
-            if (event.type === 'speech_started') {
-              const probe = (window as unknown as { __voiceChatE2E?: {
-                cycles: Record<string, unknown>[]
-              } }).__voiceChatE2E
-              probe?.cycles.push({
-                fixtureStartedAt: performance.now(),
-                sendAt: performance.now(),
-                audioReceivedAt: null,
-                audioDecodeAt: null,
-                startedAt: null,
-                sessionId,
-                utteranceId: String(event.utterance_id),
-                responseId: null,
-                conversationId,
-                sentBytes: 1,
-                receivedBytes: null,
-              })
-              if (typeof event.response_id === 'string') {
-                const responseId = event.response_id
-                receiveCoreEvent({
-                  type: 'turn_decision', session_id: sessionId,
-                  utterance_id: String(event.utterance_id), response_id: responseId,
-                  decision: 'take_turn', final: false,
-                })
-                receiveCoreEvent({
-                  type: 'response_cancelled', session_id: sessionId,
-                  response_id: responseId, reason: 'barge_in',
-                })
-                const cancelledAt = performance.now()
-                observe({
-                  transport: 'available', control: 'available', audio: 'unavailable',
-                  activeResponseId: responseId,
-                  cancelConfirmedAtMs: cancelledAt,
-                })
-                const interruption = (window as unknown as { __voiceChatE2E?: {
-                  interruptions: {
-                    responseId: string
-                    cancelConfirmedAtMs: number | null
-                  }[]
-                } }).__voiceChatE2E?.interruptions.find(
-                  (candidate) => candidate.responseId === responseId,
-                )
-                if (interruption !== undefined) {
-                  interruption.cancelConfirmedAtMs = cancelledAt
-                }
-                receiveCoreEvent({
-                  type: 'response_delta', session_id: sessionId,
-                  response_id: responseId, text_sequence: 2,
-                  text: '破棄対象',
-                  text_range: { start: responseText.length, end: responseText.length + 4 },
-                })
-                if (activeResponseId === responseId) activeResponseId = null
-              }
-              return
-            }
-            if (event.type !== 'speech_stopped') return
-            await emitResponse(String(event.utterance_id))
           },
           disconnect() {
             lifecycle.disconnectCount += 1

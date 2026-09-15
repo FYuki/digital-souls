@@ -4,6 +4,10 @@
 
 初期キャラクターは[光織（Miori）](characters/miori/)です。runtimeの定義はCharacter Cardを正本とし、記録係などの固定業務ではなく性格を中心に設計しています。役割は実際の会話や活動の文脈で扱います。
 
+#358作業ブランチでは、LiveKitのVAD・発話区間・入力世代をBackendへ接続し、Frontendをマイク・再生とユーザー操作の実行側へ整理した。
+FE／BEはprotocol 2.0へ一組で更新する。実サービス・性能・実マイク受入は未完了。
+[移行契約](docs/voice-backend-migration-contract.md)と[検証記録](docs/validation/voice-backend-vad-358.md)を参照する。
+
 ## 現在の実装範囲
 
 この一覧はリポジトリ内の実装を説明するもので、すべての機能が既定で有効、またはdogfoodで受入済みであることを意味しません。進捗・残課題はGitHub Issues、検証条件は各受入記録を参照してください。

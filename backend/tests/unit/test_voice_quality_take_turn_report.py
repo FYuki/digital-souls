@@ -274,3 +274,227 @@ def test_separate_client_observers_allow_only_bounded_timestamp_difference(
     )
     result = report.summarize(manifest, events, fixtures)
     assert result["counts"]["verified_cancel"] == int(valid)
+
+
+def fixture_case(count=1, authority="backend"):
+    manifest, events, fixtures = case(count)
+    manifest.update(
+        latency_origin="scheduled_fixture_speech_start", input_authority=authority
+    )
+    events = [event for event in events if event.name != "speech_started_client"]
+    for trial in manifest["trials"]:
+        decision = trial["decision"]
+        stop = trial["evidence"]["interruptions"][0]
+        stop.update(
+            utteranceId=decision["utteranceId"],
+            speechStartedAtMs=None,
+            backendDecisionReceivedAtMs=1300.5,
+            duplicateStop=False,
+            ambiguousDecision=False,
+        )
+        trial["initial_utterance_id"] = "different-initial-input"
+        trial["evidence"].update(
+            interruptions_overflow=False, core_events_overflow=False
+        )
+        trial["evidence"]["core_events"].append(
+            {
+                "type": "speech_started",
+                "atMs": 1200,
+                "sessionId": trial["session_id"],
+                "responseId": trial["old_response_id"],
+                "utteranceId": decision["utteranceId"],
+                "trackSid": "TR_microphone",
+                "inputGeneration": 1,
+                "startSample": 1600,
+                "activeEndSample": 3200,
+                "detectedSample": 4800,
+                "sampleRate": 16000,
+                "serverTimestampMs": 12345,
+                "clockDomain": "server_monotonic",
+            }
+        )
+    return manifest, events, fixtures
+
+
+def test_fixture_origin_uses_bounds_without_client_vad_or_cross_host_subtraction():
+    result = report.summarize(*fixture_case())
+    metrics = {m["name"]: m for m in result["metrics"]}
+    assert result["counts"]["verified_cancel"] == 1
+    assert metrics["local_playback_stop"]["p95"] == 200
+    assert (
+        metrics["local_playback_stop"]["start_point"]
+        == "fixture_speech_start_lower_bound"
+    )
+    assert metrics["barge_in_cancel_total"]["p95"] == 240
+    # client traceの整数msへの丸めを上限へ含める。
+    assert metrics["turn_decision"]["p95"] == 201
+    assert metrics["cancel_after_decision"]["p95"] == 10
+    assert result["fixture_latency_bounds"]["local_playback_stop"] == {
+        "measured_count": 1,
+        "missing_count": 0,
+        "p50_lower_ms": 198,
+        "p50_upper_ms": 200,
+        "p95_lower_ms": 198,
+        "p95_upper_ms": 200,
+    }
+    assert "private" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "mutate,reason",
+    [
+        (
+            lambda t: t["evidence"].update(interruptions_overflow=True),
+            "browser_observations_overflow",
+        ),
+        (
+            lambda t: t["evidence"].update(core_events_overflow=True),
+            "browser_observations_overflow",
+        ),
+        (
+            lambda t: t["evidence"]["interruptions"][0].update(
+                utteranceId="another-input"
+            ),
+            "browser_stop_correlation_unavailable",
+        ),
+        (
+            lambda t: t["evidence"]["interruptions"][0].update(duplicateStop=True),
+            "browser_stop_correlation_unavailable",
+        ),
+        (
+            lambda t: t["evidence"]["interruptions"][0].update(ambiguousDecision=True),
+            "browser_stop_correlation_unavailable",
+        ),
+        (
+            lambda t: t["evidence"]["core_events"].pop(),
+            "backend_speech_correlation_unavailable",
+        ),
+        (
+            lambda t: t["evidence"]["core_events"][-1].update(inputGeneration=0),
+            "backend_speech_correlation_unavailable",
+        ),
+        (
+            lambda t: t["evidence"]["core_events"][-1].update(
+                sessionId="other-session"
+            ),
+            "backend_speech_correlation_unavailable",
+        ),
+    ],
+)
+def test_fixture_report_does_not_fill_missing_or_ambiguous_input(mutate, reason):
+    manifest, events, fixtures = fixture_case()
+    mutate(manifest["trials"][0])
+    result = report.summarize(manifest, events, fixtures)
+    metric = next(m for m in result["metrics"] if m["name"] == "local_playback_stop")
+    assert metric["missing_outcomes"] == {reason: 1}
+    assert metric["p95"] is None
+    assert result["counts"]["verified_cancel"] == 0
+
+
+def test_fixture_report_keeps_failed_trial_and_missing_cancellation_separate():
+    manifest, events, fixtures = fixture_case(2)
+    manifest["trials"][0].update(
+        outcome="failure", failure_stage="cancel_or_continuity"
+    )
+    events = [
+        e
+        for e in events
+        if not (
+            e.session_id == manifest["trials"][0]["session_id"]
+            and e.name == "server_cancelled_client"
+        )
+    ]
+    manifest["trials"][0]["evidence"]["interruptions"][0]["cancelConfirmedAtMs"] = None
+    result = report.summarize(manifest, events, fixtures)
+    assert result["counts"]["expected"] == 2
+    assert result["counts"]["failure"] == 1
+    metrics = {m["name"]: m for m in result["metrics"]}
+    assert metrics["local_playback_stop"]["success_count"] == 2
+    assert metrics["barge_in_cancel_total"]["missing_count"] == 1
+    assert (
+        result["fixture_latency_bounds"]["barge_in_cancel_total"]["missing_count"] == 1
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"latency_origin": "backend_detected"},
+        {"input_authority": "unknown"},
+    ],
+)
+def test_unsupported_origin_or_authority_is_rejected(changes):
+    manifest, events, fixtures = fixture_case()
+    manifest.update(changes)
+    with pytest.raises(ValueError):
+        report.summarize(manifest, events, fixtures)
+
+
+def test_frontend_baseline_can_use_same_fixture_origin_with_real_legacy_start():
+    manifest, events, fixtures = case(1)
+    manifest.update(
+        latency_origin="scheduled_fixture_speech_start", input_authority="frontend"
+    )
+    result = report.summarize(manifest, events, fixtures)
+    assert result["counts"]["verified_cancel"] == 1
+    assert (
+        next(m for m in result["metrics"] if m["name"] == "local_playback_stop")["p95"]
+        == 200
+    )
+
+
+def test_fixture_aggregate_passes_full_cohort_validation():
+    validation_spec = importlib.util.spec_from_file_location(
+        "fixture_cohort_validation",
+        Path(__file__).resolve().parents[3]
+        / "scripts/voice_quality/cohort_report_validation.py",
+    )
+    validation = importlib.util.module_from_spec(validation_spec)
+    validation_spec.loader.exec_module(validation)
+
+    manifest, events, fixtures = fixture_case()
+    result = report.summarize(manifest, events, fixtures)
+    result.update(
+        {
+            key: "0" * 64
+            for key in (
+                "metric_schema_sha256",
+                "labeled_manifest_sha256",
+                "raw_manifest_sha256",
+                "raw_trace_sha256",
+                "reporter_sha256",
+            )
+        }
+    )
+    validation.stamp_and_validate_report(
+        result,
+        Path(__file__).resolve().parents[3]
+        / "docs/schemas/voice-quality-artifact-v1.schema.json",
+    )
+
+
+@pytest.mark.parametrize("failure", ["microphone_activation", "audit_cleanup_failed"])
+def test_fixture_failures_remain_in_denominator_when_activation_or_cleanup_fails(
+    failure,
+):
+    manifest, events, fixtures = fixture_case()
+    trial = manifest["trials"][0]
+    trial["outcome"] = "failure"
+    if failure == "microphone_activation":
+        trial["failure_stage"] = failure
+        trial.pop("decision")
+        trial["evidence"] = {}
+    else:
+        trial["audit_cleanup_failed"] = True
+    result = report.summarize(manifest, events, fixtures)
+    assert result["counts"]["failure"] == 1
+    assert result["failure_stages"] == {
+        failure if failure == "microphone_activation" else "cleanup": 1
+    }
+
+
+def test_fixture_origin_requires_explicit_authority():
+    manifest, events, fixtures = fixture_case()
+    manifest.pop("input_authority")
+    with pytest.raises(ValueError, match="explicit input authority"):
+        report.summarize(manifest, events, fixtures)

@@ -87,7 +87,12 @@ LiveKit Python 1.1.16のAudioStreamは16kHz mono PCMを返すが、frame単位�
 - queue由来の明示的sample欠落、track終了／交換中の未終了発話、30秒を超えた発話は対象発話を破棄する。復元不能音声は話し直し案内へつなぐ。
 - 欠落統計が利用不能なら、その制約を明示して対象発話を保留し、上限内に確認できなければ破棄する。未観測を欠落なし・品質合格へ読み替えない。
 - 長い静音でもPCMを蓄積し続けず、prerollと証拠窓の上限に収める。idle resetはsample数で進める。
+- 音声入力開始ACKは認可trackの最初の有効受信統計を確認してから返す。BE準備は4秒で打ち切り、FEの5秒ACK待ちに収める。未観測のまま利用者発話を開始させず、準備失敗はtrack利用不可として拒否する。
 - モデルhash、WASM、I/O、CPU推論の初期化を音声Sessionの利用開始前に確認する。失敗は音声利用不可として通知し、FE判定へ戻さない。
+- 実行中のVAD推論失敗は未終了発話を破棄して通知し、reset後に700ms以上の静音を確認してから新発話を採用する。失敗した発話の語尾を新発話へ変換しない。
+- resetにも失敗した場合、または認可trackのreaderが終了・失敗した場合は、その入力認可を破棄する。無音中も `error_code=audio_input_unavailable`、`user_state=muted` を通知する。終了済み発話・text・回答再生をreaderの失敗だけで取り消さない。
+- 入力停止エラーは `track_sid / input_generation / input_revision` を必須とする。FEは現在の認可に一致する停止だけを適用し、手動再開では新SIDのACKを取り直す。開始ACK直後で送信完了待ちの間も、停止通知を受けた入力を有効化しない。
+- 入力開始時のreset失敗は `audio_input_rejected(reason=vad_unavailable)` で返す。暗黙のFE VAD復帰や無限の自動再試行は行わない。
 
 上限は既存のcapture・preroll・FE backlogを基準に設定する。80msは約1 VAD frameより短い欠落を区別する初期基準であり、
 M2の固定音声・欠落試験で根拠を検証する。値を変更する場合は仕様の破棄／話し直し動作を維持し、変更根拠と回帰を記録する。
@@ -117,6 +122,27 @@ M2の固定音声・欠落試験で根拠を検証する。値を変更する場
 局所unit/moduleと固定音声の比較、実サービス・ブラウザ、人の実マイク・聴感確認は別の証跡にする。
 M6では人の確認が未実施なら未完了として残す。
 
+### take-turn集計の起点と誤差
+
+既存のラベル付き測定ハーネスは、take-turn manifestに
+`latency_origin=scheduled_fixture_speech_start` と `input_authority` を記録する。
+現行BE版は既定値の `backend`、旧FE版を同じハーネスで比較する場合は
+`VOICE_QUALITY_INPUT_AUTHORITY=frontend` を指定し、実行するFE／BEの版と一致させる。
+メタデータを持たない過去artifactは従来のFE VAD起点として読み、同じ起点の比較とは扱わない。
+
+`scripts/voice_quality/report_take_turn.py` はfixtureのspeechStart上下限と、
+同一ブラウザ時計の実停止・取消確認を使う。判定受信traceの整数ms切り捨てには上限1msを加える。
+主指標のp50／p95と既存の合否には遅延の上限を採用し、
+`fixture_latency_bounds` にType 7の上下限・測定数・欠測数を残す。
+BEのserver時計はclient時計から減算せず、server取消処理の内訳にのみ使う。
+
+BE発話のsession／utterance／responseとtrack・入力世代・sample境界を照合し、
+通知の受信時刻はfixtureとの因果関係の確認に限る。
+相関不足、観測overflow、重複・曖昧な停止、起点と終点の重なりは理由付き欠測とする。
+初期化やcleanupに失敗した試行も全体の分母に残す。
+集計schemaとvalidatorは起点・上下限・分母・主指標の一致を検証する。
+これらは測定手順の定義であり、100試行の前後比較や実マイク受入を完了した証跡ではない。
+
 ## 段階適用と切り戻し
 
 M2はtransport非依存のVAD・区間処理と局所試験、M3は新schema・BE/Core、M4はFE入出力clientと新契約へ接続する。
@@ -126,4 +152,34 @@ M5で既存計測と横断回帰を整合し、M6で一括切替・切り戻し�
 今回の音声判断移設では保存済み会話履歴schemaの変更を要求しない。
 切替は会話終了 → 対応するFE／BEの版へ更新 → ブラウザ再読み込み → 新Session開始。
 切り戻しも会話を終了してFE／BEをそろえて旧版へ戻し、保存済み履歴は保持する。
-具体的な実行・確認コマンドはM6の運用手順へ記載する。
+具体的な実行・確認コマンドは[更新・切り戻し手順](voice-backend-rollout.md)を参照する。
+手順の記載と、通しの実切替検証の完了は区別する。
+
+
+## M3／M4接続中の補足契約
+
+- input_revisionはFEの明示操作・入力再開要求の順序番号。BEのinput_generationとは別で、正式発話や入力世代をFEに採番させない。
+- mute／resume／focus／text submit／openに順序番号を付ける。古い抑止・openは現在のゲートを上書きしない。text本文は古い順序番号だけを理由に配送ACK済みとして捨てず、既存の入力結果契約へ渡す。
+- audio_input_openedは元のrequest event ID、track SID、revision、BE generationを照合する。拒否はaudio_input_rejected、5秒で確認できなければ入力を有効にせず再操作を案内する。
+- Speechイベントはuserの発話を表すBE通知。sample位置のstart ≤ active_end ≤ detectedと16kHzを検証する。検知時刻はserver_monotonicで、FE通知受信時計を発話起点へ代入しない。
+- 欠落確認ではOpusの48kHz受信統計と、16kHz VAD用PCMのsampleを区別する。現在の実装はaudio/opus・clock_rate=48000と必要なcounterの存在を確認し、それ以外は確認不能として扱う。実サービスでのcodec・counter更新頻度・観測範囲の検証は未了。
+- 非無音concealmentはconcealed_samplesからsilent_concealed_samplesを除く。packet lossやjitterの値だけでは破棄しない。意味の根拠は[WebRTC統計仕様](https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-concealedsamples)を参照する。
+- 統計のrequest後に届いたPCMまで確認済みにはしない。確認不能は1秒の上限まで保留し、確認できなければSTTへ渡さず、音声の話し直しを案内する。
+- 上記は接続実装の契約補足。新しい局所試験・本番ビルドの成功だけで、既存suiteの移行や実サービス受入を完了としない。
+
+### BE VAD境界と実STT入力のsample対応
+
+BE版のVAD境界reportは、開始通知を発行したframeのtrack sample位置とBridgeの受信連番を対応付ける。
+終了時には最初のawaitより前に対応を固定し、連続したcapture範囲・preroll・STTのprefix除去を検証する。
+世代をまたいで継続する受信連番と、新しいtrackのsample位置を同一視しない。
+対応できない場合は位置を補完せず、数値traceのmedia spanを無効とする。
+
+固定音声への対応には既存の二つの独立PCM anchorとv4端部照合の両方を要求する。
+相関・競合peak・sample数を再検証し、anchor間の位置差が32 sampleを超える場合は欠測とする。
+上下限は確認したoffsetに既存の32 sample許容幅を加えた範囲であり、
+物理時計の誤差保証や音声内部全体の連続性保証ではない。
+VADの開始・検知終了位置から固定音声境界までを16kHzのmedia軸で集計し、server時計とbrowser時計は減算しない。
+
+誤分割は正式BE境界から独立して件数を保持する。複数のSTT入力を結合して一発話のPCM証跡へ変換しない。
+境界offsetが欠測でも、確認済みの誤分割を分母・件数から除外しない。
+100試行条件、全件coverage、cleanup条件は維持する。人の実マイク・聴感受入は別途必要である。

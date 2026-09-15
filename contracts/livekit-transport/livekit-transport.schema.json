@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://digital-souls.local/contracts/livekit-transport/1.0/livekit-transport.schema.json",
+  "$id": "https://digital-souls.local/contracts/livekit-transport/2.0/livekit-transport.schema.json",
   "title": "LiveKitTransportFrame",
   "oneOf": [
     { "$ref": "#/$defs/Ack" },
@@ -96,7 +96,7 @@
         }
       }
     },
-    "ProtocolVersion": { "type": "string", "const": "1.0" },
+    "ProtocolVersion": { "type": "string", "const": "2.0" },
     "Identifier": { "type": "string", "format": "uuid" },
     "Generation": { "type": "integer", "minimum": 0 },
     "TerminalOutcome": {

@@ -96,7 +96,7 @@ const responseIdFromTrackName = (name: string): string | null => {
   return match?.[1] ?? null
 }
 
-const PRIVATE_TOPIC = 'digital-souls.livekit-transport.v1'
+const PRIVATE_TOPIC = 'digital-souls.livekit-transport.v2'
 const APPLICATION_TOPIC = 'digital-souls.core.v1'
 const SCREEN_TOPIC = 'digital-souls.screen-perception.v1'
 const browserRetryTimer: RetryTimer = {
@@ -296,7 +296,7 @@ export class LiveKitRoomClient {
     })
     return this.controlProbes.start(this.generation, async (probeId, generation) => {
       await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
-        protocol_version: '1.0', type: 'control_probe', probe_id: probeId, generation,
+        protocol_version: '2.0', type: 'control_probe', probe_id: probeId, generation,
       })), {reliable: true, topic: PRIVATE_TOPIC})
     })
   }
@@ -310,7 +310,7 @@ export class LiveKitRoomClient {
     // 復旧判定用probeとはpending状態を分け、通常の疎通指標へ時計診断を混ぜない。
     return this.clockProbes.start(this.generation, async (probeId, generation) => {
       await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
-        protocol_version: '1.0', type: 'control_probe', probe_id: probeId, generation, observe_clock: true,
+        protocol_version: '2.0', type: 'control_probe', probe_id: probeId, generation, observe_clock: true,
       })), {reliable: true, topic: PRIVATE_TOPIC})
     })
   }
@@ -347,20 +347,22 @@ export class LiveKitRoomClient {
       && participant.identity.endsWith('-' + this.sessionId)
   }
 
-  async publishMicrophone(stream?: MediaStream): Promise<void> {
+  async publishMicrophone(stream?: MediaStream): Promise<string> {
     if (this.room === null) throw new Error('LiveKit Room is not connected')
     if (stream !== undefined) {
       const track = stream.getAudioTracks()[0]
       if (track === undefined) throw new Error('Microphone stream has no audio track')
-      await this.room.localParticipant.publishTrack(track, {
+      const publication = await this.room.localParticipant.publishTrack(track, {
         source: Track.Source.Microphone,
       })
-      return
+      return publication.trackSid
     }
-    await this.room.localParticipant.setMicrophoneEnabled(
+    const publication = await this.room.localParticipant.setMicrophoneEnabled(
       true,
       { ...this.microphoneCaptureOptions },
     )
+    if (publication === undefined) throw new Error('Microphone publication is unavailable')
+    return publication.trackSid
   }
 
   async muteMicrophone(): Promise<void> {
@@ -474,7 +476,7 @@ export class LiveKitRoomClient {
     const result = await confirmation
     if (this.room !== room || request.sessionId !== this.sessionId || request.generation !== this.generation) return
     await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
-      protocol_version: '1.0', type: 'output_stop_confirmed', session_id: request.sessionId,
+      protocol_version: '2.0', type: 'output_stop_confirmed', session_id: request.sessionId,
       response_id: request.responseId, request_id: request.requestId, generation: request.generation,
       last_played_audio_sequence: result.lastPlayedAudioSequence, output_confirmation: result.outputConfirmation,
     })), {reliable: true, topic: PRIVATE_TOPIC})
@@ -818,7 +820,7 @@ export class LiveKitRoomClient {
       || this.recoveryProbe !== null || this.sessionId === null || this.room !== room) return
     const probeId = crypto.randomUUID(), generation = this.generation, sessionId = this.sessionId
     const frame = new TextEncoder().encode(JSON.stringify({
-      protocol_version: '1.0', type: 'control_probe', probe_id: probeId, generation,
+      protocol_version: '2.0', type: 'control_probe', probe_id: probeId, generation,
     }))
     // publish完了では閉じず、同じnonceへの返信まで250ms間隔で再送する。
     // 送信中は重ねず、60秒の期限と切断時のcloseで所有timerを終了する。
@@ -851,7 +853,7 @@ export class LiveKitRoomClient {
     const generation = this.generation, sessionId = this.sessionId
     this.syncRequestedGeneration = generation
     const frame = new TextEncoder().encode(JSON.stringify({
-      protocol_version: '1.0', type: 'state_sync_request', generation,
+      protocol_version: '2.0', type: 'state_sync_request', generation,
     }))
     this.stateSyncRequest = new StateSyncRequest(async () => {
       if (this.room !== room || this.sessionId !== sessionId) return
@@ -989,7 +991,7 @@ export class LiveKitRoomClient {
     if (sessionId === null) throw new Error('LiveKit Room is not connected')
     await this.publishControlEvent(parseVoiceSessionEvent({
       type: 'observation',
-      protocol_version: '1.1',
+      protocol_version: '2.0',
       event_id: crypto.randomUUID(),
       session_id: sessionId,
       response_id: responseId,
@@ -1014,7 +1016,7 @@ export class LiveKitRoomClient {
     let networkMeasurementDelivered = false
     try {
       await this.publishControlEvent(parseVoiceSessionEvent({
-        type: 'observation', protocol_version: '1.1', event_id: crypto.randomUUID(),
+        type: 'observation', protocol_version: '2.0', event_id: crypto.randomUUID(),
         session_id: sessionId, response_id: responseId, measurement: 'network_summary',
         network_summary: networkObservation, timestamp: Math.floor(performance.now()),
         clock_domain: 'client_monotonic', unit: 'millisecond',
@@ -1053,7 +1055,7 @@ export class LiveKitRoomClient {
     this.observe({transport: 'available', control: 'available', audio: 'unavailable',
       ...evidence})
     const event = (fields: Record<string, unknown>) => parseVoiceSessionEvent({
-      protocol_version: '1.1', event_id: crypto.randomUUID(), session_id: sessionId,
+      protocol_version: '2.0', event_id: crypto.randomUUID(), session_id: sessionId,
       response_id: responseId, reason: 'disconnect', monotonic_timestamp_ms: Math.floor(performance.now()),
       ...fields,
     })
@@ -1217,7 +1219,7 @@ export class LiveKitRoomClient {
     if (this.room !== null && this.subscriptions.has(key) && this.audioGraphs.get(key) === graph
       && this.generation === generation && !this.stoppedResponses.has(responseId)) {
       await this.room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
-        protocol_version: '1.0', type: 'response_track_ready', response_id: responseId,
+        protocol_version: '2.0', type: 'response_track_ready', response_id: responseId,
         track_sid: key, generation,
       })), {reliable: true, topic: PRIVATE_TOPIC})
     }
@@ -1278,7 +1280,7 @@ export class LiveKitRoomClient {
         throw new Error('Core ACK transport unavailable')
       }
       await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
-        protocol_version: '1.0', type: 'ack', event_id: eventId, generation: this.generation,
+        protocol_version: '2.0', type: 'ack', event_id: eventId, generation: this.generation,
       })), {reliable: true, topic: PRIVATE_TOPIC})
     }, browserRetryTimer, () => this.failTransport(), () => this.observeConnection('ack_deferred'))
     this.playbackConfirmations = new PlaybackConfirmationTracker(

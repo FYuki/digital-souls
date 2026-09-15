@@ -61,6 +61,11 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 100
+            },
+            "microphone_activation": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
             }
           }
         },
@@ -231,7 +236,10 @@
                       "const": "millisecond"
                     },
                     "start_point": {
-                      "const": "speech_started_client"
+                      "enum": [
+                        "speech_started_client",
+                        "fixture_speech_start_lower_bound"
+                      ]
                     },
                     "end_point": {
                       "const": "local_playback_stopped"
@@ -268,7 +276,10 @@
                       "const": "millisecond"
                     },
                     "start_point": {
-                      "const": "speech_started_client"
+                      "enum": [
+                        "speech_started_client",
+                        "fixture_speech_start_lower_bound"
+                      ]
                     },
                     "end_point": {
                       "const": "turn_decision_client"
@@ -342,7 +353,10 @@
                       "const": "millisecond"
                     },
                     "start_point": {
-                      "const": "speech_started_client"
+                      "enum": [
+                        "speech_started_client",
+                        "fixture_speech_start_lower_bound"
+                      ]
                     },
                     "end_point": {
                       "const": "server_cancelled_client"
@@ -398,7 +412,197 @@
               }
             }
           }
+        },
+        "latency_origin": {
+          "const": "scheduled_fixture_speech_start"
+        },
+        "input_authority": {
+          "enum": [
+            "frontend",
+            "backend"
+          ]
+        },
+        "fixture_latency_bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "local_playback_stop",
+            "turn_decision",
+            "barge_in_cancel_total"
+          ],
+          "properties": {
+            "local_playback_stop": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "measured_count",
+                "missing_count",
+                "p50_lower_ms",
+                "p50_upper_ms",
+                "p95_lower_ms",
+                "p95_upper_ms"
+              ],
+              "properties": {
+                "measured_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "missing_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "p50_lower_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p50_upper_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p95_lower_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p95_upper_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              }
+            },
+            "turn_decision": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "measured_count",
+                "missing_count",
+                "p50_lower_ms",
+                "p50_upper_ms",
+                "p95_lower_ms",
+                "p95_upper_ms"
+              ],
+              "properties": {
+                "measured_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "missing_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "p50_lower_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p50_upper_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p95_lower_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p95_upper_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              }
+            },
+            "barge_in_cancel_total": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "measured_count",
+                "missing_count",
+                "p50_lower_ms",
+                "p50_upper_ms",
+                "p95_lower_ms",
+                "p95_upper_ms"
+              ],
+              "properties": {
+                "measured_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "missing_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "p50_lower_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p50_upper_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p95_lower_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "p95_upper_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              }
+            }
+          }
         }
+      },
+      "dependentRequired": {
+        "latency_origin": [
+          "input_authority",
+          "fixture_latency_bounds"
+        ],
+        "input_authority": [
+          "latency_origin",
+          "fixture_latency_bounds"
+        ],
+        "fixture_latency_bounds": [
+          "latency_origin",
+          "input_authority"
+        ]
       }
     },
     {

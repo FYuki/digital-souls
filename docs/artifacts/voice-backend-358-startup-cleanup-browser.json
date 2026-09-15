@@ -1,0 +1,135 @@
+{
+  "scope": "real_browser_startup_cleanup_on_signaling_failure",
+  "application_source_revision": "fc4369409c15a30e356a1a90c588942fa7b6099f",
+  "test_source": "frontend/integration/voice/startup-cleanup.spec.ts",
+  "test_source_sha256": "2f6d6d2b2c1918e6384c55666548fb71edb3eec2888e23f900fa93a05b1ac758",
+  "runtime_profile": "integration-voice",
+  "new_dedicated_data_root": true,
+  "running_container_images": {
+    "backend": {
+      "container_id": "024fff4608a873db8ece4e66716c19a255df91890cf740fb817db572551c78d7",
+      "image_id": "sha256:9bc66249c79c5a087e5f28937ae6b21079cd4d1e9b1cbb95f3bf9f72477a606c",
+      "image_tag": "digital-souls-voice-quality/backend:fc4369409c15a30e356a1a90c588942fa7b6099f",
+      "running_at_observation": true,
+      "observed_at_unix": 1789431548.9755876
+    },
+    "frontend": {
+      "container_id": "09a4b5bb51e548ef567370edc8c673f35d07f116b2bfc86297b3af2c9995ec4b",
+      "image_id": "sha256:553f6f0fd9dfa8b444c07e5b89e184821a630d0e58fe89edbd36a38787ff5cf7",
+      "image_tag": "digital-souls-voice-quality/frontend:fc4369409c15a30e356a1a90c588942fa7b6099f",
+      "running_at_observation": true,
+      "observed_at_unix": 1789431567.0558317
+    }
+  },
+  "result": {
+    "source": "real_bootstrap_browser_signaling_reset",
+    "rejected_connections": 2,
+    "bootstrap_count": 1,
+    "client_delete_count": 1,
+    "delete_status": 200,
+    "reconnect_status": 409,
+    "room_before": {
+      "matching_rooms": 1,
+      "participants": 1
+    },
+    "room_after": {
+      "matching_rooms": 0,
+      "participants": 0
+    },
+    "microphone_calls": 0
+  },
+  "playwright_stats": {
+    "startTime": "2026-09-15T00:19:07.917Z",
+    "duration": 25821.259,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "environment_teardown": {
+    "status": "completed",
+    "results": [
+      {
+        "service": "frontend",
+        "result": "stopped"
+      },
+      {
+        "service": "backend",
+        "result": "stopped"
+      }
+    ]
+  },
+  "owned_ports_listening": {
+    "7880": false,
+    "7881": false,
+    "8000": false,
+    "5173": false,
+    "4174": false
+  },
+  "dedicated_livekit_stopped": true,
+  "attempts_preserved": [
+    {
+      "run_directory": "frontend/test-results/ds358-startup-cleanup-fc43694-01",
+      "exit": 1,
+      "remaining_row_counts": {
+        "conversations": 1,
+        "conversation_turns": 0,
+        "memory_thread_jobs": 0,
+        "memory_thread_receipts": 0
+      },
+      "result": "Room一覧の参加者数が0の時点を拾い事前assertで失敗。テスト側終了APIもTest endedで失敗。所有FE/BEはEnvironmentで停止し、専用LiveKitも停止。空会話1件を当該専用DBに保持。"
+    },
+    {
+      "run_directory": "frontend/test-results/ds358-startup-cleanup-fc43694-02",
+      "exit": 0,
+      "remaining_row_counts": {
+        "conversations": 0,
+        "conversation_turns": 0,
+        "memory_thread_jobs": 0,
+        "memory_thread_receipts": 0
+      },
+      "result": "実参加者APIで1人を確認後に障害を投入し、製品側終了API・Room削除・再接続拒否が成功。"
+    }
+  ],
+  "raw_evidence": [
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-01/run.json",
+      "sha256": "f7de34b2966e9722b10aa26857f5af0eff99cfa33a8297b4bf0e379ffb536c99"
+    },
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-01/execution.log",
+      "sha256": "59faf21e4034c977e6f5b6a3965c168ebafd4b96ac7bb2e2c783468989d03e76"
+    },
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-01/playwright-results.json",
+      "sha256": "37469a4c8d3ac8bd01e6358e7f02f03fd2d49d82673c35f28f58205b6cd56c83"
+    },
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-01/runtime-data/runtime/standalone/environment-run.json",
+      "sha256": "1f3dca172ec3aa424f90a1c588605ca3715994cc63ada0c2dc3424170376c1a6"
+    },
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-02/run.json",
+      "sha256": "569efd79dfc6ae395e1684d47d7f292281470100d2765880335b8dc767b3fcec"
+    },
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-02/execution.log",
+      "sha256": "c7a1a1450b852363f18a386378b864eeff2fe8b31395f8692ae605e67bc6f642"
+    },
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-02/playwright-results.json",
+      "sha256": "0df0887e6c8c19d17ed8bc83f8618a88b4bffde9630de99a4033941b52aa4c0a"
+    },
+    {
+      "path": "frontend/test-results/ds358-startup-cleanup-fc43694-02/runtime-data/runtime/standalone/environment-run.json",
+      "sha256": "ae0e9c89330fc0fbd40419fed23def736e8ecfae31e8db8529b92693e3c73110"
+    }
+  ],
+  "limitations": [
+    "実BEが返したtoken応答のlivekit_urlだけを、試験自身が一時確保した接続直後切断portへ変更した。API応答全体やRoom clientのmockではない。",
+    "実LiveKit管理APIで障害前のRoom 1件・BE参加者1人、製品側終了API後のRoom 0件を確認した。テストのfinallyからの追加cleanupより前の結果である。",
+    "起動失敗の1ケースであり、接続中断全般・終了操作との実ネットワーク競合すべてを検証した記録ではない。",
+    "マイク取得0回で、音声・テキスト会話の推論は投入していない。性能の前後比較、全cohort、人の実マイク・聴感、FE/BE一括更新・切り戻しは別途必要。",
+    "初回失敗runも保持する。Room一覧の参加者数と実参加者APIを区別し、参加者確認後にブラウザへ障害接続先を渡すようハーネスを修正した。"
+  ]
+}

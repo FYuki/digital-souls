@@ -3,7 +3,6 @@
   import { onMount, tick } from 'svelte'
 
   import AudioRecorder from './lib/AudioRecorder.svelte'
-  import type { SpeechActivity } from './lib/AudioRecorder.svelte'
   import CharacterPortrait from './lib/CharacterPortrait.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
   import type {SettledVoiceTurnDisplay} from './lib/voice-turn-display'
@@ -97,7 +96,6 @@
     addonReturnFocus?.focus()
   }
   let showingMemoryManagement = false
-  let activeUtteranceId: string | null = null
   let endingVoiceSession = false
   let voiceSourceLabel = ''
   let voiceSwitchMutedSessionId: string | null = null
@@ -143,7 +141,6 @@
   }
   const voiceSession = new LiveKitVoiceSessionController(
     (snapshot) => {
-      if (snapshot.phase === 'reconnecting') activeUtteranceId = null
       voiceSnapshot = snapshot
     },
     receiveVoiceCoreEvent,
@@ -270,7 +267,11 @@
     if (event.type === 'error') {
       screenReferenceDecisionActive = false
       if (event.utterance_id !== undefined) finalizedUtterances.delete(event.utterance_id)
-      voiceErrors = {...voiceErrors, [`${context.character}:${context.conversationId}`]: ERROR_MESSAGE}
+      voiceErrors = {...voiceErrors, [`${context.character}:${context.conversationId}`]:
+        event.error_code === 'audio_input_repeat_required'
+          ? '音声の一部を受け取れませんでした。もう一度話してください。'
+          : event.error_code === 'audio_input_unavailable'
+            ? '音声入力が停止しました。マイクを再開して、もう一度話してください。' : ERROR_MESSAGE}
       return
     }
     if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
@@ -352,7 +353,6 @@
     if (active === null || endingVoiceSession) return
     if (active.characterId === character && active.conversationId === conversationId) return
     // 表示選択ではsessionと生成を終えない。device停止とBEのmute状態をそろえる。
-    activeUtteranceId = null
     if (sessionId !== null && voiceSwitchMutedSessionId !== sessionId) {
       voiceSwitchMutedSessionId = sessionId
       void voiceSession.muteForThreadSwitch().catch(appendApplicationError)
@@ -556,7 +556,6 @@
 
   const muteVoiceMicrophone = async () => {
     try {
-      activeUtteranceId = null
       await voiceSession.muteMicrophone()
     } catch (error) {
       appendApplicationError()
@@ -564,24 +563,9 @@
     }
   }
 
-  const handleSpeechStarted = ({ clientMs }: SpeechActivity) => {
-    if (voiceSnapshot.phase === 'reconnecting') return
-    const utteranceId = crypto.randomUUID()
-    activeUtteranceId = utteranceId
-    void voiceSession.speechStarted(utteranceId, clientMs).catch(appendApplicationError)
-  }
-
-  const handleSpeechStopped = ({ clientMs }: SpeechActivity) => {
-    const utteranceId = activeUtteranceId
-    activeUtteranceId = null
-    if (utteranceId === null) return
-    void voiceSession.speechStopped(utteranceId, clientMs).catch(appendApplicationError)
-  }
-
   const endVoiceSession = async () => {
     if (endingVoiceSession) return
     endingVoiceSession = true
-    activeUtteranceId = null
     try {
       await voiceSession.end()
     } catch {
@@ -731,8 +715,6 @@
         onBeforeEnable={prepareVoiceMicrophone}
         onMicrophoneEnabled={resumeVoiceMicrophone}
         onMicrophoneDisabled={muteVoiceMicrophone}
-        onSpeechStarted={handleSpeechStarted}
-        onSpeechStopped={handleSpeechStopped}
         onAudioCaptured={() => undefined}
         onError={appendApplicationError}
       />
