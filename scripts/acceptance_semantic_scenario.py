@@ -2,10 +2,12 @@
 
 import argparse
 import json
+import os
 import re
 import sqlite3
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -18,13 +20,28 @@ args = p.parse_args()
 if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", args.label):
     raise ValueError("label must be a short filename-safe identifier")
 root = args.root.resolve(strict=True)
-assert root.parent == Path("/tmp") and root.name.startswith("ds-memory-341-")
+if (
+    os.environ.get("DS_ENVIRONMENT_ID") == "dogfood"
+    or root.parent != Path("/tmp")
+    or not root.name.startswith("ds-memory-341-")
+):
+    raise RuntimeError("owned test root required")
 manifest = json.loads((root / "runtime-manifest.json").read_text())
-assert manifest["status"] == "ready" and manifest["environmentId"] == "test"
+if manifest["status"] != "ready" or manifest["environmentId"] != "test":
+    raise RuntimeError("ready test runtime required")
 assert (
     manifest["dataRoot"] == str(root / "data")
     and (root / "data").resolve() == root / "data"
 )
+url = urlsplit(manifest["backend"])
+if (
+    url.scheme != "http"
+    or url.hostname not in {"127.0.0.1", "localhost", "::1"}
+    or url.port in {18000, 15173, 14174}
+):
+    raise RuntimeError("test backend endpoint required")
+if (root / ("lifecycle-" + args.label + ".json")).exists():
+    raise RuntimeError("use a new label to preserve prior evidence")
 client = httpx.Client(base_url=manifest["backend"], timeout=180)
 r = client.post("/characters/miori/conversations")
 r.raise_for_status()

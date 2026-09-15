@@ -41,5 +41,7 @@ SQLite正本、キャラクター境界は維持する。用語の入口は[用�
 同じ自己申告を旧`USER_PREFERENCE` / `INTERACTION_PREFERENCE`へ新規に二重形成するschedulerは起動しない。
 両方を起動すると、Semantic UIで訂正・削除した値が別正本から通常会話へ残るため、この案は採用しない。
 Targetが無効な構成では既存の嗜好schedulerへフォールバックする。
-既存の保存済みpreferenceを削除・変換する移行は行わず、旧列と正本の整理は#345で扱う。
+#345のschema移行は既存レコードを保持して新しいSemantic用tableを追加する非破壊の更新である。
+既存の保存済みpreferenceを削除・変換する移行は行わない。旧preferenceは旧契約のまま管理・検索する。
+この記載は旧列の変換作業が#345に残っているという意味ではない。
 形成型が別契約であることは維持し、旧preferenceを`SemanticRecord`と同一形式として扱わない。

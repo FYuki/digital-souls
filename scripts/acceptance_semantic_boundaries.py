@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -60,7 +61,12 @@ def main():
     if root.parent != Path("/tmp") or not root.name.startswith("ds-memory-341-"):
         raise RuntimeError("owned acceptance root required")
     manifest = json.loads((root / "runtime-manifest.json").read_text())
-    assert manifest["status"] == "stopped" and manifest["environmentId"] == "test"
+    if (
+        os.environ.get("DS_ENVIRONMENT_ID") == "dogfood"
+        or manifest["status"] != "stopped"
+        or manifest["environmentId"] != "test"
+    ):
+        raise RuntimeError("stopped test runtime required")
     assert (
         manifest["dataRoot"] == str(root / "data")
         and (root / "data").resolve() == root / "data"

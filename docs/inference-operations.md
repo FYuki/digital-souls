@@ -31,6 +31,15 @@ INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS=8192
 
 任意の`_OPTIONS_JSON`、`_TIMEOUT_SECONDS`、`_MAX_CONCURRENCY`はTargetごとに指定する。未知のTarget／suffix、未知のOption、非正数の上限、`privacy`へのcloud Provider割当ては起動時エラーになる。旧Ollama用途別設定は移行契約ではなく、1つでも指定すると起動を拒否する。
 
+意味記憶の直接抽出はoptionalな`semantic-extraction` Targetへ独立して割り当てる。
+#341の比較では12bが品質基準を満たし、e4bは満たさなかった。設定例は`backend/.env.example`を参照する。
+入力32768・出力4096の場合は`LLM_CONTEXT_TOKEN_LIMIT`を36864以上に設定する。
+会話・privacy・EpisodeのTargetを同時に変更する必要はない。
+Target未設定時は既存の嗜好抽出、有効時はSemantic workerを使用し、同じ内容を二重形成しない。
+会話中は実行中の抽出を中断・再予約するが、モデル再読込や保存待ちは残る。
+[比較と負荷](validation/semantic-memory-341-2026-09-15.md)、
+[追加受入](validation/semantic-memory-341-remaining-acceptance-2026-09-15.md)の適用範囲と制限を確認する。
+
 会話で外部MCPを利用する場合はoptionalな`tool-routing` Targetを設定する。
 `INFERENCE_TARGET_TOOL_ROUTING`と入力・出力上限を指定し、structured generationとtoken estimateに対応する
 Provider／Modelを選ぶ。未設定時はTool利用を無効にして通常会話を維持する。

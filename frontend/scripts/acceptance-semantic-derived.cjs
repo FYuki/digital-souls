@@ -8,6 +8,11 @@ const prepared=JSON.parse(fs.readFileSync(root+'/boundaries-prepare.json','utf8'
 const phase=process.argv[3]||'inspect';
 if(!['inspect','delete'].includes(phase)) throw Error('unknown phase');
 if(manifest.status!=='ready'||manifest.environmentId!=='test') throw Error('owned test runtime required');
+if(process.env.DS_ENVIRONMENT_ID==='dogfood'||manifest.dataRoot!==path.join(root,'data')||fs.realpathSync(manifest.dataRoot)!==manifest.dataRoot) throw Error('isolated test data required');
+for(const target of ['backend','frontend']) {
+ const url=new URL(manifest[target]);
+ if(url.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(url.hostname)||['18000','15173','14174'].includes(url.port)) throw Error('test endpoint required');
+}
 (async()=>{
  const browser=await chromium.launch({headless:true});
  const page=await browser.newPage({viewport:{width:1280,height:1000}});
