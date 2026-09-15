@@ -2,7 +2,8 @@
 
 ## 状態・適用範囲
 
-**ACTIVE（設計確定・実装は後続）**。2026-09-16の#187に関するgrill-meの合意を記録する。
+**ACTIVE**。2026-09-16の#187に関するgrill-meの合意を記録する。
+Epicで実装した有限buffer・consumer進捗・取得/復旧の具体契約と検証入口は[Event runtime](../addon-event-runtime.md)を参照する。
 対象は#187/#155/#190。実装要求・受入条件は[要件指示書](../epic-187-addon-event-requirements.md)、
 定義は[用語集](../glossary.md)を参照する。
 

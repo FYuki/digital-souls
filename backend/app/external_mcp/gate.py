@@ -994,3 +994,148 @@ class ExecutionGate:
                     return await source.call_tool(operation, arguments)
         finally:
             self.end_loop(loop_id)
+
+    async def event_read(
+        self,
+        connection_id: str,
+        operation: str,
+        kind: str,
+        definition_digest: str,
+        arguments: Json,
+        context: ExecutionContext,
+        *,
+        guard: Callable[[], None],
+        validate_only: bool = False,
+        resource_page: bool = False,
+        charge_validation: bool = False,
+    ) -> Json:
+        """登録済みEvent取得用の有限read。会話・承認待ち・副作用を作らない。"""
+        from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+        from app.addon_action.impact import evaluate_impact
+        from app.addon_action.models import OperationGroup
+
+        loop_id = self.begin_loop(context)
+        try:
+            loop = self._loop(loop_id)
+            snapshot, generation = loop.snapshots.get(connection_id, (None, 0))
+            if snapshot is None or kind not in {"tool", "resource"}:
+                raise MCPFailure("policy", "event_snapshot_not_granted")
+
+            def validate() -> tuple[CapabilitySource, Json, Json]:
+                source = self._live(loop, connection_id, generation)
+                self._sharing(loop, connection_id)
+                guard()
+                entry = self.registry.entry(connection_id)
+                rules = entry.connection.restrictions(operation)
+                if "deny" in rules or "require_confirmation" in rules:
+                    raise MCPFailure("policy", "event_read_denied")
+                definitions = snapshot.document["tools" if kind == "tool" else "resources"]
+                definition = next(
+                    (d for d in definitions if d["name" if kind == "tool" else "uri"] == operation), None
+                )
+                if definition is None:
+                    raise MCPFailure("policy", "event_operation_not_granted")
+                native = definition["native_definition"] if kind == "tool" else definition
+                if digest(native) != definition_digest:
+                    raise MCPFailure("policy", "event_definition_changed")
+                if kind == "tool":
+                    if definition["status"] != "active" or definition["effective_policy"]["effect"] != "read":
+                        raise MCPFailure("policy", "event_requires_trusted_read")
+                    if not validate_only:
+                        validate_arguments(definition["input_schema"], arguments)
+                    impact = evaluate_impact(
+                        definition["impact_classification"], arguments, binding_id=context.binding_id,
+                    )
+                    if impact.blocked or impact.group != OperationGroup.NORMAL:
+                        raise MCPFailure("policy", "event_requires_trusted_read")
+                    if self.confirmations is not None:
+                        self.confirmations.validate_background_read(connection_id, entry.connection.identity)
+                if entry.availability == "degraded" and f"{kind}:{operation}" not in entry.healthy_operations:
+                    raise MCPFailure("policy", "partial_failure_operation_denied")
+                return source, definition, entry.connection.manifest["core_policy"]
+
+            async def authorize() -> CapabilitySource:
+                source, _, policy = validate()
+                if policy["resource_binding_required"] or context.binding_id is not None:
+                    if self.bindings is None or not await self.bindings.validate(
+                        connection_id, operation, context.character_id,
+                        context.binding_id, context.session_id,
+                    ):
+                        raise MCPFailure("policy", "binding_denied")
+                return validate()[0]
+
+            await authorize()
+            if self.confirmations is not None:
+                await self.confirmations.validate_egress(arguments)
+            await authorize()
+            if validate_only:
+                if charge_validation:
+                    self._charge(loop, connection_id, operation, arguments)
+                return {}
+            rules = self.registry.entry(connection_id).connection.restrictions(operation)
+            uri = operation
+            if kind == "resource":
+                if arguments and not resource_page:
+                    raise MCPFailure("validation", "event_resource_arguments_unsupported")
+                if resource_page:
+                    # 登録済みResourceに固定したqueryだけを付ける。外部URIへ追従しない。
+                    if set(arguments) - {"cursor", "limit"}:
+                        raise MCPFailure("validation", "invalid_event_resource_parameters")
+                    parts = urlsplit(operation)
+                    if parts.fragment or parts.username or parts.password:
+                        raise MCPFailure("validation", "invalid_event_resource_uri")
+                    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+                    if set(query) & set(arguments):
+                        raise MCPFailure("validation", "event_resource_parameter_conflict")
+                    uri = urlunsplit(parts._replace(query=urlencode({**query, **arguments})))
+            async with self._locks[connection_id].hold("force_serial" not in rules):
+                with self._execution(connection_id):
+                    for attempt in range(1 if "disable_retry" in rules else 2):
+                        source = await authorize()
+                        self._charge(loop, connection_id, operation, arguments)
+                        try:
+                            result = (
+                                await source.call_tool(operation, arguments)
+                                if kind == "tool"
+                                else await source.read_resource(uri)
+                            )
+                            await authorize()
+                            return result
+                        except MCPFailure as error:
+                            if attempt == 0 and error.retryable and "disable_retry" not in rules:
+                                continue
+                            self.registry.operation_failure(connection_id, error)
+                            raise
+            raise AssertionError("unreachable")
+        finally:
+            self.end_loop(loop_id)
+
+    async def event_notifications(
+        self, connection_id: str, uri: str, context: ExecutionContext,
+        *, guard: Callable[[], None], wake: Callable[[], None],
+    ) -> None:
+        """通知は新着確認だけに使用し、任意のURIを購読させない。"""
+        from .client import ExternalMCPClient
+
+        loop_id = self.begin_loop(context)
+        try:
+            loop = self._loop(loop_id)
+            snapshot, generation = loop.snapshots.get(connection_id, (None, 0))
+            if snapshot is None:
+                raise MCPFailure("policy", "event_snapshot_not_granted")
+            resource = next((r for r in snapshot.document["resources"] if r["uri"] == uri), None)
+            if resource is None:
+                raise MCPFailure("policy", "event_operation_not_granted")
+            await self.event_read(
+                connection_id, uri, "resource", digest(resource), {}, context,
+                guard=guard, validate_only=True,
+            )
+            source = self._live(loop, connection_id, generation)
+            self._sharing(loop, connection_id)
+            guard()
+            self._charge(loop, connection_id, uri, {})
+            if not isinstance(source, ExternalMCPClient):
+                raise MCPFailure("event", "event_wake_unsupported")
+            await source.watch_resource(uri, wake)
+        finally:
+            self.end_loop(loop_id)
