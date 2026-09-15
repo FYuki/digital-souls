@@ -33,7 +33,7 @@ test('character切替後に以前の意味記憶の取得が完了しても現�
   const view = render(MemoryManagement, { character: 'miori', onClose: () => undefined })
   await waitFor(() => expect(requests.some(url => url.includes('/miori/'))).toBe(true))
   await view.rerender({ character: 'other', onClose: () => undefined })
-  const region = screen.getByRole('region', { name: '意味記憶', exact: true })
+  const region = screen.getByRole('region', { name: '意味記憶' })
   expect(await within(region).findByText('otherだけの意味記憶')).toBeTruthy()
   release(new Response(JSON.stringify([memory('miori')])))
   await delayed
