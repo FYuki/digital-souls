@@ -40,7 +40,14 @@ if (
     or url.port in {18000, 15173, 14174}
 ):
     raise RuntimeError("test backend endpoint required")
-if (root / ("lifecycle-" + args.label + ".json")).exists():
+# 応答直後の停止や処理待ち失敗ではsnapshotがなくても会話イベントは記録済み。
+# 境界driverが古い同名イベントを選ばないよう、イベント履歴も検査する。
+events_path = root / "lifecycle-events.jsonl"
+recorded_label = events_path.exists() and any(
+    json.loads(line).get("label") == args.label
+    for line in events_path.read_text(encoding="utf-8").splitlines()
+)
+if recorded_label or (root / ("lifecycle-" + args.label + ".json")).exists():
     raise RuntimeError("use a new label to preserve prior evidence")
 client = httpx.Client(base_url=manifest["backend"], timeout=180)
 r = client.post("/characters/miori/conversations")
