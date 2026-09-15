@@ -648,3 +648,13 @@ GPUを伴わない終了境界の確認で、token取得後のRoom生成／接�
 接続確定前のbindingとRoomを開始処理が所有するようにし、失敗・取消後はその資源だけを回収する。controllerへ所有を移した後に終了操作が走った場合は二重解放しない。取消は失敗として返し、接続失敗後の古いobserverでerrorから再接続中へ戻さない。終了API自体が失敗した場合は元の開始失敗を保ち、終了成功と扱わない。
 
 controllerの新規8ケースを含む48件、AudioRecorderの取消後マイク取得／VAD／publish 0回を含む2件、Appの44件が成功した。修正前は取消2ケースが成功を返し、Room生成／接続／開始event失敗の3ケースで終了APIが0回となることを再現した。Svelte／TypeScript検査はエラー・警告0件。これらはunitの呼び出し・状態検証であり、実SFUの障害注入や実マイク受入の証拠ではない。実接続試験と次回性能計測には、この修正を含む新版FE／BEを使用する。
+
+### 開始失敗時の資源解放を実ブラウザ・実SFUで確認
+
+fc43694の修正を含むFE／BEを同じ専用Environmentで起動し、実bootstrap後の接続失敗を確認した。 再実行時はPlaywrightの実行環境にも同じLIVEKIT_URL／LIVEKIT_API_KEY／LIVEKIT_API_SECRETを設定し、integration-voiceからstartup-cleanup.spec.tsだけを指定する。管理用認証はNodeから起動するPythonの環境変数で使い、ブラウザやartifactには渡さない。token応答の接続先だけを、試験自身の一時TCP portへ変更し、到着した接続を直ちに閉じる。実SFUの参加者APIでRoom 1件・BE参加者1人を確認してから障害接続先をブラウザへ返す。
+
+1件成功。ブラウザの接続2回が失敗し、製品側からのSession終了API 1回が200を返した。テストの追加cleanupより前に実SFUのRoom 0件と、同じSessionへの再接続409を確認した。UIはエラー・入力停止、マイク取得は0回。稼働中FE／BEのcontainer IDとimage IDを採取し、Environmentのrun reportと照合した。型検査も成功。
+
+[匿名化記録](../artifacts/voice-backend-358-startup-cleanup-browser.json)に元の8証跡hashと初回失敗を保持する。初回はRoom一覧の参加者数0を事前assertで拾い、テスト側cleanupもTest endedで失敗した。初回専用DBの空会話1件を保持し、Environment所有FE／BEと専用LiveKitは停止した。成功runの会話・turn・memory job／receiptはcleanup後0件。両runとも共有サービスは停止・変更していない。
+
+これは起動失敗1ケースの実検証であり、全接続競合、FE／BE一括切替、性能比較、人の受入を完了した証拠ではない。GPU計測は#341実装後の確保時間帯で行う。

@@ -95,6 +95,7 @@ backend/.venv/bin/python scripts/voice_quality/check_history_compatibility.py   
 | 履歴保存コード・schemaの移設前との差分 | 変更なしを確認 |
 | 新規SQLiteによる旧版／新版の読み書き往復 | 4段階成功 |
 | Core 1.1・旧privateの資源作成前拒否 | TestClient＋実SFUで4パターンの作成呼び出し0回と正常版実接続を確認。さらに新FEのversion提示だけを旧契約へ変更し、実HTTPの409・UIのエラー／入力停止・拒否後1秒のマイク取得／VAD読込／新WebSocket 0件を4件確認。旧FE bundle自体の操作は未確認 |
+| 接続開始失敗時のSession／Room解放 | 新版FE／BEと実SFUで1件成功。終了API 1回・Room削除・再接続409・マイク取得0回を確認。[証跡](artifacts/voice-backend-358-startup-cleanup-browser.json) |
 | FE／BE一括更新・切り戻しの通し実行 | 未実施 |
 | 同条件の全cohort 100試行前後比較 | 未完了。移設前相槌100件を記録したが品質gate未達。中止runも保持 |
 | 人の実マイク・聴感 | 未実施 |
