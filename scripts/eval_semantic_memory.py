@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--case-prefix", help="失敗分類の調査用。正式評価には使用しない")
     parser.add_argument("--limit", type=int, default=100, help="部分実行は調査専用、正式合格には使用しない")
+    parser.add_argument("--include-boundary-regressions", action="store_true", help="固定100件に実受入の出来事誤採用4件を追加")
     args = parser.parse_args()
     url = urlparse(args.endpoint)
     if url.hostname not in {"localhost", "127.0.0.1", "::1"} or url.port in {14174, 18000, 15173}:
@@ -62,6 +63,9 @@ def main():
     with urlopen(args.endpoint + "/api/version", timeout=10) as response:
         version = json.load(response)
     cases = [json.loads(line) for line in (SUITE / "cases.jsonl").read_text().splitlines()][:args.limit]
+    if args.include_boundary_regressions:
+        cases += [json.loads(line) for line in (SUITE / "boundary-cases.jsonl").read_text().splitlines()]
+    full_case_count = 104 if args.include_boundary_regressions else 100
     if args.case_prefix:
         cases = [case for case in cases if case["id"].startswith(args.case_prefix)]
         if not cases:
@@ -77,7 +81,7 @@ def main():
               "tests": tests}
     config_path = output / "config.json"
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2))
-    tracked = [*SUITE.glob("*.py"), SUITE / "cases.jsonl",
+    tracked = [*SUITE.glob("*.py"), SUITE / "cases.jsonl", SUITE / "boundary-cases.jsonl",
                * (ROOT / "backend/app/memory/semantic").glob("*.py"),
                ROOT / "backend/app/memory/memory_policy.json",
                * (ROOT / "backend/app/privacy/semantic").glob("*.py"), Path(__file__).resolve()]
@@ -88,7 +92,7 @@ def main():
         "files_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in tracked},
         "inference_settings": {k: v for k, v in environment.items() if k.startswith("INFERENCE_TARGET_")},
         "cache": False, "case_count": len(cases), "runs": args.runs,
-        "acceptance_eligible": args.runs == 3 and len(cases) == 100,
+        "acceptance_eligible": args.runs == 3 and len(cases) == full_case_count and not args.case_prefix and args.limit == 100,
     }
     if manifest["acceptance_eligible"] and manifest["dirty"]:
         raise ValueError("commit the worktree before the full three-run evaluation")

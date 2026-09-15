@@ -42,3 +42,17 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/eval_semantic_memory.py --mo
 既存知識が入力予算に収まる場合は全件を照合する。超過時だけ会話と属性・値の文字的一致、更新日時で候補を順位づけし、
 本番clientがschemaを含めて見積もったtoken上限内へ収める。正本は削除しない。意味的な同義語の網羅を保証する検索ではなく、
 この候補選択も本番と性能評価で同じ経路を通す。入力だけで予算を超える設定は明示的なエラーとし、処理位置を進めない。
+
+## 実受入で追加した出来事・既存知識の境界
+
+`boundary-cases.jsonl`の4件は、既存の否定的な好みがあると行動から肯定的な好みへ誤更新した
+実受入の合成シナリオを固定したもの。元の100件・期待値は変更しない。
+追加4件はすべて出来事のため保存禁止とし、1件でも保存したら不合格とする。
+固定commitは`6d1310d`。このcommitのv6診断では2件を誤保存した。
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/eval_semantic_memory.py --model gemma4:12b --include-boundary-regressions --output-dir /tmp/semantic-12b-boundary-final
+```
+
+この指定は104件×3回を実行する。選定済み12bの変更後検証であり、v6で実施したe4b/12b比較とは分ける。
+`--case-prefix boundary --runs 3`は4件だけの回帰診断であり、全体の正式合格には数えない。

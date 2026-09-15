@@ -61,6 +61,7 @@ def stop_owned(process: subprocess.Popen) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, choices=("gemma4:e4b", "gemma4:12b"))
+    parser.add_argument("--chat-model", default="gemma4:e4b", choices=("gemma4:e4b", "gemma4:12b"))
     parser.add_argument("--endpoint", default="http://127.0.0.1:11438")
     parser.add_argument("--resume-root", type=Path, help="正常停止した専用test data rootを保持して再起動")
     args = parser.parse_args()
@@ -97,7 +98,7 @@ def main() -> int:
         raise RuntimeError("acceptance requires a dedicated local dev/test Ollama")
     ollama = args.endpoint.rstrip("/")
     models = httpx.get(ollama + "/api/tags", timeout=10).raise_for_status().json()["models"]
-    required = {"gemma4:e4b", args.model, "nomic-embed-text:latest"}
+    required = {"gemma4:e4b", args.model, args.chat_model, "nomic-embed-text:latest"}
     identities = {model["name"]: model["digest"] for model in models if model["name"] in required}
     if identities.keys() != required:
         raise RuntimeError("required local inference models are unavailable")
@@ -115,9 +116,11 @@ def main() -> int:
     for target, output in (("CHAT", 1024), ("PRIVACY", 512),
                            ("MEMORY_EXTRACTION", 4096), ("MEMORY_CONSOLIDATION", 512),
                            ("SEMANTIC_EXTRACTION", 4096)):
-        input_tokens = (32768 if target in {"SEMANTIC_EXTRACTION", "MEMORY_EXTRACTION"}
-                        else 7168 if target == "CHAT" else 7680)
-        model = args.model if target == "SEMANTIC_EXTRACTION" else "gemma4:e4b"
+        # 同一e4bの用途切替でOllamaがcontextを再確保し、2秒のquery gateを
+        # 消費しないよう全用途の総contextを揃える。出力上限は用途別に保持する。
+        input_tokens = 36864 - output
+        model = (args.model if target == "SEMANTIC_EXTRACTION"
+                 else args.chat_model if target == "CHAT" else "gemma4:e4b")
         token_limits[target] = {"input": input_tokens, "output": output}
         environment.update({
             f"INFERENCE_TARGET_{target}": "ollama/" + model,
@@ -166,7 +169,7 @@ def main() -> int:
         "schemaVersion": 1, "runId": str(uuid4()), "status": "starting",
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "environmentId": "test", "dataRoot": str(data), "models": identities,
-        "semanticExtractionModel": args.model,
+        "semanticExtractionModel": args.model, "chatModel": args.chat_model,
         "inferenceSettings": {key: value for key, value in environment.items() if key.startswith("INFERENCE_TARGET_")},
         "tokenLimits": token_limits, "backend": backend, "frontend": frontend,
         "externalOllama": ollama, "ownedProcesses": {},
