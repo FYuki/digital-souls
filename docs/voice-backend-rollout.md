@@ -94,7 +94,13 @@ backend/.venv/bin/python scripts/voice_quality/check_history_compatibility.py   
 |---|---|
 | 履歴保存コード・schemaの移設前との差分 | 変更なしを確認 |
 | 新規SQLiteによる旧版／新版の読み書き往復 | 4段階成功 |
-| Core 1.1・旧privateの資源作成前拒否 | moduleに加え、TestClient＋実SFUで4パターンの作成呼び出し0回と正常版実接続を確認。ブラウザ通し操作は未確認 |
+| Core 1.1・旧privateの資源作成前拒否 | TestClient＋実SFUで4パターンの作成呼び出し0回と正常版実接続を確認。さらに新FEのversion提示だけを旧契約へ変更し、実HTTPの409・UIのエラー／入力停止・拒否後1秒のマイク取得／VAD読込／新WebSocket 0件を4件確認。旧FE bundle自体の操作は未確認 |
 | FE／BE一括更新・切り戻しの通し実行 | 未実施 |
 | 同条件の全cohort 100試行前後比較 | 未完了。移設前相槌100件を記録したが品質gate未達。中止runも保持 |
 | 人の実マイク・聴感 | 未実施 |
+
+### ブラウザの旧version拒否（GPU計測を伴わない検証）
+
+[保存済み結果](artifacts/voice-backend-358-bootstrap-browser.json)では、実FE／BEを既存Environment CLIで起動し、bootstrapのversion提示だけを変更した4件が成功した。HTTP応答は実BEのままとし、UIの汎用エラー・入力停止と、拒否後1秒のマイク取得／FE VAD asset要求／新WebSocketが0件であることを確認した。旧FE bundleそのものの実行、FE／BEの一括切替、実音声会話はこの試験に含めない。
+
+新設data rootの会話・turn・memory job／receiptはcleanup後すべて0件。Environmentの所有FE／BEと専用LiveKitを停止し、専用ポート閉鎖を確認した。共有推論サービスはexternalのまま操作していない。初回の起動設定誤り、応答構造・UI文言のテスト期待値誤りも別runとして保持した。起動前image IDはCLI内の再build後の実行image証拠には使わない。

@@ -634,3 +634,9 @@ raw manifest・trace・PCM観測・資源観測・開始終了identity等のhash
   7880／7881／8000／5173／4174閉鎖、共有Ollama／Whisper／VOICEVOXの稼働継続を確認した。
 - API側はFastAPI TestClientで実行した。配備済みHTTPサーバーとブラウザ旧clientの操作、
   FE／BE一括更新・切り戻しの通し確認は別途残る。変更テストのRuff・差分checkは成功。
+
+### 実HTTP・ブラウザでの旧version拒否
+
+frontend/integration/voice/bootstrap-rejection.spec.tsを追加。新FEのbootstrap version提示だけをCore 1.1／private省略・1.0・0.0へ変更し、実BEの409、汎用エラーと入力停止、拒否後1秒のマイク取得・VAD asset要求・新WebSocket 0件を4ケースで確認した。HTTP応答・音声clientはmockへ置換していない。型検査も成功。
+
+[匿名化記録](../artifacts/voice-backend-358-bootstrap-browser.json)に4件のattachment、run／テストsource hash、途中の試験失敗とcleanupを保持した。旧FE bundleそのものの操作と、実SFU内部の資源作成呼び出し数は別の確認範囲である。全cohort比較と人の受入、FE／BE一括更新・切り戻しを完了した扱いにはしない。GPU計測はユーザーが#341の実装完了後に確保する時間帯で行う。
