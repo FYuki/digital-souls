@@ -52,6 +52,20 @@ Ollamaの`load_duration`はprovider報告値として扱う。v0.32.5の[ChatHan
 [v1](../../frontend/playwright/fixtures/voice-quality-v1/README.md)と[v2](../../frontend/playwright/fixtures/voice-quality-v2/README.md)に、独立したラベル、音声生成クレジット、WAV hash、正解境界、展開・診断手順を記載する。`fixtures.py`と`stt_turn_diagnostic.py`は`--cases`で対応する固定ラベル定義を選択できる。
 
 
+## #358のtake-turn集計
+
+現行のラベル付きtake-turnハーネスは `latency_origin=scheduled_fixture_speech_start` と
+`input_authority=backend` をmanifestに保存する。移設前FE版の比較には
+`VOICE_QUALITY_INPUT_AUTHORITY=frontend` を指定し、使用したFE／BEの版と合わせる。
+新起点で判断主体が欠ける入力は拒否する。メタデータのない過去artifactは旧FE VAD起点として扱う。
+
+`report_take_turn.py` の `--manifest`・`--trace`・`--fixtures`・`--output` は従来どおり。
+新起点ではfixtureの正解境界と実停止・取消の上下限を算出し、上限を主指標と合否へ使う。
+`fixture_latency_bounds` の分母と主指標をcohort schema／validatorで照合する。
+[測定契約](../../docs/voice-backend-migration-contract.md)と
+[1試行の接続検証](../../docs/artifacts/voice-backend-358-take-turn-pilot.json)を参照。
+pilotの成功を100試行の品質受入や物理マイクの時刻検証へ読み替えない。
+
 ## 同一sessionの応答track切替診断
 
 `--continuous-turns 3 --scheduled-fixture`を指定すると、同じsession／conversationとマイクstreamを維持して固定音声を3回供給する。最初のマイクON後はマイクを操作せず、各応答のtrack名のresponse ID、一意な応答ID、transcript一致、応答完了、最後の明示終了を確認する。
@@ -723,3 +737,75 @@ manifestにはsessionの識別子、発話・応答件数、明示終了要求�
 ### Irodoriの実ネットワーク障害診断
 
 run_pilot.py に --profile integration-irodori --control-probe --fault-bridge --network-fault --scheduled-fixture --trials 1 を指定すると integration-irodori-fault を使う。通常測定と同じ専用アプリポート（Frontend 18573、Backend 18500、ready gate 18574）と共有Irodori 50024を維持し、LiveKitだけを所有確認済みの専用bridge 19880へ切り替える。--run-id、--inference-env、専用bridgeの --livekit-env も指定する。bridgeの準備は infra/voice-quality/README.md に従う。共有TTSの起動・停止をテストから行わない。通常の100試行集計には混在させない。
+
+## BE VAD境界の実PCM対応
+
+BE版のラベル付きrunを `--scheduled-fixture --observe-stt-pcm` で取得した後、
+既存VAD reporterへ同じrunのcontrolled traceとWhisper入力観測を渡す。
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_vad.py \
+  --manifest <run-root>/trial-manifest.json \
+  --fixtures <ラベル付きfixture-manifest.json> \
+  --trace <run-root>/runtime-data/voice-metrics/controlled-trace.jsonl \
+  --pcm-observer <run-root>/whisper-input-pcm.jsonl \
+  --output <新しいreport.json>
+```
+
+`clock_domain=vad_media_samples` はBE detectorのsample軸と実PCMの対応を表す。
+二つの独立anchor・v4端部照合・captureから最終STT入力への連続範囲が一致した試行だけoffsetを計算する。
+32 sampleの許容幅は既存照合方式の判定幅であり、物理時刻の確度を示すものではない。
+非一様なoffset、曖昧な相関、未確認のspanは欠測にする。
+`split_observed_trials / split_unknown_trials` はoffsetの測定可否とは別に構造の観測範囲を示す。
+`limits.captured_pcm_boundary_verified=false` はVAD集計自体をPCM品質受入の代用にしない制約である。
+PCM受入の詳細は同じraw入力の `report_stt_pcm.py` に残す。
+旧FE reportは従来のbrowser時計を維持し、判断主体と時計を混同しない。
+終了コードは受入合格0、pilotや欠測など受入未達1、入力・schemaエラー2。
+
+BE版の相槌集計では、`core_events_overflow` と `interruptions_overflow` が
+ともにfalseであることを正常継続の必要条件にする。
+欠落した観測から誤停止なしと推定せず、確認済みの取消・停止は失敗件数として保持する。
+
+## #358 保存履歴の版間互換性
+
+`check_history_compatibility.py --before-repo <旧版worktree> --output <新しいreport.json>`
+をBackendの仮想環境Pythonで実行する。
+既存DBは入力せず、新規の一時SQLiteに旧版Repositoryで完了・中断・privacy除外の履歴を作成し、
+新版・旧版・新版で読み書きする。既存履歴の全テーブル行hashと、各段階の追記を照合する。
+workerのhashと各版commitを匿名reportへ保存する。
+assertを無効化するPython最適化実行、保存コードが基準から異なる版、既存outputの上書きは拒否する。
+これは[一括更新・切り戻し](../../docs/voice-backend-rollout.md)のうち保存形式の互換性確認であり、
+実ブラウザ・FE／BEの切替・人の実マイク受入とは分ける。
+
+### 共有modelのcontext観測
+
+`inference-runtime.jsonl`の`expected_context_tokens`はCHAT用途の設定値である。
+`configured_chat_model_context_tokens_by_target`は、CHATと同じmodelを使う各生成用途の
+入力＋出力上限を記録する。記憶抽出などが異なるcontextを使うため、常駐値がCHAT設定と違う
+という理由だけで外部負荷・構成変更を断定しない。
+これらは設定メタデータであり、個々の常駐値と要求主体を相関させた観測ではない。
+`RAG_ENABLED=false`も記憶形成schedulerの停止を意味しない。
+
+
+## #358 通常応答を試行ごとのdata rootで測る
+
+通常の連続runnerは同じdata rootを使うため、記憶形成が完了すると次の空記憶検査に抵触する。
+既存の記憶形成を無効化せず測る場合は、次の補助runnerで既存の音声試行を逐次起動する。
+
+~~~bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/run_normal_cohort.py   --cohort-id normal-isolated-new --measured 100   --inference-env backend/.env.example --livekit-env /path/to/livekit.env
+~~~
+
+準備5回と測定100回の各回に新規data root・FE／BEを割り当てる。
+共有推論サービス、モデル、生成options、固定音声は維持する。
+アプリプロセス内のcacheも各回で新しくなるため、同じ方式の移設前後を比較し、
+以前の同一プロセス100試行と同じ条件だったとは扱わない。
+
+run manifestと初期状態hash、native SDK、所有containerの削除を確認してから次へ進む。
+失敗を成功で差し替えず、準備5回も含む全105件を残す。stop-requestedをcohort directoryへ置くと次試行前に停止する。
+全件のraw manifestとtraceを既存reporterへ渡す。失敗・欠測によって既存reporterが拒否した場合も
+summaryとrawを保持し、受入合格にしない。CPU・memory・GPUのraw観測は各runに残し、
+異なるcontainerのCPU累積値を一系列へ接続しない。全stackの受入は別途照合する。
+
+実行引数 --isolated-normal-phase は補助runnerが単独試行へ指定するためのもの。
+単独試行のscopeは isolated_normal_trial であり、通常のpilot／controlled受入とは区別する。
