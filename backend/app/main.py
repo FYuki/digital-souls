@@ -842,6 +842,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 classifier=memory_consolidation_privacy_classifier,
             )
             app.state.addon_manager = tool_runtime.management
+            app.state.event_source = tool_runtime.events
             app.state.action_policy = tool_runtime.action_policy
             await tool_runtime.start()
             app.state.tool_service = (

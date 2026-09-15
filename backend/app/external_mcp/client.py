@@ -409,3 +409,25 @@ class ExternalMCPClient:
 
         result: Json = await self._request(read)
         return result
+
+    async def watch_resource(self, uri: str, wake: Callable[[], None]) -> None:
+        """SDK標準listenのResource更新を、本文なしのwake-upへ変換する。"""
+        from mcp.client.subscriptions import ResourceUpdated
+
+        client = self._client
+        if client is None or not self.connected:
+            raise MCPFailure("unavailable", "not_connected")
+        token = _private_io.set(True)
+        try:
+            async with client.listen(resource_subscriptions=[uri]) as subscription:
+                wake()
+                async for event in subscription:
+                    if isinstance(event, ResourceUpdated) and str(event.uri) == uri:
+                        wake()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # listen未対応・切断でも通常のTool/Resourceと定期取得は利用可能。
+            raise MCPFailure("event", "event_wake_unavailable") from None
+        finally:
+            _private_io.reset(token)

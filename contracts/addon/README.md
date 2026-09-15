@@ -8,6 +8,7 @@
 - `addon-meta.schema.json`: 自作AddonがMCP `_meta` の `io.digital-souls/operation` に公開する拡張metadata。
 - `capability-snapshot.schema.json`: discovery結果を検証・正規化したCapability Snapshot。
 - `execution-envelope.schema.json`: protocol非依存の実行metadataとnative payload保持境界。
+- `event-history.schema.json`: #187のMCP Tool/Resourceへ載せるEvent履歴・snapshot結果。連続位置・cursor整合は実行時検証する。[設定と利用](../../docs/addon-event-runtime.md)。
 - `fixtures/valid/`: schemaとsemantic policyで受理すべきfixture。
 - `fixtures/invalid/`: schemaまたはsemantic policyで拒否すべきfixture。
 

@@ -442,9 +442,10 @@ snapshotを再検証する。#363はLLMを介さなくても共有Gateを通り�
 
 Event取得・復旧の詳細は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)と
 [要件指示書](epic-187-addon-event-requirements.md)を参照する。取得位置と有限sanitized bufferの永続化、
-consumerごとの欠落復旧、画面オフラインと購読解除の区別を設計として追加する。
-通知履歴の保持とTeamsを参考にするUI方針は通知／会話分離ADRの2026-09-16追記で定める。
-これらは現行runtimeへ実装・接続済みであることを示さない。
+consumerごとの欠落復旧、画面オフラインと購読解除の区別は、Epic #187のEventRuntime / EventStoreに実装した。
+既存ToolRuntimeの共有Gateとライフサイクルへ接続し、MCP標準Tool/Resourceを使う。
+設定・consumer API・公開結果契約・検証入口は[Event runtime](addon-event-runtime.md)を参照する。
+通知履歴の保持とTeamsを参考にするUI方針は通知／会話分離ADRの2026-09-16追記で定め、後続consumerで実装する。
 
 ## Character Life Runtime
 

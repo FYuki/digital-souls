@@ -3,7 +3,8 @@
 ## 目的・状態
 
 外部Addon/MCPのEventを一度取得し、通知・会話など独立したconsumerへ安全に渡す。
-2026-09-16のgrill-meで合意した要求を実装へ引き継ぐ文書であり、機能の実装・動作検証完了を示さない。
+2026-09-16のgrill-meで合意した要求を記録する。#187のEpicでは取得・復旧runtimeと別process適合試験を実装した。
+設定・公開結果契約・consumer API・検証入口は[Event runtime](addon-event-runtime.md)を参照する。
 進捗と完了条件の管理先は[Epic #187](https://github.com/FYuki/digital-souls/issues/187)、
 実装は[#155](https://github.com/FYuki/digital-souls/issues/155)、
 公開契約の適合検証は[#190](https://github.com/FYuki/digital-souls/issues/190)とする。
@@ -15,7 +16,7 @@
 ## 確認済みの前提と範囲
 
 - #104のMCP接続・Capability Snapshot・Execution Gateと抽象 `EventSourcePort` を起点にする。
-  文書整理時のEpicブランチは通知設計をPR #411から引き継いだ状態で、Event購読本体は後続実装である。
+  EventRuntimeがこの境界を実装し、ToolRuntimeの共有Gateと起動・終了処理へ接続する。
 - Event本文・Task状態・結果の正本は提供元。Coreは有限のsanitized Eventバッファを所有する。
 - MCP-firstでcursor付きhistory Query/Resourceを利用し、push/Resource更新通知は新着確認の契機とする。
   共通Eventへmappingできない外部MCPでも、通常のTool/Resource利用を妨げない。
@@ -47,7 +48,7 @@
 
 #190ではCoreをimportしないtest-owned MCP serverを別processで動かし、
 LLM/ChatService/PromptBuilder/TTSを起動せず、公開契約で次を検証する。
-以下は実装後に満たす条件であり、今回実施したテスト結果ではない。
+以下を継続的な受入条件とし、対応する実通信・境界試験は[Event runtimeの検証](addon-event-runtime.md#検証)にまとめる。
 
 | 場面 | 観測する結果 |
 |---|---|
