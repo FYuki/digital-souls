@@ -86,3 +86,15 @@ test('訂正の再送キーを維持し、版競合では再読込を案内す�
   await fireEvent.submit(form)
   expect(requests[0].body.idempotency_key).toBe(requests[1].body.idempotency_key)
 })
+
+
+test('キャンセル後は再描画した元の操作へフォーカスを戻す', async () => {
+  render(SemanticMemoryManagement, { character: 'miori' })
+  await fireEvent.click(await screen.findByRole('button', { name: '自己申告を訂正' }))
+  await fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: '自己申告を訂正' })))
+  const self = screen.getByRole('article', { name: '意味記憶 self' })
+  await fireEvent.click(within(self).getByRole('button', { name: '削除' }))
+  await fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
+  await waitFor(() => expect(document.activeElement).toBe(within(self).getByRole('button', { name: '削除' })))
+})

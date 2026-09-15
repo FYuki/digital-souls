@@ -16,12 +16,12 @@
   let receipt = ''
   let submittedValue = ''
   let editInput: HTMLInputElement
-  let trigger: HTMLButtonElement | null = null
   let heading: HTMLHeadingElement
-  async function restoreFocus(id?: string) {
+  async function restoreFocus(id?: string, action?: "correct" | "delete") {
     await tick()
     const article = id ? document.getElementById(`semantic-${id}`) : null
-    const button = article?.querySelector<HTMLButtonElement>('.actions button:not(:disabled)')
+    const button = article?.querySelector<HTMLButtonElement>(action
+      ? `[data-memory-action="${action}"]:not(:disabled)` : '.actions button:not(:disabled)')
     ;(button ?? article ?? heading)?.focus()
   }
   const statusLabels = { ACTIVE: '有効', HISTORICAL: '過去の状態', SUPERSEDED: '訂正前',
@@ -45,23 +45,23 @@
     finally { loading = false }
   }
   onMount(() => { void load() })
-  async function beginEdit(record: SemanticMemory, button: HTMLButtonElement) {
+  async function beginEdit(record: SemanticMemory) {
     editing = record
     deleting = null
     value = record.proposition?.value ?? ''
     receipt = crypto.randomUUID()
     submittedValue = ''
-    trigger = button
     error = ''
     await tick()
     editInput?.focus()
   }
   async function cancel() {
+    const id = editing?.id ?? deleting?.id
+    const action = editing ? "correct" : "delete"
     editing = null
     deleting = null
     error = ''
-    await tick()
-    trigger?.focus()
+    await restoreFocus(id, action)
   }
   async function save() {
     if (!editing || busy || !value.trim()) return
@@ -170,9 +170,9 @@
         </div>
       {:else}
         <div class="actions">
-          {#if record.can_correct}<button disabled={busy} on:click={(event) => beginEdit(record, event.currentTarget)}>自己申告を訂正</button>{/if}
-          {#if record.status !== 'DELETED'}<button disabled={busy} on:click={(event) => {
-            deleting = record; editing = null; trigger = event.currentTarget; error = ''
+          {#if record.can_correct}<button data-memory-action="correct" disabled={busy} on:click={() => beginEdit(record)}>自己申告を訂正</button>{/if}
+          {#if record.status !== 'DELETED'}<button data-memory-action="delete" disabled={busy} on:click={() => {
+            deleting = record; editing = null; error = ''
           }}>削除</button>{/if}
         </div>
       {/if}
