@@ -23,6 +23,7 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 - [`conversation-session-text-input-2026-09.md`](conversation-session-text-input-2026-09.md)は、#319のSpeech/Text共通入力、受理結果照合、focus抑止、スレッド別送信を定める。この範囲は既存の音声／LiveKit契約より優先する。実装・受入の追跡元は#321〜#327で、現行の受入結果と残課題は[混在Session受入](../conversation-session-acceptance.md)等を参照する。
 - [`conversation-session-client-2026-09.md`](conversation-session-client-2026-09.md)は、#323の共通client API、送信結果管理、履歴表示、入力抑止・中断の利用境界を定める。WebとDesktop #317から共用する設計であり、Desktop本体の実装完了を意味しない。
+- [`notification-conversation-separation-2026-09.md`](notification-conversation-separation-2026-09.md)は、#187の取り込み、#183の会話非依存通知、#364のキャラクター報告を分離する設計契約である。旧Addon接続ADRの#183責務を置き換え、登録時の担当・対象、通知用read-only caller、予算、既読／報告の独立、コピー・引用の非伝播を定める。通知起点の応答は#365で明示的に拡張する接続点であり、このADRだけで現行Speech／Text schemaやAPIを変更・有効化しない。Gate・認可・privacy・通常入力の既存契約は継続する。
 - [`addon-action-approval-recovery-2026-09.md`](addon-action-approval-recovery-2026-09.md)は、#185の接続・操作群・実行場面別承認、確認キュー、60秒待機、結果回復を定める。承認の効力・UI範囲はCharacter Life共通ADRより本ADRを優先する。
 - [`character-life-runtime-2026-09.md`](character-life-runtime-2026-09.md)は、#249のtop-level runtimeへDBOSを採用し、domain正本・関連Epicとの責務境界を定める。現在の任意有効化・接続範囲は[Life運用](../character-life-operations.md)を参照する。
 - [`character-life-memory-personality-autonomy-2026-09.md`](character-life-memory-personality-autonomy-2026-09.md)は、本人視点のEpisode、Semantic/Reflection分離、Life State、Big Five Aspects人格、Relationship、Autonomy Target、外部送信privacy、高影響操作の共通契約を定める。
