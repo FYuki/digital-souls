@@ -30,7 +30,7 @@ test.beforeEach(async ({ page }, testInfo) => {
 })
 
 test.afterEach(async ({ page }, testInfo) => {
-  // 本文やIDを含めず、cleanupで失われる失敗理由と完了数を残す。
+  // 本文やtokenを含めず、cleanupで失われる相関・時刻・失敗理由を残す。
   const observations = await page.evaluate(() => {
     const state = window.__voiceChatE2E
     if (!state) return null
@@ -45,7 +45,16 @@ test.afterEach(async ({ page }, testInfo) => {
       core_events: state.coreEventDiagnostics.map(event => ({
         type: event.type, at_ms: event.atMs, reason_code: event.reasonCode,
         decision: event.decision, final: event.final,
+        utterance_id: event.utteranceId, response_id: event.responseId,
+        track_sid: event.trackSid, input_generation: event.inputGeneration,
+        start_sample: event.startSample, active_end_sample: event.activeEndSample,
+        detected_sample: event.detectedSample, sample_rate: event.sampleRate,
+        server_timestamp_ms: event.serverTimestampMs, clock_domain: event.clockDomain,
       })),
+      core_events_overflow: state.coreEventDiagnosticsOverflow ?? false,
+      interruptions: state.interruptions,
+      interruptions_overflow: state.interruptionsOverflow ?? false,
+      fixture_clock_bounds: window.__voiceFixtureClock?.bounds ?? null,
       transport_failures: (state.transportFailures ?? []).map(event => ({
         stage: event.stage, reason: event.reason ?? null, at_ms: event.atMs,
       })),
@@ -101,7 +110,7 @@ test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page
 
 test('VAD発話終了後もLiveKit継続microphone sessionを維持する', async ({ page }) => {
   const button = await enableScheduledMicrophone(page)
-  await expect(button).toHaveClass(/mic-active/, { timeout: 15_000 })
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
   await driver.expectMicrophoneStandby(page)
   await expect(button).toHaveAttribute('aria-pressed', 'true')
 })
@@ -167,7 +176,8 @@ test('ラベル付き実音声によるLiveKit barge-inのlocal停止とcancel�
 
   const evidence = await driver.waitForInterruptionEvidence(page) as {
     responseId: string
-    speechStartedAtMs: number
+    utteranceId: string
+    backendDecisionReceivedAtMs: number
     localPlaybackStoppedAtMs: number
     cancelConfirmedAtMs: number
   }
@@ -181,23 +191,22 @@ test('ラベル付き実音声によるLiveKit barge-inのlocal停止とcancel�
   // 正解の実音声開始からの上限も評価し、turn判定受信時刻で起点を置き換えない。
   const localStopFromFixtureUpperMs = evidence.localPlaybackStoppedAtMs - bounds.speechStart.lowerMs
   const cancelFromFixtureUpperMs = evidence.cancelConfirmedAtMs - bounds.speechStart.lowerMs
-  expect(localStopFromFixtureUpperMs).toBeGreaterThanOrEqual(0)
-  expect(localStopFromFixtureUpperMs).toBeLessThanOrEqual(3_000)
-  expect(cancelFromFixtureUpperMs).toBeGreaterThanOrEqual(0)
-  expect(cancelFromFixtureUpperMs).toBeLessThanOrEqual(3_500)
-  const localStopMs = evidence.localPlaybackStoppedAtMs - evidence.speechStartedAtMs
-  const cancelTotalMs = evidence.cancelConfirmedAtMs - evidence.speechStartedAtMs
-
-  expect(localStopMs).toBeGreaterThanOrEqual(0)
-  // 冒頭STTで相槌を除外してから停止するため、VAD直後の即時停止は要求しない。
-  expect(localStopMs).toBeLessThanOrEqual(3_000)
-  expect(cancelTotalMs).toBeGreaterThanOrEqual(0)
-  expect(cancelTotalMs).toBeLessThanOrEqual(3_500)
+  // 正解境界の誤差を上下限で残す。BE検知時刻や受信時刻を発話起点にしない。
+  const localStopBoundsMs = {
+    lowerMs: evidence.localPlaybackStoppedAtMs - bounds.speechStart.upperMs,
+    upperMs: localStopFromFixtureUpperMs,
+  }
+  const cancelTotalBoundsMs = {
+    lowerMs: evidence.cancelConfirmedAtMs - bounds.speechStart.upperMs,
+    upperMs: cancelFromFixtureUpperMs,
+  }
   await testInfo.attach('barge-in-latency.real.json', {
     body: JSON.stringify({
       source: 'automated_test',
-      localStopMs,
-      cancelTotalMs,
+      origin: 'scheduled_fixture_speech_start',
+      localStopBoundsMs,
+      cancelTotalBoundsMs,
+      interruption_evidence: evidence,
       fixture_sha256: interruption.audioSha256,
       fixture_clock_bounds: bounds,
       localStopFromFixtureUpperMs,
@@ -206,6 +215,13 @@ test('ラベル付き実音声によるLiveKit barge-inのlocal停止とcancel�
     }, null, 2),
     contentType: 'application/json',
   })
+  // 閾値違反でも上の計測証拠を失わない。
+  expect(localStopFromFixtureUpperMs).toBeGreaterThanOrEqual(0)
+  expect(localStopFromFixtureUpperMs).toBeLessThanOrEqual(3_000)
+  expect(cancelFromFixtureUpperMs).toBeGreaterThanOrEqual(0)
+  expect(cancelFromFixtureUpperMs).toBeLessThanOrEqual(3_500)
+  expect(localStopBoundsMs.lowerMs).toBeGreaterThanOrEqual(0)
+  expect(cancelTotalBoundsMs.lowerMs).toBeGreaterThanOrEqual(0)
 })
 
 // 再接続はtest:integration:voice:reconnectで専用bridgeへ実障害を入れて検証する。

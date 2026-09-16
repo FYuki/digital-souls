@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "edge_alignment_method": "bandlimited_100ms_multi_seed_edge_witness_v4",
+  "evaluation_scope": "actual_stt_pcm_edge_coverage_only",
+  "cohort": "backchannel",
+  "measurement_revision": "07269e56f8c7a1c519f5800a80332985c11c410a",
+  "evidence_sha256": {
+    "manifest": "bd7293109b7161fd6bb755494eadbc36740c45ba50281c53e66c09cced7ae73b",
+    "observer": "73921e03a0294f8325d489a2a0a289e4cbe2611de838f70a276028fd9bc7df23",
+    "trace": "96cd4cafc7071d627505e696fd33af91fd42fb732d499617ec1b451a77efbd73",
+    "profile": "85b66ddd5747b5c902a0ba82aac65369284221c361b3992e35de563ed8de7a31"
+  },
+  "counts": {
+    "expected": 100,
+    "recorded": 100,
+    "final_inputs_correlated": 93,
+    "edges_matched": 91,
+    "missing": 9,
+    "session_cleanup_confirmed": 100,
+    "voice_success": 68,
+    "other_stt_requests": 87,
+    "nonuniform_global_alignment": 4
+  },
+  "missing_reasons": {
+    "final_http_input_not_unique": 4,
+    "final_utterance_unavailable": 3,
+    "speech_edges_unverified": 2
+  },
+  "minimum_edge_correlation": 0.8135770807356765,
+  "passed": false,
+  "gates": {
+    "independent_100": true,
+    "all_final_inputs_correlated": false,
+    "all_speech_edges_matched": false,
+    "no_missing": false,
+    "all_sessions_ended": true,
+    "measurement_revision_recorded": true
+  },
+  "interior_continuity_verified": false,
+  "all_vad_acceptance_verified": false
+}

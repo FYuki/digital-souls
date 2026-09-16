@@ -1,0 +1,149 @@
+{
+  "scope": "completed_before_backchannel_cohort_with_failed_acceptance",
+  "measurement_revision": "07269e56f8c7a1c519f5800a80332985c11c410a",
+  "application_baseline_revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+  "input_authority": "frontend",
+  "expected_trials": 100,
+  "recorded_trials": 100,
+  "recorded_success": 68,
+  "recorded_failure": 32,
+  "recorded_sessions_ended": 100,
+  "failure_stages": {
+    "cancel_or_continuity": 25,
+    "initial_response": 7
+  },
+  "upstream_http_status_counts": {
+    "200": 374,
+    "504": 2,
+    "503": 4
+  },
+  "maximum_observed_stt_request_ms": 46223.623214,
+  "backchannel_metrics": [
+    {
+      "name": "backchannel_false_cancel",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "labeled_backchannel_injected",
+      "end_point": "old_response_full_output_or_cancel",
+      "trial_count": 100,
+      "success_count": 84,
+      "failure_count": 0,
+      "missing_count": 16,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "full_response_continuity_unverified": 9,
+        "fixture_injection_unverified": 7
+      }
+    }
+  ],
+  "backchannel_evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": false,
+    "false_cancel_rate_passed": false
+  },
+  "pcm_counts": {
+    "expected": 100,
+    "recorded": 100,
+    "final_inputs_correlated": 93,
+    "edges_matched": 91,
+    "missing": 9,
+    "session_cleanup_confirmed": 100,
+    "voice_success": 68,
+    "other_stt_requests": 87,
+    "nonuniform_global_alignment": 4
+  },
+  "pcm_missing_reasons": {
+    "final_http_input_not_unique": 4,
+    "final_utterance_unavailable": 3,
+    "speech_edges_unverified": 2
+  },
+  "pcm_passed": false,
+  "all_start_end_identity_checks_match": true,
+  "host_gpu": {
+    "first": {
+      "utilization_percent": 0.0,
+      "used_bytes": 6050283520,
+      "total_bytes": 17171480576
+    },
+    "last": {
+      "utilization_percent": 85.0,
+      "used_bytes": 7124025344,
+      "total_bytes": 17171480576
+    },
+    "maximum_used_bytes": 16545480704
+  },
+  "supplemental_other_ollama_residency": {
+    "scope": "supplemental_shared_gpu_model_residency",
+    "clock_domain": "observer_monotonic",
+    "recorded_at_unix_ns": 1789427764414985316,
+    "observations": [
+      {
+        "port": 11434,
+        "resident_count": 0,
+        "context_tokens": [],
+        "vram_bytes": [],
+        "started_ns": 453693558356327,
+        "completed_ns": 453693561461063
+      },
+      {
+        "port": 11438,
+        "resident_count": 1,
+        "context_tokens": [
+          36864
+        ],
+        "vram_bytes": [
+          4863746373
+        ],
+        "started_ns": 453693561464646,
+        "completed_ns": 453693562927029
+      }
+    ],
+    "services_modified": false,
+    "causality_proven": false
+  },
+  "termination": {
+    "pilot_exit": 1,
+    "backchannel_reporter_exit": 0,
+    "pcm_reporter_exit": 1,
+    "all_expected_trials_recorded": true,
+    "owned_ports_closed": [
+      7880,
+      7881,
+      8000,
+      5173,
+      4174,
+      50023
+    ],
+    "shared_services_modified": false
+  },
+  "evidence_sha256": {
+    "trial-manifest.json": "bd7293109b7161fd6bb755494eadbc36740c45ba50281c53e66c09cced7ae73b",
+    "whisper-input-pcm.jsonl": "73921e03a0294f8325d489a2a0a289e4cbe2611de838f70a276028fd9bc7df23",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "96cd4cafc7071d627505e696fd33af91fd42fb732d499617ec1b451a77efbd73",
+    "inference-runtime.jsonl": "de2e57de1e6c4e3916641b478ef264856337679aa3ea66db0aa80aa365df7155",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "playwright-results.json": "58da3713085d073cc01831b9a9f1f40a0c756b4f9f321dd0d804a27f7d70e010",
+    "backchannel-report.json": "4d0a13c51d3a7663660800f4f168b2bac430da5a4a42e09fba4d7c3e67a7e56b",
+    "stt-pcm-report.json": "c53eefa805e5f7c41469fa85be7cb6a3a14f8ec81a833fe25d22df2ce8c32456",
+    "comparison-identity-start.json": "36b7ce361fb2c0778c79e82995dde7b70241dd1de9e3d7c5e5fb0b651b2db21a",
+    "comparison-identity-end.json": "c6dcc44c7f047e9f82bd86e8d8540af6a95fcb23beed6cc2dbc2f3b585dd76f8",
+    "comparison-identity-check.json": "07aeecc898c48f4d3fb4028f2b8755f1bc3fbf8db43d532dfff72b5447bb1265",
+    "other-ollama-residency.json": "192634ae1952eb7a37c49a98e6be2186ec49b8bd6a1a2cdda7a72e181567f2f3"
+  },
+  "acceptance_passed": false,
+  "before_after_comparison_completed": false,
+  "limitations": [
+    "全100件の収集完了と品質合格を区別する。観測された取消0件から欠測16件の取消なしを推測しない",
+    "PCM reporterのexit 1は生成済みreportの品質gate不成立を表し、集計例外ではない",
+    "モデル・設定の開始終了一致は測定中の負荷安定性を証明しない",
+    "別Ollamaの常駐は一時点の補足観測であり、全区間の外部負荷やWhisper障害との因果関係を証明しない",
+    "既存の記憶形成を含む試験内負荷を維持した。以前の中止runの失敗は置き換えていない"
+  ]
+}

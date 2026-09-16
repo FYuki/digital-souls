@@ -2,6 +2,15 @@
 
 `digital-souls`の自作フロントエンド（Vite + Svelte + TypeScript）。概念と実装名は[用語集](../docs/glossary.md)、FE/BEの責務境界は[アーキテクチャ](../docs/system-architecture.md)を参照する。
 
+## 音声入力の責務（#358作業ブランチ）
+
+LiveKit経路ではFE VAD assetのロードと正式speech通知を使用しない。
+マイクの取得・mute・focus抑止・再生・停止・実再生観測をFEが実行し、BEから発話と割り込み判断を受け取る。
+入力再開は新しいtrack SIDをpublishし、対応するBEの入力開始ACK後に有効化する。
+旧WebSocketのFE VAD経路は保持する。
+FE／BEを一組でprotocol 2.0へ更新する[移行契約](../docs/voice-backend-migration-contract.md)と、
+実サービス受入とは区別した[検証記録](../docs/validation/voice-backend-vad-358.md)を参照する。
+
 ## 実装している画面・操作
 
 - テキスト／LiveKit音声会話、同じ実行中Conversation Sessionへのテキスト入力、割り込み・再接続・受理結果の表示。

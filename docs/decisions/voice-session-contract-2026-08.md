@@ -1,5 +1,7 @@
 # 双方向音声セッション契約と JSON Schema SSOT (2026-08)
 
+> #358のBE VAD・正式発話境界と一括移行は[Backend集約ADR](voice-backend-authority-2026-09.md)を優先する。移設は未実装・未受入であり、本書の既存入力操作・response終端・履歴契約と過去の実装記録は維持する。
+
 ## 状態
 
 **ACTIVE**。Wave 3 の transport 非依存 Conversation Core が扱う音声セッション契約と、JSON Schema から生成する FE/BE 型を定める。LiveKit認証とtransport基盤はIssue #113および`livekit-transport-2026-08.md`で実装済みであり、VAD、streaming LLM/TTS、barge-in等は後続Issueで本契約へ接続する。

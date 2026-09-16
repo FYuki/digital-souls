@@ -73,7 +73,7 @@ def test_speech_text_speech_share_sqlite_history_context_and_tts(tmp_path: Path)
         for index, text in enumerate(inputs):
             if index == 1:
                 submitted = {
-                    "type": "user_text_submitted", "protocol_version": "1.1",
+                    "type": "user_text_submitted", "protocol_version": "2.0", "input_revision": 1,
                     "event_id": ids[index], "session_id": session.session_id,
                     "monotonic_timestamp_ms": 1, "text": text,
                     "speaker": {"role": "user", "participant_id": participant_id},

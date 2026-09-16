@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest'
 import { parsePrivateFrame } from './livekit/private-contract'
 
 const authoritativeState = (terminalOutcomes: unknown[]): Record<string, unknown> => ({
-  protocol_version: '1.0',
+  protocol_version: '2.0',
   type: 'authoritative_state',
   generation: 1,
   session_phase: 'available',
@@ -20,19 +20,19 @@ const terminalOutcome = {
 describe('LiveKit private contract', () => {
   test.each([
     {
-      protocol_version: '1.0',
+      protocol_version: '2.0',
       type: 'ack',
       event_id: '10000000-0000-4000-8000-000000000010',
       generation: 0,
     },
     {
-      protocol_version: '1.0',
+      protocol_version: '2.0',
       type: 'state_sync_request',
       generation: 1,
     },
     authoritativeState([]),
     {
-      protocol_version: '1.0',
+      protocol_version: '2.0',
       type: 'logical_audio_segment',
       response_id: '30000000-0000-4000-8000-000000000010',
       audio_sequence: 0,
@@ -40,7 +40,7 @@ describe('LiveKit private contract', () => {
       pcm_sample_count: 480,
     },
     {
-      protocol_version: '1.0',
+      protocol_version: '2.0',
       type: 'microphone_observation',
       generation: 1,
       frame_count: 1,
@@ -54,10 +54,10 @@ describe('LiveKit private contract', () => {
 
   test.each([
     { protocol_version: '0.9', type: 'state_sync_request', generation: 1 },
-    { protocol_version: '1.0', type: 'unknown_frame', generation: 1 },
+    { protocol_version: '2.0', type: 'unknown_frame', generation: 1 },
   ])('protocol不一致と未知typeを拒否する', (frame) => {
     expect(() => parsePrivateFrame(frame)).toThrow(
-      'LiveKit private frame does not match protocol 1.0',
+      'LiveKit private frame does not match protocol 2.0',
     )
   })
 
@@ -87,14 +87,14 @@ describe('LiveKit private contract', () => {
     { ...terminalOutcome, unexpected: true },
   ])('共有schemaに適合しないterminal outcomeを拒否する', (outcome) => {
     expect(() => parsePrivateFrame(authoritativeState([outcome]))).toThrow(
-      'LiveKit private frame does not match protocol 1.0',
+      'LiveKit private frame does not match protocol 2.0',
     )
   })
 })
 
 
 test('応答track準備通知は応答IDとSIDを検証して正規化する', () => {
-  const frame = { protocol_version: '1.0', type: 'response_track_ready', generation: 2,
+  const frame = { protocol_version: '2.0', type: 'response_track_ready', generation: 2,
     response_id: '50000000-0000-4000-8000-000000000001', track_sid: 'TR_one' }
   expect(parsePrivateFrame(frame)).toEqual({type: 'response_track_ready', generation: 2,
     responseId: frame.response_id, trackSid: 'TR_one'})
@@ -106,7 +106,7 @@ test('応答track準備通知は応答IDとSIDを検証して正規化する', (
 
 
 test('送信完了の総sample数を検証し、PCM本文や矛盾した総数を許可しない', () => {
-  const frame = {protocol_version: '1.0', type: 'response_audio_finished',
+  const frame = {protocol_version: '2.0', type: 'response_audio_finished',
     response_id: '50000000-0000-4000-8000-000000000001', generation: 0,
     input_sample_count: 1234, captured_sample_count: 2880, padding_sample_count: 1646}
   expect(parsePrivateFrame(frame)).toMatchObject({type: 'response_audio_finished', inputSampleCount: 1234, capturedSampleCount: 2880})
@@ -115,7 +115,7 @@ test('送信完了の総sample数を検証し、PCM本文や矛盾した総数�
   expect(() => parsePrivateFrame({...frame, input_sample_count: -1})).toThrow()
 })
 
-const controlProbe = {protocol_version: '1.0', type: 'control_probe',
+const controlProbe = {protocol_version: '2.0', type: 'control_probe',
   generation: 2, probe_id: '10000000-0000-4000-8000-000000000001'}
 test.each(['control_probe', 'control_probe_ack'])('制御probeはnonceと世代を保持する: %s', type => {
   expect(parsePrivateFrame({...controlProbe, type})).toEqual({type, generation: 2, probeId: controlProbe.probe_id})
@@ -128,7 +128,7 @@ test.each([
 })
 
 test('音声probeは固定長の診断音とnonce・世代・trackだけを通知する', () => {
-  const base = {protocol_version: '1.0', generation: 1, probe_id: controlProbe.probe_id}
+  const base = {protocol_version: '2.0', generation: 1, probe_id: controlProbe.probe_id}
   expect(parsePrivateFrame({...base, type: 'audio_probe_request'})).toEqual({
     type: 'audio_probe_request', generation: 1, probeId: base.probe_id})
   for (const type of ['audio_probe_ready', 'audio_probe_complete']) {
@@ -148,7 +148,7 @@ test('音声probeは固定長の診断音とnonce・世代・trackだけを通�
 
 
 test('時計要求と対になったserver時計を検証し、片方のみ・逆行・unsafe integerを拒否する', () => {
-  const common = {protocol_version: '1.0', probe_id: '10000000-0000-4000-8000-000000000010', generation: 0}
+  const common = {protocol_version: '2.0', probe_id: '10000000-0000-4000-8000-000000000010', generation: 0}
   expect(parsePrivateFrame({...common, type: 'control_probe', observe_clock: true})).toMatchObject({observeClock: true})
   const frame = {...common, type: 'control_probe_ack', server_received_us: 1000, server_sent_us: 1005}
   expect(parsePrivateFrame(frame)).toMatchObject({serverReceivedAtUs: 1000, serverSentAtUs: 1005})

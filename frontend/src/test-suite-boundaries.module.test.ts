@@ -76,6 +76,24 @@ const findReachableTypescriptSources = async (entries: string[]): Promise<Map<st
 }
 
 describe('Playwright suite boundaries', () => {
+
+  test('通信を制御する開始診断は通常の実接続スイートから分離する', async () => {
+    const executable = join(process.cwd(), 'node_modules', '.bin', 'playwright')
+    const { stdout } = await execFileAsync(executable, [
+      'test', '--list', '--config', 'playwright.voice-startup-diagnostic.config.ts',
+    ], { cwd: process.cwd() })
+    const lines = stdout.split('\n').filter(line => line.includes('.spec.ts:'))
+    expect(lines).toHaveLength(5)
+    expect(lines.every(line => line.includes('[voice-startup-diagnostic/chromium]'))).toBe(true)
+    expect(lines.some(line => line.includes('bootstrap-rejection.spec.ts'))).toBe(true)
+    expect(lines.some(line => line.includes('startup-cleanup.spec.ts'))).toBe(true)
+    const ordinary = await execFileAsync(executable, [
+      'test', '--list', '--config', 'playwright.integration-voice.config.ts',
+    ], { cwd: process.cwd() })
+    expect(ordinary.stdout).not.toMatch(/bootstrap-rejection|startup-cleanup|diagnostics\//)
+  }, 20_000)
+
+
   test('controlled baseline config collects only the dedicated real-service spec', async () => {
     const executable = join(process.cwd(), 'node_modules', '.bin', 'playwright')
     const { stdout } = await execFileAsync(

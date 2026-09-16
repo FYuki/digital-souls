@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { installMockUiBootstrap } from './mock-ui-bootstrap'
 import { installMockLiveKit } from './mock-livekit'
+import { createVoiceTestUseOptions } from '../playwright/voice-chat-suite'
+
+test.use(createVoiceTestUseOptions())
 import { attachProfileEvidence, getCapabilitySkipReason, readResolvedProfile, type ResolvedProfile } from '../playwright/resolved-profile'
 
 let resolvedProfile: ResolvedProfile
@@ -87,7 +90,9 @@ for (const scenario of [
     await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
     if (scenario.voice) {
       await page.getByRole('button', { name: 'マイクをオンにする' }).click()
-      await page.waitForFunction(() => Boolean((window as unknown as { __mockLiveKit?: unknown }).__mockLiveKit))
+      await page.waitForFunction(() => (window as unknown as {__mockLiveKit?: {
+        microphoneEnabled: () => boolean
+      }}).__mockLiveKit?.microphoneEnabled() === true)
       await page.evaluate(async () => {
         await (window as unknown as { __mockLiveKit: { submitUtterance: () => Promise<void> } }).__mockLiveKit.submitUtterance()
       })

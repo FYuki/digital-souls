@@ -51,6 +51,13 @@ Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受�
 
 各設定は Profile、収集ディレクトリ、成果物の出力先を固定する。spec 内で環境変数や依存 mode によってモックと実接続を切り替えない。各 spec が受け入れる要求Capabilityは1つだけとする。実接続 spec では mock WebSocket、`page.route`、HARによる外部通信の置換を禁止する。
 
+音声開始の制御診断はfrontend/diagnostics/voice-startup/に置き、test:diagnostic:voice-startupから明示実行する。
+実BE／SFUを使用するが、bootstrapのversion提示または応答の接続先を差し替えるため、通常の実接続スイートへ含めない。
+HTTP差し替えを含む診断の成功を、無変更clientの実接続・物理マイク・全受入の合格へ流用しない。
+既存Playwrightとintegration-voice Profileを再利用し、成果物・data rootをvoice-startup-diagnostic配下に分離する。
+実行時は専用LiveKitの認証を環境変数で渡し、VOICE_STARTUP_RUN_IDに新しいrun名を指定する。
+
+
 Epic #151のresponsive会話画面は`frontend/e2e/portrait-layout.spec.ts`でPC、tablet、mobile、
 Visual Viewport縮小、立ち絵未設定・取得失敗を検証する。PC右配置、PC背面配置、tablet、mobileの
 画面はPlaywright attachmentとして各テスト結果へ保存する。手動受け入れ手順と証跡名は

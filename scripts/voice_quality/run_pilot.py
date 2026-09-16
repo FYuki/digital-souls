@@ -67,6 +67,28 @@ def residency_values(body: object, model: str) -> dict[str, object]:
     }
 
 
+def configured_chat_model_contexts(environment: dict[str, str]) -> dict[str, int]:
+    """CHATと同じmodelを使う各生成用途の設定値だけを匿名で記録する。"""
+    from app.inference.config import TARGET_DEFINITIONS
+
+    reference = environment.get("INFERENCE_TARGET_CHAT")
+    if not reference or not reference.startswith("ollama/"):
+        raise ValueError("configured chat reference unavailable")
+    contexts: dict[str, int] = {}
+    for definition in TARGET_DEFINITIONS.values():
+        key = "INFERENCE_TARGET_" + definition.env_token
+        if not definition.requires_output_limit or environment.get(key) != reference:
+            continue
+        limits = [environment.get(key + suffix) for suffix in (
+            "_MAX_INPUT_TOKENS", "_MAX_OUTPUT_TOKENS",
+        )]
+        if any(value is None or re.fullmatch(r"[1-9][0-9]*", value) is None for value in limits):
+            raise ValueError("configured context limit unavailable")
+        contexts[definition.env_token] = sum(int(value) for value in limits if value is not None)
+    # 設定値が常駐contextと一致しても、要求の主体・実行時刻の証明にはしない。
+    return contexts
+
+
 def probe_residency(endpoint: str, model: str) -> dict[str, object]:
     started = time.monotonic_ns()
     try:
@@ -115,8 +137,15 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False, profile: str = "integration-voice") -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False, profile: str = "integration-voice", isolated_normal_phase: str | None = None) -> dict[str, str]:
     run_root(run_id)
+    if isolated_normal_phase is not None and (
+        isolated_normal_phase not in ("warmup", "measured") or trials != 1
+        or not scheduled_fixture or controlled or continuous_turns or interruption_cohort
+        or vad_cohort or control_probe or fault_bridge or network_fault or fixture_indices
+        or session_lifecycle
+    ):
+        raise ValueError("isolated normal trial requires one scheduled independent session")
     if profile not in {"integration-voice", "integration-irodori"}:
         raise ValueError("unsupported measurement profile")
     if profile == "integration-irodori" and observe_stt_pcm:
@@ -221,6 +250,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     if controlled:
         # specはpilot設定がない場合だけ5 warm-up＋100独立sessionを実行する。
         env.pop("VOICE_QUALITY_PILOT_TRIALS", None)
+    env.pop("VOICE_QUALITY_ISOLATED_NORMAL_PHASE", None)
+    if isolated_normal_phase is not None:
+        env["VOICE_QUALITY_ISOLATED_NORMAL_PHASE"] = isolated_normal_phase
     return env
 
 
@@ -232,7 +264,7 @@ def run(args: argparse.Namespace) -> int:
     from native_sdk import NativeSdkSampler
     from native_sdk_experiment.prepare import REVISION
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False), getattr(args, "profile", "integration-voice"))
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False), getattr(args, "profile", "integration-voice"), getattr(args, "isolated_normal_phase", None))
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -247,6 +279,7 @@ def run(args: argparse.Namespace) -> int:
     model = reference.split("/", 1)[1]
     endpoint = env.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     expected_context = int(env["INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS"]) + int(env["INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS"])
+    configured_contexts = configured_chat_model_contexts(env)
     base = run_root(args.run_id)
     base.mkdir(parents=True, exist_ok=False)  # 失敗した試行のdata rootも上書きしない。
     with ExitStack() as owned:
@@ -265,6 +298,7 @@ def run(args: argparse.Namespace) -> int:
                 sample = 0
                 while process.poll() is None:
                     row = {"scope": "controlled_shared_inference_observation" if args.controlled else "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
+                           "configured_chat_model_context_tokens_by_target": configured_contexts,
                            "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking, "scheduled_fixture": args.scheduled_fixture, "continuous_turns": args.continuous_turns,
                            "ollama": probe_residency(endpoint, model), "backend": resources.sample()}
                     if sample % 10 == 0:
@@ -298,6 +332,8 @@ if __name__ == "__main__":
     parser.add_argument("--profile", choices=("integration-voice", "integration-irodori"),
                         default="integration-voice", help="共有TTS検証Profile。声の選択はCCVで行う。")
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--isolated-normal-phase", choices=("warmup", "measured"),
+                        help="独立data rootで通常音声を1試行だけ測る。単独の受入合格にはしない。")
     parser.add_argument("--inference-env", type=Path, required=True)
     parser.add_argument("--livekit-env", type=Path, default=ROOT / "infra/livekit/.env")
     count_options = parser.add_mutually_exclusive_group()

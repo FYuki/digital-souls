@@ -128,7 +128,7 @@ class TextInputReceiver:
     async def _publish_receipt(self, receipt: InputReceipt) -> None:
         event: dict[str, object] = {
             "type": "user_input_result",
-            "protocol_version": "1.1",
+            "protocol_version": "2.0",
             "event_id": str(uuid4()),
             "session_id": self._session_id,
             "monotonic_timestamp_ms": self._clock_ms(),

@@ -19,6 +19,8 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 ## 現行の優先関係
 
 - [`addon-event-recovery-2026-09.md`](addon-event-recovery-2026-09.md)は、#187の共有取得、有限バッファと処理位置の永続化、上限超過・欠落時の復旧を具体化する。この範囲はAddon接続ADR・通知／会話分離ADRの抽象記述に優先する。通知の保持とUIは通知／会話分離ADRの2026-09-16追記、実装要求は[要件指示書](../epic-187-addon-event-requirements.md)を参照する。設計確定であり、実装完了を示さない。
+- [`voice-backend-authority-2026-09.md`](voice-backend-authority-2026-09.md)は、#358のBEによる音声活動・正式発話境界の所有、FE／BE一括更新・切り戻し、復元不能な音声欠落の扱いを定める。この移設範囲では既存音声・Speech/Text・共通client ADRより優先する。採用済み設計であり、移設の実装・受入は未完了。詳細は[要件指示書](../epic-358-voice-backend-requirements.md)を参照する。
+
 - [`tts-engine-reference-voice-2026-09.md`](tts-engine-reference-voice-2026-09.md)は、#329のSession開始時のTTS選択と、Irodoriのvoice ID・参照音声の固定対応を追加する。既存の音声／Speech・Text共通Session契約と環境分離境界を維持する。Irodoriの実装・モデル本採用・dogfood受入は未完了で、[要件](../irodori-tts-requirements.md)と#329で追跡する。
 - [`episode-fact-semantic-boundaries-2026-09.md`](episode-fact-semantic-boundaries-2026-09.md)は、#352で確定したEpisode / Fact / Semantic / Reflectionの正本責務、述語のみ必須の5W、config timezone、FactのID参照・版・失効、同thread登録時照合と後続#354の別thread非同期整理を定める。#340で合意した日常経験・仮定/創作、経験の単位、Fact更新と統合の区別、管理操作・dev受入も含む。この記憶再編の範囲ではCharacter Life・用語・Wave 2・RAG privacy ADRの旧記述より優先する。
 

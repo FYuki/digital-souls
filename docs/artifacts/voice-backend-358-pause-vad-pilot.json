@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "measurement_scope": "real_browser_vad_detector_boundaries",
+  "input_authority": "backend",
+  "cohort": "pause",
+  "raw_sha256": "ed688b57d1a44ab5a88290aa7c03ff670187bf56041cec062e30168e199c237a",
+  "fixture_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "clock_domain": "vad_media_samples",
+  "maximum_fixture_uncertainty_ms": 20,
+  "backend_alignment_method": "two_anchor_pcm_with_v4_edge_witness",
+  "trace_sha256": "a45b9d55c6412953b085244affdee22df89eddfb12ffe1fb166baf1af55d2958",
+  "pcm_observer_sha256": "51a07c2f43c5b00452fa370b6b38a5363f1003eb840fc7c1b600a664b6727c67",
+  "split_observed_trials": 3,
+  "split_unknown_trials": 0,
+  "expected_trials": 3,
+  "measured_trials": 3,
+  "session_cleanup_confirmed": 3,
+  "missing": {},
+  "counts": {
+    "leading_error": 0,
+    "early_end_error": 0,
+    "boundary_uncertain": 0,
+    "split": 0
+  },
+  "metrics": {
+    "onset_offset_lower_ms": {
+      "count": 3,
+      "minimum_ms": -52.8125,
+      "p50_ms": -41.8125,
+      "p95_ms": -10.593750000000004,
+      "maximum_ms": -7.125
+    },
+    "onset_offset_upper_ms": {
+      "count": 3,
+      "minimum_ms": -48.8125,
+      "p50_ms": -37.8125,
+      "p95_ms": -6.5937500000000036,
+      "maximum_ms": -3.125
+    },
+    "end_offset_lower_ms": {
+      "count": 3,
+      "minimum_ms": 647.1875,
+      "p50_ms": 650.1875,
+      "p95_ms": 695.80625,
+      "maximum_ms": 700.875
+    },
+    "end_offset_upper_ms": {
+      "count": 3,
+      "minimum_ms": 651.1875,
+      "p50_ms": 654.1875,
+      "p95_ms": 699.80625,
+      "maximum_ms": 704.875
+    }
+  },
+  "evaluation": {
+    "passed": false,
+    "gates": {
+      "independent_100": false,
+      "coverage_complete": true,
+      "leading_error_at_most_one_percent": true,
+      "early_end_error_at_most_one_percent": true,
+      "split_at_most_one_percent": true
+    }
+  },
+  "limits": {
+    "captured_pcm_boundary_verified": false,
+    "intentional_pause_cohort": true,
+    "all_vad_acceptance_verified": false
+  }
+}

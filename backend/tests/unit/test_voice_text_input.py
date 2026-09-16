@@ -19,10 +19,10 @@ RESPONSE = "10000000-0000-4000-8000-000000000003"
 
 def event(kind: str = "user_text_submitted", **fields: object) -> dict[str, object]:
     return {
-        "protocol_version": "1.1", "event_id": str(uuid4()), "session_id": SESSION,
+        "protocol_version": "2.0", "event_id": str(uuid4()), "session_id": SESSION,
         "type": kind, "monotonic_timestamp_ms": 1,
         "speaker": {"role": "user", "participant_id": PARTICIPANT},
-        **({"text": "続きを教えて"} if kind == "user_text_submitted" else {}),
+        **({"text": "続きを教えて", "input_revision": 1} if kind == "user_text_submitted" else {}),
         **fields,
     }
 
@@ -66,7 +66,7 @@ def test_concurrent_retry_and_query_do_not_repeat_pending_input() -> None:
         h.release.clear()
         request = event()
         first = asyncio.create_task(h.receiver.receive(request))
-        await h.started.wait()
+        await asyncio.wait_for(h.started.wait(), 1)
         await h.receiver.receive(dict(request))
         await h.receiver.receive(event("user_input_result_requested", input_event_id=request["event_id"]))
         assert [r["status"] for r in h.results] == ["processing", "processing"]

@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 
-SUPPORTED_PROTOCOL_VERSION = "1.1"
+SUPPORTED_PROTOCOL_VERSION = "2.0"
 UNSUPPORTED_PROTOCOL_VERSION = "0.0"
 
 
@@ -146,6 +146,7 @@ def _install_livekit_resource_ports(client, monkeypatch) -> RecordingLiveKitReso
 def _bootstrap_request(**overrides: object) -> dict[str, object]:
     return {
         "protocol_version": SUPPORTED_PROTOCOL_VERSION,
+        "transport_protocol_version": "2.0",
         "request_id": "10000000-0000-4000-8000-000000000001",
         "character_id": "miori",
         "conversation_id": "20000000-0000-4000-8000-000000000001",
@@ -787,3 +788,30 @@ def test_tts_preparation_failure_returns_code_and_releases_session(
     monkeypatch.setattr(resources.runtime_manager, "wait_until_ready", ready)
     retry = client.post("/voice/livekit/token", json=_bootstrap_request())
     assert retry.status_code == 200
+
+
+@pytest.mark.parametrize("transport_version", [None, "1.0", "0.0"])
+def test_transport_mismatch_rejects_before_resource_creation(client, monkeypatch, transport_version):
+    resources = _install_livekit_resource_ports(client, monkeypatch)
+    request = _bootstrap_request(transport_protocol_version=transport_version)
+    if transport_version is None:
+        request.pop("transport_protocol_version")
+    response = client.post("/voice/livekit/token", json=request)
+    assert response.status_code == 409
+    assert "transport_protocol_version_mismatch" in _all_scalar_values(response.json())
+    assert resources.room_manager.room_creations == []
+    assert resources.runtime_manager.runtime_starts == []
+    assert resources.token_signer.token_issues == []
+
+
+def test_old_core_client_is_rejected_without_starting_resources(client, monkeypatch):
+    resources = _install_livekit_resource_ports(client, monkeypatch)
+    request = _bootstrap_request(protocol_version="1.1")
+    request.pop("transport_protocol_version")
+    response = client.post("/voice/livekit/token", json=request)
+    assert response.status_code == 409
+    assert "protocol_version_mismatch" in _all_scalar_values(response.json())
+    assert resources.room_manager.room_creations == []
+    assert resources.session_repository.session_creations == []
+    assert resources.runtime_manager.runtime_starts == []
+    assert resources.token_signer.token_issues == []

@@ -1,0 +1,206 @@
+{
+  "kind": "synthetic_audio_gpu_regression",
+  "source": "VOICEVOX fixed fixtures and generated non-speech; no user recordings",
+  "results": [
+    {
+      "fixture": "silence_0.5s",
+      "durationSeconds": 0.5,
+      "before": "ご視聴ありがとうございました",
+      "beforeSeconds": 0.1788,
+      "after": "",
+      "afterSeconds": 0.1687
+    },
+    {
+      "fixture": "silence_2s",
+      "durationSeconds": 2.0,
+      "before": "ご視聴ありがとうございました",
+      "beforeSeconds": 0.1567,
+      "after": "",
+      "afterSeconds": 0.147
+    },
+    {
+      "fixture": "low_noise_2s",
+      "durationSeconds": 2.0,
+      "before": "ご視聴ありがとうございました",
+      "beforeSeconds": 0.2331,
+      "after": "",
+      "afterSeconds": 0.2475
+    },
+    {
+      "fixture": "quiet_tone_2s",
+      "durationSeconds": 2.0,
+      "before": "ご視聴ありがとうございました",
+      "beforeSeconds": 0.1561,
+      "after": "",
+      "afterSeconds": 0.1546
+    },
+    {
+      "fixture": "ack-01",
+      "durationSeconds": 0.8426875,
+      "before": "うん",
+      "beforeSeconds": 0.1406,
+      "after": "うん",
+      "afterSeconds": 0.14
+    },
+    {
+      "fixture": "ack-02",
+      "durationSeconds": 0.6186875,
+      "before": "はい",
+      "beforeSeconds": 0.1182,
+      "after": "はい",
+      "afterSeconds": 0.1254
+    },
+    {
+      "fixture": "ack-03",
+      "durationSeconds": 0.7146875,
+      "before": "フゥー",
+      "beforeSeconds": 0.1441,
+      "after": "",
+      "afterSeconds": 0.1361
+    },
+    {
+      "fixture": "ack-04",
+      "durationSeconds": 0.725375,
+      "before": "",
+      "beforeSeconds": 0.1367,
+      "after": "",
+      "afterSeconds": 0.1429
+    },
+    {
+      "fixture": "ack-05",
+      "durationSeconds": 0.917375,
+      "before": "なるほど",
+      "beforeSeconds": 0.1264,
+      "after": "なるほど",
+      "afterSeconds": 0.1111
+    },
+    {
+      "fixture": "ack-06",
+      "durationSeconds": 0.981375,
+      "before": "そうなんだ",
+      "beforeSeconds": 0.1359,
+      "after": "そうなんだ",
+      "afterSeconds": 0.1299
+    },
+    {
+      "fixture": "ack-07",
+      "durationSeconds": 1.2586875,
+      "before": "そうなんですね",
+      "beforeSeconds": 0.1508,
+      "after": "そうなんですね",
+      "afterSeconds": 0.138
+    },
+    {
+      "fixture": "ack-08",
+      "durationSeconds": 1.0346875,
+      "before": "そうですね",
+      "beforeSeconds": 0.1323,
+      "after": "そうですね",
+      "afterSeconds": 0.1346
+    },
+    {
+      "fixture": "ack-09",
+      "durationSeconds": 0.928,
+      "before": "確かに",
+      "beforeSeconds": 0.1396,
+      "after": "確かに",
+      "afterSeconds": 0.1353
+    },
+    {
+      "fixture": "ack-10",
+      "durationSeconds": 0.864,
+      "before": "そうそう",
+      "beforeSeconds": 0.1349,
+      "after": "そうそう",
+      "afterSeconds": 0.1336
+    },
+    {
+      "fixture": "take-01",
+      "durationSeconds": 1.12,
+      "before": "ちょっと待って",
+      "beforeSeconds": 0.1376,
+      "after": "ちょっと待って",
+      "afterSeconds": 0.1449
+    },
+    {
+      "fixture": "take-02",
+      "durationSeconds": 1.0986875,
+      "before": "ストックして!",
+      "beforeSeconds": 0.4477,
+      "after": "ストックして!",
+      "afterSeconds": 0.2999
+    },
+    {
+      "fixture": "take-03",
+      "durationSeconds": 1.8666875,
+      "before": "ひとつ質問してもいい?",
+      "beforeSeconds": 0.4341,
+      "after": "ひとつ質問してもいい?",
+      "afterSeconds": 0.3102
+    },
+    {
+      "fixture": "take-04",
+      "durationSeconds": 1.685375,
+      "before": "それは違うと思う",
+      "beforeSeconds": 0.1407,
+      "after": "それは違うと思う",
+      "afterSeconds": 0.1388
+    },
+    {
+      "fixture": "take-05",
+      "durationSeconds": 1.813375,
+      "before": "もう一度説明して",
+      "beforeSeconds": 0.5143,
+      "after": "もう一度説明して",
+      "afterSeconds": 0.4073
+    },
+    {
+      "fixture": "take-06",
+      "durationSeconds": 2.4426875,
+      "before": "うん、でも質問がある",
+      "beforeSeconds": 0.3674,
+      "after": "うん、でも質問がある",
+      "afterSeconds": 0.1982
+    },
+    {
+      "fixture": "take-07",
+      "durationSeconds": 2.4,
+      "before": "はい、そこを訂正して",
+      "beforeSeconds": 0.2675,
+      "after": "はい、そこを訂正して",
+      "afterSeconds": 0.4043
+    },
+    {
+      "fixture": "take-08",
+      "durationSeconds": 2.645375,
+      "before": "なるほど、具体例を教えて",
+      "beforeSeconds": 0.428,
+      "after": "なるほど、具体例を教えて",
+      "afterSeconds": 0.399
+    },
+    {
+      "fixture": "take-09",
+      "durationSeconds": 1.984,
+      "before": "その話は後にしよう",
+      "beforeSeconds": 0.1826,
+      "after": "その話は後にしよう",
+      "afterSeconds": 0.2548
+    },
+    {
+      "fixture": "take-10",
+      "durationSeconds": 2.2506875,
+      "before": "今は私の話を聞いて",
+      "beforeSeconds": 0.4701,
+      "after": "今は私の話を聞いて",
+      "afterSeconds": 0.4431
+    },
+    {
+      "fixture": "spoken_thank_you",
+      "durationSeconds": 2.3786875,
+      "before": "ご視聴ありがとうございました",
+      "beforeSeconds": 0.2836,
+      "after": "ご視聴ありがとうございました",
+      "afterSeconds": 0.153
+    }
+  ]
+}

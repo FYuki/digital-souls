@@ -5,12 +5,12 @@ const livekitMocks = vi.hoisted(() => {
     readonly handlers = new Map<string, Array<(...args: unknown[]) => void>>()
     readonly localParticipant = {
       publishData: vi.fn(async (_payload: Uint8Array, _options: unknown) => undefined),
-      publishTrack: vi.fn(async () => undefined),
-      unpublishTrack: vi.fn(async () => undefined),
+      publishTrack: vi.fn(async () => ({trackSid: 'TR_microphone'})),
+      unpublishTrack: vi.fn(async () => ({trackSid: 'TR_microphone'})),
       getTrackPublication: vi.fn(
         (_source: unknown): { track?: unknown } | undefined => undefined,
       ),
-      setMicrophoneEnabled: vi.fn(async () => undefined),
+      setMicrophoneEnabled: vi.fn(async () => ({trackSid: 'TR_microphone'})),
     }
 
     on(event: string, callback: (...args: unknown[]) => void): this {
@@ -156,7 +156,7 @@ const authoritativeState = (
   generation: number,
   terminalOutcomes: ReadonlyArray<Record<string, unknown>> = [],
 ): Uint8Array => new TextEncoder().encode(JSON.stringify({
-  protocol_version: '1.0',
+  protocol_version: '2.0',
   type: 'authoritative_state',
   generation,
   session_phase: 'available',
@@ -170,7 +170,7 @@ const latestRoom = (): InstanceType<typeof livekitMocks.FakeRoom> => {
 }
 
 const emitPrivateFrame = (room: InstanceType<typeof livekitMocks.FakeRoom>, payload: Uint8Array) => {
-  room.emit('dataReceived', payload, undefined, undefined, 'digital-souls.livekit-transport.v1')
+  room.emit('dataReceived', payload, undefined, undefined, 'digital-souls.livekit-transport.v2')
 }
 
 const recoveryRequests = (room: InstanceType<typeof livekitMocks.FakeRoom>) =>
@@ -183,7 +183,7 @@ const acknowledgeRecovery = async (room: InstanceType<typeof livekitMocks.FakeRo
   const request = recoveryRequests(room).at(-1)
   expect(request).toMatchObject({generation})
   room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({...request, type: 'control_probe_ack'})),
-    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v1')
+    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v2')
 }
 
 const emitCoreEvent = (
@@ -242,15 +242,15 @@ describe('LiveKit Room generation synchronization', () => {
     const room = latestRoom(), eventId = crypto.randomUUID()
     let completed = false
     const operation = client.publishControlEvent({
-      type: 'observation', protocol_version: '1.1', event_id: eventId, session_id: sessionId,
+      type: 'observation', protocol_version: '2.0', event_id: eventId, session_id: sessionId,
       measurement: 'session_summary', timestamp: 100, clock_domain: 'client_monotonic', unit: 'millisecond',
       session_summary: { sequence: 1, microphone_activation_attempts: 1, mute_attempts: 0,
         retry_attempts: 0, operation_tracking_started: true, end_requested: true },
     }).then(() => { completed = true })
     await Promise.resolve()
     const ack = (generation: number) => room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({
-      type: 'ack', protocol_version: '1.0', event_id: eventId, generation,
-    })), undefined, undefined, 'digital-souls.livekit-transport.v1')
+      type: 'ack', protocol_version: '2.0', event_id: eventId, generation,
+    })), undefined, undefined, 'digital-souls.livekit-transport.v2')
     ack(1)
     await Promise.resolve()
     expect(completed).toBe(false)
@@ -271,7 +271,7 @@ describe('LiveKit Room generation synchronization', () => {
     try {
       await client.connect('ws://test', 'token', sessionId)
       const room = latestRoom()
-      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_started', session_id: sessionId,
+      emitCoreEvent(room, {protocol_version: '2.0', type: 'response_started', session_id: sessionId,
         response_id: responseId, event_id: crypto.randomUUID(), source_utterance_ids: [crypto.randomUUID()],
         speaker: {participant_id: crypto.randomUUID(), role: 'character', character_id: 'miori'}, monotonic_timestamp_ms: 1})
       room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
@@ -279,10 +279,10 @@ describe('LiveKit Room generation synchronization', () => {
       await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
       const context = audioContexts[0], audit = context.worklets[1]
       expect(context.gains[0].connect).toHaveBeenCalledWith(audit)
-      const request = {protocol_version: '1.0', type: 'output_stop_request', session_id: sessionId,
+      const request = {protocol_version: '2.0', type: 'output_stop_request', session_id: sessionId,
         response_id: responseId, request_id: crypto.randomUUID(), generation: 0}
       const send = () => room.emit('dataReceived', new TextEncoder().encode(JSON.stringify(request)),
-        {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v1')
+        {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v2')
       const acks = () => room.localParticipant.publishData.mock.calls.map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
         .filter(frame => frame.type === 'output_stop_confirmed')
       send(); send()
@@ -298,7 +298,7 @@ describe('LiveKit Room generation synchronization', () => {
       await vi.waitFor(() => expect(acks()).toHaveLength(2))
       expect(acks()[0]).toMatchObject({...request, type: 'output_stop_confirmed', last_played_audio_sequence: 0,
         output_confirmation: 'output_clock_passed'})
-      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_delta', session_id: sessionId,
+      emitCoreEvent(room, {protocol_version: '2.0', type: 'response_delta', session_id: sessionId,
         response_id: responseId, event_id: crypto.randomUUID(), text_sequence: 1,
         text: '後', text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 2})
       expect(raw.mock.calls.some(([row]) => row.type === 'response_delta')).toBe(true)
@@ -316,10 +316,10 @@ describe('LiveKit Room generation synchronization', () => {
     room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
       {trackSid: 'TR_pending', trackName: `ds-response-v1:${responseId}`})
     await vi.waitFor(() => expect(audioContexts).toHaveLength(1))
-    room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+    room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '2.0',
       type: 'output_stop_request', session_id: sessionId, response_id: responseId,
       request_id: crypto.randomUUID(), generation: 0})), {identity: `character-miori-${sessionId}`, sid: 'PA_character'},
-      undefined, 'digital-souls.livekit-transport.v1')
+      undefined, 'digital-souls.livekit-transport.v2')
     await vi.waitFor(() => expect(room.localParticipant.publishData.mock.calls
       .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
       .filter(frame => frame.type === 'output_stop_confirmed')).toMatchObject([{output_confirmation: 'never_connected'}]))
@@ -334,11 +334,11 @@ describe('LiveKit Room generation synchronization', () => {
     const client = new LiveKitRoomClient(() => undefined)
     await client.connect('ws://test', 'token', sessionId)
     const room = latestRoom(), stop = vi.spyOn(client, 'stopPlayback')
-    room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+    room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '2.0',
       type: 'output_stop_request', session_id: mismatch === 'session' ? crypto.randomUUID() : sessionId,
       response_id: crypto.randomUUID(), request_id: crypto.randomUUID(), generation: mismatch === 'generation' ? 1 : 0})),
       {identity: mismatch === 'publisher' ? 'other' : `character-miori-${sessionId}`, sid: 'PA_character'},
-      undefined, 'digital-souls.livekit-transport.v1')
+      undefined, 'digital-souls.livekit-transport.v2')
     await Promise.resolve()
     expect(stop).not.toHaveBeenCalled()
     expect(room.localParticipant.publishData).not.toHaveBeenCalled()
@@ -356,7 +356,7 @@ describe('LiveKit Room generation synchronization', () => {
         {trackSid: 'TR_privacy', trackName: `ds-response-v1:${responseId}`})
       await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
       const renderer = audioContexts[0].worklets[0]
-      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_privacy_skipped',
+      emitCoreEvent(room, {protocol_version: '2.0', type: 'response_privacy_skipped',
         event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
         source_inputs: [{input_id: responseId, source: 'text'}], monotonic_timestamp_ms: 2002})
       expect(renderer.disconnect).toHaveBeenCalledOnce()
@@ -394,7 +394,7 @@ describe('LiveKit Room generation synchronization', () => {
         firstNonzeroFrame: i === 0 ? 48000 : null, lastNonzeroFrame: i === 0 ? 48127 : null,
       }))}} as MessageEvent)
       now = 1010
-      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_cancelled',
+      emitCoreEvent(room, {protocol_version: '2.0', type: 'response_cancelled',
         event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
         reason: 'barge_in', monotonic_timestamp_ms: 2002})
       expect(renderer.disconnect).toHaveBeenCalledOnce()
@@ -440,7 +440,7 @@ describe('LiveKit Room generation synchronization', () => {
       expect(readyFrames()).toEqual([])
     } else {
       await vi.waitFor(() => expect(readyFrames()).toEqual([{
-        protocol_version: '1.0', type: 'response_track_ready', response_id: '50000000-0000-4000-8000-000000000001',
+        protocol_version: '2.0', type: 'response_track_ready', response_id: '50000000-0000-4000-8000-000000000001',
         track_sid: 'TR_ready', generation: 0,
       }]))
     }
@@ -542,7 +542,7 @@ describe('LiveKit Room generation synchronization', () => {
     await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
 
-    await client.publishMicrophone()
+    expect(await client.publishMicrophone()).toBe('TR_microphone')
     await client.muteMicrophone()
 
     expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenNthCalledWith(
@@ -557,7 +557,7 @@ describe('LiveKit Room generation synchronization', () => {
     expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenNthCalledWith(2, false)
   })
 
-  test('VADと共有するmicrophone trackをLiveKitへpublishして明示的に解除する', async () => {
+  test('取得済みmicrophone trackをLiveKitへpublishして明示的に解除する', async () => {
     const client = new LiveKitRoomClient(() => undefined)
     await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
@@ -566,7 +566,7 @@ describe('LiveKit Room generation synchronization', () => {
     const stream = { getAudioTracks: () => [audioTrack] } as unknown as MediaStream
     room.localParticipant.getTrackPublication.mockReturnValue({ track: localTrack })
 
-    await client.publishMicrophone(stream)
+    expect(await client.publishMicrophone(stream)).toBe('TR_microphone')
     await client.muteMicrophone()
 
     expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(audioTrack, {
@@ -587,13 +587,13 @@ describe('LiveKit Room generation synchronization', () => {
     expect(room.localParticipant.publishData).toHaveBeenCalledTimes(1)
     const [payload, options] = room.localParticipant.publishData.mock.calls[0]
     expect(JSON.parse(new TextDecoder().decode(payload as Uint8Array))).toEqual({
-      protocol_version: '1.0',
+      protocol_version: '2.0',
       type: 'state_sync_request',
       generation: 0,
     })
     expect(options).toEqual({
       reliable: true,
-      topic: 'digital-souls.livekit-transport.v1',
+      topic: 'digital-souls.livekit-transport.v2',
     })
   })
 
@@ -731,7 +731,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     emitCoreEvent(room, {
       type: 'response_started',
-      protocol_version: '1.1',
+      protocol_version: '2.0',
       event_id: '10000000-0000-4000-8000-000000000001',
       session_id: '20000000-0000-4000-8000-000000000001',
       response_id: '50000000-0000-4000-8000-000000000002',
@@ -760,7 +760,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     emitCoreEvent(room, {
       type: 'response_audio_segment',
-      protocol_version: '1.1',
+      protocol_version: '2.0',
       event_id: '10000000-0000-4000-8000-000000000002',
       session_id: '20000000-0000-4000-8000-000000000001',
       response_id: '50000000-0000-4000-8000-000000000002',
@@ -992,9 +992,9 @@ const probePublisher = {identity: 'character-miori-' + probeSession, sid: 'PA_ba
 const probeMessages = (room: InstanceType<typeof livekitMocks.FakeRoom>) => room.localParticipant.publishData.mock.calls
   .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
 const finishAudioProbe = (room: InstanceType<typeof livekitMocks.FakeRoom>, nonce: string, extra = {}, publisher = probePublisher) => {
-  room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '1.0', type: 'audio_probe_finished',
+  room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '2.0', type: 'audio_probe_finished',
     generation: 0, probe_id: nonce, track_sid: 'TR_probe', input_sample_count: 9600,
-    captured_sample_count: 10560, padding_sample_count: 960, ...extra})), publisher, undefined, 'digital-souls.livekit-transport.v1')
+    captured_sample_count: 10560, padding_sample_count: 960, ...extra})), publisher, undefined, 'digital-souls.livekit-transport.v2')
 }
 
 test('診断音は全packetの実出力時計を待ち、会話の再生・Core測定を変更しない', async () => {
@@ -1101,7 +1101,7 @@ test.each([false, true])('全PCMの出力時計通過後の旧RTP異常だけが
   const observer = mediaMocks.observers.at(-1)!
   vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: outputComplete ? 1 : .51, performanceTime: outputComplete ? 1000 : 510})
   const privateEvent = (value: Record<string, unknown>) => emitPrivateFrame(room,
-    new TextEncoder().encode(JSON.stringify({protocol_version: '1.0', generation: 0, response_id: responseId, ...value})))
+    new TextEncoder().encode(JSON.stringify({protocol_version: '2.0', generation: 0, response_id: responseId, ...value})))
   try {
     privateEvent({type: 'logical_audio_segment', audio_sequence: 0, pcm_sample_count: 960})
     observer.report({trackReceivedAtMs: 50, firstPacketReceivedAtMs: 100, firstPacketDecodedAtMs: 101, firstPacketDecodedSamples: 960})
@@ -1143,7 +1143,7 @@ test('取消後のRTP観測は旧応答へ一度だけ送信し、非同期完�
     {trackSid:'TR_cancel_network', trackName:`ds-response-v1:${responseId}`})
   await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
   const publish = vi.spyOn(client, 'publishControlEvent')
-  const cancelled = {protocol_version:'1.1', type:'response_cancelled', session_id:sessionId,
+  const cancelled = {protocol_version:'2.0', type:'response_cancelled', session_id:sessionId,
     event_id:'60000000-0000-4000-8000-000000000003', response_id:responseId, reason:'barge_in', monotonic_timestamp_ms:1000}
   try {
     emitCoreEvent(room, cancelled)
@@ -1212,7 +1212,7 @@ test('実roomのprobe応答をnonce・世代へ相関し、通常の状態同期
   const sent = room.localParticipant.publishData.mock.calls[0]
   const frame = JSON.parse(new TextDecoder().decode(sent[0]))
   expect(frame).toMatchObject({type: 'control_probe', generation: 0})
-  expect(sent[1]).toEqual({reliable: true, topic: 'digital-souls.livekit-transport.v1'})
+  expect(sent[1]).toEqual({reliable: true, topic: 'digital-souls.livekit-transport.v2'})
   emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...frame, type: 'control_probe_ack'})))
   expect(await pending).toMatchObject({status: 'received', probeId: frame.probe_id, generation: 0})
   expect(observations.length).toBe(count)
@@ -1287,7 +1287,7 @@ test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再�
   client.setCoreDeliveryObserver(delivery)
   await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
   const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
-  const event = {protocol_version: '1.1', event_id: '10000000-0000-4000-8000-000000000010',
+  const event = {protocol_version: '2.0', event_id: '10000000-0000-4000-8000-000000000010',
     type: 'response_delta', session_id: '20000000-0000-4000-8000-000000000010',
     response_id: '30000000-0000-4000-8000-000000000010', text_sequence: 1, text: 'a',
     text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 1}
@@ -1420,7 +1420,7 @@ test('時計probeと復旧用control probeは別pendingを持ち、切断時に�
     const frames = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
     const request = frames.find(frame => frame.type === 'control_probe' && frame.observe_clock === true)
     expect(frames.filter(frame => frame.type === 'control_probe')).toHaveLength(2)
-    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '2.0',
       type: 'control_probe_ack', probe_id: request.probe_id, generation: request.generation,
       server_received_us: 1000, server_sent_us: 1001})))
     expect(await clock).toMatchObject({status: 'received', serverReceivedAtUs: 1000, serverSentAtUs: 1001})
@@ -1465,8 +1465,8 @@ test('再接続の下り通知やpublish完了では操作可能に戻らず、�
     expect(requests).toHaveLength(3)
     expect(requests.every(row => JSON.stringify(row) === JSON.stringify(requests[0]))).toBe(true)
     const reply = (participant: unknown, probeId = requests[0].probe_id, generation = 1) => room.emit('dataReceived',
-      new TextEncoder().encode(JSON.stringify({protocol_version: '1.0', type: 'control_probe_ack', probe_id: probeId, generation})),
-      participant, undefined, 'digital-souls.livekit-transport.v1')
+      new TextEncoder().encode(JSON.stringify({protocol_version: '2.0', type: 'control_probe_ack', probe_id: probeId, generation})),
+      participant, undefined, 'digital-souls.livekit-transport.v2')
     const publisher = {identity: `character-miori-${sessionId}`, sid: 'PA_character'}
     reply(undefined)
     reply({...publisher, sid: ''})
@@ -1496,7 +1496,7 @@ test('世代変更と次の再接続は前の往復確認を破棄し、遅着�
   const room = latestRoom()
   const reply = (request: Record<string, unknown>) => room.emit('dataReceived',
     new TextEncoder().encode(JSON.stringify({...request, type: 'control_probe_ack'})),
-    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v1')
+    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v2')
   try {
     room.emit('signalReconnecting'); room.emit('reconnected')
     emitPrivateFrame(room, authoritativeState(1))
@@ -1590,7 +1590,7 @@ test('往復確認中にサーバーが再びunavailableになったら状態同
     room.emit('signalReconnecting'); room.emit('reconnected')
     emitPrivateFrame(room, authoritativeState(1))
     await vi.advanceTimersByTimeAsync(0)
-    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '2.0',
       type: 'authoritative_state', generation: 1, session_phase: 'unavailable', terminal_outcomes: []})))
     await acknowledgeRecovery(room, 1)
     expect(client.isAudioProbeReady()).toBe(false)
