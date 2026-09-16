@@ -432,8 +432,8 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 | 保存・処理対象 | 責務 |
 |---|---|
 | Event本文・Task状態・結果／成果物 | 提供元のdomain正本。Coreへ無条件複製しない |
-| 通知metadata・出典・未読状態 | #183。固定文言と許可metadataを用い、LLMを直接呼ばない |
-| 会話への関連通知・依頼相関・報告状態 | #364。元の依頼と同じ担当の届け先を使い、表示中の別会話へ混ぜない |
+| 通知metadata・出典・未読状態 | #183。集約せず個別保存し、固定文言と許可metadataを用いる。LLMを直接呼ばない |
+| 会話への関連通知・依頼相関・報告状態 | #364。元の依頼と同じ担当の届け先を使い、表示中の別会話へ混ぜない。取得に必要な依頼参照を通知削除へ連動させない |
 | キャラクターの報告文 | 既存の会話privacy・記憶policyを通した会話メッセージ |
 
 非同期処理を追加した時点の担当キャラクター・接続・対象を保持し、取得時には現在権限・binding・
@@ -455,7 +455,7 @@ Event取得・復旧の詳細は[Event復旧ADR](decisions/addon-event-recovery-
 consumerごとの欠落復旧、画面オフラインと購読解除の区別は、Epic #187のEventRuntime / EventStoreに実装した。
 既存ToolRuntimeの共有Gateとライフサイクルへ接続し、MCP標準Tool/Resourceを使う。
 設定・consumer API・公開結果契約・検証入口は[Event runtime](addon-event-runtime.md)を参照する。
-通知履歴の保持とTeamsを参考にするUI方針は通知／会話分離ADRの2026-09-16追記で定め、後続consumerで実装する。
+通知の個別保存・保持・設定・削除後の再取得は通知／会話分離ADRの2026-09-16追記と[通知要件](epic-183-notification-requirements.md)で定め、後続consumerで実装する。
 
 ## Character Life Runtime
 
