@@ -12,6 +12,7 @@ export type Source = {
 }
 export type Detail = { state: string; text?: string; omitted?: boolean; kind?: 'monitor' | 'result' }
 export type Listing = {
+  notification_only?: boolean
   items: Notification[]; sources: Source[]; total: number; unread_count: number; next_offset: number | null
   retention: { days: number; max_per_user: number; history_incomplete: boolean; evicted_count: number }
 }

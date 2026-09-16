@@ -12,8 +12,9 @@ Epic #183 / #158 / #363 / #191 は、共有のEventRuntimeを購読し、会話�
 - `NotificationCenter`：時系列一覧、通知元・担当・未読の絞り込み、設定、詳細、既読・未読・非表示。
 
 保存・取得ではLLMのToolDecision、会話作成、履歴・RAG・TTSを呼ばない。
-通常アプリの起動時に必須InferenceTargetを確認する既存契約は変更しない。
-通知モジュールと共有ToolRuntimeはInferenceRouter未構成でも検証・利用できる。
+DS_NOTIFICATION_CONFIGが構成済みで、InferenceTargetが未設定、または必須推論先の起動probeが接続不可・timeoutとなる場合、同じ本番Backendが通知限定で起動する。通知・連携管理・キャラクター一覧を利用でき、会話・音声・記憶管理など未構成のAPIは503、WebSocketは1013を返す。通知画面にも停止中の機能を表示する。
+/health/readyはreadyとmode=notifications_onlyを返し、/health/inferenceは503のままとする。会話再開には設定・接続を復旧してBackendを再起動する。通常起動後のLLM停止も通知workerには影響しない。
+部分的・不正なInferenceTarget設定、認証・モデル指定の誤り、通知設定・データ領域・復元状態の異常は起動失敗として扱い、通知限定起動で隠さない。通知設定のない従来の起動契約は変更しない。通知限定起動は会話・記憶DBのschema更新や音声サービス起動を行わない。
 その場合の会話Tool routing呼出しは明示的に拒否する。
 
 ## 登録設定

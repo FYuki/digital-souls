@@ -107,7 +107,7 @@ def main():
         if source_digest != source_hash():
             raise RuntimeError("source changed during browser conformance")
         evidence.update(source_sha256=source_digest, working_tree=True)
-        evidence.update(scope="browser-http-gate-independent-mcp-fixture", llm_configured=False,
+        evidence.update(scope="production-app-browser-http-gate-independent-mcp-fixture", llm_configured=False,
                         production_external_service=False, commit=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip())
         (output / "browser-conformance.json").write_text(json.dumps(evidence, ensure_ascii=False, indent=2) + "\n")
         print(json.dumps(evidence, ensure_ascii=False))

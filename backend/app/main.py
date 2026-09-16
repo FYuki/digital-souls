@@ -52,7 +52,9 @@ from app.inference import (
     default_provider_registry,
     resolve_inference_settings,
 )
-from app.inference.config import reject_legacy_inference_environment
+from app.inference.config import INFERENCE_TARGET_PREFIX, reject_legacy_inference_environment
+from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.notifications.startup import NotificationAvailabilityMiddleware, notification_lifespan
 from app.inference.runtime import (
     create_inference_runtime,
     target_model_id,
@@ -389,8 +391,30 @@ async def _stream_core_reply(
     chat_service.record_successful_prompt_references(prompt)
 
 
+class _NotificationStartupFallback(Exception):
+    """必須推論先の接続失敗だけを通知限定起動へ伝える。"""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    reject_legacy_inference_environment(os.environ)
+    app.state.notification_only = False
+    configured = bool(os.environ.get("DS_NOTIFICATION_CONFIG"))
+    if configured and not any(key.startswith(INFERENCE_TARGET_PREFIX) for key in os.environ):
+        async with notification_lifespan(app):
+            yield
+        return
+    # yield後の例外で二度起動しないよう、fallbackは起動probe専用の例外に限定する。
+    try:
+        async with _conversation_lifespan(app):
+            yield
+    except _NotificationStartupFallback:
+        async with notification_lifespan(app):
+            yield
+
+
+@asynccontextmanager
+async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.livekit_transport.production import (
         ProductionConversationCoreSessionFactory,
         configure_production_resources,
@@ -423,8 +447,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     try:
         inference_runtime.probe_startup()
-    except Exception:
+    except Exception as error:
         inference_runtime.close()
+        if (
+            os.environ.get("DS_NOTIFICATION_CONFIG")
+            and isinstance(error, InferenceError)
+            and error.category in {InferenceErrorCategory.UNAVAILABLE, InferenceErrorCategory.TIMEOUT}
+        ):
+            raise _NotificationStartupFallback() from None
         raise
     repository_root = Path(__file__).resolve().parents[2]
     runtime_paths = resolve_runtime_paths(os.environ, repository_root)
@@ -1062,6 +1092,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 del app.state.character_life_runtime
             if tool_runtime is not None:
                 await run_cleanup(tool_runtime.close())
+            for state_name in ("addon_manager", "event_source", "notifications"):
+                if hasattr(app.state, state_name):
+                    delattr(app.state, state_name)
             if hasattr(app.state, "tool_service"):
                 del app.state.tool_service
             if hasattr(app.state, "action_policy"):
@@ -1166,6 +1199,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(NotificationAvailabilityMiddleware)
 app.include_router(tool_use_router)
 app.include_router(addon_actions_router)
 app.include_router(character_life_router)
@@ -1191,6 +1225,8 @@ def health_check() -> dict[str, str]:
 
 @app.get("/health/ready")
 def inference_readiness() -> JSONResponse:
+    if getattr(app.state, "notification_only", False):
+        return JSONResponse({"status": "ready", "mode": "notifications_only"})
     health = getattr(app.state, "inference_health", None)
     ready = health is not None and health.is_ready()
     return JSONResponse(

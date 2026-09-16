@@ -37,6 +37,7 @@
 <div class="notifications">
   <header><h1 bind:this={heading} tabindex="-1">通知 <span class="badge">{$controller.unread_count}件未読</span></h1>
     <button on:click={onClose}>チャットへ戻る</button></header>
+  {#if $controller.notification_only}<p class="notice" role="status">会話機能は現在利用できません。通知と連携管理は引き続き利用できます。</p>{/if}
   <p class="description">保存から{$controller.retention.days}日間、最大{$controller.retention.max_per_user.toLocaleString()}件を表示します。</p>
   <div class="toolbar">
     <button on:click={() => { showingSettings = !showingSettings }}>通知設定</button>

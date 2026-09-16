@@ -59,8 +59,10 @@ class PreferencePatch(BaseModel):
 async def listing(request: Request, source_id: str | None = None, character_id: str | None = None,
                   unread: bool = False, hidden: bool = False, offset: int = Query(0, ge=0, le=100000),
                   limit: int = Query(50, ge=1, le=100)) -> Json:
-    return await runtime(request).listing(LOCAL_USER_ID, source_id=source_id, character_id=character_id,
-                                         unread=unread, hidden=hidden, offset=offset, limit=limit)
+    result = await runtime(request).listing(LOCAL_USER_ID, source_id=source_id, character_id=character_id,
+                                           unread=unread, hidden=hidden, offset=offset, limit=limit)
+    result["notification_only"] = bool(getattr(request.app.state, "notification_only", False))
+    return result
 
 
 @router.patch("/preferences/{source_id}/{event_type}", status_code=204)

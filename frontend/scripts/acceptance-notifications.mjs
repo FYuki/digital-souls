@@ -19,9 +19,13 @@ async function received(position) {
 }
 async function open() {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  const ready = await page.request.get(url + '/api/health/ready')
+  expect(await ready.json()).toEqual({ status: 'ready', mode: 'notifications_only' })
+  expect((await page.request.get(url + '/api/health/inference')).status()).toBe(503)
   await page.goto(url)
   await page.getByRole('button', { name: /通知/ }).first().click()
   await page.getByRole('heading', { name: /通知/ }).first().waitFor()
+  await expect(page.getByText(/会話機能は現在利用できません/)).toBeVisible()
   return page
 }
 try {
