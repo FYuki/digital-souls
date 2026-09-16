@@ -34,3 +34,13 @@ Whisperの無音確率は約0.86〜0.92だったが、文字列の確率が高�
 
 結果: [合成音声の比較](../artifacts/stt-silence-guard-20260916.json)。
 これはSTTの回帰検証であり、利用者の実マイクでの中断解消や全音声品質ゲートの合格とは区別する。
+
+
+## devへの反映
+
+`dev-stt-validation` Profileを追加し、Whisperだけを専用`:50025`へ切り替えた。
+通常dev・dogfoodへこの接続先が混入することはPython validatorとJSON Schemaの両方で拒否する。
+Profile・共有サービス境界のmodule testは236件成功、型検査は337ファイル成功。
+実際のdev Backend内のSTT clientから無音を送信して空の結果を確認し、音声開始APIも成功した。
+共有Whisperのimage・起動時刻は切替前後で不変。検証終了後の比較用containerは停止済み。
+GHCR公開および共有Whisperへの配備は実施しない。実マイクでの受入確認を優先する。

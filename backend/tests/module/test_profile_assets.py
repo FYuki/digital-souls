@@ -600,3 +600,22 @@ def test_pcm_proxy_endpoint_is_scoped_in_both_validators(profile_validator, prof
     assert list(profile_validator.iter_errors(raw))
     with pytest.raises(profile_module.ProfileError, match='fixed local service'):
         profile_module.validate_profile(raw, name)
+
+
+def test_dev_stt_validation_changes_only_whisper_endpoint(profile_validator, profile_module):
+    standard = profile_module.load_profile('dev')
+    candidate = profile_module.load_profile('dev-stt-validation')
+    profile_validator.validate(candidate)
+    assert candidate['dependencies']['whisper']['baseUrl'] == 'http://127.0.0.1:50025'
+    assert {k: v for k, v in candidate['dependencies'].items() if k != 'whisper'} == {
+        k: v for k, v in standard['dependencies'].items() if k != 'whisper'}
+
+
+@pytest.mark.parametrize('name,port', [('dev', 50025), ('dogfood', 50025),
+    ('integration-voice', 50025), ('dev-stt-validation', 50022), ('dev-stt-validation', 50023)])
+def test_dev_stt_endpoint_does_not_cross_profiles(profile_validator, profile_module, name, port):
+    raw = _read_json(ENVIRONMENTS_DIR / 'profiles' / f'{name}.json')
+    raw['dependencies']['whisper']['baseUrl'] = f'http://127.0.0.1:{port}'
+    assert list(profile_validator.iter_errors(raw))
+    with pytest.raises(profile_module.ProfileError, match='fixed local service'):
+        profile_module.validate_profile(raw, name)
