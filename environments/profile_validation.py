@@ -146,6 +146,9 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_
         if name == "whisper" and profile_name == "integration-voice-pcm":
             # 実入力の観測用中継。通常ProfileのWhisper接続先は拡張しない。
             fixed_base_urls = {"http://127.0.0.1:50023", "http://127.0.0.1:50023/"}
+        if name == "whisper" and profile_name == "dev-stt-validation":
+            # devの修正版だけに接続し、共有Whisperの配備・設定は変更しない。
+            fixed_base_urls = {"http://127.0.0.1:50025", "http://127.0.0.1:50025/"}
         if dependency["baseUrl"] not in fixed_base_urls:
             raise ProfileError(
                 f"{path}.baseUrl must identify the fixed local service"

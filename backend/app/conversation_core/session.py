@@ -1317,6 +1317,14 @@ class ConversationCoreSession:
             transition_after = self._monotonic_ns() if state is ResponseState.CANCELLED else None
             if self._active_response_id == response_id:
                 self._active_response_id = None
+            # devの中断診断用。会話本文・音声・Providerの生応答は記録しない。
+            if state in {ResponseState.CANCELLED, ResponseState.FAILED}:
+                logger.warning(
+                    "Voice response terminated: state=%s reason=%s response_id=%s "
+                    "audio_segments=%s last_played_audio_sequence=%s",
+                    state.value, reason, response_id, len(response.audio_segments),
+                    response.last_played_audio_sequence,
+                )
             outcome = TerminalOutcome(
                 response_id=response.response_id,
                 generation=response.generation,

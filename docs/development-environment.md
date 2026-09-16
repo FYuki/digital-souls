@@ -149,6 +149,7 @@ Profile は次の5種類である。各依存の完全な接続先と readiness 
 | Profile | 用途 | 有効な依存 |
 |---|---|---|
 | `dev` | 通常のローカル開発 | Frontend、Backend、external Ollama／VOICEVOX／LiveKit、Whisper |
+| `dev-stt-validation` | 共有Whisperを変更しないSTT修正検証 | devと同じ構成、Whisperのみdev専用`:50025` |
 | `test-mocked` | ブラウザ内 mock を使う独立 E2E | Frontend、browser mock Backend |
 | `integration-text` | 実テキストチャット | Frontend、Backend、external Ollama |
 | `integration-voice` | 実音声チャット | Frontend、Backend、external Ollama／VOICEVOX／LiveKit、Whisper |
@@ -234,3 +235,29 @@ RAGの有効・無効はProfileのChroma modeが正本であり、`RAG_ENABLED=f
 音声接続の自動再試行中は復旧表示を維持する。SDKの最終切断やアプリ側の音声処理失敗で
 再試行が終了した場合は停止状態と「音声会話を再開」を表示し、実際には再接続していない
 状態で復旧表示を続けない。履歴と未確認送信は保持する。
+
+
+## Whisper修正のdev専用検証
+
+`dev-stt-validation`は通常devと同じ画面・Backend・データ識別を使い、
+Whisperだけを`http://127.0.0.1:50025`へ固定する。共有`:50022`は変更しない。
+専用Whisperは外部サービスとして事前に起動し、通常のEnvironment CLIでは停止しない。
+`DS_ENVIRONMENT_ID=dev`と既存の`DS_DATA_DIR`・run reportを明示し、旧devを停止してから
+`DS_PROFILE=dev-stt-validation scripts/start-all.sh`で起動する。
+
+専用Whisperはローカルで作成した修正版imageを使用する。例:
+
+```bash
+docker run -d --name digital-souls-dev-whisper --restart unless-stopped \
+  --network host --gpus all \
+  --env WHISPER_MODEL_PATH=/opt/models/whisper-medium --env WHISPER_MODEL=medium \
+  --label digital-souls.environment=dev \
+  --label digital-souls.purpose=dev-stt-validation \
+  "$DS_DEV_WHISPER_IMAGE" \
+  --host 127.0.0.1 --port 50025 --workers 1 --no-access-log
+```
+
+`DS_DEV_WHISPER_IMAGE`は事前にローカルbuildしたimage名とする。検証用imageのGHCR公開は不要。
+共有Whisperと別モデルinstanceを持つためGPUの空き容量を確認する。
+終了時はdevを停止してから、ラベルで所有を確認した`digital-souls-dev-whisper`だけを停止する。
+共有Whisperやdogfoodのアプリケーションは停止・配備しない。
