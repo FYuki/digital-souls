@@ -8,8 +8,11 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
+from report_vad_backend import MATCH_METHOD, measure_backend
+
 COHORTS = {"backchannel", "take_turn", "pause"}
 MISSING = {
+    "backend_media_alignment_unavailable",
     "fixture_boundary_unavailable", "detector_events_unavailable",
     "detector_event_overflow", "speech_not_confirmed", "speech_end_unavailable",
     "detector_event_order_invalid",
@@ -100,7 +103,8 @@ def measure(trial: dict[str, Any], fixture: dict[str, Any]) -> dict[str, Any]:
             "split": len(confirmed) > fixture["expected_utterances"]}
 
 
-def summarize(manifest_bytes: bytes, fixture_bytes: bytes) -> dict[str, Any]:
+def summarize(manifest_bytes: bytes, fixture_bytes: bytes, trace_bytes: bytes | None = None,
+              observer_bytes: bytes | None = None) -> dict[str, Any]:
     manifest, fixtures = json.loads(manifest_bytes), json.loads(fixture_bytes)
     cohort, count, trials = manifest.get("cohort"), manifest.get("expected_measured"), manifest.get("trials")
     if (manifest.get("measurement_scope") not in {"labeled_livekit_interruption_diagnostic", "labeled_livekit_vad_diagnostic"}
@@ -120,11 +124,26 @@ def summarize(manifest_bytes: bytes, fixture_bytes: bytes) -> dict[str, Any]:
         selected = available[:count]
     if len(selected) != count:
         raise ValueError("fixture cohort incomplete")
+    authority = manifest.get("input_authority", "frontend")
+    if authority not in {"frontend", "backend"}:
+        raise ValueError("unsupported VAD input authority")
+    events = None if trace_bytes is None else [json.loads(line) for line in trace_bytes.splitlines()]
+    observed = None if observer_bytes is None else [json.loads(line) for line in observer_bytes.splitlines()]
+    if authority == "backend":
+        if events is not None and (any(not isinstance(e, dict) or e.get("measurement_kind") != "controlled_baseline" for e in events)
+                                   or len({e.get("character_id") for e in events}) > 1):
+            raise ValueError("incompatible backend measurement trace")
+        if observed is not None:
+            ordinals = [r.get("request_ordinal") for r in observed if isinstance(r, dict)]
+            if (len(ordinals) != len(observed) or any(type(n) is not int or n < 1 for n in ordinals)
+                    or len(set(ordinals)) != len(ordinals)):
+                raise ValueError("invalid PCM observer request ordinals")
+    split_observations = []
     sessions = set()
     missing: Counter[str] = Counter()
     measured = []
     cleanup = 0
-    for trial, fixture in zip(trials, selected, strict=True):
+    for ordinal, (trial, fixture) in enumerate(zip(trials, selected, strict=True), 1):
         if trial.get("cohort") != cohort or trial.get("fixture_sha256") != fixture["audio_sha256"]:
             raise ValueError("fixture correlation mismatch")
         session = trial.get("session_id")
@@ -147,22 +166,38 @@ def summarize(manifest_bytes: bytes, fixture_bytes: bytes) -> dict[str, Any]:
             if (type(pause) is not int or not 0 < pause <= 28800
                     or intervals[1]["start_sample"] - intervals[0]["end_sample"] != pause):
                 raise ValueError("pause outside acceptance scope")
-        row = measure(trial, fixture)
+        row = (measure_backend(trial, fixture, ordinal, events, observed) if authority == "backend"
+               else measure(trial, fixture))
+        if authority == "backend" and type(row.get("split")) is bool:
+            split_observations.append(row["split"])
         if "missing" in row:
             missing[row["missing"]] += 1
         else:
             measured.append(row)
     counts = {key: sum(row[key] for row in measured)
               for key in ("leading_error", "early_end_error", "boundary_uncertain", "split")}
+    if authority == "backend":
+        # source照合に失敗した分割発話も、確定した誤分割件数から除外しない。
+        counts["split"] = sum(split_observations)
     coverage = len(measured) == count and cleanup == count
     gates = {"independent_100": count == 100, "coverage_complete": coverage,
              "leading_error_at_most_one_percent": counts["leading_error"] * 100 <= count,
              "early_end_error_at_most_one_percent": counts["early_end_error"] * 100 <= count,
-             "split_at_most_one_percent": counts["split"] * 100 <= count}
+             "split_at_most_one_percent": counts["split"] * 100 <= count
+             and (authority != "backend" or len(split_observations) == count)}
     return {"schema_version": "1.0", "measurement_scope": "real_browser_vad_detector_boundaries",
+            **({"input_authority": authority} if "input_authority" in manifest else {}),
             "cohort": cohort, "raw_sha256": sha256(manifest_bytes).hexdigest(),
             "fixture_manifest_sha256": sha256(fixture_bytes).hexdigest(),
-            "clock_domain": "browser_monotonic", "maximum_fixture_uncertainty_ms": 20,
+            "clock_domain": "vad_media_samples" if authority == "backend" else "browser_monotonic",
+            "maximum_fixture_uncertainty_ms": 20,
+            **({
+                "backend_alignment_method": MATCH_METHOD,
+                "trace_sha256": sha256(trace_bytes).hexdigest() if trace_bytes is not None else None,
+                "pcm_observer_sha256": sha256(observer_bytes).hexdigest() if observer_bytes is not None else None,
+                "split_observed_trials": len(split_observations),
+                "split_unknown_trials": count - len(split_observations),
+            } if authority == "backend" else {}),
             "expected_trials": count, "measured_trials": len(measured), "session_cleanup_confirmed": cleanup,
             "missing": dict(sorted(missing.items())), "counts": counts,
             "metrics": {key: distribution([row[key] for row in measured]) for key in (
@@ -185,9 +220,15 @@ def main(argv: list[str] | None = None) -> int:
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--schema", type=Path, default=Path(__file__).resolve().parents[2]
                         / "docs/schemas/voice-quality-vad-report-v1.schema.json")
+    parser.add_argument("--trace", type=Path, help="BE境界とSTT captureの既存controlled trace")
+    parser.add_argument("--pcm-observer", type=Path, help="既存Whisper入力観測のJSONL")
     args = parser.parse_args(argv)
     try:
-        report = summarize(args.manifest.read_bytes(), args.fixtures.read_bytes())
+        report = summarize(
+            args.manifest.read_bytes(), args.fixtures.read_bytes(),
+            args.trace.read_bytes() if args.trace is not None else None,
+            args.pcm_observer.read_bytes() if args.pcm_observer is not None else None,
+        )
         schema = json.loads(args.schema.read_text())
         Draft202012Validator.check_schema(schema)
         Draft202012Validator(schema).validate(report)

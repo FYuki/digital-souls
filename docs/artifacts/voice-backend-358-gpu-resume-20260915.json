@@ -1,0 +1,125 @@
+{
+  "scope": "gpu_measurement_resume_blocked_before_full_cohorts",
+  "recorded_date": "2026-09-15",
+  "after_revision": "6adb301e7c74707ff3a4c18f677df6c627aa8083",
+  "runs": [
+    {
+      "series": "01",
+      "application_baseline_revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+      "measurement_revision": "07269e56f8c7a1c519f5800a80332985c11c410a",
+      "expected_warmup": 1,
+      "expected_measured": 3,
+      "recorded_trials": 1,
+      "recorded_phases": [
+        "warmup"
+      ],
+      "successful_cycles": 0,
+      "failed_cycles": 1,
+      "failure_reasons": [
+        "voice_cycle_incomplete"
+      ],
+      "token_estimate_total_ms": [
+        30031.99637704529
+      ],
+      "stt_http_200": 2,
+      "gpu_observation_count": 14,
+      "host_gpu_peak_used_bytes": 2323644416,
+      "application_ollama_port": 11434,
+      "observer_ollama_port": 11434,
+      "observer_matches_application": true,
+      "pilot_exit": 1,
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:74a55ed8fd4ae69825d8e7d857cfcdbbcebe4903ddff908f48b189f398f0001e",
+          "image_tag": "digital-souls-voice-quality/backend:07269e56f8c7a1c519f5800a80332985c11c410a"
+        },
+        "frontend": {
+          "image_id": "sha256:57be04d018a8491f6a0068e418435de37368d0585881894bf066046485313745",
+          "image_tag": "digital-souls-voice-quality/frontend:07269e56f8c7a1c519f5800a80332985c11c410a"
+        }
+      },
+      "evidence_sha256": {
+        "trial-manifest.json": "218e84e03d6ab45fb4aee981617146e42613f089edea5654f8a3e75b5c02bfe3",
+        "inference-runtime.jsonl": "390c2e44cbe1bb5cdc35f13db1ee40d4dbdfb64ef8535795f77ce347c93b83cd",
+        "whisper-input-pcm.jsonl": "0f0bb4409f6f17f8faada424124b277a61919248f31db8922f1157d5c5ae4dd2",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "e4827f1c7078541da71bc768fc523892b9c564250abe3113ed092bd27307cbdd",
+        "runtime-data/runtime/standalone/resolved-profile.json": "ee3c9739cb3325db9644a21bda5661c9d475c62f0b5a3557b1dde52430042bc6",
+        "runtime-data/runtime/standalone/environment-run.json": "747ee205f7c30ad41c346b53abf923fadd78d178d47f0a5d8c77af0d9e20fcf1",
+        "playwright-results.json": "ec1de5c88cbb22ea3688bc91c419583b06e4e6ad616307e52c1cfbd14e627268",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+      },
+      "comparison_eligible": false
+    },
+    {
+      "series": "02",
+      "application_baseline_revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+      "measurement_revision": "07269e56f8c7a1c519f5800a80332985c11c410a",
+      "expected_warmup": 1,
+      "expected_measured": 3,
+      "recorded_trials": 1,
+      "recorded_phases": [
+        "warmup"
+      ],
+      "successful_cycles": 0,
+      "failed_cycles": 1,
+      "failure_reasons": [
+        "voice_cycle_incomplete"
+      ],
+      "token_estimate_total_ms": [
+        30027.98722399166
+      ],
+      "stt_http_200": 2,
+      "gpu_observation_count": 14,
+      "host_gpu_peak_used_bytes": 7175405568,
+      "application_ollama_port": 11434,
+      "observer_ollama_port": 11439,
+      "observer_matches_application": false,
+      "pilot_exit": 1,
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:a462425e4d28588dba835a4c8cf38ad18bfde054cf27ed5ab9e651d8ffc4a92c",
+          "image_tag": "digital-souls-voice-quality/backend:07269e56f8c7a1c519f5800a80332985c11c410a"
+        },
+        "frontend": {
+          "image_id": "sha256:fa17550a2cb1271922ca14111b134c7ffb51291c40d162c505863ac6613bff3c",
+          "image_tag": "digital-souls-voice-quality/frontend:07269e56f8c7a1c519f5800a80332985c11c410a"
+        }
+      },
+      "evidence_sha256": {
+        "trial-manifest.json": "d0a037151eb44b5d49ecb4f95c791ec617aa9899db89ad5b12fed720f4128f4b",
+        "inference-runtime.jsonl": "95c2311fd182ad0d40db8728422dba52abe945123f397650d7d1f1e832bedf6d",
+        "whisper-input-pcm.jsonl": "13bffe8bf514ff22eece4088b4843cfa1dd069ff93dc01144ea47f2aa3dbfdbb",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "af1128bfbf5524827a64b21cf47c302e52fa69ca769ab4da698e972cea0412e8",
+        "runtime-data/runtime/standalone/resolved-profile.json": "d10378d00362cfb096a1ef7e05bd6864491f75e89c28dc4ffe56261d1d5f9ac7",
+        "runtime-data/runtime/standalone/environment-run.json": "8f3d8d59ec55d515267bef6bea029073ccd965d790ad97a5ae88e48c74ef1421",
+        "playwright-results.json": "41ca71d31ea5c5a273265ae79ccc7518af2a613dd30dcd3d0c399a28ee56a17d",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+      },
+      "comparison_eligible": false
+    }
+  ],
+  "shared_ollama_direct_probe": {
+    "error_type": "TimeoutError",
+    "elapsed_seconds": 60.07200337998802
+  },
+  "dedicated_ollama_direct_probe": {
+    "http_status": 200,
+    "done": true,
+    "eval_count": 1,
+    "load_duration_ns": 25793857177,
+    "elapsed_seconds": 46.324815903033596
+  },
+  "dedicated_model_digests_match": true,
+  "dedicated_model_cache_read_only": true,
+  "after_application_trials_started": false,
+  "full_cohorts_started": false,
+  "acceptance_passed": false,
+  "dedicated_services_stopped": true,
+  "shared_services_modified": false,
+  "limitations": [
+    "2回目はProfile固定値が環境変数を上書きし、アプリとOllama observerの接続先が不一致。専用Ollamaでの会話試験と扱わない",
+    "固定音声STTと直接の短い推論の成功は会話往復の成功を示さない",
+    "共有Ollamaの直接推論も60秒timeout。再起動等の共有サービス操作は未実施",
+    "過去の100試行を置換しない。新たな前後比較は未完了"
+  ]
+}

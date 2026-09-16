@@ -30,25 +30,25 @@ def _validator() -> Draft202012Validator:
     "frame",
     [
         {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "ack",
             "event_id": "10000000-0000-4000-8000-000000000010",
             "generation": 0,
         },
         {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "state_sync_request",
             "generation": 1,
         },
         {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "authoritative_state",
             "generation": 1,
             "session_phase": "available",
             "terminal_outcomes": [],
         },
         {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "authoritative_state",
             "generation": 1,
             "session_phase": "available",
@@ -62,7 +62,7 @@ def _validator() -> Draft202012Validator:
             ],
         },
         {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "logical_audio_segment",
             "response_id": "30000000-0000-4000-8000-000000000010",
             "audio_sequence": 0,
@@ -70,7 +70,7 @@ def _validator() -> Draft202012Validator:
             "pcm_sample_count": 480,
         },
         {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "microphone_observation",
             "generation": 1,
             "frame_count": 1,
@@ -89,12 +89,12 @@ def test_private_schema_accepts_each_required_transport_frame(
 def test_private_schema_rejects_unknown_frames_and_audio_bytes() -> None:
     validator = _validator()
     unknown = {
-        "protocol_version": "1.0",
+        "protocol_version": "2.0",
         "type": "livekit_rpc",
         "generation": 0,
     }
     audio_bytes = {
-        "protocol_version": "1.0",
+        "protocol_version": "2.0",
         "type": "logical_audio_segment",
         "response_id": "30000000-0000-4000-8000-000000000010",
         "audio_sequence": 0,
@@ -142,7 +142,7 @@ def test_private_schema_rejects_invalid_terminal_outcome(
     terminal_outcome: dict[str, object],
 ) -> None:
     frame = {
-        "protocol_version": "1.0",
+        "protocol_version": "2.0",
         "type": "authoritative_state",
         "generation": 1,
         "session_phase": "available",

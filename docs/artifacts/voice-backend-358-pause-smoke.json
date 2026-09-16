@@ -1,0 +1,120 @@
+{
+  "scope": "BE pauseハーネスと実Whisper入力端部の限定診断。100試行・前後比較・人の受入ではない。",
+  "measurement_revision": "76b042f69d8c31902feb02c0fbe52de37d603b33",
+  "profile": "integration-voice-pcm",
+  "counts": {
+    "expected": 3,
+    "recorded": 3,
+    "successful": 2,
+    "failed": 1,
+    "session_end_confirmed": 3
+  },
+  "trials": [
+    {
+      "pause_ms": 200,
+      "outcome": "failure",
+      "stage": "initial_response",
+      "reason": "audio_integrity_unavailable",
+      "labeled_fixture_injected": false
+    },
+    {
+      "pause_ms": 400,
+      "outcome": "success",
+      "confirmed": 1,
+      "ended": 1,
+      "finalized": 1,
+      "pcm_edges_matched": true
+    },
+    {
+      "pause_ms": 600,
+      "outcome": "success",
+      "confirmed": 1,
+      "ended": 1,
+      "finalized": 1,
+      "pcm_edges_matched": true
+    }
+  ],
+  "pcm_report": "voice-backend-358-pause-pcm-pilot.json",
+  "evidence_sha256": {
+    "trial-manifest.json": "ff91777dcce371b926d435f21accdb8adb16f14f73940578f4104c23d4d0ee59",
+    "whisper-input-pcm.jsonl": "fbb4a8aa272d365d8cefa3095ee7c0589183b9e87afe57921710193079898ec7",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "ca87382a7ae6d066ad9f1f5e5fd96a92ca081e51ea868b35aec622f9035111d1",
+    "playwright-results.json": "141e59ba6db15d6579ef7a5d2c36d790d10b7627167223ee3e41ac7186ac7a51",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "runtime-data/runtime/standalone/environment-run.json": "7a0113c7db6012bc7c956ed7c5d9c0798f2e9995678b4cb47a31644651c71b72"
+  },
+  "limitations": [
+    "語頭末尾のPCM照合と、正式VAD sample位置の誤差集計は異なる。後者は未了。",
+    "初回発話の統計未確認による破棄を保持。原因の詳細な範囲は記録されていない。",
+    "統計診断追加後の1件・5件では欠測が再現せず、先の初回失敗2件の根本原因は未確定。"
+  ],
+  "cleanup": {
+    "owned_services_stopped": true,
+    "shared_inference_preserved": true,
+    "pcm_observer_port_closed": true
+  },
+  "readiness_retry": {
+    "measurement_revision": "0f0a028a87ba105304ae0d26cba2b13f8880d3b9",
+    "counts": {
+      "expected": 3,
+      "success": 2,
+      "failed": 1,
+      "pcm_edges_matched": 2,
+      "session_end_confirmed": 3
+    },
+    "first_failure": "初期応答のaudio_integrity_unavailableが再現。準備待ちだけでは解消していない。",
+    "pcm_report": "voice-backend-358-pause-pcm-pilot-ready.json",
+    "evidence_sha256": {
+      "trial-manifest.json": "9a23a9f74dd45ab86e3a636f73317411c0c1ad9adef148e4c455d979ce8a6a50",
+      "whisper-input-pcm.jsonl": "4b31280240ff2fc922bcf7894acc6f4df2cd162b9fd2f58594fdbea08ea42b90",
+      "runtime-data/voice-metrics/controlled-trace.jsonl": "28cfa3325dd36dc45cbbd83bceff9e7ec1e7755804a3483687f8d9a3167c873e",
+      "playwright-results.json": "b90c81de1d01c8627845219b3cb3eb52ba77f29c47152485d814f65bc95486c8"
+    }
+  },
+  "diagnostic_runs": [
+    {
+      "measurement_revision": "3a447f4e2b33bec1265404327fe7e0b5be4da5c7",
+      "expected": 1,
+      "successful": 1,
+      "formal_utterances_per_trial": [
+        1
+      ],
+      "pcm_edges_matched": 1,
+      "missing": 0,
+      "input_integrity_failures": 0,
+      "pcm_report": "voice-backend-358-pause-pcm-diagnostic-01.json",
+      "evidence_sha256": {
+        "trial-manifest.json": "d7666c377ad1b1ebf6c8976bd7d7804a646199a6cb6565881c472a36f5b8a938",
+        "whisper-input-pcm.jsonl": "10ae69f11be14c319de6cb27d074ca031a4faa6e93fe7a2c5f73c12901bf50ab",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "68a68e3ca3abb680b5d7657d78c94335b0c97fe5a13cfad2a60cef2bfda1b253",
+        "playwright-results.json": "8f95851ed4cff3b68e8063c8a929d41b768362954bdc9f8e3acc4d26afc6330d",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/environment-run.json": "4af2065b4f63ed22e9bd4a9da4b99dea577123e396ea25965dfd4d9900218f7d"
+      }
+    },
+    {
+      "measurement_revision": "3a447f4e2b33bec1265404327fe7e0b5be4da5c7",
+      "expected": 5,
+      "successful": 5,
+      "formal_utterances_per_trial": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "pcm_edges_matched": 5,
+      "missing": 0,
+      "input_integrity_failures": 0,
+      "pcm_report": "voice-backend-358-pause-pcm-diagnostic-02.json",
+      "evidence_sha256": {
+        "trial-manifest.json": "22a7bb13cfeac874e4607dc77d1486a938047b363982857c67c5000145d78439",
+        "whisper-input-pcm.jsonl": "3d83e705c6a458a8bce93d5d774ba7e818ad45826255b23ae4ce0697c5856068",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "e7a6409209af3d2d05e18a1d4caa61ab792696d35692e13e92b25d843bdcdcd8",
+        "playwright-results.json": "ee1ad6f033aa68b4fe54962e95b3061069cf07e9c961c27009f8b58658c3dfee",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/environment-run.json": "39307e8dd72eb3485733ce91a4fabf23ddb7ea15562a5af9eb39b5820d828831"
+      }
+    }
+  ]
+}

@@ -46,8 +46,16 @@ const pilot = process.env.VOICE_QUALITY_PILOT_TRIALS
 if (pilot !== undefined && !(/^[1-9][0-9]?$/.test(pilot) || (pilot === '100' && (interruptionCohort !== undefined || vadCohort !== undefined)))) {
   throw new Error('VOICE_QUALITY_PILOT_TRIALS must be between 1 and 99')
 }
-const WARMUP_RUNS = pilot === undefined ? 5 : 1
-const MEASURED_RUNS = pilot === undefined ? 100 : Number(pilot)
+// 記憶形成を止めず、cohort runnerが試行ごとに新規data rootを所有する。
+const isolatedNormalPhase = process.env.VOICE_QUALITY_ISOLATED_NORMAL_PHASE
+if (isolatedNormalPhase !== undefined && (
+  !['warmup', 'measured'].includes(isolatedNormalPhase) || pilot !== '1'
+  || !scheduledFixture || sessionLifecycle || controlProbe || interruptionCohort !== undefined
+  || vadCohort !== undefined || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
+  || process.env.VOICE_QUALITY_FAULT_BRIDGE === '1' || process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
+)) throw new Error('isolated normal trial requires one scheduled independent session')
+const WARMUP_RUNS = isolatedNormalPhase === undefined ? (pilot === undefined ? 5 : 1) : Number(isolatedNormalPhase === 'warmup')
+const MEASURED_RUNS = isolatedNormalPhase === undefined ? (pilot === undefined ? 100 : Number(pilot)) : Number(isolatedNormalPhase === 'measured')
 const fixtureMetadataUrl = new URL(
   '../../playwright/fixtures/speech.metadata.json',
   import.meta.url,
@@ -135,7 +143,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
   const persistManifest = async (diagnostics?: Record<string, number>) => {
     await mkdir(dirname(manifestPath), { recursive: true })
     await writeFile(manifestPath, JSON.stringify({
-      measurement_scope: pilot === undefined ? "controlled" : "pilot",
+      measurement_scope: isolatedNormalPhase === undefined ? (pilot === undefined ? "controlled" : "pilot") : "isolated_normal_trial",
       measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
       playback_supply_observation_enabled: observePlaybackSupply,
       stt_pcm_observation_enabled: process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1',

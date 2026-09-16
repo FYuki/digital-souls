@@ -132,7 +132,7 @@ class AudioProbePublisher:
                     return
                 stage = "finish_notification"
                 self._accept_complete = True
-                await self._publish({"protocol_version": "1.0", "type": "audio_probe_finished",
+                await self._publish({"protocol_version": "2.0", "type": "audio_probe_finished",
                     "probe_id": probe_id, "generation": generation, "track_sid": publication.sid,
                     "input_sample_count": pacer.input_sample_count, "captured_sample_count": pacer.captured_sample_count,
                     "padding_sample_count": pacer.padding_sample_count})

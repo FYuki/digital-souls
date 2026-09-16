@@ -1,0 +1,64 @@
+{
+  "scope": "labeled_livekit_backchannel_cohort_report",
+  "quantile_method": "hyndman_fan_type_7",
+  "cohort": "backchannel",
+  "counts": {
+    "expected": 100,
+    "recorded": 100,
+    "independent_sessions": 100,
+    "success": 68,
+    "failure": 32,
+    "verified_injection": 93,
+    "session_end_confirmed": 100,
+    "backchannel_decision": 74,
+    "take_turn_decision": 0,
+    "indeterminate_decision": 19,
+    "unverified_final_decision": 7,
+    "observed_server_cancel": 0,
+    "observed_local_stop": 0
+  },
+  "failure_stages": {
+    "cancel_or_continuity": 25,
+    "initial_response": 7
+  },
+  "metrics": [
+    {
+      "name": "backchannel_false_cancel",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "labeled_backchannel_injected",
+      "end_point": "old_response_full_output_or_cancel",
+      "trial_count": 100,
+      "success_count": 84,
+      "failure_count": 0,
+      "missing_count": 16,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "full_response_continuity_unverified": 9,
+        "fixture_injection_unverified": 7
+      }
+    }
+  ],
+  "evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": false,
+    "false_cancel_rate_passed": false
+  },
+  "metric_schema_sha256": "aff90857ebe0acc8819639d46581c36e620d06bf7f1b39ca2cbe02d7b9a5c996",
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "raw_manifest_sha256": "bd7293109b7161fd6bb755494eadbc36740c45ba50281c53e66c09cced7ae73b",
+  "raw_trace_sha256": "96cd4cafc7071d627505e696fd33af91fd42fb732d499617ec1b451a77efbd73",
+  "reporter_sha256": "5976de74506d1b1a5fda4c63cbb1ebaa3bfe5a03f4710fa178a743b16ecdfd2b",
+  "playback_validator_sha256": "81422195a2809017a206369d3825064e2da30736b6012a14a3278b2f3787022e",
+  "shared_reporter_sha256": "4545b413791dd800908216b898ad4ec8594606427f610a4ea0c4cfd9486c1e32",
+  "cohort_schema_version": "1.0",
+  "cohort_schema_sha256": "ad185073655f120c71af3a7c59e5c6640cc91fd45ef3bcd98f461c61f78754d9",
+  "cohort_validator_sha256": "d3eac380f5cad534724bf433b0ef842917a7c35a0219b2c912a77d6a32484937"
+}

@@ -22,6 +22,7 @@ const microphoneTrackStop = vi.fn()
 const microphoneTrack = {enabled: true, stop: microphoneTrackStop}
 const microphoneStream = {
   getTracks: () => [microphoneTrack],
+  getAudioTracks: () => [microphoneTrack],
 } as unknown as MediaStream
 let vadOptions: {
   baseAssetPath: string
@@ -73,28 +74,12 @@ const createCaptureMock = () => {
   return vi.fn((_pcmData: ArrayBuffer, _metadata: object): void => undefined)
 }
 
-let vadFrameClock = 10_000
-const feedVadFrames = (
-  callback: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void,
-  count: number, amplitude: number, probability: number,
-) => {
-  const clock = vi.spyOn(performance, 'now')
-  try {
-    for (let index = 0; index < count; index += 1) {
-      vadFrameClock += 96
-      clock.mockReturnValue(vadFrameClock)
-      callback({ isSpeech: probability, notSpeech: 1 - probability }, new Float32Array(1536).fill(amplitude))
-    }
-  } finally { clock.mockRestore() }
-}
-
 describe('AudioRecorder', () => {
   beforeEach(() => {
     shortSpeechProcess.mockReset()
     shortSpeechProcess.mockReturnValue({voicedFraction: 0, tonalConcentration: 1, spectralFlatness: 1})
     shortSpeechReset.mockReset()
     shortSpeechClose.mockReset()
-    vadFrameClock = 10_000
     vadStart.mockReset()
     vadStart.mockResolvedValue(undefined)
     vadDestroy.mockReset()
@@ -118,32 +103,24 @@ describe('AudioRecorder', () => {
     vi.clearAllMocks()
   })
 
-  test('再接続中はtrackを無音化して発話を破棄し、追加操作やマイク再取得なしで再開する', async () => {
-    const started = vi.fn(), stopped = vi.fn()
-    const {component} = render(AudioRecorder, {props: {disabled: false, forceOff: false, continuous: true,
-      onSpeechStarted: started, onSpeechStopped: stopped, onAudioCaptured: createCaptureMock(), onError: vi.fn()}})
+  test('再接続中はtrackを無音化し、復旧だけでは入力開始ACKの前に有効化しない', async () => {
+    const enabled = vi.fn(async () => {microphoneTrack.enabled = true})
+    const {component} = render(AudioRecorder, {props: {
+      disabled: false, forceOff: false, continuous: true, onMicrophoneEnabled: enabled,
+      onAudioCaptured: createCaptureMock(), onError: vi.fn(),
+    }})
     const button = screen.getByRole('button', {name: 'マイクをオンにする'})
     await fireEvent.click(button)
     await waitFor(() => expect(button.getAttribute('aria-pressed')).toBe('true'))
-    feedVadFrames(vadOptions.onFrameProcessed, 4, .01, .8)
-    expect(started).toHaveBeenCalledTimes(1)
+    expect(microphoneTrack.enabled).toBe(true)
     await component.$set({suspended: true})
     expect(microphoneTrack.enabled).toBe(false)
     expect(button.getAttribute('aria-pressed')).toBe('true')
-    expect(vadDestroy).not.toHaveBeenCalled()
     expect(microphoneTrackStop).not.toHaveBeenCalled()
-    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, .1)
-    feedVadFrames(vadOptions.onFrameProcessed, 4, .01, .8)
-    expect(started).toHaveBeenCalledTimes(1)
-    expect(stopped).not.toHaveBeenCalled()
     await component.$set({suspended: false})
-    expect(microphoneTrack.enabled).toBe(true)
-    feedVadFrames(vadOptions.onFrameProcessed, 4, .01, .8)
-    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, .1)
-    expect(started).toHaveBeenCalledTimes(2)
-    expect(stopped).toHaveBeenCalledTimes(1)
+    expect(microphoneTrack.enabled).toBe(false)
     expect(getUserMedia).toHaveBeenCalledTimes(1)
-    expect(vadStart).toHaveBeenCalledTimes(1)
+    expect(MicVAD.new).not.toHaveBeenCalled()
   })
 
   test('再接続中に利用者がマイクをオフにした場合は復旧後も再取得しない', async () => {
@@ -237,149 +214,59 @@ describe('AudioRecorder', () => {
     await expect(vadOptions.getStream()).resolves.toBe(microphoneStream)
   })
 
-  test('継続modeではPCMを発話単位に停止せずVAD eventだけを通知する', async () => {
-    const onSpeechStarted = vi.fn()
-    const onSpeechStopped = vi.fn()
-    const onMicrophoneEnabled = vi.fn(async () => undefined)
-    render(AudioRecorder, {
-      props: {
-        disabled: false,
-        forceOff: false,
-        continuous: true,
-        onMicrophoneEnabled,
-        onSpeechStarted,
-        onSpeechStopped,
-        onAudioCaptured: createCaptureMock(),
-        onError: vi.fn(),
-      },
-    })
-
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
-    feedVadFrames(vadOptions.onFrameProcessed, 4, 0.01, 0.8)
-    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, 0.8)
-    // legacyの別callbackで開始・終了を二重通知しない。
-    vadOptions.onSpeechStart()
-    vadOptions.onSpeechRealStart()
-    vadOptions.onSpeechEnd()
-
-    await waitFor(() => expect(onSpeechStopped).toHaveBeenCalledTimes(1))
-    expect(onMicrophoneEnabled).toHaveBeenCalledTimes(1)
-    expect(onMicrophoneEnabled).toHaveBeenCalledWith(microphoneStream)
-    expect(onSpeechStarted).toHaveBeenCalledWith({ clientMs: expect.any(Number) })
-    expect(recorderInitialize).not.toHaveBeenCalled()
-    expect(recorderStart).not.toHaveBeenCalled()
-    expect(recorderStopAndTake).not.toHaveBeenCalled()
-  })
-
-  test('短い未確定発話は終了時に元の開始時刻を通知し、その直後に一度だけ終了する', async () => {
-    const events: {type: string; clientMs: number}[] = []
-    const onError = vi.fn()
+  // 発話境界・短発話・quiet resetの移設前後の同値性はBackendの実VAD parity試験が検証する。
+  test('継続modeはVADと発話用recorderをロードせず、同じstreamをclientへ渡す', async () => {
+    const enabled = vi.fn(async () => undefined)
+    const started = vi.fn(), stopped = vi.fn()
     render(AudioRecorder, {props: {
       disabled: false, forceOff: false, continuous: true,
-      onAudioCaptured: createCaptureMock(), onError,
-      onSpeechStarted: activity => events.push({type: 'start', ...activity}),
-      onSpeechStopped: activity => events.push({type: 'stop', ...activity}),
-    }})
-    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
-    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
-    shortSpeechProcess.mockReturnValue({voicedFraction: 1, tonalConcentration: 0.4, spectralFlatness: 0.1})
-    feedVadFrames(vadOptions.onFrameProcessed, 2, 0.01, 0.05)
-    feedVadFrames(vadOptions.onFrameProcessed, 6, 0, 0.05)
-    expect(events).toEqual([])
-    feedVadFrames(vadOptions.onFrameProcessed, 1, 0, 0.05)
-    expect(events).toEqual([{type: 'start', clientMs: 10_000}, {type: 'stop', clientMs: 10_864}])
-    feedVadFrames(vadOptions.onFrameProcessed, 8, 0, 0.05)
-    expect(events).toHaveLength(2)
-    expect(onError).not.toHaveBeenCalled()
-  })
-
-  test('継続modeの停止で補助VADも解放し、再開時に作り直す', async () => {
-    render(AudioRecorder, {props: {
-      disabled: false, forceOff: false, continuous: true,
+      onMicrophoneEnabled: enabled, onSpeechStarted: started, onSpeechStopped: stopped,
       onAudioCaptured: createCaptureMock(), onError: vi.fn(),
     }})
     await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
-    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
-    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオフにする'}))
-    await waitFor(() => expect(shortSpeechClose).toHaveBeenCalledTimes(1))
-    expect(vadDestroy).toHaveBeenCalledTimes(1)
-    expect(microphoneTrackStop).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(screen.getByRole('button', {name: 'マイクをオンにする'})).toBeTruthy())
-    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
-    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(2))
-    expect(createShortSpeechAnalyzer).toHaveBeenCalledTimes(2)
-  })
-
-  test('静音で主VADを再開する前に補助VADをリセットし、保持したフレームを処理する', async () => {
-    render(AudioRecorder, {props: {
-      disabled: false, forceOff: false, continuous: true,
-      onAudioCaptured: createCaptureMock(), onError: vi.fn(),
-    }})
-    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
-    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
-    const instance = await vi.mocked(MicVAD.new).mock.results[0].value
-    for (let i = 0; i < 8; i++) await instance.processFrame(new Float32Array(1536))
-    expect(shortSpeechReset).toHaveBeenCalledTimes(1)
-    expect(shortSpeechProcess).toHaveBeenCalledTimes(8)
-    expect(shortSpeechReset.mock.invocationCallOrder[0]).toBeLessThan(vadStart.mock.invocationCallOrder[1])
-    expect(vadStart.mock.invocationCallOrder[1]).toBeLessThan(shortSpeechProcess.mock.invocationCallOrder[7])
-  })
-
-  test('補助VADの初期化に失敗した場合もマイクを解放する', async () => {
-    const error = new Error('Short speech asset failed')
-    vi.mocked(createShortSpeechAnalyzer).mockRejectedValueOnce(error)
-    const onError = vi.fn()
-    render(AudioRecorder, {props: {
-      disabled: false, forceOff: false, continuous: true,
-      onAudioCaptured: createCaptureMock(), onError,
-    }})
-    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
-    await waitFor(() => expect(onError).toHaveBeenCalledWith(error))
-    expect(microphoneTrackStop).toHaveBeenCalledTimes(1)
+    await screen.findByRole('button', {name: 'マイクをオフにする'})
+    expect(enabled).toHaveBeenCalledWith(microphoneStream)
+    expect(microphoneTrack.enabled).toBe(false)
     expect(MicVAD.new).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', {name: 'マイクをオンにする'}).getAttribute('aria-pressed')).toBe('false')
+    expect(createShortSpeechAnalyzer).not.toHaveBeenCalled()
+    expect(recorderInitialize).not.toHaveBeenCalled()
+    expect(started).not.toHaveBeenCalled()
+    expect(stopped).not.toHaveBeenCalled()
   })
 
-  test('主VADの初期化に失敗した場合は生成済みの補助VADを解放する', async () => {
-    const error = new Error('Primary model failed')
-    vi.mocked(MicVAD.new).mockRejectedValueOnce(error)
-    const onError = vi.fn()
+  test('継続modeを停止して再開すると新しく取得したstreamをclientへ渡す', async () => {
+    const enabled = vi.fn(async () => undefined)
     render(AudioRecorder, {props: {
-      disabled: false, forceOff: false, continuous: true,
-      onAudioCaptured: createCaptureMock(), onError,
+      disabled: false, forceOff: false, continuous: true, onMicrophoneEnabled: enabled,
+      onAudioCaptured: createCaptureMock(), onError: vi.fn(),
     }})
     await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
-    await waitFor(() => expect(onError).toHaveBeenCalledWith(error))
-    expect(shortSpeechClose).toHaveBeenCalledTimes(1)
-    expect(microphoneTrackStop).toHaveBeenCalledTimes(1)
+    await fireEvent.click(await screen.findByRole('button', {name: 'マイクをオフにする'}))
+    await waitFor(() => expect(microphoneTrackStop).toHaveBeenCalledTimes(1))
+    await fireEvent.click(await screen.findByRole('button', {name: 'マイクをオンにする'}))
+    await screen.findByRole('button', {name: 'マイクをオフにする'})
+    expect(getUserMedia).toHaveBeenCalledTimes(2)
+    expect(enabled).toHaveBeenCalledTimes(2)
+    expect(MicVAD.new).not.toHaveBeenCalled()
   })
 
-  test('VAD候補だけでは発話開始を通知せずmisfireを待機状態へ戻す', async () => {
-    const onSpeechStarted = vi.fn()
-    render(AudioRecorder, {
-      props: {
-        disabled: false,
-        forceOff: false,
-        continuous: true,
-        onSpeechStarted,
-        onAudioCaptured: createCaptureMock(),
-        onError: vi.fn(),
-      },
-    })
-
-    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
-    await fireEvent.click(button)
-    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
-
-    feedVadFrames(vadOptions.onFrameProcessed, 1, 0.01, 0.1)
-    expect(onSpeechStarted).not.toHaveBeenCalled()
-    await waitFor(() => expect(button.classList.contains('mic-standby')).toBe(true))
-
-    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, 0.1)
-    await waitFor(() => expect(button.classList.contains('mic-standby')).toBe(true))
-    expect(onSpeechStarted).not.toHaveBeenCalled()
-  })
+  test.each(['publish failure', 'audio_input_open_timeout'])(
+    '継続modeのclient開始失敗でtrackを解放しOFFへ戻す: %s', async message => {
+      const error = new Error(message)
+      const onError = vi.fn()
+      render(AudioRecorder, {props: {
+        disabled: false, forceOff: false, continuous: true,
+        onMicrophoneEnabled: vi.fn(async () => {throw error}),
+        onAudioCaptured: createCaptureMock(), onError,
+      }})
+      await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
+      await waitFor(() => expect(onError).toHaveBeenCalledWith(error))
+      expect(microphoneTrackStop).toHaveBeenCalledTimes(1)
+      expect(microphoneTrack.enabled).toBe(false)
+      expect(screen.getByRole('button', {name: 'マイクをオンにする'}).getAttribute('aria-pressed')).toBe('false')
+      expect(MicVAD.new).not.toHaveBeenCalled()
+    },
+  )
 
   test('should publish ON status while speech is active', async () => {
     render(AudioRecorder, {

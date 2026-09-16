@@ -3,21 +3,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import App from './App.svelte'
 
-let vadFrameClock = 10_000
-const feedVadFrames = (
-  callback: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void,
-  count: number, amplitude: number, probability: number,
-) => {
-  const clock = vi.spyOn(performance, 'now')
-  try {
-    for (let index = 0; index < count; index += 1) {
-      vadFrameClock += 96
-      clock.mockReturnValue(vadFrameClock)
-      callback({ isSpeech: probability, notSpeech: 1 - probability }, new Float32Array(1536).fill(amplitude))
-    }
-  } finally { clock.mockRestore() }
-}
-
 const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 const SECOND_CONVERSATION_ID = '6ad9a610-02cc-4a41-b02e-503826f7292b'
 const THIRD_CONVERSATION_ID = 'f98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
@@ -120,7 +105,7 @@ type CoreEventReceiver = (event: Record<string, unknown>) => void
 type RoomObserver = (event: Record<string, unknown>) => void
 const liveKitMocks = {
   connect: vi.fn(async () => undefined),
-  publishMicrophone: vi.fn(async () => undefined),
+  publishMicrophone: vi.fn(async () => 'TR_initial'),
   muteMicrophone: vi.fn(async () => undefined),
   stopPlayback: vi.fn(() => 0),
   publishControlEvent: vi.fn(async (event: Record<string, unknown>) => {
@@ -229,6 +214,19 @@ const emitCoreEvent = async (event: Record<string, unknown>) => {
   await act(() => receiver({ session_id: VOICE_SESSION_ID, ...event }))
 }
 
+// UI単体試験のBE通知fixture。実PCMからの境界検出はBackendの実VAD試験で検証する。
+const emitSpeech = async (type: 'speech_started' | 'speech_stopped') => {
+  const request = liveKitMocks.controlEvents.findLast(event => event.type === 'audio_input_open_requested')
+  if (!request) throw new Error('入力開始要求がない')
+  await emitCoreEvent({
+    protocol_version: '2.0', event_id: crypto.randomUUID(), monotonic_timestamp_ms: 1000,
+    type, utterance_id: TURN_ID, speaker: {participant_id: VOICE_PARTICIPANT_ID, role: 'user'},
+    track_sid: request.track_sid, input_generation: Number(String(request.track_sid).split('_').at(-1)),
+    start_sample: 0, active_end_sample: 3200, detected_sample: 16000,
+    sample_rate: 16000, clock_domain: 'server_monotonic',
+  })
+}
+
 describe('App conversation lifecycle', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -248,12 +246,22 @@ describe('App conversation lifecycle', () => {
     start.mockReset()
     close.mockReset().mockResolvedValue(undefined)
     liveKitMocks.connect.mockReset().mockResolvedValue(undefined)
-    liveKitMocks.publishMicrophone.mockReset().mockResolvedValue(undefined)
+    let microphoneIndex = 0
+    liveKitMocks.publishMicrophone.mockReset().mockImplementation(async () => `TR_test_${++microphoneIndex}`)
     liveKitMocks.muteMicrophone.mockReset().mockResolvedValue(undefined)
     liveKitMocks.stopPlayback.mockReset().mockReturnValue(0)
     liveKitMocks.publishControlEvent.mockReset().mockImplementation(
       async (event: Record<string, unknown>) => {
         liveKitMocks.controlEvents.push(event)
+        if (event.type === 'audio_input_open_requested') {
+          liveKitMocks.receiveCoreEvent?.({
+            protocol_version: '2.0', event_id: crypto.randomUUID(),
+            session_id: VOICE_SESSION_ID, monotonic_timestamp_ms: 1000,
+            type: 'audio_input_opened', request_event_id: event.event_id,
+            track_sid: event.track_sid, input_revision: event.input_revision,
+            input_generation: microphoneIndex,
+          })
+        }
       },
     )
     liveKitMocks.disconnect.mockReset()
@@ -298,44 +306,40 @@ describe('App conversation lifecycle', () => {
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
   })
 
-  test('再接続中はマイクを保持して発話を送らず、復旧後の次の発話を追加操作なしで送る', async () => {
+  test('再接続中はマイクを保持し、復旧後は新しい入力開始ACKでBE通知を受け取る', async () => {
     render(App)
     await startLiveKitSession()
     const button = screen.getByRole('button', {name: 'マイクをオフにする'})
-    const frame = audioMocks.vadOptions!.onFrameProcessed
     await act(() => liveKitMocks.observeRoom?.({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'}))
     expect(screen.getByText('セッション: 再接続中')).toBeTruthy()
     expect(button.getAttribute('aria-pressed')).toBe('true')
-    expect(audioMocks.vadDestroy).not.toHaveBeenCalled()
-    feedVadFrames(frame, 4, .01, .8)
-    feedVadFrames(frame, 7, 0, .1)
-    expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_started')).toHaveLength(0)
-    await act(() => liveKitMocks.observeRoom?.({transport: 'available', control: 'available', audio: 'unavailable'}))
-    expect(screen.getByText('セッション: 接続済み')).toBeTruthy()
-    feedVadFrames(frame, 4, .01, .8)
-    feedVadFrames(frame, 7, 0, .1)
-    await waitFor(() => expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_stopped')).toHaveLength(1))
-    expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_started')).toHaveLength(1)
+    await emitSpeech('speech_stopped')
+    expect(screen.queryByText('入力: 文字起こし中')).toBeNull()
+    await act(() => liveKitMocks.observeRoom?.({transport: 'available', control: 'available', audio: 'available'}))
+    await waitFor(() => expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByText('入力: 聞き取り中')).toBeTruthy())
+    await emitSpeech('speech_started')
+    await emitSpeech('speech_stopped')
+    expect(screen.getByText('入力: 文字起こし中')).toBeTruthy()
+    expect(liveKitMocks.controlEvents.some(event => ['speech_started', 'speech_stopped'].includes(String(event.type)))).toBe(false)
     expect(audioMocks.getUserMedia).toHaveBeenCalledTimes(1)
-    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+    expect(audioMocks.vadOptions).toBeUndefined()
   })
 
-  test('通常UIからLiveKit sessionを開始し継続VADと順序付きdeltaを表示する', async () => {
+  test('通常UIからLiveKit sessionを開始しBE発話通知と順序付きdeltaを表示する', async () => {
     render(App)
     await startLiveKitSession()
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    expect(audioMocks.vadOptions).toBeUndefined()
 
-    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 4, 0.01, 0.8)
-    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 7, 0, 0.8)
+    await emitSpeech('speech_started')
+    await emitSpeech('speech_stopped')
     await waitFor(() => expect(
       liveKitMocks.controlEvents.map((event) => event.type),
     ).toEqual([
       'session_start_requested',
       'observation',
       'session_resumed',
-      'speech_started',
-      'speech_stopped',
-      'observation',
+      'audio_input_open_requested',
     ]))
     expect(liveKitMocks.controlEvents.find(event => event.measurement === 'session_summary')?.session_summary).toMatchObject({
       microphone_activation_attempts: 1, operation_tracking_started: true, end_requested: false,
@@ -378,7 +382,7 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('逐次応答')).toBeTruthy()
     expect(screen.queryByText(/重複|順序外/)).toBeNull()
     expect(screen.getByRole('button', { name: 'マイクをオフにする' })).toBeTruthy()
-    expect(audioMocks.vadStart).toHaveBeenCalledTimes(1)
+    expect(audioMocks.vadStart).not.toHaveBeenCalled()
     expect(audioMocks.vadDestroy).not.toHaveBeenCalled()
   })
 
@@ -536,12 +540,12 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('入力: 聞き取り中')).toBeTruthy()
     expect(screen.getByText('応答: 応答生成中')).toBeTruthy()
     expect(screen.getByText('再生: 再生中')).toBeTruthy()
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    expect(audioMocks.vadOptions).toBeUndefined()
 
-    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 4, 0.01, 0.8)
+    await emitSpeech('speech_started')
     await waitFor(() => expect(
       liveKitMocks.controlEvents.map((event) => event.type),
-    ).toContain('speech_started'))
+    ).not.toContain('speech_started'))
     expect(liveKitMocks.stopPlayback).not.toHaveBeenCalled()
 
     await emitCoreEvent({
@@ -552,7 +556,7 @@ describe('App conversation lifecycle', () => {
       final: false,
     })
     await waitFor(() => expect(liveKitMocks.stopPlayback).toHaveBeenCalledWith(
-      RESPONSE_ID, expect.any(Number),
+      RESPONSE_ID,
     ))
     expect(liveKitMocks.controlEvents.map((event) => event.type))
       .not.toContain('response_cancel_requested')
@@ -583,7 +587,7 @@ describe('App conversation lifecycle', () => {
     await waitFor(() => expect(document.activeElement).not.toBe(input))
     expect(await screen.findByText('入力: 聞き取り中')).toBeTruthy()
     expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
-    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(2)
   })
 
   test.each(['text', 'speech', 'started'])('privacy省略%sは開始前後とも履歴を更新し、本文や生成状態を残さない', async source => {
@@ -705,7 +709,7 @@ describe('App conversation lifecycle', () => {
     await emitCoreEvent({type: 'utterance_finalized', utterance_id: TURN_ID, transcript: 'Aだけの音声質問', should_response: true})
     await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID, source_utterance_ids: [TURN_ID]})
     await fireEvent.click(screen.getByRole('button', {name: '別スレッドB'}))
-    await waitFor(() => expect(liveKitMocks.muteMicrophone).toHaveBeenCalledOnce())
+    await waitFor(() => expect(liveKitMocks.muteMicrophone).toHaveBeenCalledTimes(2))
     await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 1, text: 'Aだけの回答'})
     expect(screen.queryByText('Aだけの回答')).toBeNull()
     expect(liveKitMocks.disconnect).not.toHaveBeenCalled()

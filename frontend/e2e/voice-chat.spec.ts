@@ -64,10 +64,29 @@ const installMockBackend = async (page: Page) => {
 }
 
 test.use(createVoiceTestUseOptions())
-test.describe.configure({ mode: 'serial' })
 test.setTimeout(voiceTestTimeout)
 
 const driver = createVoiceChatDriver()
+
+// BE通知を代入するモックE2E。実音声の自動検知・性能受入はintegrationが担当する。
+const submitMockSpeech = async (page: Page) => {
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as {__mockLiveKit: {microphoneEnabled: () => boolean}})
+      .__mockLiveKit.microphoneEnabled(),
+  )).toBe(true)
+  await page.evaluate(async () => (window as unknown as {__mockLiveKit: {
+    submitUtterance: () => Promise<void>
+  }}).__mockLiveKit.submitUtterance())
+}
+
+const interruptionEvidence = async (page: Page) => {
+  return page.evaluate(() => (window as unknown as {__mockLiveKit: {interruptions: {
+    responseId: string
+    backendDecisionAtMs: number
+    localPlaybackStoppedAtMs: number | null
+    cancelConfirmedAtMs: number | null
+  }[]}}).__mockLiveKit.interruptions)
+}
 
 const expectMockMessages = async (page: Page) => {
   const messages = page.locator('article.message')
@@ -110,51 +129,71 @@ for (const operation of ['Enter', 'click'] as const) {
       await expect(page.getByText(manualMute ? '入力: ミュート' : '入力: 聞き取り中')).toBeVisible()
       await expect.poll(() => page.evaluate(() =>
         (window as unknown as {__mockLiveKit: {lifecycle: {publishMicrophoneCount: number}}}).__mockLiveKit.lifecycle.publishMicrophoneCount,
-      )).toBe(1)
+      )).toBe(manualMute ? 1 : 2)
     })
   }
 }
 
-test('VADの発話イベント中も継続microphone sessionを維持する', async ({ page }) => {
+test('BEの発話通知中も継続microphone sessionを維持する', async ({ page }) => {
   const button = await driver.enableMicrophone(page)
-  await expect(button).toHaveClass(/mic-active/, { timeout: 15_000 })
-  await page.waitForFunction(() => window.__voiceChatE2E.cycles.length > 0)
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as {__mockLiveKit: {microphoneEnabled: () => boolean}})
+      .__mockLiveKit.microphoneEnabled(),
+  )).toBe(true)
+  const utteranceId = await page.evaluate(() => (window as unknown as {__mockLiveKit: {
+    beginSpeech: () => string
+  }}).__mockLiveKit.beginSpeech())
+  await expect(button).toHaveClass(/mic-standby/)
   await expect(button).toHaveAttribute('aria-pressed', 'true')
+  await page.evaluate(id => (window as unknown as {__mockLiveKit: {
+    finishSpeech: (id: string) => void
+  }}).__mockLiveKit.finishSpeech(id), utteranceId)
+  await expect(page.getByText('入力: 文字起こし中')).toBeVisible()
+  const clientTypes = await page.evaluate(() => (window as unknown as {__mockLiveKit: {
+    controlEvents: {type: string}[]
+  }}).__mockLiveKit.controlEvents.map(event => event.type))
+  expect(clientTypes).not.toContain('speech_started')
+  expect(clientTypes).not.toContain('speech_stopped')
 })
 
 test('音声応答のuser発話とmiori応答がこの順でチャット欄に表示される', async ({ page }) => {
   await driver.enableMicrophone(page)
-  await driver.waitForSpeechCompletion(page)
+  await submitMockSpeech(page)
   await driver.expectMessages(page)
   await expectMockMessages(page)
 })
 
 test('音声応答はtext delta、audio segmentの順で受信する', async ({ page }) => {
   await driver.enableMicrophone(page)
-  await driver.waitForSpeechCompletion(page)
+  await submitMockSpeech(page)
   await driver.expectMessages(page)
   await expect(driver.waitForFrameOrder(page)).resolves.toEqual(['text-delta', 'audio'])
 })
 
 test('音声segmentを受信すると再生開始観測をresponseへ相関する', async ({ page }) => {
   await driver.enableMicrophone(page)
-  await driver.waitForSpeechCompletion(page)
+  await submitMockSpeech(page)
   await driver.waitForCompletedVoiceCycle(page)
 })
 
-test('音声送信から音声再生開始までの遅延を計測してレポートへ添付する', async ({ page }, testInfo) => {
+test('モックBE通知とモック再生開始の相関をレポートへ添付する', async ({ page }, testInfo) => {
   await driver.enableMicrophone(page)
-  await driver.waitForSpeechCompletion(page)
+  await submitMockSpeech(page)
   const cycle = await driver.waitForCompletedVoiceCycle(page)
   await testInfo.attach('voice-playback-latency.json', {
-    body: JSON.stringify(cycle, null, 2),
+    body: JSON.stringify({source: 'mock_backend_notification', ...cycle}, null, 2),
     contentType: 'application/json',
   })
 })
 
-test('通常UIの同一sessionで追加操作なしに3往復を履歴へ確定する', async ({ page }) => {
+test('FE VAD assetなしで同一sessionへのBEモック通知3往復を履歴へ確定する', async ({ page }) => {
+  let vadAssetRequests = 0
+  await page.route('**/vad-assets/**', route => {
+    vadAssetRequests += 1
+    return route.abort()
+  })
   await driver.enableMicrophone(page)
-  await driver.waitForSpeechCompletion(page)
+  await submitMockSpeech(page)
   await expect(page.locator('article.message')).toHaveCount(2)
   await expect(page.getByText('応答: 待機')).toBeVisible()
 
@@ -169,6 +208,7 @@ test('通常UIの同一sessionで追加操作なしに3往復を履歴へ確定�
     await expect(page.locator('article.message')).toHaveCount((index + 2) * 2)
   }
 
+  expect(vadAssetRequests).toBe(0)
   await expect(page.getByText(MOCK_TRANSCRIPT_TEXT, { exact: true })).toHaveCount(3)
   await expect(page.getByText(MOCK_RESPONSE_TEXT, { exact: true })).toHaveCount(3)
   await expect(page.getByRole('button', { name: 'マイクをオフにする' }))
@@ -203,7 +243,7 @@ test('通常UIでmute・再開・終了しRoomとmicrophone resourceを一度ず
     return lifecycle
   })).toEqual({
     publishMicrophoneCount: 2,
-    muteMicrophoneCount: 1,
+    muteMicrophoneCount: 3,
     disconnectCount: 1,
   })
 })
@@ -253,22 +293,15 @@ test('barge-inでlocal停止とserver cancelを相関し遅延出力を破棄す
     return mock.beginInterruptibleResponse()
   })
   await page.evaluate(async () => {
-    const controller = window.__voiceSessionController
-    if (controller === undefined) throw new Error('mock voice controller is required')
-    await controller.speechStarted(crypto.randomUUID(), performance.now())
+    ;(window as unknown as {__mockLiveKit: {interruptFromBackend: () => void}})
+      .__mockLiveKit.interruptFromBackend()
   })
 
-  const evidence = await driver.waitForInterruptionEvidence(page) as {
-    responseId: string
-    speechStartedAtMs: number
-    localPlaybackStoppedAtMs: number
-    cancelConfirmedAtMs: number
-  }
+  const [evidence] = await interruptionEvidence(page)
   expect(evidence.responseId).toBe(responseId)
-  expect(evidence.localPlaybackStoppedAtMs - evidence.speechStartedAtMs).toBeLessThanOrEqual(150)
-  expect(evidence.cancelConfirmedAtMs).toBeGreaterThanOrEqual(
-    evidence.localPlaybackStoppedAtMs,
-  )
+  expect(evidence.localPlaybackStoppedAtMs).not.toBeNull()
+  expect(evidence.localPlaybackStoppedAtMs! - evidence.backendDecisionAtMs).toBeLessThanOrEqual(150)
+  expect(evidence.cancelConfirmedAtMs).toBeGreaterThanOrEqual(evidence.localPlaybackStoppedAtMs!)
   await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)
   const messageCountBeforeNextTurn = await page.locator('article.message').count()
   await page.evaluate(async () => {
@@ -283,7 +316,7 @@ test('barge-inでlocal停止とserver cancelを相関し遅延出力を破棄す
     .toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)
   await testInfo.attach('barge-in-latency.mock.json', {
-    body: JSON.stringify({ source: 'automated_test', ...evidence }, null, 2),
+    body: JSON.stringify({ source: 'mock_backend_notification', ...evidence }, null, 2),
     contentType: 'application/json',
   })
 })
@@ -322,7 +355,7 @@ test('text submitが旧回答を停止し、遅延deltaを混ぜず同じsession
   const lifecycle = await page.evaluate(() =>
     (window as unknown as {__mockLiveKit: {lifecycle: {publishMicrophoneCount: number; disconnectCount: number}}}).__mockLiveKit.lifecycle,
   )
-  expect(lifecycle.publishMicrophoneCount).toBe(1)
+  expect(lifecycle.publishMicrophoneCount).toBe(2)
   expect(lifecycle.disconnectCount).toBe(0)
 })
 
@@ -332,28 +365,18 @@ test('連続barge-in後も旧responseを混入させず同じsessionで次の発
   const interrupt = async () => page.evaluate(async () => {
     const mock = (window as unknown as { __mockLiveKit?: {
       beginInterruptibleResponse: () => string
+      interruptFromBackend: () => void
     } }).__mockLiveKit
-    const controller = window.__voiceSessionController
-    if (mock === undefined || controller === undefined) {
-      throw new Error('mock LiveKit and voice controller are required')
-    }
+    if (mock === undefined) throw new Error('mock LiveKit is required')
     const responseId = mock.beginInterruptibleResponse()
-    await controller.speechStarted(crypto.randomUUID(), performance.now())
+    mock.interruptFromBackend()
     return responseId
   })
 
   const firstResponseId = await interrupt()
-  await page.waitForFunction(() => (
-    window.__voiceChatE2E.interruptions.filter(
-      (candidate) => candidate.cancelConfirmedAtMs !== null,
-    ).length >= 1
-  ))
+  expect((await interruptionEvidence(page)).filter(row => row.cancelConfirmedAtMs !== null)).toHaveLength(1)
   const secondResponseId = await interrupt()
-  await page.waitForFunction(() => (
-    window.__voiceChatE2E.interruptions.filter(
-      (candidate) => candidate.cancelConfirmedAtMs !== null,
-    ).length >= 2
-  ))
+  expect((await interruptionEvidence(page)).filter(row => row.cancelConfirmedAtMs !== null)).toHaveLength(2)
 
   expect(secondResponseId).not.toBe(firstResponseId)
   await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)

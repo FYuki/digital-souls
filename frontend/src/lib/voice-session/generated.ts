@@ -4,19 +4,28 @@
 export interface VoiceSessionEvent {
     event_id:                      string;
     monotonic_timestamp_ms?:       number;
-    protocol_version:              "1.1";
+    protocol_version:              "2.0";
+    reason?:                       VoiceSessionEventReason;
+    request_event_id?:             string;
     session_id:                    string;
+    type:                          Type;
+    input_generation?:             number;
+    input_revision?:               number;
+    track_sid?:                    string;
     speaker?:                      Speaker;
     text?:                         string;
-    type:                          Type;
     input_event_id?:               string;
     error_code?:                   string;
     response_id?:                  string;
     status?:                       VoiceSessionEventStatus;
-    reason?:                       VoiceSessionEventReason;
     suppressed?:                   boolean;
     requested_reconnect_grace_ms?: number;
     reconnect_grace_ms?:           number;
+    active_end_sample?:            number;
+    clock_domain?:                 ClockDomain;
+    detected_sample?:              number;
+    sample_rate?:                  number;
+    start_sample?:                 number;
     utterance_id?:                 string;
     decision?:                     Decision;
     final?:                        boolean;
@@ -36,7 +45,6 @@ export interface VoiceSessionEvent {
     response_finished?:            boolean;
     classification?:               Classification;
     user_state?:                   UserState;
-    clock_domain?:                 ClockDomain;
     measurement?:                  Measurement;
     network_summary?:              NetworkSummary;
     session_summary?:              SessionSummary;
@@ -46,7 +54,7 @@ export interface VoiceSessionEvent {
 
 export type Classification = "recoverable" | "terminal";
 
-export type ClockDomain = "client_monotonic" | "server_monotonic";
+export type ClockDomain = "server_monotonic" | "client_monotonic";
 
 export type Decision = "backchannel" | "take_turn" | "indeterminate";
 
@@ -97,7 +105,7 @@ export interface PlaybackSummary {
     sample_rate:                   number;
 }
 
-export type VoiceSessionEventReason = "text_focus" | "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "input_suppressed" | "text_priority" | "barge_in" | "decode_failure";
+export type VoiceSessionEventReason = "stale_input_request" | "new_microphone_track_required" | "input_capacity_exceeded" | "input_suppressed" | "microphone_track_unavailable" | "vad_unavailable" | "text_focus" | "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "text_priority" | "audio_gap" | "audio_integrity_unavailable" | "input_replaced" | "input_closed" | "barge_in" | "decode_failure";
 
 export interface SessionSummary {
     end_requested:                  boolean;
@@ -133,7 +141,7 @@ export interface TextRange {
     start: number;
 }
 
-export type Type = "user_text_submitted" | "user_input_result_requested" | "user_input_result" | "audio_input_suppression_changed" | "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "turn_decision" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "response_privacy_skipped" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
+export type Type = "audio_input_rejected" | "audio_input_opened" | "audio_input_open_requested" | "user_text_submitted" | "user_input_result_requested" | "user_input_result" | "audio_input_suppression_changed" | "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "turn_decision" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "response_privacy_skipped" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
 
 export type Unit = "millisecond" | "nanosecond";
 

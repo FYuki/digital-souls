@@ -17,6 +17,10 @@ finally:
 
 @pytest.fixture
 def evidence():
+    return build_pcm_evidence()
+
+
+def build_pcm_evidence():
     digest = 'b' * 64
     trials, observed, events = [], [], []
     for i in range(100):

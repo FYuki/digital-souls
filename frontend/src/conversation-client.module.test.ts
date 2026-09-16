@@ -10,7 +10,7 @@ const speechId = '30000000-0000-4000-8000-000000000001'
 const responseId = '50000000-0000-4000-8000-000000000001'
 const context = {characterId: 'miori', conversationId: 'thread-a'}
 const event = (fields: Record<string, unknown>) => parseVoiceSessionEvent({
-  protocol_version: '1.1', event_id: crypto.randomUUID(), session_id: sessionId,
+  protocol_version: '2.0', event_id: crypto.randomUUID(), session_id: sessionId,
   monotonic_timestamp_ms: 1, ...fields,
 })
 
@@ -18,7 +18,7 @@ describe('DOM非依存のConversation client共通部品', () => {
   test('共有protocolからSpeech/Textの順序・発生元・履歴表示を投影する', () => {
     const submissions = new TextSubmissionTracker()
     const projection = new VoiceHistoryProjection()
-    submissions.begin(event({type: 'user_text_submitted', event_id: inputId, text: '直接の質問',
+    submissions.begin(event({type: 'user_text_submitted', event_id: inputId, input_revision: 1, text: '直接の質問',
       speaker: {role: 'user', participant_id: inputId}}), context)
     projection.receive(event({type: 'utterance_finalized', utterance_id: speechId,
       transcript: '音声で補足', should_response: false,

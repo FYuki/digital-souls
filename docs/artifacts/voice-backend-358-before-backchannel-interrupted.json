@@ -1,0 +1,104 @@
+{
+  "scope": "interrupted_frontend_backchannel_measurement",
+  "measurement_revision": "67e1a03e232a5e75ca717ec28bc720e00f267849",
+  "application_baseline_revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+  "input_authority": "frontend",
+  "expected_trials": 100,
+  "recorded_trials": 41,
+  "recorded_success": 19,
+  "recorded_failure": 22,
+  "unrecorded_trials": 59,
+  "recorded_sessions_ended": 41,
+  "highest_pcm_trial_ordinal": 42,
+  "unrecorded_includes_started_trial": true,
+  "failure_stages": {
+    "cancel_or_continuity": 18,
+    "initial_response": 4
+  },
+  "decisions": {
+    "backchannel": 21,
+    "indeterminate": 16,
+    "unobserved": 4
+  },
+  "upstream_http_status_counts": {
+    "200": 139,
+    "504": 2,
+    "503": 6
+  },
+  "maximum_observed_stt_request_ms": 46183.652679,
+  "host_gpu": {
+    "first": {
+      "utilization_percent": 0.0,
+      "used_bytes": 4731174912,
+      "total_bytes": 17171480576
+    },
+    "last": {
+      "utilization_percent": 39.0,
+      "used_bytes": 10135535616,
+      "total_bytes": 17171480576
+    },
+    "maximum_used_bytes": 16525557760,
+    "cause_identified": false
+  },
+  "resident_context": {
+    "expected_context_tokens": 8192,
+    "observed_context_sample_counts": {
+      "8192": 383,
+      "36864": 1151
+    },
+    "own_generation_requested_context_counts": {
+      "8192": 38
+    },
+    "origin_of_nonmatching_context_identified": false
+  },
+  "start_end_identity": {
+    "checks": {
+      "ollama_roles": true,
+      "whisper": true,
+      "whisper_model_name_sha256": true,
+      "voicevox_reported_version": true,
+      "configuration_sha256": true,
+      "runtime_overrides": true,
+      "voicevox_image": true,
+      "whisper_image": true
+    },
+    "all_recorded_checks_match": true,
+    "proves_runtime_load_stability": false
+  },
+  "termination": {
+    "pilot_exit": 130,
+    "wrapper_exit": 1,
+    "reason": "shared_inference_unavailable_and_resident_context_changed",
+    "owned_runner_sigint": true,
+    "shared_services_modified": false,
+    "owned_ports_closed": [
+      7880,
+      7881,
+      8000,
+      5173,
+      4174,
+      50023
+    ]
+  },
+  "evidence_sha256": {
+    "trial-manifest.json": "d24be4725782edc425476e196ed1fa6ded2773c8ac95d10bac8a052a534905ff",
+    "whisper-input-pcm.jsonl": "7d5ce6500946541a1da2060f0f283f09ef6b4a974ac7dad5b7c9065d4376af4f",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "45252b157a6074523654d419404a52275227caf180d8c02a6b1d840f8583a0be",
+    "inference-runtime.jsonl": "260da7d7928dedfab32e49e277b8ecf78bb526140eb8f263251a95d2ab53e5cf",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "measurement-interruption.json": "f01e8dacaddada15c4cf02b7cc6e4031647f9d4b4ae1346bcffd662d563b1dff",
+    "comparison-identity-start.json": "5cf9f22cbc173719d1f5c7d951d4c8ca500466dc139e6e554d3aad554fdc2d1e",
+    "comparison-identity-end.json": "dcac42292294b58aca7425dc09c3293def32343775a5090ccd34302d533aa182",
+    "preflight-observation.json": "8047c1c1cfc4f379cc0df5a7dc05d8f59aaeb629797f910ab1b656ef720a0a29"
+  },
+  "acceptance_passed": false,
+  "limitations": [
+    "全100件に達しない中止runであり、前後性能比較に使用しない",
+    "未記録試行や判定不能を成功へ補完しない。失敗を後続成功で置き換えない",
+    "GPU負荷・常駐contextの変化と共有Whisper障害の因果関係、発生元は未確定",
+    "測定アプリの記録済み生成要求は8192だが、別処理のcontext要求元はこのtraceから特定できない",
+    "モデルdigest・image・設定の開始終了一致は測定中の負荷安定性を証明しない",
+    "Whisperのmodel cache全体のbytes同一性は未検証",
+    "途中runは完全cohort用reporterに投入していない"
+  ]
+}

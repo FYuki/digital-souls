@@ -29,11 +29,21 @@ def parse_voice_session_event(value: object) -> VoiceSessionEvent:
         key=lambda error: tuple(str(segment) for segment in error.path),
     )
     if errors:
-        raise ValueError("voice session event does not match protocol 1.1") from errors[0]
+        raise ValueError("voice session event does not match protocol 2.0") from errors[0]
     try:
         event = VoiceSessionEvent.model_validate(value)
     except ValidationError as error:
         raise ValueError("voice session event cannot be converted to generated type") from error
+    validate_speech_positions(value)
     if event.text_range is not None and event.text_range.start > event.text_range.end:
         raise ValueError("voice session event has an invalid text range")
     return event
+
+
+def validate_speech_positions(value: object) -> None:
+    if not isinstance(value, dict) or value.get("type") not in {"speech_started", "speech_stopped"}:
+        return
+    start, active, detected = (value.get(key) for key in ("start_sample", "active_end_sample", "detected_sample"))
+    if (type(start) is not int or type(active) is not int or type(detected) is not int
+            or not 0 <= start <= active <= detected):
+        raise ValueError("voice session event has invalid media positions")

@@ -31,9 +31,10 @@ def test_runtime_bridge_delivers_text_and_lookup_without_stt_or_duplicate_submis
             lambda operation: tasks.append(asyncio.create_task(operation)),
             text_input=receiver,
         )
+        await bridge.prepare_audio()
         delivery = CoreEventDelivery(core_port=bridge)
         event = {
-            "protocol_version": "1.1", "type": "user_text_submitted",
+            "protocol_version": "2.0", "input_revision": 1, "type": "user_text_submitted",
             "event_id": str(uuid4()), "session_id": session_id,
             "speaker": {"role": "user", "participant_id": participant_id},
             "monotonic_timestamp_ms": 1, "text": "同じ会話へのテキスト入力",
@@ -48,9 +49,11 @@ def test_runtime_bridge_delivers_text_and_lookup_without_stt_or_duplicate_submis
         query = {**event, "type": "user_input_result_requested",
                  "event_id": str(uuid4()), "input_event_id": event["event_id"]}
         del query["text"]
+        del query["input_revision"]
         delivery.receive(json.dumps(query).encode())
         await asyncio.gather(*tasks)
         assert results[-1]["input_event_id"] == event["event_id"]
         assert results[-1]["response_id"] == response_id
         assert submit.await_count == 1
+        await bridge.close_audio()
     asyncio.run(run())
