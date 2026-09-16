@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 
-POLICY_VERSION = "2026-08-wave2-v1"
+POLICY_VERSION = "2026-09-semantic-v1"
 SANITIZER_VERSION = "history-sanitizer-v1"
 
 

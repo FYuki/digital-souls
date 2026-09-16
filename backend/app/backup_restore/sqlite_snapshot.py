@@ -12,6 +12,7 @@ from app.backup_restore.models import (
 )
 from app.memory.episodic.schema import validate_episodic_schema
 from app.memory.episodic import response_provenance
+from app.memory.semantic import schema as semantic_schema
 from app.conversation_history.schema import (
     inspect_conversation_history_artifact_schema,
 )
@@ -19,6 +20,7 @@ from app.memory.persistence.schema import (
     PERSONA_MEMORY_TABLES,
     LEGACY_PERSONA_MEMORY_TABLES,
     VERSION_THREE_PERSONA_MEMORY_TABLES,
+    VERSION_FIVE_PERSONA_MEMORY_TABLES,
     SCHEMA_VERSION as PERSONA_MEMORY_SCHEMA_VERSION,
 )
 
@@ -100,16 +102,20 @@ def verify_sqlite_database(
             is_current = schema_version == PERSONA_MEMORY_SCHEMA_VERSION and tables == PERSONA_MEMORY_TABLES
             is_legacy = schema_version == 2 and tables == LEGACY_PERSONA_MEMORY_TABLES
             is_version_three = schema_version == 3 and tables == VERSION_THREE_PERSONA_MEMORY_TABLES
-            is_version_four = schema_version == 4 and tables == PERSONA_MEMORY_TABLES
-            if not is_current and not is_legacy and not is_version_three and not is_version_four:
+            is_version_four = schema_version == 4 and tables == VERSION_FIVE_PERSONA_MEMORY_TABLES
+            is_version_five = schema_version == 5 and tables == VERSION_FIVE_PERSONA_MEMORY_TABLES
+            if not any((is_current, is_legacy, is_version_three, is_version_four, is_version_five)):
                 raise BackupSchemaError(
                     "SQLite schema version or table contract does not match"
                 )
-            if is_current or is_version_three or is_version_four:
+            if is_current or is_version_three or is_version_four or is_version_five:
                 try:
-                    validate_episodic_schema(connection, version_guards=is_current)
-                    if is_current or is_version_four:
+                    validate_episodic_schema(connection, version_guards=is_current or is_version_five)
+                    if is_current or is_version_four or is_version_five:
                         response_provenance.validate_schema(connection)
+                    if is_current:
+                        semantic_schema.validate_schema(connection)
+                        record_count += int(connection.execute("SELECT COUNT(*) FROM semantic_records").fetchone()[0])
                     record_count += int(connection.execute(
                         "SELECT COUNT(*) FROM episodic_records"
                     ).fetchone()[0])

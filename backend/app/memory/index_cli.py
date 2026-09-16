@@ -13,6 +13,9 @@ from app.memory.episodic.sources import ConversationSourceGuard
 from app.inference.runtime import create_inference_runtime
 from app.memory.inference_client import MemoryInferenceEmbedder
 from app.memory.index_sync import MemoryIndexSync
+from app.memory.semantic.read_repository import SemanticReadRepository, WithSemanticReadRepository
+from app.memory.semantic.repository import SemanticRepository
+from app.memory.semantic.service import SemanticSourceReader
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.memory.persistence.schema import initialize_persona_memory_schema
@@ -36,18 +39,25 @@ def main(argv: list[str] | None = None) -> int:
             router=inference_runtime.router,
             settings=inference_runtime.settings,
         )
-        sync = MemoryIndexSync(
-            approved_repository=CombinedMemoryReadRepository(
-                ApprovedMemoryRepository(
-                    database_path=runtime_paths.persona_memory_sqlite_path,
-                    clock=clock, uuid_factory=uuid4, outbox_uuid_factory=uuid4,
-                ),
-                EpisodicReadRepository(
-                    EpisodicRepository(runtime_paths.persona_memory_sqlite_path),
-                    ConversationSourceGuard(history_config.database_path, clock=clock,
-                                            retention=history_config.retention),
-                ),
+        legacy_reader = CombinedMemoryReadRepository(
+            ApprovedMemoryRepository(
+                database_path=runtime_paths.persona_memory_sqlite_path,
+                clock=clock, uuid_factory=uuid4, outbox_uuid_factory=uuid4,
             ),
+            EpisodicReadRepository(
+                EpisodicRepository(runtime_paths.persona_memory_sqlite_path),
+                ConversationSourceGuard(history_config.database_path, clock=clock,
+                                        retention=history_config.retention),
+            ),
+        )
+        reader = WithSemanticReadRepository(legacy_reader)
+        reader.bind(SemanticReadRepository(SemanticSourceReader(
+            repository=SemanticRepository(runtime_paths.persona_memory_sqlite_path),
+            source_guard=legacy_reader.episodic.source_guard,
+            episode_reader=legacy_reader.episodic, clock=clock,
+        )))
+        sync = MemoryIndexSync(
+            approved_repository=reader,
             outbox_repository=IndexOutboxRepository(
                 database_path=runtime_paths.persona_memory_sqlite_path,
                 clock=clock,

@@ -190,8 +190,9 @@ class TestRuntimeConfiguration:
         }
         assert isinstance(config["policy_version"], str)
         assert config["policy_version"]
+        # 既存Wave 2記憶は、意味記憶の方針更新後も検索候補として再検証できる。
         assert config["retrieval_compatible_policy_versions"] == [
-            config["policy_version"]
+            "2026-08-wave2-v1", config["policy_version"]
         ]
         assert set(config["common"]) == {
             "do_not_store_terms",

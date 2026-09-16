@@ -148,6 +148,9 @@ def test_v3_migration_preserves_records_and_v3_backup_is_readable(setup):
     with sqlite3.connect(paths.persona_memory_sqlite_path) as db:
         db.execute("DROP TABLE memory_response_dependencies")
         db.execute("DROP TABLE memory_response_origins")
+        from app.memory.semantic.schema import TABLES as semantic_tables
+        for table in semantic_tables:
+            db.execute(f"DROP TABLE {table}")
         db.execute("PRAGMA user_version=3")
     verification = verify_sqlite_database(paths.persona_memory_sqlite_path, "persona-memory.db")
     assert verification.schema_version == 3
@@ -156,7 +159,7 @@ def test_v3_migration_preserves_records_and_v3_backup_is_readable(setup):
     with repo.read() as tx:
         assert tx.get("miori", fact.id) == fact
         assert tx.invalid_response_ids("miori") == set()
-        assert tx._connection.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert tx._connection.execute("PRAGMA user_version").fetchone()[0] == 6
 
 
 def test_invalid_response_is_removed_from_prompt_history_without_changing_saved_user(setup):
@@ -193,11 +196,14 @@ def test_version_guards_migrate_without_rewriting_saved_history(setup, old_versi
         if old_version == 3:
             db.execute("DROP TABLE memory_response_dependencies")
             db.execute("DROP TABLE memory_response_origins")
+        from app.memory.semantic.schema import TABLES as semantic_tables
+        for table in semantic_tables:
+            db.execute(f"DROP TABLE {table}")
         db.execute(f"PRAGMA user_version={old_version}")
     assert verify_sqlite_database(paths.persona_memory_sqlite_path, "persona-memory.db").schema_version == old_version
     initialize_persona_memory_schema(paths, root)
     initialize_persona_memory_schema(paths, root)
-    assert verify_sqlite_database(paths.persona_memory_sqlite_path, "persona-memory.db").schema_version == 5
+    assert verify_sqlite_database(paths.persona_memory_sqlite_path, "persona-memory.db").schema_version == 6
     with repo.read() as tx:
         assert tx.get("miori", fact.id) == fact
         assert tx.versions("miori", fact.id) == before

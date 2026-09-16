@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 import json
 import math
 import re
@@ -28,6 +28,7 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.adapters.cancellable_http import post as cancellable_post
 from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 from app.inference.diagnostics import diagnostic, ollama_diagnostics, ollama_request_diagnostics
 from app.inference.token_estimate_cache import ExactTokenEstimateCache
@@ -57,12 +58,16 @@ class OllamaAdapter:
         *,
         base_url: str,
         http_client: httpx.Client | None = None,
+        async_client_factory: Callable[[float], httpx.AsyncClient] | None = None,
     ) -> None:
         if not base_url.strip() or base_url.strip() != base_url:
             raise ValueError("Ollama base URL must be canonical")
         self._base_url = base_url.rstrip("/")
         self._http_client = http_client or httpx.Client(trust_env=False)
         self._owns_http_client = http_client is None
+        self._async_client_factory = async_client_factory or (
+            lambda seconds: httpx.AsyncClient(timeout=seconds, trust_env=False)
+        )
         self._token_counts = ExactTokenEstimateCache()
         self._model_digests: dict[str, str] = {}
         self._model_details: dict[str, Mapping[str, object]] = {}
@@ -155,7 +160,7 @@ class OllamaAdapter:
                 retryable=False,
             )
         try:
-            response = self._http_client.post(
+            response = cancellable_post(self._http_client,
                 self._endpoint("/api/embed"),
                 json={
                     "model": request.model_id,
@@ -164,6 +169,7 @@ class OllamaAdapter:
                     "options": dict(request.options),
                 },
                 timeout=httpx.Timeout(request.timeout_seconds),
+                async_client_factory=lambda: self._async_client_factory(request.timeout_seconds),
             )
             response.raise_for_status()
         except Exception as error:
@@ -356,10 +362,11 @@ class OllamaAdapter:
         if cached is not None:
             return cached
         try:
-            response = self._http_client.post(
+            response = cancellable_post(self._http_client,
                 self._endpoint("/api/show"),
                 json={"model": model_id},
                 timeout=httpx.Timeout(timeout_seconds),
+                async_client_factory=lambda: self._async_client_factory(timeout_seconds),
             )
             response.raise_for_status()
         except Exception as error:
@@ -402,10 +409,11 @@ class OllamaAdapter:
                 context_window_tokens=context_window_tokens,
             )
             ollama_request_diagnostics(cast(Mapping[str, object], payload["options"]))
-            response = self._http_client.post(
+            response = cancellable_post(self._http_client,
                 self._endpoint("/api/chat"),
                 json=payload,
                 timeout=httpx.Timeout(request.timeout_seconds),
+                async_client_factory=lambda: self._async_client_factory(request.timeout_seconds),
             )
             response.raise_for_status()
             return response

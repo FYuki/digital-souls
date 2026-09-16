@@ -285,3 +285,14 @@ PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python -m pytest \
 `strict_format_valid`で元のJSONのみという指定への適合を別記し、`passed`は取得できた回答値を
 評価する。これは音声回答にJSON形式を要求する製品仕様ではない。旧schema 1.0の失敗証跡は
 その定義のまま保存し、回答本文を保存していない過去試行を再採点しない。
+
+## Semantic Memoryの品質・実接続受入（#341）
+
+[実行指示書](epic-341-semantic-memory-requirements.md)の判定分類を固定したpromptfoo suiteで評価する。
+開発モデルはGemma 4 e4b／12bを同じ固定case・期待値・共通prompt・本番経路でcacheなし各3回比較する。
+各回各分類90%以上、禁止情報保存・別character混入0件を必須とする。
+caseと期待値はprompt調整前にcommitで固定し、版・量子化・実行設定・誤判定・時間・tokens・メモリ・会話への影響を記録する。
+品質が同程度ならe4b、重要判断の改善と許容可能な負荷が確認できれば12bを選び、両方未達なら採用を確定しない。
+モデル選定の成功は実接続受入の代用ではない。選定モデルでdev/test専用data rootと合成会話を使い、
+通常会話からの抽出・実SQLite保存・実Chroma検索・別スレッド応答・管理UI訂正／削除までを確認する。
+共有GPU推論サービスを停止せず、通常会話を優先し、遅延した抽出を後から回復できることを検証する。

@@ -16,6 +16,7 @@ class InferenceTarget(str, Enum):
     CHAT = "chat"
     PRIVACY = "privacy"
     MEMORY_EXTRACTION = "memory-extraction"
+    SEMANTIC_EXTRACTION = "semantic-extraction"
     MEMORY_CONSOLIDATION = "memory-consolidation"
     EMBEDDING = "embedding"
     VISION = "vision"

@@ -67,7 +67,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 | 内容版 | Episode / Factの内容と出典・形成設定を対応づけた履歴。識別子・版番号・出典・設定は変更せず、削除時は本文だけを消去できる。消去の再試行は許可する | 実装：[版の保存制約](../backend/app/memory/episodic/schema.py)、[移行](../backend/app/memory/persistence/schema.py) |
 | Episode–Fact参照 / Fact統合関係 | 経験から情報への取得経緯と、同一Factを指すID間の関係。双方の版・根拠・有効状態を保持し、訂正・削除で無効化する | 実装：[schema](../backend/app/memory/episodic/schema.py)、[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
 | SELF Episode / 本人経験 | キャラクター自身の会話外活動・観測の記憶。活動handoffや実行ログを保存しただけではSELF Episode形成済みとはしない | 設計・未接続：[共通契約](decisions/character-life-memory-personality-autonomy-2026-09.md)、[Life運用](character-life-operations.md) |
-| Semantic Memory / 意味記憶 | 特定の一出来事ではなく、事実・安定した好み等。現行の直接形成型は`USER_PREFERENCE / INTERACTION_PREFERENCE` | 一部実装：[admission型](../backend/app/memory/admission/contracts.py)、[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
+| 旧嗜好記憶（legacy） | `USER_PREFERENCE / INTERACTION_PREFERENCE`を旧`approved_memories`へ直接形成する経路。#341の`SemanticRecord`正本とは別契約。意味記憶Target無効時のフォールバックとして維持し、保存済みデータの整理は#345で扱う | 実装：[admission型](../backend/app/memory/admission/contracts.py)、[起動境界ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
 | Derived Semantic Memory / 派生意味記憶 | 複数Episodeから根拠付きで一般化した記憶。元Episodeの削除・置換ではない | 設計：[用語ADR](decisions/memory-personality-terminology-2026-09.md) |
 | Reflection / 内省、Reflective Memory / 内省記憶 | 本人が経験をどう認知・意味付けしたかを形成する処理と、その永続的な結果。客観的な一般化を目指すSemantic Memoryとは別 | 設計：[用語ADR](decisions/memory-personality-terminology-2026-09.md)。通常会話のRAGへ原則直接注入しない |
 | Memory Formation / 記憶形成 | 保存済み会話履歴から候補を抽出し、検証・保存する非同期処理。抽出成功だけでは保存承認ではない | 実装：[formation](../backend/app/memory/formation/)、[Wave 2契約](decisions/wave2-memory-formation-retrieval-2026-08.md) |
@@ -97,7 +97,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
 |---|---|---|
-| Inference Target | Coreが指定する推論用途。現在は`chat / privacy / memory-extraction / memory-consolidation / embedding / vision / heavy-reasoning / tool-routing / character-life` | 実装：[Target型](../backend/app/inference/contracts.py) |
+| Inference Target | Coreが指定する推論用途。現在は`chat / privacy / memory-extraction / semantic-extraction / memory-consolidation / embedding / vision / heavy-reasoning / tool-routing / character-life` | 実装：[Target型](../backend/app/inference/contracts.py) |
 | Provider / Model / Adapter | 推論の接続先・使用モデル・接続先固有の実装境界。用途Targetへ`provider/model`を割り当てる。環境Profileや人格とは別 | 実装：[Inference運用](inference-operations.md)、[inference](../backend/app/inference/) |
 | Inference Caller | 同じTargetを呼ぶ処理の識別。`screen-reference`はChat Targetのcallerであり、独立したTargetではない | 実装：[画面契約](decisions/browser-screen-perception-2026-09.md)、[アーキテクチャ](system-architecture.md) |
 | Capability | Inferenceでは画像・構造化出力等の推論能力、MCPでは公開されるTool・Resource等。権限と能力は同義ではない | 実装：[Inference型](../backend/app/inference/contracts.py)、[MCP基盤](external-mcp-foundation.md) |
@@ -131,3 +131,28 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 ## 更新時の扱い
 
 新しい概念、公開API・schema上の用語、既存語の意味・責務境界を変更するPRでは、本書の対応行と参照先を更新します。設計時に追加した「設計」項目も、mainへの実装・接続時に状態を見直します。新しい仕様判断はADRへ、未実装の作業はIssueへ残し、用語集だけで決定しません。
+
+## #341で追加した意味記憶の用語（設計）
+
+以下は2026-09-14の採用設計と#341 Epic上の実装状態であり、mainへの反映とは区別する。
+正本は[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md)。
+
+| 用語 | 意味・境界 | 実装名 | 状態・参照先 |
+|---|---|---|---|
+| Semantic Memory / 意味記憶 | 特定の経験を離れて使える汎用知識・事実。変化する居住地等も含む | `SemanticRecord` | Epic実装済み。[型](../backend/app/memory/semantic/contracts.py) |
+| DIRECT_EXTRACTION | 明示発言から直接抽出・検証した形成経路。全件がUI訂正可能ではない | `FormationType.DIRECT_EXTRACTION` | Epic実装済み。[型](../backend/app/memory/semantic/contracts.py) |
+| EXPERIENCE_DERIVED | 独立した経験から一般化した形成経路 | `FormationType.EXPERIENCE_DERIVED` | 共通保存入口はEpic実装済み、一般化は#100。[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
+| 自己申告由来 | 本人の好み・属性・状態についての明示発言を根拠とする知識。UI本文訂正の対象 | `Proposition.self_report` / `can_correct` | Epic実装済み。[管理](../backend/app/memory/semantic/management.py) |
+| 時間変化 | 以前の知識を誤りとせず適用状態が変わること。不明な日時は補完しない | `SemanticOperation.CHANGE` | Epic実装済み。[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
+| 明示訂正 | 内容の誤りを明示して置き換える。時間変化とは別の関係 | `SemanticOperation.CORRECT` | Epic実装済み。[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
+| 矛盾保留 | 通常変わらない属性の食い違いを両根拠とともに保持し断定しない | `SemanticOperation.CONFLICT` / `SemanticStatus.CONFLICTED` | Epic実装済み。[意味記憶ADR](decisions/semantic-memory-lifecycle-2026-09.md) |
+| 増分抽出位置 | スレッド内の正常処理済み出典と版。知識の所有範囲とは別 | `semantic_processed_sources` / `mark_processed` | Epic実装済み。[repository](../backend/app/memory/semantic/repository.py) |
+| 意味記憶の状態 | `ACTIVE`は有効、`HISTORICAL`は過去の状態、`SUPERSEDED`は訂正前、`CONFLICTED`は矛盾保留、`INACTIVE`は利用停止、`DELETED`は本文削除済み | `SemanticStatus` / API `status` | Epic実装済み。[型](../backend/app/memory/semantic/contracts.py) |
+| 意味記憶の関係 | 訂正`CORRECT`、時間変化`CHANGE`、矛盾`CONFLICT`、自己申告優先`SELF_REPORT`を記憶IDと版で結ぶ。`NEW`と`REAFFIRM`は作成・再言及の操作 | API `relations[].relation` / `SemanticOperation` | Epic実装済み。[repository](../backend/app/memory/semantic/repository.py) |
+| 再評価待ち | 根拠の変化で利用停止し再評価を待つ。自動再評価の完了を意味しない | API `reassessment_pending` | 状態公開はEpic実装済み、再評価は#100。[管理](../backend/app/memory/semantic/management.py) |
+
+#341の作業ブランチでは共通の型・SQLite正本・出典検証・保存入口に加え、
+`semantic-extraction` Targetによる増分workerと共通検索readerへ接続した。
+保存完了と処理位置の更新は同じtransactionで行い、会話優先で延期した発言は再取得する。
+UI、知識増加時の照合予算、実モデル品質・実会話受入は検証途上であり、
+既存mainへの反映やEpic全体の受入完了を意味しない。

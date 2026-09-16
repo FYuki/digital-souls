@@ -303,7 +303,7 @@ async def test_scheduler_failure_diagnostic_excludes_exception_content(harness, 
     await scheduler.start()
     try:
         async with asyncio.timeout(2):
-            while "episodic formation failed" not in caplog.text:
+            while "memory formation failed" not in caplog.text:
                 await asyncio.sleep(0.01)
     finally:
         await scheduler.stop()

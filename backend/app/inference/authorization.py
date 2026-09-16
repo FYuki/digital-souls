@@ -13,6 +13,7 @@ class InferenceCaller(str, Enum):
     CHAT = "chat"
     SEMANTIC_PRIVACY = "semantic-privacy"
     MEMORY_EXTRACTION = "memory-extraction"
+    SEMANTIC_EXTRACTION = "semantic-extraction"
     MEMORY_CONSOLIDATION = "memory-consolidation"
     MEMORY_INDEX = "memory-index"
     SCREEN_VISION = "screen-vision"
@@ -24,6 +25,7 @@ class InferenceCaller(str, Enum):
 
 CORE_TARGET_ALLOWLIST: Mapping[InferenceCaller, frozenset[InferenceTarget]] = {
     InferenceCaller.CHARACTER_LIFE: frozenset({InferenceTarget.CHARACTER_LIFE}),
+    InferenceCaller.SEMANTIC_EXTRACTION: frozenset({InferenceTarget.SEMANTIC_EXTRACTION}),
     InferenceCaller.CHAT: frozenset({InferenceTarget.CHAT}),
     InferenceCaller.SEMANTIC_PRIVACY: frozenset({InferenceTarget.PRIVACY}),
     InferenceCaller.MEMORY_EXTRACTION: frozenset({InferenceTarget.MEMORY_EXTRACTION}),
