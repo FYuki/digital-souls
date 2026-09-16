@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.external_mcp import Connection, ExecutionGate, Registry
 from app.external_mcp.models import MCPFailure, encode
+from app.external_mcp.reference_egress import reference_arguments_allowed
 from app.addon_admin.runtime import AddonRuntime
 from app.addon_admin.connections import ConnectionStore
 from app.addon_admin.management import ConnectionManagement
@@ -23,6 +25,8 @@ from app.addon_action.dispatch import ActionDispatch
 from app.addon_action.recovery import ActionRecovery
 from app.addon_events.contracts import load_sources
 from app.addon_events.runtime import EventRuntime
+from app.notifications.contracts import load_config as load_notification_config
+from app.notifications.runtime import NotificationRuntime
 
 from .binding import BindingResolver, BindingTarget
 from .projection import Sanitizer
@@ -118,11 +122,12 @@ class ToolRuntime:
     def __init__(
         self,
         settings: ToolSettings,
-        router: InferenceRouter,
+        router: InferenceRouter | None,
         scanner: PrivacyScanner,
         *,
         settings_path: Path | None = None,
         classifier: SemanticPrivacyClassifier | None = None,
+        character_exists: Callable[[str], bool] = lambda _: False,
     ) -> None:
         self.settings = settings
         registry = Registry()
@@ -199,6 +204,7 @@ class ToolRuntime:
             ActionStore(action_path),
             self.service.sanitizer,
             egress=ActionEgress(classifier).allowed,
+            reference_egress=reference_arguments_allowed,
             protected_roots=protected,
             autonomous_wait_seconds=float(
                 os.environ.get("DS_MCP_ACTION_WAIT_SECONDS", "60")
@@ -221,10 +227,15 @@ class ToolRuntime:
         )
         self.management.on_disabled = self.service.connection_disabled
         event_sources = load_sources(os.environ.get("DS_MCP_EVENT_CONFIG"))
+        registrations, notification_limits = load_notification_config(os.environ.get("DS_NOTIFICATION_CONFIG"))
         self.events = (
             EventRuntime(self.gate, event_sources, action_path.parent.parent / "addon-events" / "events.sqlite3", self.service.sanitizer)
             if event_sources or (action_path.parent.parent / "addon-events" / "events.sqlite3").exists() else None
         )
+
+        self.notifications = NotificationRuntime(self.gate, self.events, registrations,
+            action_path.parent.parent / "notifications" / "notifications.sqlite3", self.service.sanitizer,
+            character_exists=character_exists, limits=notification_limits)
 
     async def start(self) -> None:
         self.action_policy.store.detach_waiters()
@@ -234,8 +245,10 @@ class ToolRuntime:
         self.action_recovery.start()
         if self.events is not None:
             self.events.start()
+        self.notifications.start()
 
     async def close(self) -> None:
+        await self.notifications.close()
         if self.events is not None:
             await self.events.close()
         self.service.close()

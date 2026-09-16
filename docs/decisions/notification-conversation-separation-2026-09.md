@@ -297,3 +297,22 @@ OFF中の処理結果も、必要に応じて会話などから現在の権限�
 - #365／#366／#189：依頼報告、明示操作の導線、任意の自発発話。
 - [Addon接続とGate](addon-connection-foundation-2026-09.md)、[外部MCP利用基盤](../external-mcp-foundation.md)、[会話Tool利用](tool-use-foundation-2026-09.md)。
 - [Conversation Session](conversation-session-text-input-2026-09.md)、[音声契約](voice-session-contract-2026-08.md)、[操作承認・回復](addon-action-approval-recovery-2026-09.md)。
+
+
+## 12. 登録済み参照readの実装境界（2026-09-16）
+
+#183は[通知runtime](../notification-runtime.md)へ具体化する。
+通知の担当・接続・対象・操作定義を登録時に固定し、実行時の現在権限と共有Gateを再検証する。
+
+既存の通常Action送信判定は、非空引数をLLMの意味privacy判定へ渡す。
+これを参照IDとEvent cursorにも無条件に適用すると、通知の取得がLLM停止に依存してしまう。
+そこで登録済みreadに限り、Coreの登録・参照解決guardと、決定的な参照形状・secret検査を組み合わせる。
+
+- 送信できる値は短いASCII参照token、有限整数、booleanのみ。自由文・URL・ネストを受け付けない。
+- sourceのcursorや登録済みTask／bindingから引数を作り、外部本文・任意のUI入力をこの経路へ流さない。
+- trusted read、現在snapshot、binding、共有範囲、自律操作の継続許可、global／connection等の予算は従来どおり適用する。
+- 通常会話Tool・writeは従来の意味privacy判定を継続する。独自Policyの拒否判定も省略しない。
+
+代替の「すべて意味判定を通す」はLLM非依存要件を満たさず、
+「privacy判定を一律省略する」は自由文やsecretを送れるため採用しない。
+この決定は参照だけの取得契約であり、任意のバックグラウンドTool利用を許可するものではない。

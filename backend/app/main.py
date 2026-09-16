@@ -120,6 +120,7 @@ from app.routers.addon_actions import router as addon_actions_router
 from app.addon_action.interaction import confirmation_resume_scope
 from app.conversation_core.control_input import current_control_request
 from app.routers.addon_admin import router as addon_admin_router
+from app.routers.notifications import router as notifications_router
 from app.screen_perception.http_security import (
     SCREEN_ALLOWED_ORIGIN_ENV,
     resolve_screen_http_security,
@@ -834,15 +835,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise ValueError(
                     "Character Life requires INFERENCE_TARGET_CHARACTER_LIFE"
                 )
+            notification_catalog = CharacterCatalog(repository_root / "characters")
             tool_runtime = ToolRuntime(
                 tool_settings,
                 inference_runtime.router,
                 privacy_scanner,
                 settings_path=runtime_paths.data_root / "addon-settings.json",
+                character_exists=lambda character: any(entry.character_id == character for entry in notification_catalog.scan()),
                 classifier=memory_consolidation_privacy_classifier,
             )
             app.state.addon_manager = tool_runtime.management
             app.state.event_source = tool_runtime.events
+            app.state.notifications = tool_runtime.notifications
             app.state.action_policy = tool_runtime.action_policy
             await tool_runtime.start()
             app.state.tool_service = (
@@ -1166,6 +1170,7 @@ app.include_router(tool_use_router)
 app.include_router(addon_actions_router)
 app.include_router(character_life_router)
 app.include_router(addon_admin_router)
+app.include_router(notifications_router)
 
 app.include_router(chat_router)
 app.include_router(character_catalog_router)
