@@ -38,6 +38,26 @@ MCP管理UI要件へ揃え、Toolごとの再承認UIを追加しない。
 外部へ送るargumentsのprivacyはconnection permissionとは分離し、
 `character-life-memory-personality-autonomy-2026-09.md`のMinimum Disclosure / Egress Privacyをdispatch前に適用する。
 
+### 通知用read-only callerの再利用境界（設計・#363）
+
+通知詳細と通知由来の会話文脈は、[通知／会話分離ADR](notification-conversation-separation-2026-09.md)に従い、
+LLMのToolDecisionに依存しない読み取りcallerで取得する設計とする。通知の取得に会話やLLMを要求せず、
+#104の共有Gate・snapshot・binding検証・認可・予算と、#182の再利用可能なsanitize/projectionを通す。
+本節は後続の接続点であり、既存の会話用APIが通知callerに対応済みであることを意味しない。
+
+呼出主体と`audit.character_id`は非同期処理登録時の担当キャラクターを用いる。依頼ユーザー、閲覧者、
+接続認証主体、取得目的は別に検証する。登録時の接続・対象・Task／rule参照を使い、現在の会話bindingや
+表示中のキャラクターを借用しない。元の対象を維持しても現在権限・active snapshotを再検証する。
+
+取得は独立した有限のread-only実行とし、元の会話loop／音声sessionを保持し続けない。
+個々の実行IDとTask／rule等の安定した予算集計単位を区別し、新loop発行・再試行で共有制限をリセットしない。
+会話なしの集計範囲を既存Gateへ対応させる契約は#363で実装し、通常会話の予算を緩めない。
+監視は最新状態、単発完了は特定実行結果を読む。availability確認を内容取得の成功に置き換えない。
+
+取得だけで通知既読・会話取込・報告済みを変更しない。別キャラクターへのコピー・引用は通常会話として扱い、
+元Taskの取得・再開・変更権限を与えず、その会話・回答を元の非同期処理へ伝播させない。
+本契約は自律活動のwrite許可、既存MRTR待機期限、Task lifecycleを変更しない。
+
 ## 推論と候補
 
 `tool-routing`をoptionalなCore Targetとして追加する。要求能力は構造化生成とtoken推定。

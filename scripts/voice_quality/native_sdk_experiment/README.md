@@ -40,6 +40,18 @@ build.shは再試行の単体検証4件と、`cargo build --locked --release --p
 上流に由来するコンパイラ警告がある。成果物のハッシュも記録するが、ビルドパス等の差により同一ハッシュになることまでは保証しない。
 Dockerベースはdigest固定、OSパッケージはbookwormの取得時点の版となる。
 
+## コンテナビルド時の検証
+
+`verify.py`は固定FFIのPython SDK対応版・SHA-256・実ロード・初期化・明示解放を確認する。
+固定版Rust SDKの`dispose`はログ転送taskをjoinしないため、直後のPython終了処理とnative callbackが
+競合することがある。明示解放だけでは防げないため、検証がすべて成功した後に限り、
+出力をflushして`os._exit(0)`で一時processを終了する。検証例外やnativeの異常終了は成功に変換しない。
+
+この終了方法はDockerビルドの短い検証processに限定し、Backendの通常終了や音声Sessionには適用しない。
+本検証は実通信や通常shutdownの受入を代替しない。固定版の
+[dispose](https://github.com/livekit/rust-sdks/blob/63128d01d955d9d8967544f46cff64a361232bf6/livekit-ffi/src/server/mod.rs#L159)と
+[ログ転送task](https://github.com/livekit/rust-sdks/blob/63128d01d955d9d8967544f46cff64a361232bf6/livekit-ffi/src/server/logger.rs#L89)を参照する。
+
 ## 実通信での読み込みと記録
 
 実23〜25では、ビルドした`liblivekit_ffi.so`を各試行の新しいtest data rootへコピーし、

@@ -31,6 +31,25 @@ Coreのpending管理・応答予約・終端後の後続入力開始は`UserInpu
 
 Text応答も再生確認・音声による割り込みの計測相関対象にする。Speech/STT起点の品質traceには架空のutteranceを追加せず、Text-only応答を音声入力のTTFA標本として扱わない。
 
+### 通知起点の応答への接続点（設計・#364／#365）
+
+[通知／会話分離ADR](notification-conversation-separation-2026-09.md)は、後着した依頼結果の報告、任意の自発発話、
+「この件について話す」の明示操作を、通常のSpeech／Text発言とは区別する設計を定める。
+本節は後続の拡張点を記録するものであり、現行の`source_inputs` schemaやprotocolをこの文書変更だけで緩めない。
+
+#365でCore認可済みの新しい報告起点を定義し、元の依頼・通知・結果参照を持つ新しいassistant turnへ接続する。
+過去のUser Inputを再消費せず、元のTaskを再実行せず、架空のuser発言・utterance・空入力も作らない。
+外部Eventそのものを発話命令にしない。#189／#366も同じ起点境界を使い、別runtimeを作らない。
+
+schema、FE／BE生成型、serializer、runtime validation、protocol互換性、履歴保存、計測を実装PRで同期する。
+通常のSpeech／Text入力検証、response世代、privacy、停止・再生の既存契約は維持する。
+通知起点を音声入力TTFAの標本へ混ぜず、通知取得・既読・会話取込・報告済みも独立させる。
+
+通知の自動報告は登録時担当の対象会話がactive／foreground、有効なleaseを持ち、入力・生成・発話ともidleの
+場合だけ開始する。生成開始と確定／配送時に対象・権限・世代を再検証し、別会話へ出力しない。
+通知の閲覧だけで別キャラクターへ文脈を渡さず、ユーザーがコピー・会話引用した場合も通常の話題として扱う。
+その会話・回答は元の非同期処理や担当の報告状態へ伝播させない。具体的な受入は#365／#366で追跡する。
+
 ## protocolと互換性
 
 SSOTは既存の`contracts/voice-session/voice-session.schema.json`とする。`source_inputs`を含む新契約はCore protocol `1.1`として実装し、FE/BEを同時に更新する。旧`1.0`はbootstrapで拒否し、Roomや会話turnを作成しない。既存WebSocketのbaseline契約は変更しない。LiveKit private frameは独立したtransport契約のため、変更しないframeのversionは`1.0`を維持する。

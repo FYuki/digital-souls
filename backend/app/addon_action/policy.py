@@ -54,6 +54,12 @@ class ActionPolicy:
         ):
             raise MCPFailure("policy", "egress_privacy_blocked")
 
+    def validate_background_read(self, connection_id: str, identity: str) -> None:
+        """バックグラウンドreadで承認待ちを作らず、現在の継続許可だけを使う。"""
+        key = ApprovalKey(connection_id, identity, OperationGroup.NORMAL, ExecutionScene.AUTONOMOUS)
+        if self.store.state(key).permission != Permission.ALWAYS:
+            raise MCPFailure("policy", "background_read_not_approved")
+
     async def prepare(
         self,
         call: ActionInvocation,

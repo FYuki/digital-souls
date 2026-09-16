@@ -1,7 +1,7 @@
 # 外部能力としてのAddonとMCP-first接続基盤
 
 - 作成日: 2026-09-05
-- 最終整理日: 2026-09-06
+- 最終整理日: 2026-09-13（通知／会話の後続責務を分離）
 - 文書段階: 設計・契約確定
 - 状態: `ACTIVE`。#104ではexternal MCP subsetを適用し、self-owned固有runtimeは#221へ延期する。
 - 対象: #104 Addon接続基盤、#152 設計確定
@@ -16,6 +16,11 @@
 Execution Gate、external conformanceを対象とする。self-ownedのmetadata・stable operation ID・
 localhost bind・Origin検証・mandatory Bearer server conformanceは#221の後続設計とする。
 以下にself-owned向け記述があっても、#104の実装・受入条件には含めない。
+
+通知Policy・通知状態・キャラクター報告の後続設計は、2026-09-13の
+[通知／会話分離ADR](notification-conversation-separation-2026-09.md)を優先する。
+#183は会話非依存の通知基盤、#364は会話への統合を所有する。接続・Gateの既存契約は継続し、
+この文書更新だけで通知機能や新しいcallerを実装済みとは扱わない。
 
 ## 1. 決定概要
 
@@ -367,10 +372,19 @@ ConfirmationPolicyPort
 
 ### Event
 
+2026-09-16に取得・有限永続バッファ・欠落復旧を[Event復旧ADR](addon-event-recovery-2026-09.md)で具体化した。
+本節の抽象方針を維持し、#187の詳細な取得・保持・再開条件は同ADRを優先する。
+
 - Event本文のdomain正本はAddon側。
 - cursor付きhistory Query/Resourceを復旧baselineとする。
 - notificationはwake-upに使えても唯一の正本配送路にしない。
 - #187でingestion cursor / consumer cursor / reconnect / backpressureを実装する。
+- #183は会話・LLM非依存の通知Policy、metadata管理、未読／既読／非表示、read-only詳細参照を所有する。
+- #364は通知を登録時担当の会話へ紐付け、依頼報告と任意の自発発話を制御する。取り込み層から直接発話しない。
+- ingestion、通知consumer、会話取込／報告、ユーザー既読を別状態とし、会話archive／削除で共有sourceを止めない。
+- Task／ruleの担当と対象は登録時に固定し、現在の画面・会話設定を借用しない。取得時の現在権限と共有Gateを検証する。
+- コピー・引用で別キャラクターと話しても、通知の自動共有・担当引継ぎ・元の非同期処理への逆伝播を行わない。
+- これらは後続設計であり、詳細と適用境界は[通知／会話分離ADR](notification-conversation-separation-2026-09.md)を参照する。
 
 ### ActionRecovery
 
@@ -456,7 +470,8 @@ JSON Schemaだけで表現できないidentity照合、Core restrictionの単調
 | #182 | Tool Catalog projection、routing、binding解決、LLM result統合 |
 | #185 | confirmation、ActionRecovery、result_unknown |
 | #187 | EventSource、cursor、reconnect/backpressure |
-| #183 | Event会話通知・自発発話 |
+| #183 | 会話・LLM非依存の通知Policy、metadata、通知タブ、未読、安全な内容参照 |
+| #364 | 登録時担当の会話への紐付け・依頼報告・任意の自発発話（#365 / #366 / #189） |
 | #184 | runtime管理UI / availability表示 |
 | #186 | 動的Manifest、Addon配布/更新、別repo SDK |
 | #58 | Development Observer MCP Addon |
