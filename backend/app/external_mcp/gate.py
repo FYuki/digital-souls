@@ -1008,6 +1008,7 @@ class ExecutionGate:
         validate_only: bool = False,
         resource_page: bool = False,
         charge_validation: bool = False,
+        registered_references: bool = False,
     ) -> Json:
         """登録済みEvent取得用の有限read。会話・承認待ち・副作用を作らない。"""
         from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -1066,7 +1067,10 @@ class ExecutionGate:
 
             await authorize()
             if self.confirmations is not None:
-                await self.confirmations.validate_egress(arguments)
+                if registered_references:
+                    await self.confirmations.validate_reference_egress(arguments)
+                else:
+                    await self.confirmations.validate_egress(arguments)
             await authorize()
             if validate_only:
                 if charge_validation:

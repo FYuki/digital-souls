@@ -115,7 +115,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 
 ## Event・通知・非同期結果
 
-Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通知・会話報告の名称は設計上の概念であり、#158／#363／#365等の実装時に具体的な型と対応づける。
+Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通知はNotificationRuntime / NotificationStore、内容取得はNotificationReaderとして実装する。会話への参照・報告接続は#365等の後続範囲。
 
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
 |---|---|---|
@@ -126,16 +126,16 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | Sanitized Event buffer / 復旧用バッファ | 許可情報に限定したEventの有限な永続保管。処理位置と整合して未処理分を復旧する。提供元のdomain正本・通知履歴とは別 | 実装・EventStore / EventRuntime：[Event runtime](addon-event-runtime.md) |
 | Event gap / 欠落、snapshot / 最新状態 | 欠落は正常処理を確認できない過去のEvent範囲。最新状態の取得だけではその過去を復元したことにならない | 実装・EventStore / EventRuntime：[Event runtime](addon-event-runtime.md) |
 | Wake-up / 新着確認の契機 | 提供元の通知等を受けて履歴取得を促すこと。Event本文の唯一の配送路や正本ではない | 実装・EventStore / EventRuntime：[Event runtime](addon-event-runtime.md) |
-| 通知履歴の保持 / 期限切れ | 各通知の初回保存からの保持。件数上限による早期削除もある。Eventバッファ・提供元本文・依頼参照の寿命と別で、通知削除をTask取消し・報告完了へ変換しない | 設計・#183/#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
-| 通知Policy、`ignore / state-only / notify` | 無視／管理metadataだけ更新／個別通知を作成、の分類。notifyだけでは会話取込・発話を許可しない | 設計・#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
-| 通知ON／OFF | 通知元・通知種類ごとの生成設定。OFFは元処理・監視・保存済み通知を止めず、再ON時もOFF中に受け取った分を遡及通知しない | 設計・#158／#191：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 通知履歴の保持 / 期限切れ | 各通知の初回保存からの保持。件数上限による早期削除もある。Eventバッファ・提供元本文・依頼参照の寿命と別で、通知削除をTask取消し・報告完了へ変換しない | 実装・NotificationStore：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 通知Policy、`ignore / state-only / notify` | 無視／管理metadataだけ更新／個別通知を作成、の分類。notifyだけでは会話取込・発話を許可しない | 実装・NotificationRuntime / NotificationStore：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 通知ON／OFF | 通知元・通知種類ごとの生成設定。OFFは元処理・監視・保存済み通知を止めず、再ON時もOFF中に受け取った分を遡及通知しない | 実装・NotificationRuntime / NotificationCenter：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | 表示のグループ化 / 通知の要約回答 | 前者は画面上の整理、後者は会話での表現。個別の通知レコードを統合する操作ではない | 追加候補の表示／#364側の会話機能：[通知要件](epic-183-notification-requirements.md) |
-| 登録時担当 / 担当キャラクター | 非同期処理を追加した時点の担当・呼出主体。依頼ユーザー、閲覧ユーザー、外部接続認証主体とは別で、画面切替に追従しない | 設計・#158／#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
-| 登録時対象 / 対象設定revision | 接続・認証主体参照・binding・Task／ruleの対象と版。会話の対象変更とは独立し、開始済みTaskへ新設定を遡及しない。現在権限は取得時に再検証する | 設計・#158／#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 登録時担当 / 担当キャラクター | 非同期処理を追加した時点の担当・呼出主体。依頼ユーザー、閲覧ユーザー、外部接続認証主体とは別で、画面切替に追従しない | 実装・Registration / NotificationReader：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 登録時対象 / 対象設定revision | 接続・認証主体参照・binding・Task／ruleの対象と版。会話の対象変更とは独立し、開始済みTaskへ新設定を遡及しない。現在権限は取得時に再検証する | 実装・Registration / NotificationReader：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | Origin / Target / Delivery policy | Originは依頼・設定元、Targetは結果の届け先、Policyは通知のみ等の配送方針。元の会話がない通知もあり、現在表示中の会話とは同義でない | 設計・#365：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
-| 通知用read-only caller | 登録時担当で内容を安全に取得する処理。通知IDまたはCore検証済みの独立した依頼・対象参照を使い、通知削除後も現在の権限・提供元の保持状況を検証する。LLMのToolDecisionは不要だが共有Gate・binding・snapshot・予算を通す。Inference Callerとは別 | 設計・#363：[Tool利用ADR](decisions/tool-use-foundation-2026-09.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
-| 取得実行 / 継続的な予算集計単位 | 個々の短い取得と、Task／rule等に紐付く再試行を含む制限の範囲。元の会話loopを保持せず、新実行IDで制限をリセットしない | 設計・#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
-| 内容取得済み / 既読 / 会話取込済み / 報告済み | 取得成功、ユーザー確認、会話文脈への採用、担当の報告turn保存を区別する。どれもTask取消しや音声再生完了と同義ではない | 設計・#191／#365：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 通知用read-only caller | 登録時担当で内容を安全に取得する処理。通知IDまたはCore検証済みの独立した依頼・対象参照を使い、通知削除後も現在の権限・提供元の保持状況を検証する。LLMのToolDecisionは不要だが共有Gate・binding・snapshot・予算を通す。Inference Callerとは別 | 実装・NotificationReader / Reference：[通知runtime](notification-runtime.md)、[Tool利用ADR](decisions/tool-use-foundation-2026-09.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 取得実行 / 継続的な予算集計単位 | 個々の短い取得と、Task／rule等に紐付く再試行を含む制限の範囲。元の会話loopを保持せず、新実行IDで制限をリセットしない | 実装・NotificationStore / ExecutionGate：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 内容取得済み / 既読 / 会話取込済み / 報告済み | 取得成功、ユーザー確認、会話文脈への採用、担当の報告turn保存を区別する。どれもTask取消しや音声再生完了と同義ではない | 通知状態は実装・NotificationCenter、会話状態は設計・#365：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | 報告起点 / 任意の自発発話候補 | 前者は元の依頼・結果を参照するCore認可済みの応答起点。後者は許可・idle・cooldown・TTL等で判断する任意候補。依頼報告を任意候補TTLで捨てない | 設計・#365／#189：[Session接続点](decisions/conversation-session-text-input-2026-09.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | コピー・会話引用の非伝播 | 明示共有された範囲だけを別キャラクターとの通常会話で扱い、元の非同期処理の担当・設定・状態へ会話や返答を伝えない。通知閲覧だけでは共有しない | 設計・#366：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 

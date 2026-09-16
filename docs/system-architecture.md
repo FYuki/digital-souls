@@ -453,6 +453,9 @@ snapshotを再検証する。#363はLLMを介さなくても共有Gateを通り�
 Event取得・復旧の詳細は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)と
 [要件指示書](epic-187-addon-event-requirements.md)を参照する。取得位置と有限sanitized bufferの永続化、
 consumerごとの欠落復旧、画面オフラインと購読解除の区別は、Epic #187のEventRuntime / EventStoreに実装した。
+Epic #183は共有Eventを独立購読するNotificationRuntime / NotificationStoreと、
+共有Gateで有限取得するNotificationReader、会話と独立したNotificationCenterへ接続する。
+個別保存・ユーザーごとの通知設定・初回保存から30日と件数上限・独立参照は[通知runtime](notification-runtime.md)を参照する。
 既存ToolRuntimeの共有Gateとライフサイクルへ接続し、MCP標準Tool/Resourceを使う。
 設定・consumer API・公開結果契約・検証入口は[Event runtime](addon-event-runtime.md)を参照する。
 通知の個別保存・保持・設定・削除後の再取得は通知／会話分離ADRの2026-09-16追記と[通知要件](epic-183-notification-requirements.md)で定め、後続consumerで実装する。
