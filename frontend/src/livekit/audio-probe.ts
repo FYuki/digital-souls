@@ -95,7 +95,7 @@ export class AudioAvailabilityProbe {
   }
 
   private frame(type: string): ProbeFrame {
-    return {protocol_version: '1.0', type, probe_id: this.probeId, generation: this.generation,
+    return {protocol_version: '2.0', type, probe_id: this.probeId, generation: this.generation,
       ...(type === 'audio_probe_request' || this.trackSid === null ? {} : {track_sid: this.trackSid})}
   }
 

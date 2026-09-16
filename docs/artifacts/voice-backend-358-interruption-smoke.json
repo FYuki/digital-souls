@@ -1,0 +1,100 @@
+{
+  "scope": "固定ラベル音声のBE判断・実停止を確認する限定診断。前後比較・全cohort・人の受入ではない。",
+  "profile": "integration-voice",
+  "fixture_sha256": "f30a370fef9c05ea158fc58aade405bccad6a82d894c86a45d615b15e1dec2ce",
+  "trials": [
+    {
+      "application_commit": "92a1f6e",
+      "outcome": "failed",
+      "local_stop_upper_ms": 6166.5,
+      "limit_ms": 3000,
+      "limitation": "閾値assert後の添付が実行されず、境界の詳細とstage traceがない。失敗を残し、原因は未確定。"
+    },
+    {
+      "application_commit": "0a1e198",
+      "outcome": "passed",
+      "origin": "scheduled_fixture_speech_start",
+      "local_stop_bounds_ms": {
+        "lowerMs": 1148.3999999761581,
+        "upperMs": 1152.300000011921
+      },
+      "cancel_total_bounds_ms": {
+        "lowerMs": 1203.3999999761581,
+        "upperMs": 1207.300000011921
+      },
+      "fixture_clock_bounds": {
+        "sourceStart": {
+          "lowerMs": 13382.600000023842,
+          "upperMs": 13384.300000011921,
+          "sourceSample": 0
+        },
+        "speechStart": {
+          "lowerMs": 13520.699999988079,
+          "upperMs": 13524.600000023842,
+          "sourceSample": 7200
+        },
+        "speechEnd": {
+          "lowerMs": 14364.600000023842,
+          "upperMs": 14366.600000023842,
+          "sourceSample": 47520
+        }
+      },
+      "backend_same_clock_durations_ms": {
+        "speech_detected_to_preview_started": 290.380841,
+        "preview_started_to_take_turn": 254.90627,
+        "take_turn_to_server_cancelled": 36.842724,
+        "full_stt": 143.559361
+      },
+      "preview_before_speech_end": true,
+      "trace_sha256": "e0c7d839a5a8ddfa52493fc445e0f14b2d4d6c14491300c2aa22be5fadb837fa",
+      "trace_event_count": 150,
+      "interruption_event_count": 43,
+      "transport_failure_count": 0,
+      "observations_overflow": false
+    }
+  ],
+  "setup_failures": [
+    {
+      "count": 1,
+      "reason": "suiteが固定するdata rootと、環境変数で指定したtrace pathが不一致。試験開始前のreadinessで失敗し、保存先を既存test data root内へ修正した。"
+    }
+  ],
+  "other_real_test": {
+    "application_commit": "92a1f6e",
+    "backend_speech_end_keeps_microphone": "passed"
+  },
+  "remaining": [
+    "最初の遅い試行の原因と再現性",
+    "M5集計・pause診断の移行",
+    "全cohortの同条件前後比較・欠測・resource評価",
+    "人の実マイク・聴感受入",
+    "更新・切り戻し"
+  ],
+  "cleanup": {
+    "owned_services_stopped": true,
+    "shared_inference_preserved": true,
+    "other_task_ollama_preserved": true
+  },
+  "labeled_cohort_pilots": [
+    {
+      "application_commit": "618177ce6822ff27ee234068f4d13ef669022f5d",
+      "cohort": "take_turn",
+      "trials": 1,
+      "playwright": "1 passed / 0 failed / 0 skipped",
+      "report": "voice-backend-358-take-turn-pilot.json",
+      "report_sha256": "187af5dec1417ce2bcdfd1241c52ef1f79a5116fc2ecef2c70aa5873f07218e1",
+      "fixture_sha256": "c14c470baf158d5de45b7a07f28f8da9c8b454da94c1a307effbe6608a728642",
+      "runtime_status": "completed",
+      "native_sdk_verified": true,
+      "raw_sha256": {
+        "trial-manifest.json": "c83cf01c77b8c498b084748e42c3f41f56abc1dde89b32ebe8a1ace0e8857424",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "d36c371fee345a4c4e1b2de62619fb019eec627090f6e06a18ce720e3969667d",
+        "playwright-results.json": "f747a3f655f6d16ea8b50ae719989fe1ef93240ebe68ff217c45f5c7292c8c3e",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/environment-run.json": "24626c00426ac5e1d4187de0e7d1899c177a550529cdee8270ff67c33171e0d9"
+      },
+      "observations_overflow": false,
+      "limitation": "集計と実サービス証跡の接続を1試行で確認した限定pilot。100試行の前後比較や先の遅延失敗の解消を証明しない。"
+    }
+  ]
+}

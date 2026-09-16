@@ -1,0 +1,109 @@
+{
+  "scope": "legacy_bootstrap_real_sfu_resource_boundary",
+  "application_revision": "10a5286fbb3a486da166bde1152d84b6b95332b1",
+  "api_execution": "fastapi_testclient",
+  "sfu": "real_livekit",
+  "positive_client": "livekit_python_rtc",
+  "browser_executed": false,
+  "full_profile_rollout_executed": false,
+  "legacy_cases": [
+    {
+      "core_protocol": "1.1",
+      "private_protocol": null,
+      "http_status": 409,
+      "error_code": "protocol_version_mismatch",
+      "resource_invocation_counts": {
+        "session": 0,
+        "room": 0,
+        "runtime": 0,
+        "token": 0
+      },
+      "real_room_inventory_unchanged": true
+    },
+    {
+      "core_protocol": "2.0",
+      "private_protocol": null,
+      "http_status": 409,
+      "error_code": "transport_protocol_version_mismatch",
+      "resource_invocation_counts": {
+        "session": 0,
+        "room": 0,
+        "runtime": 0,
+        "token": 0
+      },
+      "real_room_inventory_unchanged": true
+    },
+    {
+      "core_protocol": "2.0",
+      "private_protocol": "1.0",
+      "http_status": 409,
+      "error_code": "transport_protocol_version_mismatch",
+      "resource_invocation_counts": {
+        "session": 0,
+        "room": 0,
+        "runtime": 0,
+        "token": 0
+      },
+      "real_room_inventory_unchanged": true
+    },
+    {
+      "core_protocol": "2.0",
+      "private_protocol": "0.0",
+      "http_status": 409,
+      "error_code": "transport_protocol_version_mismatch",
+      "resource_invocation_counts": {
+        "session": 0,
+        "room": 0,
+        "runtime": 0,
+        "token": 0
+      },
+      "real_room_inventory_unchanged": true
+    }
+  ],
+  "resource_observer": "transparent_call_through_to_real_implementations",
+  "positive_control": {
+    "core_protocol": "2.0",
+    "private_protocol": "2.0",
+    "http_status": 200,
+    "real_user_and_character_participants": 2,
+    "all_observed_resource_paths_invoked": true,
+    "room_cleanup_verified": true,
+    "microphone_track_published": false
+  },
+  "inference_router_calls_during_bootstrap": {
+    "generate_text": 0,
+    "generate_structured": 0,
+    "embed": 0,
+    "estimate_input_tokens": 0
+  },
+  "pytest": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 3.254
+  },
+  "evidence_sha256": {
+    "test_source": "736ffa8d0200736c7e0bfc283cceed9056c7909a3be6bfb60776cf1ba13dde48",
+    "junit": "2495e1c4d492295fff9c61ab37fd8e10ae84f6f8900738b8c65c40765cea79c6",
+    "log": "518bae95db15124b977b47ae048714e341aa31694737fa36c52793f0e46b194d"
+  },
+  "cleanup": {
+    "owned_livekit_stopped": true,
+    "owned_ports_closed": [
+      7880,
+      7881,
+      8000,
+      5173,
+      4174
+    ],
+    "shared_services_modified": false
+  },
+  "verification_passed": true,
+  "epic_acceptance_completed": false,
+  "limitations": [
+    "HTTPネットワーク上の配備済みAPIやブラウザUIではなく、TestClient経由の実アプリと実SFUを検証した",
+    "推論生成・実マイク・聴感・FE/BE一括更新や切り戻し全体を受け入れ済みとは扱わない",
+    "推論呼び出し0件のassertは旧版リクエストと正常bootstrapの検証区間を対象とする"
+  ]
+}

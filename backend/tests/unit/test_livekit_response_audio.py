@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 import time
 from types import SimpleNamespace
 
@@ -28,7 +27,7 @@ def rig(monkeypatch):
 
         async def capture_frame(self, frame):
             assert not self.closed
-            self.frames.append(frame.data)
+            self.frames.append(bytes(frame.data))
             if self.capture_entered is not None:
                 self.capture_entered.set()
                 await self.capture_release.wait()
@@ -80,15 +79,16 @@ def rig(monkeypatch):
             raise UnpublishTrackError('track not found')
         flags.publications.pop(sid)
 
-    rtc = SimpleNamespace(
-        AudioSource=Source,
-        LocalAudioTrack=SimpleNamespace(create_audio_track=Track),
-        TrackSource=SimpleNamespace(SOURCE_MICROPHONE='microphone'),
-        TrackPublishOptions=lambda **kwargs: kwargs,
-        AudioFrame=lambda data, rate, channels, count: SimpleNamespace(data=data),
-    )
-    monkeypatch.setitem(sys.modules, 'livekit.rtc', rtc)
-    monkeypatch.setitem(sys.modules, 'livekit.rtc.participant', SimpleNamespace(UnpublishTrackError=UnpublishTrackError))
+    # SDK package自体は保持し、出力に使うAPIだけを置き換える。
+    # AudioFrame／FrameProcessorは他の実adapterと同じSDK型を参照する。
+    from livekit import rtc
+    from livekit.rtc import participant
+
+    monkeypatch.setattr(rtc, "AudioSource", Source)
+    monkeypatch.setattr(rtc, "LocalAudioTrack", SimpleNamespace(create_audio_track=Track))
+    monkeypatch.setattr(rtc, "TrackSource", SimpleNamespace(SOURCE_MICROPHONE="microphone"))
+    monkeypatch.setattr(rtc, "TrackPublishOptions", lambda **kwargs: kwargs)
+    monkeypatch.setattr(participant, "UnpublishTrackError", UnpublishTrackError)
     room = SimpleNamespace(local_participant=SimpleNamespace(publish_track=publish, unpublish_track=unpublish, track_publications=flags.publications))
     output = ResponseAudioTracks(room, ready_timeout_seconds=.05)
     return output, sources, tracks, operations, flags

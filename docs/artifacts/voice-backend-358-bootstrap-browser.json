@@ -1,0 +1,191 @@
+{
+  "scope": "real_http_browser_bootstrap_rejection",
+  "application_source_revision": "10a5286fbb3a486da166bde1152d84b6b95332b1",
+  "harness_parent_revision": "5e8a8b66d0835f99b1056dbacfcc34b72ddb10e3",
+  "test_source": "frontend/integration/voice/bootstrap-rejection.spec.ts",
+  "test_source_sha256": "01171c8c17daf4b954277067ee0e1c13d030680abeb2df4c811874015d784e92",
+  "runtime_profile": "integration-voice",
+  "new_dedicated_data_root": true,
+  "application_source_matches_current_worktree": true,
+  "results": [
+    {
+      "source": "real_http_browser_version_override",
+      "core_version": "1.1",
+      "transport_version": null,
+      "http_status": 409,
+      "rejection_detail": "protocol_version_mismatch",
+      "post_rejection_observation_ms": 1000,
+      "bootstrap_requests": 1,
+      "microphone_calls": 0,
+      "vad_asset_requests": 0,
+      "new_websockets": 0
+    },
+    {
+      "source": "real_http_browser_version_override",
+      "core_version": "2.0",
+      "transport_version": null,
+      "http_status": 409,
+      "rejection_detail": "transport_protocol_version_mismatch",
+      "post_rejection_observation_ms": 1000,
+      "bootstrap_requests": 1,
+      "microphone_calls": 0,
+      "vad_asset_requests": 0,
+      "new_websockets": 0
+    },
+    {
+      "source": "real_http_browser_version_override",
+      "core_version": "2.0",
+      "transport_version": "1.0",
+      "http_status": 409,
+      "rejection_detail": "transport_protocol_version_mismatch",
+      "post_rejection_observation_ms": 1000,
+      "bootstrap_requests": 1,
+      "microphone_calls": 0,
+      "vad_asset_requests": 0,
+      "new_websockets": 0
+    },
+    {
+      "source": "real_http_browser_version_override",
+      "core_version": "2.0",
+      "transport_version": "0.0",
+      "http_status": 409,
+      "rejection_detail": "transport_protocol_version_mismatch",
+      "post_rejection_observation_ms": 1000,
+      "bootstrap_requests": 1,
+      "microphone_calls": 0,
+      "vad_asset_requests": 0,
+      "new_websockets": 0
+    }
+  ],
+  "playwright_stats": {
+    "startTime": "2026-09-14T23:59:54.042Z",
+    "duration": 29377.429,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cleanup": {
+    "environment_teardown": {
+      "status": "completed",
+      "results": [
+        {
+          "service": "frontend",
+          "result": "stopped"
+        },
+        {
+          "service": "backend",
+          "result": "stopped"
+        }
+      ]
+    },
+    "empty_database_row_counts": {
+      "conversations": 0,
+      "conversation_turns": 0,
+      "memory_thread_jobs": 0,
+      "memory_thread_receipts": 0
+    },
+    "owned_ports_listening": {
+      "7880": false,
+      "7881": false,
+      "8000": false,
+      "5173": false,
+      "4174": false
+    },
+    "dedicated_livekit_stopped": true,
+    "external_dependencies_not_owned": true
+  },
+  "prior_attempts_preserved": [
+    {
+      "run_directory": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6",
+      "exit": 1,
+      "result": "Environment CLIのcwd指定不足でアプリ起動前に終了"
+    },
+    {
+      "run_directory": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-02",
+      "exit": 1,
+      "result": "テストのdetail期待値が既存の構造化応答と不一致"
+    },
+    {
+      "run_directory": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-03",
+      "exit": 1,
+      "result": "テストの表示期待値が既存UIの固定文言と不一致"
+    },
+    {
+      "run_directory": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-04",
+      "exit": 0,
+      "result": "4件成功"
+    }
+  ],
+  "raw_evidence": [
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6/run.json",
+      "sha256": "42aae530dbb2417d3fefa3a12da290744a4ef5a5ae5c68513bfa7170d3d45e66"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6/execution.log",
+      "sha256": "76a493590dac982ddfbcc9d86a675891092855bd96bf8a84bd2b902e18d9ac9e"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6/playwright-results.json",
+      "sha256": "097700aaab18e44d2ca38d537aea46730b9f1ee0ec41a8717ee43ff5fe3eb7ee"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-02/run.json",
+      "sha256": "3bed1ea6e359dfa8a664b254dfd1c5af51ca1ee7546440181cca4ab6db2936bd"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-02/execution.log",
+      "sha256": "88dc879dcb90ee2a0f5587dafe11c4b16e5b4f235a8c8344df60c9ae710e8a10"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-02/playwright-results.json",
+      "sha256": "6f01674acc09512049845a04523da0a4f272ee5801b068bfae0febe0b8f3de92"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-02/runtime-data/runtime/standalone/environment-run.json",
+      "sha256": "d2d3f74e2cde9a8c239fbe978a75211e155d9a66b440279fb07abf27e9341fd8"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-03/run.json",
+      "sha256": "42332fc959ded983eb5cbf06e7b77b9d1baf2bbe02f628cf3eef28faaecd15f2"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-03/execution.log",
+      "sha256": "419c1a9a0665739d0fdca736821e72d9073427690ac1d4ebf0722c12df26e2a6"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-03/playwright-results.json",
+      "sha256": "c296a25b78028c793240b16de0ba99ad78cc42278507b7983fc111ca691d7d79"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-03/runtime-data/runtime/standalone/environment-run.json",
+      "sha256": "29b79460f318947558a333d7c9834bcae93083329f208d327df7bdc393f8dd99"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-04/run.json",
+      "sha256": "af631547e93d3be3d2355b7ff1f216f1ebb6009cb15a63d8dbdc7c0a4c5e4041"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-04/execution.log",
+      "sha256": "fd6d6b1eea9a3ad0fec5112c5f3670deaf37ef5f282c5038028477eaac4e576c"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-04/playwright-results.json",
+      "sha256": "e3096943f6cf4f329313fb6efb97273fb6c3b27b9e3312d0b48c523aed0c5c83"
+    },
+    {
+      "path": "frontend/test-results/ds358-bootstrap-browser-5e8a8b6-04/runtime-data/runtime/standalone/environment-run.json",
+      "sha256": "816f6f3883777c441b3a1418c99f66f810353e22cc75c04d48d3ea11a6609c84"
+    }
+  ],
+  "limitations": [
+    "現在のFEを実行し、bootstrap requestのversion提示だけを旧契約へ変更した。旧FE bundle自体の実行ではない。",
+    "HTTP応答・ブラウザUI・getUserMediaは実実装。API応答、Room、音声をmockで差し替えていない。",
+    "拒否後1秒までのマイク取得・FE VAD asset・新WebSocketの件数を観測した。将来の任意時点までの不在証明ではない。",
+    "UIは汎用エラーと音声停止を表示する。protocol専用メッセージや再読み込み案内の表示を確認した記録ではない。",
+    "資源作成前の実SFU呼び出し0回と正常版接続は別artifactのTestClient試験が担当し、本ブラウザ試験だけで証明しない。",
+    "Environment CLIは起動時にFE/BEをbuildする。run.jsonの起動前image IDは実行containerのimage ID証明に使わない。実行containerのimage IDは未採取。",
+    "音声・テキストの会話を投入していない。全cohort前後比較、FE/BE一括更新・切り戻し、人の実マイク・聴感は別途必要。"
+  ]
+}

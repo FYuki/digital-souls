@@ -31,7 +31,7 @@ from app.conversation_core.adapters import (
     ResponsePromptState,
 )
 from app.conversation_core.ports import DeliveryPort, TtsPort
-from app.conversation_core.models import Response, ResponseStopResult
+from app.conversation_core.models import Response, ResponseStopResult, ResponseState
 from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
@@ -51,6 +51,14 @@ from app.livekit_transport.delivery import CoreNotificationPort, TerminalProtoco
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
+from app.livekit_transport.microphone_frames import (
+    MicrophoneFrameClock, MICROPHONE_FRAME_MS, MICROPHONE_QUEUE_CAPACITY,
+)
+from app.livekit_transport.microphone_integrity import AudioIntegrityFault, MicrophoneIntegrity
+from app.voice_input.models import check_ready
+from app.voice_input.pipeline import AudioInputFault, VoiceInputPipeline
+from app.voice_input.session import BackendVoiceInput, InputGrant, SpeechBoundary
+
 from app.livekit_transport.text_input import TextInputReceiver
 from app.livekit_transport.stt_audio import (
     PcmCaptureSpan, SttSignalSpan, prepare_stt_audio, stt_preparation_statistics,
@@ -197,7 +205,7 @@ class _ObservationPublisher:
 
     def record(self, observation: dict[str, object]) -> None:
         frame = {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "microphone_observation",
             "generation": self._generation(),
             **observation,
@@ -749,7 +757,7 @@ class _ConversationCoreDelivery:
                 response_id=response_id, name="first_audio_out", stage="transport", timestamp=timestamp_ns,
             )
         await self._coordinator.send_core(json.dumps({
-            "type": "observation", "protocol_version": "1.1", "event_id": str(uuid4()),
+            "type": "observation", "protocol_version": "2.0", "event_id": str(uuid4()),
             "session_id": self._session_id, "response_id": response_id,
             "measurement": "first_audio_out", "timestamp": str(timestamp_ns),
             "clock_domain": "server_monotonic", "unit": "nanosecond",
@@ -759,7 +767,7 @@ class _ConversationCoreDelivery:
         self, event: CoreEvent, *, utterance_id: str | None = None
     ) -> bytes:
         payload: dict[str, object] = {
-            "protocol_version": "1.1",
+            "protocol_version": "2.0",
             "event_id": str(uuid4()),
             "session_id": event.session_id,
             "monotonic_timestamp_ms": int(time.monotonic() * 1000),
@@ -908,14 +916,18 @@ class _UserAudioCapture:
     interrupted_response_id: str | None = None
     pcm: bytearray = field(default_factory=bytearray)
     finalized: bool = False
-    finalization_scheduled: bool = False
-    media_tail_elapsed: bool = False
+    integrity_verified: bool = False
     capacity_exceeded: bool = False
     preview_attempts: int = 0
     preview_complete: bool = False
     preview_last_signal_samples: int = 0
     preview_signal: SttSignalSpan = field(default_factory=SttSignalSpan)
     received_span: PcmCaptureSpan = field(default_factory=PcmCaptureSpan)
+    media_offset_samples: int | None = None
+    vad_started_sample: int | None = None
+    vad_active_end_sample: int | None = None
+    vad_detected_end_sample: int | None = None
+    media_end_anchor_valid: bool = False
     preparation_started: bool = False
     quiet_samples: int = 0
 
@@ -927,15 +939,23 @@ class _ConversationCoreBridge:
         schedule: Callable[[Awaitable[None]], None],
         stop_audio: Callable[[str], None] = lambda _response_id: None,
         confirm_response_playback: Callable[[str, int], bool] = lambda _response_id, _sequence: False,
-        media_tail_seconds: float = 0.15,
         measurement: LiveKitMeasurementSession | None = None,
         session_metrics: SessionMetrics | None = None,
         text_input: TextInputReceiver | None = None,
+        publish_audio_event: Callable[[dict[str, object]], Awaitable[None]] | None = None,
+        authorize_microphone: Callable[[str], Awaitable[bool]] | None = None,
+        verify_audio_integrity: Callable[[str, int, int], Awaitable[None]] | None = None,
+        user_participant_id: str | None = None,
     ) -> None:
         self._session = session
         self._text_input = text_input
+        self._voice_input: BackendVoiceInput | None = None
+        self._publish_audio_event = publish_audio_event
+        self._authorize_microphone = authorize_microphone
+        self._verify_audio_integrity = verify_audio_integrity
+        self._user_participant_id = user_participant_id
+        self._playback_response_id: str | None = None
         self._schedule = schedule
-        self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
         self._confirm_response_playback = confirm_response_playback
         self._measurement = measurement
@@ -953,6 +973,22 @@ class _ConversationCoreBridge:
 
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
+        if event["type"] in {"speech_started", "speech_stopped"}:
+            raise TerminalProtocolError("speech boundaries are owned by Backend")
+        if event["type"] == "audio_input_open_requested":
+            self._schedule(self._open_audio(event))
+            return
+        if event["type"] in {"audio_input_suppression_changed", "session_muted", "session_resumed", "user_text_submitted"}:
+            if self._voice_input is None:
+                raise TerminalProtocolError("audio input is not ready")
+            reason = "text_priority" if event["type"] == "user_text_submitted" else "input_suppressed"
+            if not self._voice_input.suppress(reason=reason, input_revision=event["input_revision"]):
+                if event["type"] != "user_text_submitted":
+                    return
+                self._voice_input.suppress(reason="text_priority")
+        if event["type"] in {"session_disconnected", "session_reconnected"} and self._voice_input is not None:
+            self._voice_input.suppress(reason="disconnect")
+            self._microphone_preroll.clear()
         if event["type"] == "audio_input_suppression_changed":
             self._text_focus_suppressed = bool(event["suppressed"])
             self._apply_audio_input_gate()
@@ -967,82 +1003,252 @@ class _ConversationCoreBridge:
             # 受付が非同期処理中でも照合要求はprocessingの結果へ到達できる。
             self._schedule(self._text_input.receive(event))
             return
-        if event["type"] == "speech_started" and self._is_user_event(event):
-            if self._audio_input_suppressed:
-                return
-            utterance_id = str(event["utterance_id"])
-            if self._measurement is not None:
-                interrupted_response_id = event.get("response_id")
-                if isinstance(interrupted_response_id, str):
-                    self._measurement.bind_interruption(
-                        utterance_id=utterance_id, response_id=interrupted_response_id,
-                    )
-                self._measurement.record_utterance_event(
-                    utterance_id=utterance_id,
-                    name="speech_started",
-                    stage="vad",
-                )
-                self._measurement.record_utterance_event(
-                    utterance_id=utterance_id, name="speech_started_client", stage="vad",
-                    timestamp=event["monotonic_timestamp_ms"],
-                    clock_domain="client_monotonic", unit="millisecond",
-                )
-                # 通常発話の正解境界診断はその発話への応答に結ぶ。
-                # 割り込み指標のspeech_started_clientは従来どおり旧応答だけへ結ぶ。
-                self._measurement.record_utterance_event(
-                    utterance_id=utterance_id, name="vad_speech_start_client", stage="vad",
-                    timestamp=event["monotonic_timestamp_ms"],
-                    clock_domain="client_monotonic", unit="millisecond",
-                )
-            open_captures = sum(
-                not capture.finalized for capture in self._user_audio_captures
-            )
-            if open_captures >= STT_MAX_OPEN_CAPTURES:
-                oldest_open = next(
-                    capture
-                    for capture in self._user_audio_captures
-                    if not capture.finalized
-                )
-                self._user_audio_captures.remove(oldest_open)
-                self._schedule(
-                    self._discard_capture(oldest_open.utterance_id)
-                )
-            capture = _UserAudioCapture(
-                utterance_id=utterance_id,
-                interrupted_response_id=(
-                    str(event["response_id"])
-                    if isinstance(event.get("response_id"), str)
-                    else None
-                ),
-            )
-            capture.received_span.append(
-                self._microphone_received_bytes - len(self._microphone_preroll),
-                len(self._microphone_preroll),
-            )
-            capture.pcm.extend(self._microphone_preroll)
-            self._microphone_preroll.clear()
-            self._user_audio_captures.append(capture)
-            self._consider_stt_preparation(capture, bytes(capture.pcm))
-            return
-        if event["type"] == "speech_stopped" and self._is_user_event(event):
-            utterance_id = str(event["utterance_id"])
-            if self._measurement is not None:
-                self._measurement.record_utterance_event(
-                    utterance_id=utterance_id,
-                    name="vad_speech_end",
-                    stage="vad",
-                )
-            for capture in self._user_audio_captures:
-                if capture.utterance_id == utterance_id:
-                    capture.finalized = True
-                    self._schedule_finalization_if_ready(capture)
-                    break
-            return
         if event["type"] == "observation":
             if self._measurement is not None:
                 self._measurement.record_client_observation(event)
             return
         self._schedule(self._receive_serialized(event))
+
+    async def prepare_audio(self) -> None:
+        def prepare() -> VoiceInputPipeline:
+            check_ready()
+            return VoiceInputPipeline()
+        task = asyncio.create_task(asyncio.to_thread(prepare))
+        try:
+            pipeline = await asyncio.shield(task)
+        except BaseException:
+            def release(done: asyncio.Task[VoiceInputPipeline]) -> None:
+                if not done.cancelled() and done.exception() is None:
+                    done.result().close()
+            task.add_done_callback(release)
+            raise
+        self._voice_input = BackendVoiceInput(
+            pipeline, on_frame=lambda frame: self.receive_microphone(frame.pcm),
+            on_started=self._audio_started, on_stopped=self._audio_stopped,
+            on_discarded=self._audio_discarded,
+        )
+
+    def _audio_event(self, kind: str, **fields: object) -> dict[str, object]:
+        return {"type": kind, "protocol_version": "2.0", "event_id": str(uuid4()),
+                "session_id": self._session.session_id,
+                "monotonic_timestamp_ms": time.monotonic_ns() // 1_000_000, **fields}
+
+    async def _publish_audio(self, event: dict[str, object]) -> None:
+        if self._publish_audio_event is None:
+            raise RuntimeError("audio event delivery is not connected")
+        await self._publish_audio_event(event)
+
+    def _speech_event(self, kind: str, boundary: SpeechBoundary) -> dict[str, object]:
+        detection = boundary.detection
+        return self._audio_event(
+            kind, utterance_id=boundary.utterance_id,
+            speaker={"role": "user", "participant_id": self._user_participant_id},
+            input_generation=boundary.grant.input_generation, track_sid=boundary.grant.track_sid,
+            start_sample=detection.started_sample, detected_sample=detection.detected_sample,
+            active_end_sample=detection.active_end_sample, sample_rate=STT_SAMPLE_RATE,
+            clock_domain="server_monotonic",
+        )
+
+    def _audio_started(self, boundary: SpeechBoundary) -> None:
+        event = self._speech_event("speech_started", boundary)
+        active = self._session.active_response
+        response_id = active.response_id if active is not None else self._playback_response_id
+        if response_id is not None:
+            try:
+                response = self._session.response(response_id)
+            except KeyError:
+                response_id = None
+            else:
+                if response.state not in {ResponseState.IN_PROGRESS, ResponseState.COMPLETED}:
+                    response_id = None
+        if response_id is not None:
+            event["response_id"] = response_id
+        self._begin_capture(event)
+        self._schedule(self._publish_audio(event))
+
+    async def _audio_stopped(self, boundary: SpeechBoundary) -> None:
+        capture = next((item for item in self._user_audio_captures
+                        if item.utterance_id == boundary.utterance_id), None)
+        if capture is None:
+            return
+        # 発話終了位置は既にPCMで確認済み。focus抑止はこの区間を取り消さない。
+        capture.finalized = True
+        # await前に、この終了frameまでの受信連番とVADのtrack sample位置を固定する。
+        detection = boundary.detection
+        capture.vad_active_end_sample = detection.active_end_sample
+        capture.vad_detected_end_sample = detection.detected_sample
+        capture.media_end_anchor_valid = (
+            capture.media_offset_samples is not None
+            and capture.vad_started_sample == detection.started_sample
+            and self._microphone_received_bytes // 2 + capture.media_offset_samples
+            == detection.detected_sample
+        )
+        await self._publish_audio(self._speech_event("speech_stopped", boundary))
+        if self._measurement is not None:
+            self._measurement.record_utterance_event(
+                utterance_id=boundary.utterance_id, name="vad_speech_end", stage="vad",
+            )
+        try:
+            if self._verify_audio_integrity is None:
+                raise AudioInputFault("audio_integrity_unavailable")
+            await self._verify_audio_integrity(
+                boundary.grant.track_sid, boundary.detection.started_sample, boundary.detection.detected_sample,
+            )
+        except AudioInputFault as error:
+            if self._measurement is not None and isinstance(error, AudioIntegrityFault):
+                for name, value in error.statistics.items():
+                    self._measurement.record_utterance_event(
+                        utterance_id=boundary.utterance_id, name=name, stage="input_integrity",
+                        value=value,
+                    )
+            self._audio_discarded(boundary.utterance_id, error.code)
+            # 先行発話が失敗しても、別世代で終了・検証済みの後続を滞留させない。
+            await self._finalize_user_audio_if_ready()
+            return
+        if not any(item is capture for item in self._user_audio_captures):
+            return
+        # BE自身がPCM境界を検出するため、FE通知後のmedia tail待機は不要。
+        capture.integrity_verified = True
+        await self._finalize_user_audio_if_ready()
+
+    def _audio_discarded(self, utterance_id: str | None, reason: str) -> None:
+        self._microphone_preroll.clear()
+        if utterance_id is not None:
+            self._user_audio_captures = deque(
+                item for item in self._user_audio_captures if item.utterance_id != utterance_id
+            )
+            normalized = {
+                "invalid_audio_frame": "invalid_audio",
+                "vad_backlog_exceeded": "input_capacity_exceeded",
+                "vad_reset_required": "vad_unavailable",
+                "vad_processing_failed": "vad_unavailable",
+                "microphone_track_unavailable": "audio_gap",
+            }.get(reason, reason)
+            self._schedule(self._discard_capture(utterance_id, normalized))
+        if reason not in {"input_suppressed", "input_replaced", "input_closed", "text_priority", "disconnect", "microphone_track_unavailable"}:
+            self._schedule(self._publish_audio(self._audio_event(
+                "error", classification="recoverable", error_code="audio_input_repeat_required",
+                user_state="listening",
+            )))
+
+    async def _open_audio(self, event: dict[str, object]) -> None:
+        request_id, track_sid = str(event["event_id"]), str(event["track_sid"])
+        try:
+            source = self._voice_input
+            if source is None:
+                raise AudioInputFault("vad_unavailable")
+            if self._audio_input_suppressed:
+                raise AudioInputFault("input_suppressed")
+            if self._authorize_microphone is None or not await self._authorize_microphone(track_sid):
+                raise AudioInputFault("microphone_track_unavailable")
+            if self._audio_input_suppressed:
+                raise AudioInputFault("input_suppressed")
+            if self._voice_input is not source:
+                raise AudioInputFault("vad_unavailable")
+            grant = await source.open(
+                track_sid=track_sid, request_id=request_id, input_revision=int(str(event["input_revision"])),
+            )
+            self._microphone_preroll.clear()
+            await self._publish_audio(self._audio_event(
+                "audio_input_opened", request_event_id=request_id, track_sid=grant.track_sid,
+                input_generation=grant.input_generation, input_revision=grant.input_revision,
+            ))
+        except AudioInputFault as error:
+            await self._publish_audio(self._audio_event(
+                "audio_input_rejected", request_event_id=request_id, reason=error.code,
+            ))
+
+    async def receive_microphone_frame(self, pcm: bytes, *, start_sample: int, track_sid: str) -> None:
+        source = self._voice_input
+        if source is None or self._audio_input_suppressed:
+            return
+        grant = source.grant
+        if grant is None or grant.track_sid != track_sid:
+            return
+        try:
+            await source.receive(pcm, start_sample=start_sample, grant=grant)
+        except AudioInputFault:
+            # resetの失敗は当該入力だけを停止する。旧世代の失敗で新入力を止めない。
+            if self._voice_input is source and source.revision == grant.input_revision:
+                self._audio_unavailable(grant)
+
+    def _audio_unavailable(self, grant: InputGrant) -> None:
+        self._schedule(self._publish_audio(self._audio_event(
+            "error", classification="recoverable", error_code="audio_input_unavailable",
+            user_state="muted", track_sid=grant.track_sid,
+            input_generation=grant.input_generation, input_revision=grant.input_revision,
+        )))
+
+    def close_microphone_track(
+        self, track_sid: str, *, reason: str = "microphone_track_unavailable",
+    ) -> None:
+        source = self._voice_input
+        if source is not None and source.grant is not None and source.grant.track_sid == track_sid:
+            grant = source.grant
+            source.suppress(reason=reason)
+            self._microphone_preroll.clear()
+            if reason == "microphone_track_unavailable":
+                # 無音中のreader終了にも通知し、聴取中表示を残さない。
+                self._audio_unavailable(grant)
+
+    async def close_audio(self) -> None:
+        source, self._voice_input = self._voice_input, None
+        if source is not None:
+            await source.close()
+
+    def _begin_capture(self, event: dict[str, object]) -> None:
+        if self._audio_input_suppressed:
+            return
+        utterance_id = str(event["utterance_id"])
+        if self._measurement is not None:
+            interrupted_response_id = event.get("response_id")
+            if isinstance(interrupted_response_id, str):
+                self._measurement.bind_interruption(
+                    utterance_id=utterance_id, response_id=interrupted_response_id,
+                )
+            self._measurement.record_utterance_event(
+                utterance_id=utterance_id,
+                name="speech_started",
+                stage="vad",
+            )
+        open_captures = sum(
+            not capture.finalized for capture in self._user_audio_captures
+        )
+        if open_captures >= STT_MAX_OPEN_CAPTURES:
+            oldest_open = next(
+                capture
+                for capture in self._user_audio_captures
+                if not capture.finalized
+            )
+            self._user_audio_captures.remove(oldest_open)
+            self._schedule(
+                self._discard_capture(oldest_open.utterance_id)
+            )
+        capture = _UserAudioCapture(
+            utterance_id=utterance_id,
+            interrupted_response_id=(
+                str(event["response_id"])
+                if isinstance(event.get("response_id"), str)
+                else None
+            ),
+        )
+        detected, started = event.get("detected_sample"), event.get("start_sample")
+        if (event.get("type") == "speech_started"
+                and type(detected) is int and type(started) is int
+                and 0 <= started <= detected):
+            # on_frameがこのconfirmed frameをcaptureへ渡した直後に呼ばれる。
+            # 世代間でbridgeの受信連番は継続するため、offsetは負にもなり得る。
+            capture.media_offset_samples = detected - self._microphone_received_bytes // 2
+            capture.vad_started_sample = started
+        capture.received_span.append(
+            self._microphone_received_bytes - len(self._microphone_preroll),
+            len(self._microphone_preroll),
+        )
+        capture.pcm.extend(self._microphone_preroll)
+        self._microphone_preroll.clear()
+        self._user_audio_captures.append(capture)
+        self._consider_stt_preparation(capture, bytes(capture.pcm))
+        return
 
     @property
     def _audio_input_suppressed(self) -> bool:
@@ -1091,20 +1297,18 @@ class _ConversationCoreBridge:
         self._microphone_received_bytes += len(pcm)
         if self._audio_input_suppressed:
             return
-        if not self._user_audio_captures:
+        capture = next(
+            (item for item in reversed(self._user_audio_captures) if not item.finalized),
+            None,
+        )
+        if capture is None:
+            # BEがPCMから確定した終了境界を越える音声は次の入力のprerollにする。
+            # 終了通知・欠落確認の待機中にも、確定済みcaptureへ追加しない。
             self._microphone_preroll.extend(pcm)
             excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
             if excess > 0:
                 del self._microphone_preroll[:excess]
             return
-        active = next(
-            (item for item in reversed(self._user_audio_captures) if not item.finalized),
-            None,
-        )
-        capture = active or next(
-            (item for item in self._user_audio_captures if not item.pcm),
-            self._user_audio_captures[0],
-        )
         if self._measurement is not None:
             self._measurement.record_utterance_event(
                 utterance_id=capture.utterance_id,
@@ -1118,7 +1322,6 @@ class _ConversationCoreBridge:
             capture.pcm.extend(pcm)
         self._consider_stt_preparation(capture, pcm)
         self._consider_turn_preview(capture)
-        self._schedule_finalization_if_ready(capture)
 
     def _consider_turn_preview(self, capture: _UserAudioCapture) -> None:
         if (capture.interrupted_response_id is None or capture.preview_complete
@@ -1250,26 +1453,6 @@ class _ConversationCoreBridge:
                 if capture is not None:
                     self._consider_turn_preview(capture)
 
-    def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
-        if (
-            capture.finalized
-            and capture.pcm
-            and not capture.finalization_scheduled
-        ):
-            capture.finalization_scheduled = True
-            self._schedule(self._finalize_after_media_tail(capture.utterance_id))
-
-    async def _finalize_after_media_tail(self, utterance_id: str) -> None:
-        # reliable dataとWebRTC mediaは同じ到着順を保証しない。VAD停止直後の
-        # audio frameを取りこぼさない短い猶予を置いてからSTT入力を確定する。
-        if self._media_tail_seconds > 0:
-            await asyncio.sleep(self._media_tail_seconds)
-        for capture in self._user_audio_captures:
-            if capture.utterance_id == utterance_id:
-                capture.media_tail_elapsed = True
-                await self._finalize_user_audio_if_ready()
-                break
-
     async def _finalize_user_audio_if_ready(self) -> None:
         while self._user_audio_captures:
             capture = self._user_audio_captures[0]
@@ -1280,9 +1463,9 @@ class _ConversationCoreBridge:
                     return
                 self._user_audio_captures.popleft()
                 continue
-            # 各発話のtimerが完了するまで、その発話の末尾を確定しない。
+            # 各発話の欠落確認が成功するまでSTTへ渡さない。
             # 音声のない旧captureは従来どおり後続を妨げず取り除く。
-            if not capture.media_tail_elapsed:
+            if not capture.integrity_verified:
                 return
             utterance_id = capture.utterance_id
             microphone_pcm = bytes(capture.pcm)
@@ -1294,7 +1477,24 @@ class _ConversationCoreBridge:
                 )
                 continue
             if self._measurement is not None:
-                for name, value in capture.received_span.statistics(microphone_pcm).items():
+                statistics = capture.received_span.statistics(microphone_pcm)
+                valid_media = capture.media_end_anchor_valid and statistics["stt_capture_received_span_valid"] == 1
+                statistics["stt_capture_media_span_valid"] = 0
+                if valid_media and capture.media_offset_samples is not None:
+                    media_start = statistics["stt_capture_received_start_sample"] + capture.media_offset_samples
+                    media_end = statistics["stt_capture_received_end_sample"] + capture.media_offset_samples
+                    if (0 <= media_start <= media_end and media_end == capture.vad_detected_end_sample
+                            and capture.vad_started_sample is not None
+                            and capture.vad_active_end_sample is not None):
+                        statistics.update(
+                            stt_capture_media_span_valid=1,
+                            stt_capture_media_start_sample=media_start,
+                            stt_capture_media_end_sample=media_end,
+                            vad_started_sample=capture.vad_started_sample,
+                            vad_active_end_sample=capture.vad_active_end_sample,
+                            vad_detected_end_sample=media_end,
+                        )
+                for name, value in statistics.items():
                     self._measurement.record_utterance_event(
                         utterance_id=utterance_id, name=name, stage='stt_capture', value=value,
                     )
@@ -1306,7 +1506,16 @@ class _ConversationCoreBridge:
 
     async def _receive(self, event: dict[str, object]) -> None:
         event_type = event["type"]
-        if event_type == "response_cancel_requested":
+        if event_type == "playback_started":
+            response_id = event.get("response_id")
+            if isinstance(response_id, str):
+                try:
+                    response = self._session.response(response_id)
+                except KeyError:
+                    return
+                if response.state in {ResponseState.IN_PROGRESS, ResponseState.COMPLETED}:
+                    self._playback_response_id = response_id
+        elif event_type == "response_cancel_requested":
             response_id = event.get("response_id")
             reason = event.get("reason")
             if not isinstance(response_id, str) or not isinstance(reason, str):
@@ -1325,6 +1534,8 @@ class _ConversationCoreBridge:
             ):
                 self._log_invalid_control_event(event_type)
                 return
+            if self._playback_response_id == response_id:
+                self._playback_response_id = None
             if event_type == "playback_stopped":
                 # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
                 self._stop_audio(response_id)
@@ -1455,6 +1666,7 @@ class _ConversationCoreBridge:
         return isinstance(speaker, dict) and speaker.get("role") == "user"
 
     async def end(self) -> None:
+        await self.close_audio()
         await self._session.end()
 
     @staticmethod
@@ -1520,6 +1732,7 @@ class ProductionRuntimeManager:
         self._audio_sources: dict[str, ResponseAudioTracks] = {}
         self._core_sessions: dict[str, ConversationCoreSession] = {}
         self._core_bridges: dict[str, _ConversationCoreBridge] = {}
+        self._microphone_integrities: dict[tuple[str, str], MicrophoneIntegrity] = {}
         self._cleanup_states: dict[str, _SessionCleanupState] = {}
         self._screen_client_sessions: dict[str, UUID] = {}
 
@@ -1609,6 +1822,7 @@ class ProductionRuntimeManager:
             int, tuple[rtc.Track, str, str, int, asyncio.Task[None] | None]
         ] = {}
         microphone_lock = asyncio.Lock()
+        microphone_changed = asyncio.Event()
 
         async def replace_microphone_reader(
             track: rtc.Track, identity: str, participant_sid: str,
@@ -1632,6 +1846,39 @@ class ProductionRuntimeManager:
             ))
             if task is not None:
                 microphone_readers[key] = (track, identity, participant_sid, generation, task)
+                microphone_changed.set()
+
+        async def authorize_microphone(track_sid: str) -> bool:
+            try:
+                # FEの5秒ACK待ちに収める。統計開始前の発話を認可し、後から欠測で
+                # 破棄する状態を避けるため、無音trackで最初の有効統計を待つ。
+                async with asyncio.timeout(4):
+                    while True:
+                        for track, identity, participant_sid, generation, task in tuple(microphone_readers.values()):
+                            if (str(track.sid) == track_sid and task is not None and not task.done()
+                                    and generation == coordinator.generation
+                                    and coordinator.is_current_participant(identity=identity, participant_sid=participant_sid)):
+                                monitor = self._microphone_integrities.get((session_id, track_sid))
+                                if monitor is None:
+                                    # reader taskは登録直後、最初の実行をまだ待っている場合がある。
+                                    await asyncio.sleep(0.01)
+                                    break
+                                await monitor.wait_ready()
+                                return (not task.done() and generation == coordinator.generation
+                                        and self._microphone_integrities.get((session_id, track_sid)) is monitor
+                                        and coordinator.is_current_participant(
+                                            identity=identity, participant_sid=participant_sid))
+                        else:
+                            microphone_changed.clear()
+                            await microphone_changed.wait()
+            except (TimeoutError, AudioInputFault):
+                return False
+
+        async def verify_audio_integrity(track_sid: str, start_sample: int, end_sample: int) -> None:
+            monitor = self._microphone_integrities.get((session_id, track_sid))
+            if monitor is None:
+                raise AudioInputFault("audio_integrity_unavailable")
+            await monitor.verify(start_sample, end_sample)
 
         async def generation_ready() -> None:
             if audio_probe is not None:
@@ -1800,6 +2047,7 @@ class ProductionRuntimeManager:
             async def handle_track_unsubscribed() -> None:
                 async with microphone_lock:
                     old = microphone_readers.pop(id(track), None)
+                    microphone_changed.set()
                     if old is not None and old[4] is not None:
                         old[4].cancel()
                         await asyncio.gather(old[4], return_exceptions=True)
@@ -1873,6 +2121,10 @@ class ProductionRuntimeManager:
             confirm_response_playback=delivery.confirm_response_playback,
             measurement=delivery.measurement,
             session_metrics=session_metrics,
+            publish_audio_event=publish_input_result,
+            authorize_microphone=authorize_microphone,
+            verify_audio_integrity=verify_audio_integrity,
+            user_participant_id=str(request["core_participant_id"]),
             text_input=TextInputReceiver(
                 session_id=session_id, participant_id=str(request["core_participant_id"]),
                 submit=submit_text, publish=publish_input_result,
@@ -1881,6 +2133,7 @@ class ProductionRuntimeManager:
         )
         self._core_sessions[session_id] = core_session
         self._core_bridges[session_id] = bridge
+        await bridge.prepare_audio()
         if isinstance(self._core_port, ProductionCoreEventInbox):
             self._core_port.bind(session_id, bridge.notify)
         self._ready[session_id].set()
@@ -1908,9 +2161,16 @@ class ProductionRuntimeManager:
             ),
             sample_rate=STT_SAMPLE_RATE,
         )
+        clock = MicrophoneFrameClock()
         stream: rtc.AudioStream = rtc_module.AudioStream(
-            track, sample_rate=STT_SAMPLE_RATE, num_channels=1
+            track, sample_rate=STT_SAMPLE_RATE, num_channels=1,
+            capacity=MICROPHONE_QUEUE_CAPACITY, frame_size_ms=MICROPHONE_FRAME_MS,
+            noise_cancellation=clock,
         )
+        key = (session_id, str(track.sid))
+        monitor = MicrophoneIntegrity(track.get_stats, lambda: clock.samples_seen)
+        self._microphone_integrities[key] = monitor
+        monitor_task = asyncio.create_task(monitor.run())
         try:
             async for event in stream:
                 if (
@@ -1925,8 +2185,13 @@ class ProductionRuntimeManager:
                 bridge = self._core_bridges.get(session_id)
                 if bridge is None:
                     return
-                pcm = bytes(frame.data)
-                bridge.receive_microphone(pcm)
+                try:
+                    pcm, start_sample = clock.read(frame)
+                except AudioInputFault:
+                    return
+                await bridge.receive_microphone_frame(
+                    pcm, start_sample=start_sample, track_sid=str(track.sid),
+                )
                 observer.receive_frame(
                     pcm=pcm,
                     sample_count=int(frame.samples_per_channel),
@@ -1934,7 +2199,19 @@ class ProductionRuntimeManager:
                 )
                 if session_id not in self._rooms:
                     return
+        except Exception:
+            # 端末trackの読取失敗はfinallyで入力停止として通知する。
+            # text・終了済み発話・回答再生はこのreaderの所有物ではない。
+            logger.warning("LiveKit microphone reader failed")
         finally:
+            monitor.close()
+            monitor_task.cancel()
+            await asyncio.gather(monitor_task, return_exceptions=True)
+            if self._microphone_integrities.get(key) is monitor:
+                self._microphone_integrities.pop(key, None)
+            bridge = self._core_bridges.get(session_id)
+            if bridge is not None:
+                bridge.close_microphone_track(str(track.sid))
             await stream.aclose()
 
     def _schedule_task(
@@ -2105,6 +2382,9 @@ class ProductionRuntimeManager:
                     screen_client_session_id,
                     "backend_disconnect",
                 )
+            bridge = self._core_bridges.get(session_id)
+            if bridge is not None:
+                await bridge.close_audio()
             core_session = self._core_sessions.pop(session_id, None)
             if core_session is not None:
                 await core_session.end()

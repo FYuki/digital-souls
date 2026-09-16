@@ -43,6 +43,14 @@ Windowsやcloudへの暗黙fallbackを前提にしない。
 現行のdev ProfileではBackend／Frontendがmanaged、Ollama／VOICEVOX／Whisper／LiveKitがexternal、
 Chromaがin_processである。接続先とreadinessは[dev Profile](../environments/profiles/dev.json)を参照する。
 
+#358作業ブランチのLiveKit入力はCore／private protocol 2.0を使用する。FEは新trackを通知し、
+BEの入力開始ACK後にマイクを有効化する。発話境界と割り込み判断はBEが通知し、
+FEは再生停止と実再生観測を担当する。FE／BEを一組で更新・切り戻す。
+VAD推論失敗は発話を破棄して静音後に回復する。reset失敗・認可trackのreader終了は、
+入力世代付きのエラーで当該マイクを停止し、新SIDによる明示再開を必要とする。
+[移行契約](voice-backend-migration-contract.md)と[検証記録](validation/voice-backend-vad-358.md)を参照する。
+実サービス・前後性能比較・人の実マイク受入は未完了である。
+
 ## 自作BE/FE構成
 
 `digital-souls`のCoreは、自作BE（FastAPI）+ 自作FE（Vite + Svelte）で実装している。
@@ -52,6 +60,8 @@ Chromaがin_processである。接続先とreadinessは[dev Profile](../environm
 * `routers/chat.py` — テキストチャットのHTTPエンドポイント
 * `routers/ws.py` — 移行前baselineとして凍結するターン型音声WebSocketエンドポイント。Wave 3機能は追加しない
 * `routers/livekit.py` / `livekit_transport/` — LiveKit join認証、Roomとsessionの対応付け、control event配送、character audio runtimeを担うWave 3の正式な音声transport境界
+* `voice_input/` — LiveKitの連続PCMをCPUのSilero legacy／libfvadへ入力し、発話区間と正式utterance・入力世代をBEで確定する。モデル資産はhash固定、処理とbufferには上限を設ける
+* `livekit_transport/microphone_frames.py` / `microphone_integrity.py` — SDK queue前のsample位置とtrack統計から欠落を確認し、終了済みcaptureを固定してSTTへ渡す
 * `livekit_transport/paced_audio.py` — 応答ごとのPCM queueを最大1秒に制限し、入力のある10ms frameだけをbufferなしのnative AudioSourceへ供給する。cancel時はqueueと送信taskを止め、応答末尾は明示的にpaddingしてnative供給完了を待つ
 * `livekit_transport/playback_completion.py` — 残りPCMの送出後、応答ID・最終sequenceが一致するブラウザの全出力確認を待つ。Coreの生成pipelineは`ResponseCompletionPort`を介して完了を待ち、その間もcancelできる
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
@@ -89,7 +99,7 @@ Irodori対応はepic実装であり、本採用・性能受入は#329の実測�
 
 * `lib/audio/transport.ts` — 移行前baseline用の `WebSocketAudioTransport`。Wave 3の正式経路には使用しない
 * `livekit/` — LiveKit Room接続、microphone publish、応答IDを持つCharacter AudioTrack再生、旧応答trackの再開防止、control event、再接続を担うWave 3音声transport
-* `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
+* `lib/AudioRecorder.svelte` — LiveKitでは端末マイク取得・有効状態を扱い、VAD assetをロードしない。旧WebSocketのPCM録音・FE VADには`lib/audio/pcm-worklet-recorder.ts`／`vad-assets.ts`を保持する
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
 * `lib/MemoryManagement.svelte` / `lib/AddonManagement.svelte` — 記憶管理、Addon接続管理・操作承認のUI

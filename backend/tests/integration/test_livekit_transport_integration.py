@@ -14,7 +14,7 @@ CHARACTER_ID = "miori"
 SHORT_RECONNECT_GRACE_MS = 250
 STATE_WAIT_TIMEOUT_SECONDS = 10.0
 APPLICATION_TOPIC = "digital-souls.core.v1"
-PRIVATE_TOPIC = "digital-souls.livekit-transport.v1"
+PRIVATE_TOPIC = "digital-souls.livekit-transport.v2"
 
 
 def _required_setting(name: str) -> str:
@@ -50,7 +50,8 @@ def _bootstrap(
     session_id: str | None = None,
 ) -> httpx.Response:
     body: dict[str, object] = {
-        "protocol_version": "1.1",
+        "protocol_version": "2.0",
+        "transport_protocol_version": "2.0",
         "request_id": str(uuid4()),
         "character_id": CHARACTER_ID,
         "conversation_id": conversation_id,
@@ -64,7 +65,7 @@ def _bootstrap(
 def _core_event(session_id: str, event_id: str) -> bytes:
     return json.dumps(
         {
-            "protocol_version": "1.1",
+            "protocol_version": "2.0",
             "event_id": event_id,
             "type": "session_started",
             "session_id": session_id,
@@ -198,7 +199,7 @@ async def _connect_test_app_user(client, rtc_module):
 async def _acknowledge_application_event(room, event_id: str) -> None:
     payload = json.dumps(
         {
-            "protocol_version": "1.0",
+            "protocol_version": "2.0",
             "type": "ack",
             "event_id": event_id,
             "generation": 0,
@@ -225,7 +226,12 @@ async def _wait_for_application_ack(room, session_id: str) -> dict[str, object]:
             if not ack.done():
                 ack.set_result(frame)
 
-    payload = _core_event(session_id, event_id)
+    # clientの生存確認は許可された操作で行い、BE専用session_startedを偽送信しない。
+    payload = json.dumps({
+        "protocol_version": "2.0", "event_id": event_id,
+        "type": "session_resumed", "session_id": session_id,
+        "monotonic_timestamp_ms": 1000, "input_revision": 1,
+    }).encode()
     deadline = asyncio.get_running_loop().time() + STATE_WAIT_TIMEOUT_SECONDS
     while asyncio.get_running_loop().time() < deadline:
         await room.local_participant.publish_data(
@@ -447,12 +453,12 @@ def test_real_livekit_application_event_receives_private_ack() -> None:
                 await room.connect(livekit_url, binding["token"])
                 payload = json.dumps(
                     {
-                        "protocol_version": "1.1",
+                        "protocol_version": "2.0",
                         "event_id": event_id,
-                        "type": "session_started",
+                        "type": "session_resumed",
                         "session_id": session_id,
                         "monotonic_timestamp_ms": 1000,
-                        "reconnect_grace_ms": 60_000,
+                        "input_revision": 1,
                     },
                     separators=(",", ":"),
                 ).encode()
@@ -521,6 +527,28 @@ def test_real_livekit_first_ack_stops_backend_outbox_retry(client) -> None:
     asyncio.run(exercise())
 
 
+async def _open_test_microphone(room, binding, publication, payloads) -> None:
+    request_id = str(uuid4())
+    await room.local_participant.publish_data(
+        json.dumps({
+            "protocol_version": "2.0", "event_id": request_id,
+            "type": "audio_input_open_requested", "session_id": binding["session_id"],
+            "monotonic_timestamp_ms": 1000, "track_sid": publication.sid,
+            "input_revision": 1,
+            "speaker": {"role": "user", "participant_id": binding["participant_id"]},
+        }).encode(),
+        reliable=True, topic=APPLICATION_TOPIC,
+    )
+    async with asyncio.timeout(STATE_WAIT_TIMEOUT_SECONDS):
+        while True:
+            event = json.loads(await payloads.get())
+            await _acknowledge_application_event(room, event["event_id"])
+            if event.get("request_event_id") == request_id:
+                assert event["type"] == "audio_input_opened", event.get("reason")
+                assert event["track_sid"] == publication.sid
+                return
+
+
 def test_real_livekit_sustained_microphone_keeps_core_delivery_available(client) -> None:
     _required_setting("LIVEKIT_URL")
     _required_setting("LIVEKIT_API_KEY")
@@ -541,12 +569,34 @@ def test_real_livekit_sustained_microphone_keeps_core_delivery_available(client)
                 track,
                 rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE),
             )
+            await _open_test_microphone(room, binding, publication, payloads)
             # 実ブラウザと同じ10ms cadenceで継続入力し、観測用private messageが
             # response/control配送を枯渇させないことを確認する。
             for _ in range(800):
                 await source.capture_frame(frame)
                 await asyncio.sleep(0.01)
 
+            async def verify_real_input() -> None:
+                runtime = client.app.state.livekit_runtime_manager
+                bridge = runtime._core_bridges[session_id]
+                assert bridge._voice_input.grant.track_sid == publication.sid
+                # reader、実CPU VAD、capture前のprerollまでPCMが届いている。
+                assert bridge._microphone_received_bytes >= 16000 * 2 * 3
+                monitor = runtime._microphone_integrities[(session_id, publication.sid)]
+                # 初期warm-up後の3秒を実SDKのOpus統計で確認する。
+                try:
+                    await monitor.verify(16000, 16000 * 4)
+                except Exception as error:
+                    # 生のSDK payloadやtokenではなく、欠測位置だけを診断する。
+                    raise AssertionError({
+                        "reason": type(error).__name__,
+                        "known_start_sample": monitor._known_start,
+                        "covered_end_sample": monitor._covered_end,
+                        "received_pcm_bytes": bridge._microphone_received_bytes,
+                        "fault_windows": list(monitor._faults),
+                    }) from error
+
+            client.portal.call(verify_real_input)
             event_id = str(uuid4())
             payload = _core_event(session_id, event_id)
             _send_core_from_test_app(client, session_id, payload)
@@ -869,5 +919,112 @@ def test_real_livekit_grace_timeout_cleans_up_and_requires_a_new_session() -> No
                         session_ids=(old_session_id, fresh_session_id),
                         conversation_id=conversation_id,
                     )
+
+    asyncio.run(exercise())
+
+
+def test_real_livekit_rejects_legacy_bootstrap_before_resource_creation(
+    client, monkeypatch,
+) -> None:
+    """実資源の呼出しを透過計数し、旧版拒否と正常版の実接続を同じ構成で確認する。"""
+    from app.livekit_transport.bootstrap import BootstrapService
+
+    api, rtc = _livekit_sdk()
+    livekit_url = _required_setting("LIVEKIT_URL")
+    api_key = _required_setting("LIVEKIT_API_KEY")
+    api_secret = _required_setting("LIVEKIT_API_SECRET")
+    service = client.app.state.livekit_bootstrap_service
+    assert isinstance(service, BootstrapService)
+    counts = {"session": 0, "room": 0, "runtime": 0, "token": 0}
+
+    def observe(label, original):
+        async def invoke(*args, **kwargs):
+            counts[label] += 1
+            return await original(*args, **kwargs)
+        return invoke
+
+    # 元の実装へ必ず委譲する。Room、runtime、tokenの結果をstubへ差し替えない。
+    for label, target, method in (
+        ("session", service._sessions, "reserve"),
+        ("room", service._rooms, "create"),
+        ("runtime", service._runtimes, "connect"),
+        ("token", service._signer, "issue_with_expiration"),
+    ):
+        monkeypatch.setattr(target, method, observe(label, getattr(target, method)))
+
+    inference_counts = {}
+    def observe_inference(name, original):
+        def invoke(*args, **kwargs):
+            inference_counts[name] += 1
+            return original(*args, **kwargs)
+        return invoke
+    for method in ("generate_text", "generate_structured", "embed", "estimate_input_tokens"):
+        inference_counts[method] = 0
+        router = client.app.state.inference_router
+        monkeypatch.setattr(router, method, observe_inference(method, getattr(router, method)))
+
+    async def exercise() -> None:
+        async with api.LiveKitAPI(livekit_url, api_key, api_secret) as livekit_api:
+            conversation_id = _create_conversation(client)
+            room = rtc.Room()
+            session_id = None
+            try:
+                initial_rooms = {
+                    item.name for item in (
+                        await livekit_api.room.list_rooms(api.ListRoomsRequest())
+                    ).rooms
+                }
+                for core, transport, expected_code in (
+                    ("1.1", None, "protocol_version_mismatch"),
+                    ("2.0", None, "transport_protocol_version_mismatch"),
+                    ("2.0", "1.0", "transport_protocol_version_mismatch"),
+                    ("2.0", "0.0", "transport_protocol_version_mismatch"),
+                ):
+                    body = {
+                        "protocol_version": core,
+                        "request_id": str(uuid4()),
+                        "character_id": CHARACTER_ID,
+                        "conversation_id": conversation_id,
+                        "requested_reconnect_grace_ms": 60_000,
+                    }
+                    if transport is not None:
+                        body["transport_protocol_version"] = transport
+                    response = client.post("/voice/livekit/token", json=body)
+                    assert response.status_code == 409
+                    assert response.json()["detail"]["code"] == expected_code
+                    assert set(response.json()) == {"detail"}
+                    assert counts == {"session": 0, "room": 0, "runtime": 0, "token": 0}
+                    assert {
+                        item.name for item in (
+                            await livekit_api.room.list_rooms(api.ListRoomsRequest())
+                        ).rooms
+                    } == initial_rooms
+
+                # 同じ実portsで正常clientが接続できることを確認し、未設定による拒否を除外する。
+                response = _bootstrap(
+                    client, conversation_id=conversation_id, reconnect_grace_ms=60_000,
+                )
+                assert response.status_code == 200
+                binding = response.json()
+                session_id = binding["session_id"]
+                await room.connect(binding["livekit_url"], binding["token"])
+                assert await _wait_for_participants(
+                    livekit_api, api, room_name=binding["room"],
+                    expected_identities={
+                        f"user-{session_id}", f"character-{CHARACTER_ID}-{session_id}",
+                    },
+                ) == {f"user-{session_id}", f"character-{CHARACTER_ID}-{session_id}"}
+                assert all(value > 0 for value in counts.values())
+                assert all(value == 0 for value in inference_counts.values())
+                assert not room.local_participant.track_publications
+                client.delete(f"/voice/livekit/sessions/{session_id}").raise_for_status()
+                assert await _wait_for_room_cleanup(
+                    livekit_api, api, room_name=binding["room"],
+                ) == []
+            finally:
+                await _cleanup_resources(
+                    client, rooms=(room,), session_ids=(session_id,),
+                    conversation_id=conversation_id,
+                )
 
     asyncio.run(exercise())

@@ -13,7 +13,11 @@ _SPEC = importlib.util.spec_from_file_location("voice_quality_vad_report", _ROOT
 assert _SPEC is not None and _SPEC.loader is not None
 report_vad = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = report_vad
-_SPEC.loader.exec_module(report_vad)
+sys.path.insert(0, str(_ROOT / 'scripts/voice_quality'))
+try:
+    _SPEC.loader.exec_module(report_vad)
+finally:
+    sys.path.remove(str(_ROOT / 'scripts/voice_quality'))
 measure, summarize, main = report_vad.measure, report_vad.summarize, report_vad.main
 
 
@@ -47,6 +51,25 @@ def cohort(count=100):
 
 
 class ReportTests(unittest.TestCase):
+    def test_backend_manifest_never_uses_legacy_fe_detection_to_claim_alignment(self):
+        m, fb = cohort()
+        m["input_authority"] = "backend"
+        result = summarize(json.dumps(m).encode(), fb)
+        self.assertEqual(result["input_authority"], "backend")
+        self.assertEqual(result["expected_trials"], 100)
+        self.assertEqual(result["measured_trials"], 0)
+        self.assertEqual(result["missing"], {"backend_media_alignment_unavailable": 100})
+        self.assertFalse(result["evaluation"]["passed"])
+        from jsonschema import Draft202012Validator
+        schema = json.loads((_ROOT / "docs/schemas/voice-quality-vad-report-v1.schema.json").read_text())
+        Draft202012Validator(schema).validate(result)
+
+    def test_unknown_input_authority_is_rejected(self):
+        m, fb = cohort(1)
+        m["input_authority"] = "unknown"
+        with self.assertRaises(ValueError):
+            summarize(json.dumps(m).encode(), fb)
+
     def test_targeted_selection_is_correlated_and_never_formal(self):
         m, fb = cohort()
         fs = json.loads(fb)

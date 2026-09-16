@@ -1,7 +1,7 @@
 {
   "valid": [
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -10,10 +10,11 @@
         "participant_id": "10000000-0000-4000-8000-000000000002",
         "role": "user"
       },
-      "text": "音声と同じ会話へ送信します"
+      "text": "音声と同じ会話へ送信します",
+      "input_revision": 1
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -25,7 +26,7 @@
       "input_event_id": "10000000-0000-4000-8000-000000000011"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -34,7 +35,7 @@
       "status": "processing"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -43,7 +44,7 @@
       "status": "accepted"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -52,7 +53,7 @@
       "status": "rejected"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -61,16 +62,17 @@
       "status": "not_received"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
       "type": "audio_input_suppression_changed",
       "reason": "text_focus",
-      "suppressed": true
+      "suppressed": true,
+      "input_revision": 1
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -90,7 +92,7 @@
       ]
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -115,10 +117,11 @@
         "participant_id": "10000000-0000-4000-8000-000000000002",
         "role": "user"
       },
-      "text": "音声と同じ会話へ送信します"
+      "text": "音声と同じ会話へ送信します",
+      "input_revision": 1
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -127,10 +130,11 @@
         "participant_id": "10000000-0000-4000-8000-000000000002",
         "role": "user"
       },
-      "text": " \n\t"
+      "text": " \n\t",
+      "input_revision": 1
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -140,10 +144,11 @@
         "role": "character",
         "character_id": "miori"
       },
-      "text": "音声と同じ会話へ送信します"
+      "text": "音声と同じ会話へ送信します",
+      "input_revision": 1
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -156,7 +161,7 @@
       "text": "送信の照合へ本文を混ぜない"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -165,7 +170,7 @@
       "status": "delivered"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -180,7 +185,7 @@
       "source_inputs": []
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -194,7 +199,7 @@
       "source_utterance_ids": []
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,
@@ -209,7 +214,7 @@
       "text": "省略した本文"
     },
     {
-      "protocol_version": "1.1",
+      "protocol_version": "2.0",
       "event_id": "10000000-0000-4000-8000-000000000011",
       "session_id": "10000000-0000-4000-8000-000000000001",
       "monotonic_timestamp_ms": 1,

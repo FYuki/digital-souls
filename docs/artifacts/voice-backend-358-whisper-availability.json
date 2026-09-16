@@ -1,0 +1,17 @@
+{
+  "scope": "fixed_fixture_shared_whisper_availability",
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "input_sample_rate_hz": 16000,
+  "input_sample_count": 32086,
+  "http_status": 200,
+  "response_text_nonempty": true,
+  "response_text_length": 5,
+  "error_code": null,
+  "elapsed_ms": 381.695034,
+  "performance_acceptance": false,
+  "service_restarted": false,
+  "limitations": [
+    "固定音声1回によるavailability確認であり、継続安定性・100試行品質・性能合格を示さない",
+    "サービスの再起動・設定変更を行っていない"
+  ]
+}

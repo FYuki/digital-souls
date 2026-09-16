@@ -1,0 +1,58 @@
+{
+  "scope": "labeled_livekit_backchannel_cohort_report",
+  "quantile_method": "hyndman_fan_type_7",
+  "cohort": "backchannel",
+  "counts": {
+    "expected": 3,
+    "recorded": 3,
+    "independent_sessions": 3,
+    "success": 3,
+    "failure": 0,
+    "verified_injection": 3,
+    "session_end_confirmed": 3,
+    "backchannel_decision": 3,
+    "take_turn_decision": 0,
+    "indeterminate_decision": 0,
+    "unverified_final_decision": 0,
+    "observed_server_cancel": 0,
+    "observed_local_stop": 0
+  },
+  "failure_stages": {},
+  "metrics": [
+    {
+      "name": "backchannel_false_cancel",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "labeled_backchannel_injected",
+      "end_point": "old_response_full_output_or_cancel",
+      "trial_count": 3,
+      "success_count": 3,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 3,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    }
+  ],
+  "evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": true,
+    "false_cancel_rate_passed": false
+  },
+  "metric_schema_sha256": "aff90857ebe0acc8819639d46581c36e620d06bf7f1b39ca2cbe02d7b9a5c996",
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "raw_manifest_sha256": "06587b9e04d04db3d8527e87576187bb7f7700ca97ade2255de3debe5fc21b40",
+  "raw_trace_sha256": "89b8296ebf4146e6f86dfe2b0faad81840f6cb36010f6007d96304b5337a875e",
+  "reporter_sha256": "5976de74506d1b1a5fda4c63cbb1ebaa3bfe5a03f4710fa178a743b16ecdfd2b",
+  "playback_validator_sha256": "81422195a2809017a206369d3825064e2da30736b6012a14a3278b2f3787022e",
+  "shared_reporter_sha256": "4545b413791dd800908216b898ad4ec8594606427f610a4ea0c4cfd9486c1e32",
+  "cohort_schema_version": "1.0",
+  "cohort_schema_sha256": "ad185073655f120c71af3a7c59e5c6640cc91fd45ef3bcd98f461c61f78754d9",
+  "cohort_validator_sha256": "d3eac380f5cad534724bf433b0ef842917a7c35a0219b2c912a77d6a32484937"
+}

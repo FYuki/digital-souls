@@ -1,0 +1,66 @@
+{
+  "scope": "interrupted_backend_backchannel_measurement",
+  "measurement_revision": "9ebc209eb1500620cad20ae78a899026b61e3aa2",
+  "input_authority": "backend",
+  "expected_trials": 100,
+  "recorded_trials": 16,
+  "recorded_success": 8,
+  "recorded_failure": 8,
+  "unrecorded_trials": 84,
+  "recorded_sessions_ended": 16,
+  "highest_pcm_trial_ordinal": 17,
+  "unrecorded_includes_interrupted_trial": true,
+  "failure_stages": {
+    "cancel_or_continuity": 3,
+    "initial_response": 5
+  },
+  "upstream_http_status_counts": {
+    "200": 41,
+    "504": 2,
+    "503": 10
+  },
+  "maximum_observed_stt_request_ms": 46245.30343,
+  "host_gpu": {
+    "first": {
+      "utilization_percent": 0.0,
+      "used_bytes": 5247074304,
+      "total_bytes": 17171480576
+    },
+    "last": {
+      "utilization_percent": 100.0,
+      "used_bytes": 16502489088,
+      "total_bytes": 17171480576
+    },
+    "maximum_used_bytes": 16555966464,
+    "cause_identified": false
+  },
+  "termination": {
+    "pilot_exit": 130,
+    "reason": "shared_inference_unavailable_and_host_gpu_conditions_changed",
+    "owned_runner_sigint": true,
+    "shared_services_modified": false,
+    "owned_ports_closed": [
+      7880,
+      7881,
+      8000,
+      5173,
+      4174,
+      50023
+    ]
+  },
+  "evidence_sha256": {
+    "trial-manifest.json": "0519f2c45b000f27ff71a98db7b48f211c1282a391619315ed2faf26c66dcbc4",
+    "whisper-input-pcm.jsonl": "3beeb24a7d48340cf742cc4eb3e278fe46cd7d0fda9a7d574326c02ceac9e587",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "fb70ca3e18fa8094420cbe8b76e8c7cc64e3906bb42124c15847d7337d7054e6",
+    "inference-runtime.jsonl": "127c536b7e96b243f97a75546f71bf8fbd59669a95797d920f786f749589bf2c",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "measurement-interruption.json": "1f02bbef37c90111d403c33b59f365b533177dae81b3ce50ef375222ae2d9b1b"
+  },
+  "acceptance_passed": false,
+  "limitations": [
+    "全100件に達しない中止runであり、独立100試行の集計ではない",
+    "未記録試行を成功に数えない",
+    "GPU利用状況の変化と共有推論障害は観測事実だが、因果関係は未確定",
+    "記録済みの失敗を後続の成功試行で差し替えない"
+  ]
+}

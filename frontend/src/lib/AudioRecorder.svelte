@@ -13,14 +13,11 @@
 
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { MicVAD, type RealTimeVADOptions } from '@ricky0123/vad-web'
+  import type { RealTimeVADOptions } from '@ricky0123/vad-web'
 
   import { AudioWorkletPcmRecorder } from './audio/pcm-worklet-recorder'
-  import { attachIdleVadReset } from './audio/idle-vad-reset'
-  import { createShortSpeechAnalyzer, type ShortSpeechAnalyzer, type ShortSpeechEvidence } from './audio/short-speech-evidence'
   import { VAD_ASSET_ROUTE } from './audio/vad-assets'
   import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
-  import { UtteranceDetector, type UtteranceDetection } from './audio/utterance-detector'
 
   type MicStatus = 'off' | 'standby' | 'on'
 
@@ -45,15 +42,12 @@
   export let onSpeechStopped: (activity: SpeechActivity) => void = () => undefined
 
   let vad: MicVadInstance | null = null
-  let vadFrameControl: ReturnType<typeof attachIdleVadReset> | null = null
-  let shortSpeechAnalyzer: ShortSpeechAnalyzer | null = null
   let recorder: AudioWorkletPcmRecorder | null = null
   let microphoneStream: MediaStream | null = null
   let status: MicStatus = 'off'
   let isLoading = false
   let candidateSpeechStartClientMs: number | null = null
   let capturedAudioStartClientMs: number | null = null
-  let utteranceDetector: UtteranceDetector | null = null
 
   const requestMicrophoneStream = (): Promise<MediaStream> => {
     return navigator.mediaDevices.getUserMedia({
@@ -65,31 +59,6 @@
     })
   }
 
-  // 実接続診断が設定した場合だけ数値を観測する。PCMや本文をtest portへ渡さない。
-  const vadTestPort = () => (globalThis as typeof globalThis & {
-    __digitalSoulsVoiceVadTestPort?: {
-      frame: (observation: {atMs: number; probability: number; rms: number; samples: number; secondary?: ShortSpeechEvidence}) => void
-      modelReset?: (atMs: number) => void
-      event: (event: UtteranceDetection) => void
-    }
-  }).__digitalSoulsVoiceVadTestPort
-
-  const handleUtteranceDetection = (event: UtteranceDetection) => {
-    vadTestPort()?.event(event)
-    if (event.type === 'candidate') {
-      candidateSpeechStartClientMs = event.speechStartedAtMs
-    } else if (event.type === 'confirmed') {
-      capturedAudioStartClientMs = event.speechStartedAtMs
-      candidateSpeechStartClientMs = null
-      setStatus('on')
-      onSpeechStarted({ clientMs: event.speechStartedAtMs })
-    } else if (event.type === 'ended') {
-      void handleSpeechEnd(event.detectedAtMs)
-    } else {
-      void handleVadMisfire()
-    }
-  }
-
   const buildVadOptions = (stream: MediaStream): Partial<RealTimeVADOptions> => ({
     model: 'legacy',
     baseAssetPath: VAD_ASSET_ROUTE,
@@ -99,22 +68,6 @@
     getStream: async () => stream,
     resumeStream: async () => stream,
     pauseStream: async () => undefined,
-    onFrameProcessed: (probabilities, frame) => {
-      if (continuous) {
-        if (suspended) return
-        const atMs = performance.now()
-        const secondary = shortSpeechAnalyzer?.process(frame)
-        const port = vadTestPort()
-        if (port) {
-          let energy = 0
-          for (const sample of frame) energy += sample * sample
-          port.frame({atMs, probability: probabilities.isSpeech, rms: Math.sqrt(energy / frame.length), samples: frame.length,
-            // 診断側の変更が検出器の補助根拠を書き換えないよう、数値だけを複製する。
-            ...(secondary === undefined ? {} : {secondary: {...secondary}})})
-        }
-        utteranceDetector?.process(frame, probabilities.isSpeech, atMs, secondary)
-      }
-    },
     onSpeechStart: () => {
       if (continuous) return
       try {
@@ -158,13 +111,6 @@
   }
 
   const releaseMicrophoneResources = async () => {
-    utteranceDetector?.reset()
-    utteranceDetector = null
-    const frameControl = vadFrameControl
-    vadFrameControl = null
-    if (frameControl !== null) await frameControl.close()
-    shortSpeechAnalyzer?.close()
-    shortSpeechAnalyzer = null
     candidateSpeechStartClientMs = null
     capturedAudioStartClientMs = null
     if (vad !== null) {
@@ -189,15 +135,8 @@
       return vad
     }
 
-    if (continuous) {
-      shortSpeechAnalyzer = await createShortSpeechAnalyzer()
-      utteranceDetector = new UtteranceDetector(handleUtteranceDetection)
-    }
+    const {MicVAD} = await import('@ricky0123/vad-web')
     const instance = await MicVAD.new(buildVadOptions(stream))
-    if (continuous) vadFrameControl = attachIdleVadReset(instance, reportError, () => {
-      shortSpeechAnalyzer?.reset()
-      vadTestPort()?.modelReset?.(performance.now())
-    })
     vad = instance
     return vad
   }
@@ -212,9 +151,13 @@
 
       const stream = await requestMicrophoneStream()
       microphoneStream = stream
-      if (!continuous) await getRecorder().initialize(stream)
-      const activeVad = await getVad(stream)
-      await activeVad.start()
+      if (continuous) {
+        for (const track of stream.getAudioTracks()) track.enabled = false
+      } else {
+        await getRecorder().initialize(stream)
+        const activeVad = await getVad(stream)
+        await activeVad.start()
+      }
       await onMicrophoneEnabled(stream)
       setStatus('standby')
     } catch (error) {
@@ -296,10 +239,9 @@
   const suspendCapture = (paused: boolean, stream: MediaStream | null) => {
     // 再接続中は同じtrackを無音化し、利用者が選んだマイクのON/OFFを保持する。
     // 途中の発話は次の接続へ継ぎ足さず、復旧後に新しい発話境界を検出する。
-    for (const track of stream?.getTracks() ?? []) track.enabled = !paused
+    // continuousの再有効化はBEの入力認可ACK後にcontrollerが行う。
+    if (paused) for (const track of stream?.getTracks() ?? []) track.enabled = false
     if (paused) {
-      utteranceDetector?.reset()
-      shortSpeechAnalyzer?.reset()
       candidateSpeechStartClientMs = null
       capturedAudioStartClientMs = null
       if (status === 'on') setStatus('standby')

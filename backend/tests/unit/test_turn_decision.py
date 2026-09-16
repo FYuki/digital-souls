@@ -41,6 +41,7 @@ def test_classify_turn_limits_backchannel_to_complete_short_reactions() -> None:
 @pytest.mark.parametrize("transcript, expected_decision", [
     ("うん", "backchannel"), ("そうなんですね", "backchannel"), ("そうですね", "backchannel"),
     ("ヘッ", "indeterminate"), ("ん", "indeterminate"),
+    ("", "indeterminate"), ("  ", "indeterminate"),
 ])
 def test_non_taking_reaction_keeps_active_response_and_is_not_carried_to_next_prompt(
     transcript: str, expected_decision: str,
@@ -144,7 +145,7 @@ def test_short_reaction_does_not_hide_question_or_following_instruction(transcri
     assert classify_turn(transcript) == "take_turn"
 
 
-@pytest.mark.parametrize("transcript", ["ん", "ヘッ", "エッ"])
+@pytest.mark.parametrize("transcript", ["ん", "ヘッ", "エッ", "", "  "])
 def test_indeterminate_reaction_preserves_output_until_following_take_turn(transcript: str) -> None:
     async def exercise() -> None:
         delivery = RecordingDelivery()

@@ -1,0 +1,23 @@
+{
+  "scope": "before_backchannel_100_identity_comparison",
+  "checks": {
+    "ollama_roles": true,
+    "whisper": true,
+    "whisper_model_name_sha256": true,
+    "voicevox_reported_version": true,
+    "configuration_sha256": true,
+    "runtime_overrides": true,
+    "voicevox_image": true,
+    "whisper_image": true,
+    "voicevox_model_mounts": true,
+    "whisper_cache_mount_read_write": true,
+    "fresh_end_image_proof": true,
+    "baseline_application_trees_unchanged": true
+  },
+  "all_recorded_checks_match": true,
+  "limitations": [
+    "共有image IDは同時に行うdocker inspectと照合する",
+    "Whisperのcache全体のbytes同一性は未検証。APIの固定revisionとimage IDを記録する",
+    "開始・終了のsnapshotは測定中の一時的な変更を完全に除外する証明ではない"
+  ]
+}

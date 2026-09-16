@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from app.livekit_transport.production import _ConversationCoreBridge
+from tests.voice_capture_test_support import begin_capture, finish_capture
 
 
 def test_focus_gate_drops_open_capture_and_muted_media_without_stopping_response() -> None:
@@ -25,18 +26,24 @@ def test_focus_gate_drops_open_capture_and_muted_media_without_stopping_response
         text = SimpleNamespace(receive=AsyncMock())
         bridge = _ConversationCoreBridge(
             core, lambda operation: tasks.append(asyncio.create_task(operation)),
-            media_tail_seconds=0, text_input=text,
+            text_input=text,
         )
 
+        await bridge.prepare_audio()
+        revision = 0
+
         def notify(kind: str, **fields: object) -> None:
+            nonlocal revision
+            revision += 1
+            fields["input_revision"] = revision
             bridge.notify(json.dumps({"type": kind, "speaker": {"role": "user"}, **fields}).encode())
 
-        notify("speech_started", utterance_id="unfinished")
+        begin_capture(bridge, "unfinished")
         bridge.receive_microphone(b"\x20\x00" * 480)
         notify("audio_input_suppression_changed", suppressed=True, reason="text_focus")
         bridge.receive_microphone(b"\x55\x00" * 480)
-        notify("speech_started", utterance_id="muted-speech")
-        notify("speech_stopped", utterance_id="muted-speech")
+        begin_capture(bridge, "muted-speech")
+        await finish_capture(bridge, "muted-speech")
         notify("user_text_submitted", text="テキストは送信できる")
         await asyncio.gather(*tasks)
         core.discard_utterance.assert_awaited_once_with(utterance_id="unfinished", reason="input_suppressed")
@@ -46,14 +53,15 @@ def test_focus_gate_drops_open_capture_and_muted_media_without_stopping_response
         core.end.assert_not_awaited()
 
         notify("audio_input_suppression_changed", suppressed=False, reason="text_focus")
-        notify("speech_started", utterance_id="new-speech")
+        begin_capture(bridge, "new-speech")
         bridge.receive_microphone(b"\x33\x00" * 480)
-        notify("speech_stopped", utterance_id="new-speech")
+        await finish_capture(bridge, "new-speech")
         await asyncio.gather(*tasks)
         await asyncio.sleep(0)
         assert len(transcribed) == 1
         assert transcribed[0]["utterance_id"] == "new-speech"
         assert transcribed[0]["audio"] == b"\x33\x00" * 480
+        await bridge.close_audio()
 
     asyncio.run(exercise())
 
@@ -63,7 +71,13 @@ def test_focus_and_manual_mute_are_independent_backend_gates() -> None:
         tasks: list[asyncio.Task[None]] = []
         bridge = _ConversationCoreBridge(core, lambda operation: tasks.append(asyncio.create_task(operation)))
 
+        await bridge.prepare_audio()
+        revision = 0
+
         def notify(kind: str, **fields: object) -> None:
+            nonlocal revision
+            revision += 1
+            fields["input_revision"] = revision
             bridge.notify(json.dumps({"type": kind, **fields}).encode())
 
         notify("session_muted")
@@ -79,5 +93,5 @@ def test_focus_and_manual_mute_are_independent_backend_gates() -> None:
         bridge.receive_microphone(b"\x33\x00" * 480)
         assert bridge._microphone_preroll == b"\x33\x00" * 480
         assert not tasks
-
+        await bridge.close_audio()
     asyncio.run(exercise())

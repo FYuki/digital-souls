@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import struct
 from types import SimpleNamespace
 
 import pytest
+
+from tests.voice_capture_test_support import begin_capture, finish_capture
 
 from app.livekit_transport.stt_audio import PcmCaptureSpan, stt_preparation_statistics
 
@@ -44,7 +45,7 @@ def test_suffix_check_detects_equal_length_replacement_and_tail_truncation():
     assert stt_preparation_statistics(original,b'0'*10,3)['stt_input_suffix_preserved']==0
 
 
-def test_real_bridge_preroll_queue_tail_and_final_stt_preserve_the_exact_received_suffix():
+def test_bridge_preroll_queue_and_final_stt_preserve_the_exact_received_suffix():
     from app.livekit_transport.production import _ConversationCoreBridge, STT_MICROPHONE_PREROLL_BYTES
     observed=[];requests=[];tasks=[]
     measurement=SimpleNamespace(record_utterance_event=lambda **row:observed.append(row))
@@ -54,20 +55,19 @@ def test_real_bridge_preroll_queue_tail_and_final_stt_preserve_the_exact_receive
             requests.append(request)
             task=asyncio.create_task(asyncio.sleep(0));tasks.append(task);return task
     def schedule(operation):tasks.append(asyncio.create_task(operation))
-    bridge=_ConversationCoreBridge(Core(),schedule,media_tail_seconds=0,measurement=measurement)
+    bridge=_ConversationCoreBridge(Core(),schedule,measurement=measurement)
     bridge._transcription_active=True
-    def event(kind,utterance):
-        bridge.notify(json.dumps(dict(type=kind,utterance_id=utterance,speaker={'role':'user'},monotonic_timestamp_ms=1000)).encode())
     async def exercise():
         # 2秒を超えるprerollは実際の受信連番の末尾2秒へ対応する。
         quiet=bytes(STT_MICROPHONE_PREROLL_BYTES+6400)
         bridge.receive_microphone(quiet)
-        event('speech_started','first')
+        begin_capture(bridge, 'first')
         voice=struct.pack('<4h',301,-702,1301,-2202)*1600
         bridge.receive_microphone(voice)
-        event('speech_stopped','first')
         tail=struct.pack('<2h',707,-909)*160
         bridge.receive_microphone(tail)
+        await finish_capture(bridge, 'first')
+        bridge.receive_microphone(b'\x66\x00' * 320)
         await asyncio.gather(*tasks);tasks.clear()
         assert not requests and len(bridge._pending_transcriptions)==1
         bridge._transcription_active=False
@@ -95,17 +95,87 @@ def test_gap_between_two_received_pieces_is_not_hidden_by_equal_capture_length()
         accepting_input=True
         def start_transcription(self,**_):
             task=asyncio.create_task(asyncio.sleep(0));tasks.append(task);return task
-    bridge=_ConversationCoreBridge(Core(),lambda op:tasks.append(asyncio.create_task(op)),media_tail_seconds=0,
-        measurement=SimpleNamespace(record_utterance_event=lambda **row:observed.append(row)))
+    bridge=_ConversationCoreBridge(Core(),lambda op:tasks.append(asyncio.create_task(op)),measurement=SimpleNamespace(record_utterance_event=lambda **row:observed.append(row)))
     async def exercise():
-        bridge.notify(json.dumps(dict(type='speech_started',utterance_id='u',speaker={'role':'user'},monotonic_timestamp_ms=1)).encode())
+        begin_capture(bridge, 'u')
         bridge.receive_microphone(b'\x11\x00'*320)
         # 別captureへ渡った範囲を診断上再現する。現在captureに追加されない受信位置を挟む。
         bridge._microphone_received_bytes+=640
         bridge.receive_microphone(b'\x12\x00'*320)
-        bridge.notify(json.dumps(dict(type='speech_stopped',utterance_id='u',speaker={'role':'user'})).encode())
+        await finish_capture(bridge, 'u')
         for _ in range(10):await asyncio.sleep(0)
         await asyncio.gather(*tasks)
     asyncio.run(exercise())
     assert next(r for r in observed if r['name']=='stt_capture_received_span_valid')['value']==0
     assert next(r for r in observed if r['name']=='stt_input_suffix_preserved')['value']==1
+
+
+@pytest.mark.parametrize("media_end", [100000, 6400])
+@pytest.mark.parametrize("end_shift", [0, 1])
+def test_formal_vad_anchors_map_preroll_and_trimmed_capture_to_track_samples(media_end, end_shift):
+    from unittest.mock import AsyncMock
+    from app.livekit_transport.production import _ConversationCoreBridge
+    from app.voice_input.detector import Detection
+    from app.voice_input.session import InputGrant, SpeechBoundary
+    async def scenario():
+        observed, tasks, requests = [], [], []
+        class Core:
+            accepting_input = True
+            session_id = "session"
+            def start_transcription(self, **request):
+                requests.append(request)
+                task = asyncio.create_task(asyncio.sleep(0))
+                tasks.append(task)
+                return task
+        bridge = _ConversationCoreBridge(
+            Core(), lambda op: tasks.append(asyncio.create_task(op)),
+            measurement=SimpleNamespace(record_utterance_event=lambda **row: observed.append(row)),
+            publish_audio_event=AsyncMock(), verify_audio_integrity=AsyncMock(),
+        )
+        # 別入力で進んだbridge連番と、新しいtrackのsample位置を混同しない。
+        bridge._microphone_received_bytes = 200000
+        quiet = bytes(6400)
+        bridge.receive_microphone(quiet)
+        bridge._begin_capture({
+            "type": "speech_started", "utterance_id": "u",
+            "start_sample": media_end - 1600, "detected_sample": media_end,
+        })
+        voice = struct.pack("<2h", 700, -900) * 800
+        bridge.receive_microphone(voice)
+        end = media_end + len(voice) // 2
+        await bridge._audio_stopped(SpeechBoundary(
+            "u", InputGrant("TR_fixture", 1, "request", 1),
+            Detection("ended", media_end - 1600, end + end_shift, end - 100),
+        ))
+        await asyncio.gather(*tasks)
+        stats = {r["name"]: r.get("value") for r in observed}
+        if end_shift:
+            assert stats["stt_capture_media_span_valid"] == 0
+            assert "stt_capture_media_start_sample" not in stats
+            assert requests[0]["audio"] == quiet + voice
+            return
+        assert stats["stt_capture_media_span_valid"] == 1
+        assert stats["stt_capture_media_start_sample"] == media_end - len(quiet) // 2
+        assert stats["stt_capture_media_end_sample"] == end
+        assert stats["vad_started_sample"] == media_end - 1600
+        assert stats["vad_active_end_sample"] == end - 100
+        assert stats["vad_detected_end_sample"] == end
+        assert requests[0]["audio"] == quiet + voice
+    asyncio.run(scenario())
+
+
+def test_missing_formal_anchor_never_fabricates_media_positions():
+    async def scenario():
+        from tests.voice_capture_test_support import capture_harness
+        bridge, _, tasks = capture_harness()
+        observed = []
+        bridge._measurement = SimpleNamespace(record_utterance_event=lambda **row: observed.append(row))
+        begin_capture(bridge, "u")
+        bridge.receive_microphone(b"\x11\x00" * 320)
+        await finish_capture(bridge, "u")
+        await asyncio.gather(*tasks)
+        stats = {r["name"]: r.get("value") for r in observed}
+        assert stats["stt_capture_received_span_valid"] == 1
+        assert stats["stt_capture_media_span_valid"] == 0
+        assert "stt_capture_media_start_sample" not in stats
+    asyncio.run(scenario())

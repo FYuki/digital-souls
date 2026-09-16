@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import multiprocessing
 import threading
 import wave
@@ -18,10 +19,12 @@ PCM_SAMPLE_RATE_HZ = 16_000
 PCM_CHANNELS = 1
 PCM_SAMPLE_WIDTH_BYTES = 2
 STARTUP_TIMEOUT_SECONDS = 300.0
+MAX_NO_SPEECH_PROBABILITY = 0.6
 
 
 class WhisperSegment(Protocol):
     text: str
+    no_speech_prob: float
 
 
 class WhisperModel(Protocol):
@@ -60,6 +63,16 @@ def _pcm_to_wav(audio: bytes) -> io.BytesIO:
     return source
 
 
+def _speech_text(segments: Iterable[WhisperSegment]) -> str:
+    # faster-whisper既定では文字列の確率が高いと無音判定が覆るため、
+    # 無音確率を独立に確認する。語句を禁止せず、短い相槌のPCMも切り取らない。
+    return "".join(
+        segment.text for segment in segments
+        if math.isfinite(segment.no_speech_prob)
+        and 0 <= segment.no_speech_prob <= MAX_NO_SPEECH_PROBABILITY
+    )
+
+
 def _worker_main(connection: Connection, config: WhisperServiceConfig) -> None:
     try:
         from faster_whisper import WhisperModel as FasterWhisperModel
@@ -75,7 +88,8 @@ def _worker_main(connection: Connection, config: WhisperServiceConfig) -> None:
                 local_files_only=True,
             ),
         )
-        # generatorを最後まで消費することでCUDA実推論までready gateに含める。
+        # generatorを最後まで消費してCUDA実推論を確認する。
+        # ここで生成された文字列は認識結果として公開しない。
         silence = bytes(PCM_SAMPLE_RATE_HZ * PCM_CHANNELS * PCM_SAMPLE_WIDTH_BYTES // 10)
         segments, _info = model.transcribe(_pcm_to_wav(silence), language="ja")
         "".join(segment.text for segment in segments)
@@ -87,7 +101,7 @@ def _worker_main(connection: Connection, config: WhisperServiceConfig) -> None:
             request_id, audio = request
             try:
                 segments, _info = model.transcribe(_pcm_to_wav(audio), language="ja")
-                transcript = "".join(segment.text for segment in segments)
+                transcript = _speech_text(segments)
                 connection.send((request_id, "ok", transcript))
             except BaseException as error:
                 connection.send((request_id, "error", type(error).__name__))
