@@ -166,10 +166,13 @@ HTTP APIに任意の参照や取得先を登録する入口は設けない。
 
 単体試験：`backend/tests/unit/test_notification_store_unit.py`。
 独立MCP適合試験：`backend/tests/module/test_notifications_module.py`。
+本番起動境界：`backend/tests/module/test_notification_startup_module.py`（LLM未構成・接続停止、誤設定拒否、復元中の起動禁止）。
 UIコンポーネント試験：`frontend/src/lib/notifications/notifications.module.test.ts`。
 
-`python scripts/acceptance_notifications.py`は、独立した一時data root、実ToolRuntime・HTTP・Vite・ブラウザと
+`python scripts/acceptance_notifications.py`は、独立した一時data root、本番app.mainの通知限定lifespan・共有ToolRuntime・HTTP・Vite・ブラウザと
 MCP fixtureを起動し、ブラウザ終了中の保存、件数上限、詳細、明示既読、OFF／ON、絞り込み、期限切れを検証する。
 LLM・会話・音声サービスを構成せず、API通信を差し替えない。
 結果は`docs/artifacts/notification-183/`へ保存する。
 提供元は合成データの適合試験用であり、実外部サービスやdogfoodの受入完了を示さない。
+
+2026-09-16の実行証跡・PC／モバイル画面は[検証記録](artifacts/notification-183/README.md)を参照する。
