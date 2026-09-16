@@ -1,0 +1,544 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/addon/event-history.schema.json",
+  "title": "Event履歴結果 v1",
+  "description": "MCP Tool structuredContent または Resource 内 JSON に載せる公開結果契約。新しいMCPメソッドではない。",
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "epoch",
+        "cursor",
+        "position",
+        "state"
+      ],
+      "properties": {
+        "epoch": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+        },
+        "cursor": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "type": "object",
+          "description": "許可する参照・状態 metadata のみCoreへ投影する。他の項目は保存・配送しない。",
+          "properties": {
+            "resource_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "task_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "rule_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "execution_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "revision": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "result_kind": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "status": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "count": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "required": [
+        "epoch",
+        "next_cursor",
+        "position",
+        "events",
+        "more"
+      ],
+      "properties": {
+        "epoch": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+        },
+        "next_cursor": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "required": [
+              "position",
+              "cursor",
+              "id",
+              "type",
+              "occurred_at"
+            ],
+            "properties": {
+              "position": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "cursor": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+              },
+              "type": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "metadata": {
+                "type": "object",
+                "description": "許可する参照・状態 metadata のみCoreへ投影する。他の項目は保存・配送しない。",
+                "properties": {
+                  "resource_ref": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "task_ref": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "rule_ref": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "execution_ref": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "revision": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "result_kind": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "status": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "count": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "more": {
+          "type": "boolean"
+        },
+        "gap": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": [
+        "position",
+        "cursor",
+        "id",
+        "type",
+        "occurred_at"
+      ],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cursor": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:~-]{1,256}$"
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "許可する参照・状態 metadata のみCoreへ投影する。他の項目は保存・配送しない。",
+          "properties": {
+            "resource_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "task_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "rule_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "execution_ref": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "revision": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "result_kind": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "status": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "count": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/snapshot"
+    },
+    {
+      "$ref": "#/$defs/history"
+    }
+  ]
+}

@@ -409,6 +409,54 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 [#185受入](addon-action-185-acceptance.md)、[承認管理UI受入](addon-approval-admin-305-acceptance.md)を参照する。
 この基盤が存在することと、Character Lifeへ高影響操作・副作用回復が接続済みであることは別である。
 
+## 通知とキャラクター会話の分離（後続設計）
+
+以下は#183で整理し#187のEpicへ引き継いだ後続設計であり、上記の現行構成に通知タブ・通知用caller・
+新しい応答起点が実装済みであることを意味しない。詳細は
+[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md)を正本とする。
+
+```text
+提供元のEvent・Task結果
+  → #187 取り込み・復旧・有限buffer
+  → #183 通知Policy・metadata・未読管理・安全な詳細参照
+       ├─ 会話・LLMなしで使える通知タブ
+       └─ 通知ID・登録時担当・出典・発生元参照
+            → #364 会話への関連付け・認可済み報告起点
+                 → 既存Conversation Core・履歴・必要時のTTS
+```
+
+通知の正規化・保存・確認と、キャラクターの文脈・報告生成を分ける。同一Backendの責務分離であり、
+別サービスや並列人格を追加する要求ではない。#187のsource取得は共有し、会話archive／削除で
+他consumer向けの取り込みを止めない。通知消費・既読・会話取込・報告済み・再生完了は独立した状態とする。
+
+| 保存・処理対象 | 責務 |
+|---|---|
+| Event本文・Task状態・結果／成果物 | 提供元のdomain正本。Coreへ無条件複製しない |
+| 通知metadata・出典・未読状態 | #183。固定文言と許可metadataを用い、LLMを直接呼ばない |
+| 会話への関連通知・依頼相関・報告状態 | #364。元の依頼と同じ担当の届け先を使い、表示中の別会話へ混ぜない |
+| キャラクターの報告文 | 既存の会話privacy・記憶policyを通した会話メッセージ |
+
+非同期処理を追加した時点の担当キャラクター・接続・対象を保持し、取得時には現在権限・binding・
+snapshotを再検証する。#363はLLMを介さなくても共有Gateを通り、元の会話loopを保持せず有限の取得を行う。
+実行IDを新しくしてもTask／rule等の継続的な予算をリセットしない。監視の最新状態と特定Task結果を分け、
+提供元で削除・期限切れになった結果を推測や別実行で補完しない。
+
+#365はSpeech／Textとは別のCore認可済み報告起点を既存会話契約へ追加する設計とする。
+架空のユーザー発言・utteranceを作らず、具体的なschema・protocol・API・生成型は実装と同期して変更する。
+自動報告・自発発話は対象会話のactive／foreground／lease／idleを検証し、進行中の発話を中断しない。
+依頼への報告を任意の自発発話候補のTTLで破棄しない。
+
+通知の閲覧だけでは別キャラクターへ内容を渡さない。ユーザーがコピー・会話引用で明示共有した範囲は
+通常会話の話題として扱い、その会話・回答・記憶を元の非同期処理の担当・対象・監視・実行・報告状態へ
+伝播させない。通知からの会話導線は登録時担当へ戻す。用語の対応は[用語集](glossary.md)を参照する。
+
+Event取得・復旧の詳細は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)と
+[要件指示書](epic-187-addon-event-requirements.md)を参照する。取得位置と有限sanitized bufferの永続化、
+consumerごとの欠落復旧、画面オフラインと購読解除の区別は、Epic #187のEventRuntime / EventStoreに実装した。
+既存ToolRuntimeの共有Gateとライフサイクルへ接続し、MCP標準Tool/Resourceを使う。
+設定・consumer API・公開結果契約・検証入口は[Event runtime](addon-event-runtime.md)を参照する。
+通知履歴の保持とTeamsを参考にするUI方針は通知／会話分離ADRの2026-09-16追記で定め、後続consumerで実装する。
+
 ## Character Life Runtime
 
 `backend/app/character_life/`が会話外の実行を所有する。FastAPI lifespanでDBOSを一度だけ起動し、

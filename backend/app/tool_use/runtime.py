@@ -21,6 +21,8 @@ from app.addon_action.store import ActionStore
 from app.addon_action.journal import ActionJournal
 from app.addon_action.dispatch import ActionDispatch
 from app.addon_action.recovery import ActionRecovery
+from app.addon_events.contracts import load_sources
+from app.addon_events.runtime import EventRuntime
 
 from .binding import BindingResolver, BindingTarget
 from .projection import Sanitizer
@@ -218,6 +220,11 @@ class ToolRuntime:
             else AddonRuntime(self.gate, settings_path=settings_path)
         )
         self.management.on_disabled = self.service.connection_disabled
+        event_sources = load_sources(os.environ.get("DS_MCP_EVENT_CONFIG"))
+        self.events = (
+            EventRuntime(self.gate, event_sources, action_path.parent.parent / "addon-events" / "events.sqlite3", self.service.sanitizer)
+            if event_sources or (action_path.parent.parent / "addon-events" / "events.sqlite3").exists() else None
+        )
 
     async def start(self) -> None:
         self.action_policy.store.detach_waiters()
@@ -225,8 +232,12 @@ class ToolRuntime:
         self.gate.actions.journal.detach_dispatches()
         await self.management.start()
         self.action_recovery.start()
+        if self.events is not None:
+            self.events.start()
 
     async def close(self) -> None:
+        if self.events is not None:
+            await self.events.close()
         self.service.close()
         await self.action_recovery.close()
         await self.management.close()
