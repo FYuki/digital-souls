@@ -7,6 +7,7 @@ import { parseVoiceSessionEvent } from '../lib/voice-session/validation'
 import {
   endLiveKitSession,
   requestLiveKitToken,
+  VoicePreparationError,
   type TokenResponse,
 } from './client'
 import { LiveKitRoomClient, type RoomObservation } from './room'
@@ -41,6 +42,7 @@ export type VoiceSessionSnapshot = Readonly<{
   sessionId: string | null
   activeResponseId: string | null
   textSubmissions: readonly TextSubmission[]
+  preparationError?: string
 }>
 
 export type VoiceSessionRoom = {
@@ -58,6 +60,7 @@ export type VoiceSessionDependencies = Readonly<{
     conversationId: string,
     sessionId?: string,
     screenClientSessionId?: string | null,
+    signal?: AbortSignal,
   ) => Promise<TokenResponse>
   endSession: (sessionId: string) => Promise<void>
   roomFactory: (
@@ -119,6 +122,8 @@ const sameContext = (
 
 export class LiveKitVoiceSessionController {
   private phase: VoiceSessionPhase = 'idle'
+  private preparationAbort: AbortController | null = null
+  private preparationError: string | null = null
   private input: VoiceInputPhase = 'inactive'
   private response: VoiceResponsePhase = 'idle'
   private playback: VoicePlaybackPhase = 'idle'
@@ -177,6 +182,7 @@ export class LiveKitVoiceSessionController {
       sessionId: this.binding?.session_id ?? null,
       activeResponseId: this.generatingResponseId ?? this.playbackResponseId,
       textSubmissions: this.textInputs.snapshot(),
+      ...(this.preparationError === null ? {} : {preparationError: this.preparationError}),
     }
   }
 
@@ -294,6 +300,8 @@ export class LiveKitVoiceSessionController {
     this.authorizedTrackSid = null
     this.microphoneStream = null
     this.context = context
+    this.preparationError = null
+    const preparationAbort = this.preparationAbort = new AbortController()
     this.setPhase('connecting')
     // 接続確定前の資源はこの開始処理が所有し、終了・別Session開始後も回収する。
     let openingBinding: TokenResponse | null = null
@@ -305,6 +313,7 @@ export class LiveKitVoiceSessionController {
         context.conversationId,
         undefined,
         this.screenClientSessionId,
+        preparationAbort.signal,
       )
       if (version !== this.operationVersion) throw new Error('音声Sessionの開始は取り消されました')
       const room = openingRoom = this.dependencies.roomFactory(
@@ -349,10 +358,13 @@ export class LiveKitVoiceSessionController {
         this.controlTail = Promise.resolve()
         this.microphoneEnabled = false
         this.input = 'inactive'
+        this.preparationError = error instanceof VoicePreparationError ? error.message
+          : '音声会話の準備に失敗しました。接続を確認して再試行してください。'
         this.setPhase('error')
       }
       throw error
     } finally {
+      if (this.preparationAbort === preparationAbort) this.preparationAbort = null
       if (!handedOff) {
         try {
           openingRoom?.disconnect()
@@ -564,6 +576,9 @@ export class LiveKitVoiceSessionController {
   }
 
   private async finishEnd(): Promise<void> {
+    this.preparationAbort?.abort()
+    this.preparationAbort = null
+    this.preparationError = null
     const binding = this.binding
     const room = this.room
     this.preserveUnconfirmedText()

@@ -69,7 +69,7 @@ for (const legacy of [
       code: legacy.detail,
       [legacy.core === '1.1' ? 'supported_protocol_version' : 'supported_transport_protocol_version']: '2.0',
     } })
-    await expect(page.getByRole('alert').filter({ hasText: '応答の取得に失敗しました。' })).toBeVisible()
+    await expect(page.getByRole('alert').filter({ hasText: '画面を再読み込みして更新してください' })).toBeVisible()
     await expect(page.getByText('セッション: エラー', { exact: true })).toBeVisible()
     await expect(page.getByText('入力: 停止', { exact: true })).toBeVisible()
     await expect(page.getByText('音声会話は停止しました。テキスト履歴は保持されています。', { exact: true })).toBeVisible()

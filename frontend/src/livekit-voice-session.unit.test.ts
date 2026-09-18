@@ -961,3 +961,17 @@ describe('接続開始中の取消と資源解放', () => {
   })
 
 })
+
+
+test('開始準備中の終了は要求を取り消してマイク公開を行わない', async () => {
+  const {controller, dependencies, room} = setup()
+  vi.mocked(dependencies.requestToken).mockImplementation((_character, _conversation, _session, _screen, signal) =>
+    new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(signal.reason), {once: true})))
+  const starting = controller.ensureSession({characterId: 'miori', conversationId: 'conversation'})
+  const rejected = expect(starting).rejects.toMatchObject({name: 'AbortError'})
+  await controller.end()
+  await rejected
+  expect(controller.snapshot().phase).toBe('idle')
+  expect(room.publishMicrophone).not.toHaveBeenCalled()
+  expect(room.connect).not.toHaveBeenCalled()
+})
