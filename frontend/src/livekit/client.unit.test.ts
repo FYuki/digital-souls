@@ -49,6 +49,24 @@ describe('音声開始準備の状態確認', () => {
     expect(fetch.mock.calls.filter(([url]) => url.endsWith('/cancel'))).toHaveLength(1)
   })
 
+  test.each([
+    ['stt', 'stt_inference_timeout', '音声認識', 'タイムアウト'],
+    ['inference', 'inference_model_not_found', '応答モデル', '見つかりません'],
+    ['inference', 'inference_provider_error', '応答モデル', 'サービスでエラー'],
+  ])('%s準備の%sは安全な理由を返し自動再試行しない', async (stage, code, label, reason) => {
+    const fetch = vi.fn(async (url: string) => url.endsWith('/cancel')
+      ? new Response(null, {status: 204})
+      : new Response(JSON.stringify({detail: {stage, code, message: 'PRIVATE_SENTINEL'}}), {status: 503}))
+    vi.stubGlobal('fetch', fetch)
+    const failure = await requestLiveKitToken('miori', 'conversation').catch(error => error)
+    expect(failure).toBeInstanceOf(VoicePreparationError)
+    expect(failure.message).toContain(label)
+    expect(failure.message).toContain(reason)
+    expect(failure.message).not.toContain('PRIVATE_SENTINEL')
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/token'))).toHaveLength(1)
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/cancel'))).toHaveLength(1)
+  })
+
   test('準備中の取消は状態確認を止め、同じ要求の回収を依頼する', async () => {
     vi.useFakeTimers()
     const calls: Array<{url: string; body: Record<string, unknown>}> = []

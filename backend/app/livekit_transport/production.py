@@ -25,6 +25,7 @@ from app.conversation_core.adapters import (
     PromptLlmAdapter,
     SpeakerSynthesizer,
     SyncTranscriber,
+    SttCapacityError,
     VoicevoxTtsAdapter,
     WhisperSttAdapter,
     ScreenLineageResponseState,
@@ -50,6 +51,9 @@ from app.livekit_transport.coordinator import (
 )
 from app.livekit_transport.delivery import CoreNotificationPort, TerminalProtocolError
 from app.livekit_transport.errors import RoomCleanupPendingError
+from app.livekit_transport.preparation import VoiceModelPreparationError
+from app.inference.errors import InferenceError
+from app.stt.remote_whisper_client import RemoteWhisperError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.microphone_frames import (
@@ -329,6 +333,7 @@ class ProductionConversationCoreSessionFactory:
             ],
             AsyncIterator[str],
         ] | None = None,
+        prepare_inference: Callable[[], Awaitable[bool]] | None = None,
         measurement_kind: MeasurementKind = "automated_test",
         trace_record: Callable[[TraceEvent], None] | None = None,
         measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
@@ -343,6 +348,7 @@ class ProductionConversationCoreSessionFactory:
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
         self._generate_screen_reply_stream = generate_screen_reply_stream
+        self._prepare_inference = prepare_inference
         self._measurement_kind = measurement_kind
         self._trace_record = trace_record
         self._measurement_clock_ns = measurement_clock_ns
@@ -383,6 +389,23 @@ class ProductionConversationCoreSessionFactory:
         tts = self._tts_adapter(load_tts_config(character_id))
         if isinstance(tts, IrodoriTtsAdapter):
             await tts.prepare()
+        try:
+            await self._stt.prepare_required()
+        except (RemoteWhisperError, SttCapacityError) as error:
+            raise VoiceModelPreparationError(stage="stt", code=error.error_code) from error
+        except Exception as error:
+            raise VoiceModelPreparationError(stage="stt", code="stt_preparation_failed") from error
+        if self._prepare_inference is not None:
+            try:
+                await self._prepare_inference()
+            except InferenceError as error:
+                raise VoiceModelPreparationError(
+                    stage="inference", code=f"inference_{error.category.value}",
+                ) from error
+            except Exception as error:
+                raise VoiceModelPreparationError(
+                    stage="inference", code="inference_preparation_failed",
+                ) from error
         return self._create(
             session_id=session_id, character_id=character_id,
             conversation_id=conversation_id, delivery=delivery,

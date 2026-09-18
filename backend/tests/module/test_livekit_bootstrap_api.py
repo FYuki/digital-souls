@@ -841,3 +841,21 @@ def test_preparation_poll_returns_pending_then_token_and_supports_cancellation(c
     cancelled = client.post("/voice/livekit/preparation/cancel", json=body)
     assert cancelled.status_code == 204
     assert not resources.session_repository.contains(response.json()["session_id"])
+
+
+@pytest.mark.parametrize("stage,code", [
+    ("stt", "stt_inference_timeout"), ("inference", "inference_timeout"),
+    ("stt", "stt_capacity_exceeded"),
+])
+def test_model_preparation_failure_reports_stage_and_releases_resources(client, monkeypatch, stage, code):
+    from app.livekit_transport.preparation import VoiceModelPreparationError
+    resources = _install_livekit_resource_ports(client, monkeypatch)
+    async def fail_preparation(_session_id):
+        raise VoiceModelPreparationError(stage=stage, code=code) from RuntimeError("PRIVATE_SENTINEL")
+    monkeypatch.setattr(resources.runtime_manager, "wait_until_ready", fail_preparation)
+    response = client.post("/voice/livekit/token", json=_bootstrap_request())
+    assert response.status_code == 503
+    assert response.json() == {"detail": {"stage": stage, "code": code}}
+    assert "PRIVATE_SENTINEL" not in response.text
+    assert resources.token_signer.token_issues == []
+    assert not resources.session_repository.contains("20000000-0000-4000-8000-000000000001")

@@ -22,6 +22,8 @@ from app.inference.contracts import (
     InferenceMessage,
     InferenceTarget,
     InferenceUsage,
+    ModelPreparationAdapter,
+    ModelPreparationRequest,
     JsonValue,
     ProviderTextResult,
     ResolvedTarget,
@@ -62,6 +64,56 @@ class InferenceRouter:
             target: BoundedSemaphore(resolved.max_concurrency)
             for target, resolved in settings.targets.items()
         }
+
+    async def prepare_text(
+        self, *, caller: InferenceCaller, target: InferenceTarget,
+        latency_sensitive: bool = False,
+    ) -> bool:
+        """明示的に対応するProviderだけを準備する。別Providerへは切り替えない。"""
+        if type(latency_sensitive) is not bool:
+            raise TypeError("latency_sensitive must be boolean")
+        resolved, adapter = self._resolve(caller, target, InferenceCapability.STREAM_TEXT)
+        if InferenceCapability.PREPARE_MODEL not in adapter.capabilities:
+            # クラウド等、モデル常駐をclientから制御しないProvider。
+            return False
+        if not isinstance(adapter, ModelPreparationAdapter):
+            raise InferenceError(InferenceErrorCategory.UNSUPPORTED_CAPABILITY, retryable=False)
+        if resolved.max_output_tokens is None:
+            raise InferenceError(InferenceErrorCategory.INVALID_REQUEST, retryable=False)
+        request = ModelPreparationRequest(
+            model_id=resolved.reference.model_id, options=resolved.options,
+            max_input_tokens=resolved.max_input_tokens,
+            max_output_tokens=resolved.max_output_tokens,
+            timeout_seconds=resolved.timeout_seconds, latency_sensitive=latency_sensitive,
+        )
+        capacity = self._capacity[target]
+        request_id, started_at = str(uuid4()), perf_counter()
+        acquired, dispatched = False, False
+        category: InferenceErrorCategory | None = None
+        try:
+            # 準備操作の期限には同じTargetの枠待ちを含める。
+            async with asyncio.timeout(resolved.timeout_seconds):
+                while not capacity.acquire(blocking=False):
+                    await asyncio.sleep(0.01)
+                acquired = True
+                dispatched = True
+                await adapter.prepare_model(request)
+        except asyncio.CancelledError:
+            category = InferenceErrorCategory.CANCELLED
+            raise
+        except TimeoutError as error:
+            category = InferenceErrorCategory.TIMEOUT
+            raise InferenceError(category, retryable=True) from error
+        except Exception as error:
+            category = error.category if isinstance(error, InferenceError) else InferenceErrorCategory.PROVIDER_ERROR
+            raise
+        finally:
+            if acquired:
+                capacity.release()
+            self._observe(request_id, started_at, caller, target,
+                          InferenceCapability.PREPARE_MODEL, resolved, category,
+                          external_request_count=int(dispatched))
+        return True
 
     def generate_text(
         self,

@@ -52,7 +52,7 @@
 | Voice Design / 声の設計 | Caption（声質・話し方の説明文）から音声候補を合成し、ユーザーが声を選ぶ工程。モデル最終採用やTTS接続とは別 | 選定済み：[光織の音声](../characters/miori/voice.md)、[選定記録](miori-voice-selection-2026-09-13.md) |
 | Reference voice / 参照音声、voice ID | Irodoriで声の参照に使う固定音声と、その登録先の安定した識別子。VOICEVOXの整数speaker IDやキャラクターIDとは別。登録後のIDと音声の対応は固定する | 光織の資産・CCV・登録契約はmain反映済み、残る品質受入は#423：[光織の音声](../characters/miori/voice.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
 | Irodoriの準備完了 | 起動時のモデル読み込みとウォームアップ合成が成功した状態。health応答だけやモデルの本採用を意味しない | mainに導入済み、過去の実GPU検証と今回の残受入を区別：[過去検証](irodori-tts-validation-2026-09.md)、[利用開始条件](irodori-tts-requirements.md) |
-| 音声Sessionの開始準備 | 開始操作から、必要な処理を準備して発話受付可能にするまで。単一サービスのhealth/readinessや、入力受付後の応答待ちとは別 | 一部実装：非同期準備・取消・失敗表示と既存TTS/VADの準備。STT/LLMのcold準備と全体受入は未完了。[開始準備ADR](decisions/voice-session-preparation-2026-09.md)・[現在の動作](system-architecture.md) |
+| 音声Sessionの開始準備 | 開始操作から、必要な処理を準備して発話受付可能にするまで。単一サービスのhealth/readinessや、入力受付後の応答待ちとは別 | 実装：非同期準備・取消・失敗表示、TTS/VAD/STTと対応Providerの会話用LLM準備。全体の性能・品質受入は未完了。[開始準備ADR](decisions/voice-session-preparation-2026-09.md)・[現在の動作](system-architecture.md) |
 | 準備時間 / 初回応答 / 継続応答 | 準備時間は開始操作から発話受付可能まで。初回応答は準備後の最初の入力への応答、継続応答は同一Sessionの後続入力への応答 | 今回の評価で区別：[共通指示書](voice-quality-350-423-424-requirements.md)。準備時間をTTFAと混ぜない |
 | 空状態 / 記憶参照のみの比較 | 空状態は会話履歴が空で記憶参照なし。参照のみの比較は履歴を空に保ち、固定記憶の検索・参照だけを追加する。モデル未ロードや記憶形成の負荷条件とは別 | 今回の評価用語：[共通指示書](voice-quality-350-423-424-requirements.md)。記憶形成・長履歴を含む通常利用全体の保証ではない |
 
@@ -104,6 +104,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 |---|---|---|
 | Inference Target | Coreが指定する推論用途。現在は`chat / privacy / memory-extraction / semantic-extraction / memory-consolidation / embedding / vision / heavy-reasoning / tool-routing / character-life` | 実装：[Target型](../backend/app/inference/contracts.py) |
 | Provider / Model / Adapter | 推論の接続先・使用モデル・接続先固有の実装境界。用途Targetへ`provider/model`を割り当てる。環境Profileや人格とは別 | 実装：[Inference運用](inference-operations.md)、[inference](../backend/app/inference/) |
+| モデル開始準備 | 会話本文を使わず、実際の推論設定でモデルを準備する操作。endpoint疎通やモデル存在確認とは別。常駐継続や速度受入を保証しない | 実装：Inference Capability `prepare_model` / `prepare_text`。[運用](inference-operations.md#音声sessionのモデル開始準備) |
 | Inference Caller | 同じTargetを呼ぶ処理の識別。`screen-reference`はChat Targetのcallerであり、独立したTargetではない | 実装：[画面契約](decisions/browser-screen-perception-2026-09.md)、[アーキテクチャ](system-architecture.md) |
 | Capability | Inferenceでは画像・構造化出力等の推論能力、MCPでは公開されるTool・Resource等。権限と能力は同義ではない | 実装：[Inference型](../backend/app/inference/contracts.py)、[MCP基盤](external-mcp-foundation.md) |
 | Screen Session / lease / generation | 利用者が選択した共有対象と会話・同意・有効期限を結び付ける状態。永続スレッドや音声Sessionとは別 | 実装：[screen_perception](../backend/app/screen_perception/)、[capture](../frontend/src/lib/screen-perception/capture.ts) |

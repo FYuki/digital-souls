@@ -19,6 +19,7 @@ from app.livekit_transport.bootstrap import (
 from app.routers.screen_perception import _require_owner
 from app.tts.irodori_client import IrodoriTtsError
 from app.voice_input.models import VadPreparationError
+from app.livekit_transport.preparation import VoiceModelPreparationError
 
 
 SUPPORTED_PROTOCOL_VERSION = "2.0"
@@ -108,6 +109,8 @@ async def issue_token(body: TokenRequest, request: Request) -> TokenResponse | J
         }) from error
     except (TtsConfigMissingError, TtsConfigValidationError) as error:
         raise HTTPException(503, detail={"code": error.error_code, "stage": "tts"}) from error
+    except VoiceModelPreparationError as error:
+        raise HTTPException(503, detail={"code": error.code, "stage": error.stage}) from error
     except VadPreparationError as error:
         raise HTTPException(503, detail={"code": "vad_unavailable", "stage": "vad"}) from error
     except IrodoriTtsError as error:
