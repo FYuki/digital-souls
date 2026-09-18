@@ -108,31 +108,31 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       || process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1' || process.env.VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY === '1') {
       throw new Error('zero-response sessions require the separate two-case diagnostic')
     }
-    await measureZeroResponseSessions(browser, sourceFixture, manifestPath)
+    await measureZeroResponseSessions(browser, sourceFixture, manifestPath, testInfo)
     return
   }
   if (controlProbe) {
     if (!sourceFixture || pilot === undefined || interruptionCohort !== undefined
       || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
       || Number(pilot) > 10) throw new Error('control probe requires a separate scheduled diagnostic')
-    await measureControlProbeSession(browser, sourceFixture, Number(pilot), manifestPath)
+    await measureControlProbeSession(browser, sourceFixture, Number(pilot), manifestPath, testInfo)
     return
   }
   if (vadCohort !== undefined) {
     if (!sourceFixture || pilot === undefined) throw new Error('VAD pause requires explicit scheduled trial count')
-    await measureLabeledInterruptions(browser, sourceFixture, 'pause', Number(pilot), manifestPath)
+    await measureLabeledInterruptions(browser, sourceFixture, 'pause', Number(pilot), manifestPath, testInfo)
     return
   }
   if (interruptionCohort !== undefined) {
     if (!sourceFixture || pilot === undefined || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)) throw new Error('interruption requires independent scheduled pilot')
-    await measureLabeledInterruptions(browser, sourceFixture, interruptionCohort as 'take_turn' | 'backchannel', Number(pilot), manifestPath)
+    await measureLabeledInterruptions(browser, sourceFixture, interruptionCohort as 'take_turn' | 'backchannel', Number(pilot), manifestPath, testInfo)
     return
   }
   const continuousTurns = Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
   if (!Number.isInteger(continuousTurns) || continuousTurns < 0 || continuousTurns > 10) throw new Error('invalid continuous diagnostic count')
   if (continuousTurns > 0) {
     if (!sourceFixture || pilot === undefined) throw new Error('continuous diagnostic requires scheduled pilot')
-    await measureResponseTrackSession(browser, sourceFixture, expectedTranscript, continuousTurns, manifestPath)
+    await measureResponseTrackSession(browser, sourceFixture, expectedTranscript, continuousTurns, manifestPath, testInfo)
     return
   }
   let initialStateHash: string | undefined

@@ -115,14 +115,14 @@ def test_verifier_requires_actual_deletion_and_exclusive_test_ownership(tmp_path
             cohort.verify_trial('test-001','a'*40)
 
 
-def test_timeout_signals_only_the_owned_child_process_group(tmp_path, monkeypatch):
+def test_interruption_signals_only_the_owned_child_process_group(tmp_path, monkeypatch):
     signals, launches, waits = [], [], []
     class Child:
         pid = 45678
-        def wait(self, timeout):
+        def wait(self, timeout=None):
             waits.append(timeout)
-            if timeout == 300:
-                raise cohort.subprocess.TimeoutExpired('owned pilot', timeout)
+            if timeout is None:
+                raise KeyboardInterrupt
             return 130
     def launch(command, **options):
         launches.append((command, options))
@@ -130,10 +130,10 @@ def test_timeout_signals_only_the_owned_child_process_group(tmp_path, monkeypatc
     monkeypatch.setattr(cohort.subprocess, 'Popen', launch)
     monkeypatch.setattr(cohort.os, 'killpg', lambda pid, sig: signals.append((pid, sig)))
     args = argparse.Namespace(inference_env=tmp_path/'inference.env', livekit_env=tmp_path/'keys.env', disable_thinking=True)
-    with pytest.raises(cohort.subprocess.TimeoutExpired):
+    with pytest.raises(KeyboardInterrupt):
         cohort.run_trial('test-001', args, tmp_path/'child.log')
     assert signals == [(45678, cohort.signal.SIGINT)]
-    assert waits == [300, 45]
+    assert waits == [None, 45]
     assert launches[0][1]['start_new_session'] is True
     assert launches[0][0][-1] == '--disable-thinking'
     assert launches[0][0][launches[0][0].index('--trials') + 1] == '3'
@@ -147,3 +147,16 @@ def test_concurrent_cohort_is_rejected_before_any_trial_starts(rig):
         with pytest.raises(BlockingIOError):
             cohort.execute(args)
     assert not calls and not directory.exists()
+
+
+def test_trial_has_no_fixed_preparation_deadline(tmp_path, monkeypatch):
+    waits = []
+    class Child:
+        def wait(self, timeout=None):
+            waits.append(timeout)
+            return 1
+    monkeypatch.setattr(cohort.subprocess, "Popen", lambda *a, **kw: Child())
+    args = argparse.Namespace(inference_env=tmp_path/"inference.env",
+                              livekit_env=tmp_path/"keys.env", disable_thinking=False)
+    assert cohort.run_trial("run", args, tmp_path/"trial.log") == 1
+    assert waits == [None]

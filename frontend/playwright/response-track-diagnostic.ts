@@ -1,6 +1,7 @@
+import {waitForVoicePreparation} from './wait-for-preparation'
 import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 // 実サービスで同一sessionのtrack切替を確認する。独立100試行の代用にはしない。
-import { expect, type Browser } from '@playwright/test'
+import { expect, type Browser, type TestInfo } from '@playwright/test'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { installScheduledFixture, readFixtureBounds, type ScheduledFixture } from './controlled-audio-fixture'
@@ -8,11 +9,12 @@ import { createVoiceChatDriver, voiceTestTimeout } from './voice-chat-suite'
 import { normalizeBaselineTranscript } from './voice-baseline-fixture'
 
 export const measureResponseTrackSession = async (
-  browser: Browser, fixture: ScheduledFixture, expectedTranscript: string, turns: number, output: string,
+  browser: Browser, fixture: ScheduledFixture, expectedTranscript: string, turns: number, output: string, testInfo: TestInfo,
 ): Promise<void> => {
   const page = await browser.newPage({ baseURL: await readVoiceMeasurementBaseUrl(), permissions: ['microphone'] })
   const driver = createVoiceChatDriver()
   const observations: Record<string, unknown>[] = []
+  let preparation: unknown = null
   let ended = false
   let failureDiagnostics: Record<string, unknown> | null = null
   const persist = async () => {
@@ -21,14 +23,15 @@ export const measureResponseTrackSession = async (
       measurement_scope: 'continuous_response_track_diagnostic', expected_turns: turns,
       measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
       fixture_sha256: fixture.audioSha256, session_end_confirmed: ended, trials: observations,
-      failure_diagnostics: failureDiagnostics,
+      failure_diagnostics: failureDiagnostics, preparation_observation: preparation,
     }, null, 2) + '\n')
   }
   try {
     await installScheduledFixture(page, fixture)
     const microphone = await driver.openVoiceChat(page)
     await microphone.click()
-    await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+    await waitForVoicePreparation(page, testInfo)
+    preparation = await page.evaluate(() => window.__voicePreparationProbe!.snapshot())
     await page.evaluate(() => window.__voiceUserControlProbe!.begin())
     for (let index = 0; index < turns; index++) {
       await page.evaluate(async replay => {
@@ -89,6 +92,7 @@ export const measureResponseTrackSession = async (
     })).catch(() => ({ browser_state_unavailable: true }))
     throw error
   } finally {
+    preparation = await page.evaluate(() => window.__voicePreparationProbe?.snapshot() ?? null).catch(() => preparation)
     if (!ended) {
       await persist()
       await driver.endVoiceSession(page).catch(() => undefined)
