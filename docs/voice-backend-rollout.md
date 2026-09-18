@@ -3,6 +3,9 @@
 本書はM6の実行手順。配備完了・実マイク受入済みの記録ではない。
 [移設契約](voice-backend-migration-contract.md)と[検証記録](validation/voice-backend-vad-358.md)を併読する。
 
+導入はmain反映済みだが、本書の通し実行は[#424](https://github.com/FYuki/digital-souls/issues/424)の残件。
+個別証跡と未実施範囲は[残受入対応表](validation/voice-quality-350-423-424-status.md)に整理する。
+
 ## 版とデータの境界
 
 FEとBEを同じcommitの一組で切り替える。旧Core 1.1／private v1と新Core 2.0／private v2を混在させない。

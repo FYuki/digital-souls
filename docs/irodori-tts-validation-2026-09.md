@@ -10,6 +10,8 @@ Irodori導入・声選定の#329/#330はクローズ済み。現在の採用音�
 
 #329 / #330の固定設定を用いた検証記録。性能・音質の受入とモデルの最終採用は未完了。
 
+#329/#330の各条件と証拠・残件の対応は[残受入対応表](validation/voice-quality-350-423-424-status.md)を参照する。
+
 ## 固定条件
 
 - モデル: Aratako/Irodori-TTS-v4.1-Small、revision 2b28324dc263ed5e6638b3cf3dd94c82ead07b4b、非量子化CUDA/BF16。
