@@ -40,6 +40,16 @@ jobs:
         run: |
           owner=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           printf 'prefix=ghcr.io/%s\n' "$owner" >> "$GITHUB_OUTPUT"
+      - name: Reserve disk space for Irodori CUDA dependencies
+        if: matrix.name == 'irodori' && runner.environment == 'github-hosted'
+        shell: bash
+        run: |
+          # このjob専用の使い捨てrunnerに同梱された未使用SDKだけを除去する。
+          # ソース・Docker・uv cache・モデルの保存領域は対象にしない。
+          df -h /
+          sudo rm -rf -- /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
