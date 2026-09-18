@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Literal, cast
 
@@ -235,6 +236,19 @@ def _compatibility(env: dict[str, str], used: list[str]) -> Compatibility:
     return {"usedEnvironmentVariables": used_variables, "warnings": warnings}
 
 
+def measurement_environment(env: Mapping[str, object], environment_id: str) -> dict[str, str]:
+    """既存Profileに任意の測定条件を加え、誤値を記録へ持ち込まない。"""
+    key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
+    if key not in env:
+        return {}
+    value = env[key]
+    if not isinstance(value, str) or value not in ("true", "false"):
+        raise ProfileError(f"{key} must be true or false")
+    if value == "true" and environment_id != "test":
+        raise ProfileError("memory formation isolation requires test environment")
+    return {key: value}
+
+
 def resolve_profile(
     env: dict[str, str],
     default_profile: str | None,
@@ -272,8 +286,7 @@ def resolve_profile(
                 model_settings,
                 inference_target_environment(env),
             ),
-            **({key: env[key] for key in ("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION",)
-                if key in env}),
+            **measurement_environment(env, runtime_paths.environment_id),
             "DS_ENVIRONMENT_ID": runtime_paths.environment_id,
             "DS_DATA_DIR": str(runtime_paths.data_root),
         },

@@ -203,12 +203,29 @@ def test_measurement_formation_setting_is_preserved_in_report_and_backend_contai
     key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
     paths = resolved_runtime_paths(tmp_path)
     report = resolve_profile({"DS_PROFILE": "integration-voice", key: "true"}, None, paths)
+    from profile_report import validate_resolved_report
+    assert validate_resolved_report(report) == report
     assert report["derivedEnvironment"][key] == "true"
     adapter = BackendAdapter(tmp_path, paths, RecordingRunner())
-    adapter._write_compose_environment(
+    values = adapter._write_compose_environment(
         report["dependencies"]["backend"], report["derivedEnvironment"],
         host="127.0.0.1", port=18500,
     )
     # Composeが読むbackend env fileへ明示キーが渡ることを確認する。
-    env_files = list(paths.data_root.rglob("*.env"))
-    assert any(key + "=" in path.read_text() for path in env_files)
+    from dotenv import dotenv_values
+    assert values[key] == "true"
+    assert dotenv_values(values["DS_CONTAINER_ENV_FILE"])[key] == "true"
+
+
+@pytest.mark.parametrize("value", ["invalid", "1", True, None])
+def test_profile_rejects_invalid_measurement_policy_values(tmp_path, value):
+    from profile_resolution import resolve_profile
+    from profile_report import validate_resolved_report
+    from profile_types import ProfileError
+    key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
+    report = _resolve("integration-voice", tmp_path)
+    report["derivedEnvironment"][key] = value
+    with pytest.raises(ProfileError, match="true or false"):
+        validate_resolved_report(report)
+    with pytest.raises(ProfileError, match="true or false"):
+        resolve_profile({"DS_PROFILE": "integration-voice", key: value}, None, resolved_runtime_paths(tmp_path))

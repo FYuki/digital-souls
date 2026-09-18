@@ -106,7 +106,7 @@ def _backend_environment_command(report_path: str) -> None:
     allowed = (
         set(MODEL_ENVIRONMENT_KEYS)
         | set(INFERENCE_TARGET_ENVIRONMENT_KEYS)
-        | {SCREEN_ALLOWED_ORIGIN_ENV}
+        | {SCREEN_ALLOWED_ORIGIN_ENV, "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"}
     )
     for key in sorted(allowed & derived.keys()):
         value = derived[key]

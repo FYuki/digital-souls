@@ -145,9 +145,9 @@ privacy、記憶index・参照の経路は維持する。専用data root内の�
 
 ### 形成負荷除外のローカル検証
 
-2026-09-19 JST、以下の関連unit/moduleは437件成功（既存Starlette非推奨警告1件）、
+2026-09-19 JST、以下の関連unit/moduleは442件成功（既存Starlette非推奨警告1件）、
 CIと同じmypy対象は364 source filesで成功した。
-起動ガード、通常起動、履歴保存を維持した形成停止、Compose envへの伝播、
+起動ガード、通常起動、履歴保存を維持した形成停止、Profileの保存・厳密読込・Backend用CLI出力・Compose envへの伝播、
 初期状態hashと既存reporter、停止証跡が欠測・不一致のcohort拒否を確認した。
 Moduleの外部推論境界はfixtureで代替しており、実サービス性能の証拠ではない。
 
