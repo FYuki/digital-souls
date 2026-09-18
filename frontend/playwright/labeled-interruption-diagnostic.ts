@@ -213,9 +213,19 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         cycle.responseId, {timeout: 5000})
       } else {
         // ラベルとの一致を検査する前に、保留・誤判定時も旧応答の終端まで観測する。
-        await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId]
-          || window.__voiceChatE2E.coreEventDiagnostics.some(event =>
-            event.type === 'response_cancelled' && event.responseId === responseId), cycle.responseId, {timeout: 10000})
+        // 通常会話と同じ完了観測期限。応答開始の遅延基準とは別で、
+        // 長い音声を10秒で打ち切って完了欠測を作らない。
+        await page.waitForFunction(responseId => {
+          const state = window.__voiceChatE2E
+          if (state.transportFailures?.length) throw new Error('voice transport failed')
+          if (state.coreEventDiagnostics.some(event =>
+            event.type === 'response_failed' && event.responseId === responseId)) {
+            throw new Error('voice response failed')
+          }
+          return !!state.playbackCompletions?.[responseId]
+            || state.coreEventDiagnostics.some(event =>
+              event.type === 'response_cancelled' && event.responseId === responseId)
+        }, cycle.responseId, {timeout: 60_000})
         const cancelled = await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
           event.type === 'response_cancelled' && event.responseId === responseId), cycle.responseId)
         expect(cancelled).toBe(false)
