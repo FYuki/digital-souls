@@ -169,7 +169,7 @@ def test_preparation_cannot_bypass_target_authorization():
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("failure_stage", [None, "stt", "inference", "cancel"])
+@pytest.mark.parametrize("failure_stage", [None, "stt", "inference", "prompt", "cancel", "unsupported"])
 def test_core_factory_requires_stt_and_model_before_opening_history(monkeypatch, failure_stage):
     from app.livekit_transport import production
     from app.characters.loader import VoicevoxTtsConfig
@@ -188,7 +188,12 @@ def test_core_factory_requires_stt_and_model_before_opening_history(monkeypatch,
             if failure_stage == "inference":
                 raise InferenceError(InferenceErrorCategory.TIMEOUT, retryable=True)
             await release.wait()
-            return True
+            return failure_stage != "unsupported"
+        async def prepare_prompt(character):
+            assert character == "miori"
+            calls.append("prompt")
+            if failure_stage == "prompt":
+                raise InferenceError(InferenceErrorCategory.TIMEOUT, retryable=True)
         def open_history(*_args):
             calls.append("history")
             return object()
@@ -197,14 +202,16 @@ def test_core_factory_requires_stt_and_model_before_opening_history(monkeypatch,
             transcriber=SimpleNamespace(transcribe=transcribe), synthesizer=object(),
             history_service=SimpleNamespace(open_session=open_history),
             generate_reply=lambda *_: pytest.fail("準備では応答を生成しない"),
-            prepare_inference=prepare_model,
+            prepare_inference=prepare_model, prepare_prompt=prepare_prompt,
         )
         pending = asyncio.create_task(factory.create_ready(
             session_id=str(uuid4()), character_id="miori", conversation_id=uuid4(), delivery=object()))
-        if failure_stage in {"stt", "inference"}:
+        if failure_stage == "prompt":
+            release.set()
+        if failure_stage in {"stt", "inference", "prompt"}:
             with pytest.raises(VoiceModelPreparationError) as failure:
                 await pending
-            assert failure.value.stage == failure_stage
+            assert failure.value.stage == ("inference" if failure_stage == "prompt" else failure_stage)
             assert failure.value.code == ("stt_inference_timeout" if failure_stage == "stt" else "inference_timeout")
             assert "PRIVATE_SENTINEL" not in str(failure.value)
             assert "history" not in calls
@@ -220,7 +227,8 @@ def test_core_factory_requires_stt_and_model_before_opening_history(monkeypatch,
             else:
                 release.set()
                 session = await pending
-                assert calls == ["stt", "inference", "history"]
+                assert calls == (["stt", "inference", "history"] if failure_stage == "unsupported"
+                                 else ["stt", "inference", "prompt", "history"])
                 await session.end()
     asyncio.run(scenario())
 

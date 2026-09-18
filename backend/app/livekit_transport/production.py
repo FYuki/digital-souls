@@ -334,6 +334,7 @@ class ProductionConversationCoreSessionFactory:
             AsyncIterator[str],
         ] | None = None,
         prepare_inference: Callable[[], Awaitable[bool]] | None = None,
+        prepare_prompt: Callable[[str], Awaitable[None]] | None = None,
         measurement_kind: MeasurementKind = "automated_test",
         trace_record: Callable[[TraceEvent], None] | None = None,
         measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
@@ -349,6 +350,7 @@ class ProductionConversationCoreSessionFactory:
         self._generate_reply_stream = generate_reply_stream
         self._generate_screen_reply_stream = generate_screen_reply_stream
         self._prepare_inference = prepare_inference
+        self._prepare_prompt = prepare_prompt
         self._measurement_kind = measurement_kind
         self._trace_record = trace_record
         self._measurement_clock_ns = measurement_clock_ns
@@ -397,7 +399,9 @@ class ProductionConversationCoreSessionFactory:
             raise VoiceModelPreparationError(stage="stt", code="stt_preparation_failed") from error
         if self._prepare_inference is not None:
             try:
-                await self._prepare_inference()
+                prepared = await self._prepare_inference()
+                if prepared and self._prepare_prompt is not None:
+                    await self._prepare_prompt(character_id)
             except InferenceError as error:
                 raise VoiceModelPreparationError(
                     stage="inference", code=f"inference_{error.category.value}",
