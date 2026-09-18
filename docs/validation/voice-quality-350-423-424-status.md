@@ -114,3 +114,25 @@ main統合済みをレビュー済みとは扱わず、未レビュー範囲を�
 除外前の認識も予定の相槌とは一致せず、無音controlにも認識segmentが生じた。
 無音除外の撤廃や曖昧な反応の一律相槌化は行わない。元fixture・ラベル・失敗分母を維持し、
 実収録の確認と必要な人の試聴を#350/#424で続ける。
+
+## 割り込み診断のfixture番号指定と集計の整合
+
+#408の残レビューとして、VAD/PCM/割り込みreporterと匿名cohort検証を照合した。
+runnerは小規模診断で `fixture_indices` を記録するが、相槌・take-turn reporterは
+常に原catalogの先頭N件と照合していた。3番・1番を指定した2件の記録が
+`labeled fixture coverage or order mismatch` で拒否されることを回帰テストで再現した。
+
+両reporterは、元catalogと記録済み番号列から選択順を解決する。
+10件以下・整数・1〜100かつcatalog内・重複なしを確認し、実trialのSHAと順序も照合する。
+省略時の先頭N件、原catalogのhash確認、全試行分母、匿名化、時計の相関、
+100件以上の合格条件は維持する。選択診断のためのcatalog編集・trial付け替えは不要になる。
+
+2026-09-19 JST、CLI入口から原catalogのhash保持・schema検証済み出力までを含め、
+以下の関連283テストが成功した（既存Starlette非推奨警告1件）。
+これは集計処理の検証であり、実ブラウザで新しい発話試験を実施した証拠ではない。
+過去の測定結果は再計算・上書きしていない。全#408差分レビューの完了は主張しない。
+
+```sh
+cd backend
+.venv/bin/python -m pytest tests/unit/test_voice_quality_take_turn_report.py tests/unit/test_voice_quality_backchannel_report.py tests/unit/test_voice_quality_cohort_report_validation.py tests/unit/test_voice_quality_backend_vad_report.py tests/unit/test_voice_quality_vad_report.py tests/unit/test_voice_quality_stt_pcm_report.py tests/unit/test_voice_quality_pilot.py -q
+```

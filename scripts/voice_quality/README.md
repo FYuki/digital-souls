@@ -330,6 +330,9 @@ backend/.venv/bin/python scripts/voice_quality/run_reconnect_cohort.py \
 これは10件以下の原因調査用であり、100試行の受け入れには使用できない。重複や範囲外は拒否し、
 省略時は通常どおり先頭から全件を使用する。選択した番号列は生記録の`fixture_indices`へ保存する。
 診断用番号を環境変数から次の正式測定へ引き継がない。
+相槌・take-turnの既存reporterも、この番号列と原catalogのhashを用いて実際の試行順を照合する。
+選択診断のためにcatalogを並べ替えたり、元のtrial記録を付け替えたりしない。
+10件を超える選択はreporterでも拒否し、小規模診断を100件の合格へ昇格させない。
 
 VAD診断は各frameの確率・RMS・補助VADの有声割合・スペクトル集中度／平坦度と、モデルのリセット時刻を記録する。
 PCMや本文を診断portへ渡さない。frame・イベント・リセット記録には個別の上限とoverflowフラグを設け、
