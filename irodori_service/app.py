@@ -111,8 +111,12 @@ def create_app(
         await voice_validation.run(lambda: voices.resolve(payload.voice))
         result = asyncio.create_task(scheduler.submit(payload, cast(Environment, environment)))
 
+        # Starletteの切断probe内では外部cancelが吸収される場合がある。
+        # 応答完了時はcancelだけに頼らず、次の反復も必ず終了させる。
+        stopping_disconnect_watch = False
+
         async def watch_disconnect() -> None:
-            while not await request.is_disconnected():
+            while not stopping_disconnect_watch and not await request.is_disconnected():
                 await asyncio.sleep(0.025)
 
         disconnected = asyncio.create_task(watch_disconnect())
@@ -125,6 +129,7 @@ def create_app(
                 raise ServiceError("tts_request_cancelled", 499)
             return Response(await result, media_type="audio/wav")
         finally:
+            stopping_disconnect_watch = True
             disconnected.cancel()
             if not result.done():
                 result.cancel()
