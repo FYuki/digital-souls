@@ -216,6 +216,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
+        preparation_observation: await page.evaluate(() => window.__voicePreparationProbe?.snapshot()),
         pcm_input_observation: await snapshotPcmInputs(index + 1),
         ...(observePlaybackSupply ? {
           playback_supply_observation: await page.evaluate(readPlaybackSupplyDiagnostic, cycle.responseId!),
@@ -257,6 +258,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
         ...trials[index],
         phase: index < WARMUP_RUNS ? 'warmup' : 'measured',
         outcome: 'failure', failure_reason: 'voice_cycle_incomplete', diagnostics,
+        preparation_observation: await page.evaluate(() => window.__voicePreparationProbe?.snapshot()).catch(() => null),
         pcm_input_observation: await snapshotPcmInputs(index + 1).catch(() => ({unavailable: true})),
       }
       throw error

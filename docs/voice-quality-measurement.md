@@ -418,3 +418,26 @@ stats API未提供・timeout・track未取得は引き続き理由付き欠測�
 Backend module 1,430件、Frontend module 107件、mocked E2E 41件、型検査・lint・buildを通過した。
 Backend全unitは3,121件成功・既存の取消event列期待1件が失敗し、追加した取消一次記録へ期待を更新した後、
 関連81件が成功した。初回失敗のログhashを残す。生成契約一致とmocked環境のteardown・所有Frontend撤去も確認した。
+
+
+## #350・#423・#424の開始準備と独立試行
+
+`run_normal_cohort.py --profile integration-irodori`は、採用Irodoriを使う通常音声も
+既存の5 warm-up＋100独立試行で実行する。各試行は専用data rootで空履歴・空記憶を検証し、
+終了時に同じProfile・所有containerの削除を照合する。既定は従来の`integration-voice`。
+同一data rootで複数試行を繰り返すpilotでは、前試行の記憶形成後に空状態検査が失敗し得る。
+空状態検査を省略したり、残った記憶を試行間で都合よく除外したりしない。
+
+各trialの`preparation_observation`は、ブラウザ内の同一performance時計で、開始ボタンのclickから
+マイク待機表示までを記録する。待機表示は接続・マイク取得・入力認可を終えてから反映される。
+観測方式は`browser_click_to_microphone_standby_dom_v1`であり、DOM更新の観測遅延を含む。
+OSの権限待ちも含め、モデル単体のロード時間とは区別する。HTTP完了やBE時計を代用しない。
+
+失敗時も開始時刻と未取得の完了時刻を保持し、欠測を0msや成功へ補完しない。
+複数回の開始操作は回数を残し、有効な単一試行と認めない。
+cohort summaryはwarm-up／測定の準備件数・欠測・不正・未完了・coverageと、
+有効値のp50/p95/maxを分けて示す。時間の上限は追加せず、準備証拠の欠落があれば
+runnerは成功終了しない。既存TTFA報告は利用者発話終了→実再生の境界を維持する。
+
+この計測機能の実装だけでは、正式100試行・速度目標・記憶参照の追加計測・Issue固有受入を
+完了としない。[共通指示書](voice-quality-350-423-424-requirements.md)に従って別途判定する。
