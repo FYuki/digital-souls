@@ -1,3 +1,4 @@
+import {installPreparationProbe} from './preparation-probe'
 import type {DecodedReceiptSnapshot} from '../src/livekit/decoded-receipt-audit'
 import {installStaleTextProbe} from './stale-text-probe'
 import type {CoreDeliveryObservation} from '../src/livekit/core-delivery-observation'
@@ -81,6 +82,7 @@ type CompletedVoiceCycle = {
 }
 
 const installPlaybackProbe = async (page: Page) => {
+  await page.addInitScript(installPreparationProbe)
   await page.addInitScript(installStaleTextProbe)
   await page.addInitScript(installUserControlProbe)
   await page.addInitScript(installInterruptionProbe)
