@@ -36,6 +36,7 @@ from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
     BootstrapService,
+    preparation_operation,
     CharacterConversationBindingValidator,
     InMemorySessionBindingRepository,
 )
@@ -1779,17 +1780,18 @@ class ProductionRuntimeManager:
             )
         room_name = f"voice-{session_id}"
         user_identity = f"user-{session_id}"
-        token = await self._signer.issue_token(
-            {
-                "identity": request["identity"],
-                "room": room_name,
-                "ttl_seconds": 90,
-                "can_subscribe": True,
-                "can_publish": True,
-                "can_publish_data": True,
-                "can_publish_sources": ["microphone"],
-            }
-        )
+        async with preparation_operation("token", BOOTSTRAP_TIMEOUT_SECONDS):
+            token = await self._signer.issue_token(
+                {
+                    "identity": request["identity"],
+                    "room": room_name,
+                    "ttl_seconds": 90,
+                    "can_subscribe": True,
+                    "can_publish": True,
+                    "can_publish_data": True,
+                    "can_publish_sources": ["microphone"],
+                }
+            )
         room: rtc.Room = rtc_module.Room()
 
         if self._audio_probe_enabled:
@@ -2062,11 +2064,12 @@ class ProductionRuntimeManager:
                 or coordinator.phase == "ended"
             )
 
-        await room.connect(self._livekit_url, token)
+        async with preparation_operation("transport", BOOTSTRAP_TIMEOUT_SECONDS):
+            await room.connect(self._livekit_url, token)
         if startup_ended():
             raise RuntimeError("runtime startup ended")
-        coordinator.start_join_deadline()
-        audio_source = await self._prepare_output_track(room)
+        async with preparation_operation("output", BOOTSTRAP_TIMEOUT_SECONDS):
+            audio_source = await self._prepare_output_track(room)
         if startup_ended():
             await audio_source.aclose()
             raise RuntimeError("runtime startup ended")
@@ -2136,6 +2139,10 @@ class ProductionRuntimeManager:
         await bridge.prepare_audio()
         if isinstance(self._core_port, ProductionCoreEventInbox):
             self._core_port.bind(session_id, bridge.notify)
+        if startup_ended():
+            raise RuntimeError("runtime startup ended")
+        # clientのjoin猶予をモデル準備で消費しない。
+        coordinator.start_join_deadline()
         self._ready[session_id].set()
 
     async def _observe_microphone(

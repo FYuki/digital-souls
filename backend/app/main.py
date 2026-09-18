@@ -1050,6 +1050,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     cleanup_errors.append(error)
 
             if livekit_api is not None:
+                await run_cleanup(app.state.livekit_bootstrap_service.cancel_all_preparations())
                 await run_cleanup(app.state.livekit_runtime_manager.stop_all())
                 await run_cleanup(livekit_api.aclose())
             if life_runtime is not None:

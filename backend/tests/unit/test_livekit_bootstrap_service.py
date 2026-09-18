@@ -331,9 +331,9 @@ def test_bootstrap_cleanup_uses_an_independent_deadline_and_releases_all_ownersh
 
 
 @pytest.mark.parametrize(
-    "stage", ["session", "room", "runtime", "readiness", "token"]
+    "stage", ["session", "room", "token"]
 )
-def test_bootstrap_timeout_covers_every_resource_acquisition_stage(stage: str) -> None:
+def test_bootstrap_operation_timeout_covers_individual_resource_acquisition(stage: str) -> None:
     module = _bootstrap_module("whole-bootstrap timeout and compensation")
     calls: list[str] = []
     sessions = FakeSessionRepository(calls, hang_reserve=stage == "session")
@@ -352,8 +352,9 @@ def test_bootstrap_timeout_covers_every_resource_acquisition_stage(stage: str) -
         timeout_seconds=0.01,
     )
 
-    with pytest.raises(module.BootstrapTimeoutError, match="bootstrap timed out"):
+    with pytest.raises(module.BootstrapTimeoutError, match="bootstrap timed out") as failure:
         asyncio.run(asyncio.wait_for(service.bootstrap(_request()), timeout=0.5))
+    assert failure.value.stage == stage
 
     if stage == "token":
         assert calls[:5] == [
@@ -636,3 +637,100 @@ def test_real_binding_validator_allows_active_owned_conversation() -> None:
         "conversation.resume:miori:20000000-0000-4000-8000-000000000011",
         "session.reserve",
     ]
+
+
+def test_slow_preparation_outlives_operation_timeout_without_token_until_ready() -> None:
+    module = _bootstrap_module("unbounded preparation with explicit readiness")
+    async def exercise() -> None:
+        service, calls, sessions, rooms, runtimes, signer = _service(module)
+        service._timeout_seconds = 0.005
+        runtimes.ready_started = asyncio.Event()
+        runtimes.ready_release = asyncio.Event()
+        request = _request()
+        assert await service.poll_preparation(request) is None
+        await runtimes.ready_started.wait()
+        for _ in range(3):
+            await asyncio.sleep(0.01)
+            assert await service.poll_preparation(request) is None
+        assert signer.issued_tokens == []
+        assert calls.count("runtime.connect") == 1
+        runtimes.ready_release.set()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        result = await service.poll_preparation(request)
+        assert result is not None
+        assert calls.count("token.issue") == 1
+        await service.end(result.session_id)
+        assert not rooms.rooms and not sessions.active and not runtimes.active
+    asyncio.run(exercise())
+
+
+def test_failed_preparation_poll_never_automatically_restarts() -> None:
+    module = _bootstrap_module("manual retry after preparation failure")
+    async def exercise() -> None:
+        service, calls, sessions, rooms, runtimes, signer = _service(module, fail_ready=True)
+        request = _request()
+        assert await service.poll_preparation(request) is None
+        task = service._preparations[str(request["request_id"])].task
+        with pytest.raises(module.BootstrapTimeoutError):
+            await asyncio.shield(task)
+        for _ in range(2):
+            with pytest.raises(module.BootstrapTimeoutError):
+                await service.poll_preparation(request)
+        assert calls.count("runtime.connect") == 1
+        assert not sessions.active and not rooms.rooms and not runtimes.active
+        assert not signer.issued_tokens
+        await service.cancel_preparation(request)
+        runtimes.fail_ready = False
+        retry = {**request, "request_id": "explicit-manual-retry"}
+        assert await service.poll_preparation(retry) is None
+        await service._preparations["explicit-manual-retry"].task
+        result = await service.poll_preparation(retry)
+        assert result is not None
+        await service.end(result.session_id)
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("mode", ["manual", "lease", "shutdown"])
+def test_abandoned_preparation_releases_owned_resources(monkeypatch, mode: str) -> None:
+    module = _bootstrap_module("cancel and abandoned client cleanup")
+    monkeypatch.setattr(module, "PREPARATION_POLL_LEASE_SECONDS", 0.04)
+    async def exercise() -> None:
+        service, calls, sessions, rooms, runtimes, signer = _service(module)
+        runtimes.ready_started = asyncio.Event()
+        runtimes.ready_release = asyncio.Event()
+        request = _request()
+        assert await service.poll_preparation(request) is None
+        await runtimes.ready_started.wait()
+        task = service._preparations[str(request["request_id"])].task
+        if mode == "manual":
+            await service.cancel_preparation(request)
+        elif mode == "shutdown":
+            await service.cancel_all_preparations()
+        else:
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(asyncio.shield(task), 0.5)
+            await asyncio.sleep(0)
+        assert not sessions.active and not rooms.rooms and not runtimes.active
+        assert not signer.issued_tokens
+        assert not service._preparations
+    asyncio.run(exercise())
+
+
+def test_poll_and_cancel_reject_mismatched_request_without_cancelling_owner() -> None:
+    module = _bootstrap_module("preparation ownership")
+    async def exercise() -> None:
+        service, _, _, _, runtimes, _ = _service(module)
+        runtimes.ready_started = asyncio.Event()
+        runtimes.ready_release = asyncio.Event()
+        request = _request()
+        await service.poll_preparation(request)
+        await runtimes.ready_started.wait()
+        mismatched = {**request, "character_id": "different"}
+        with pytest.raises(module.BootstrapConflictError):
+            await service.poll_preparation(mismatched)
+        with pytest.raises(module.BootstrapConflictError):
+            await service.cancel_preparation(mismatched)
+        assert not service._preparations[str(request["request_id"])].task.done()
+        await service.cancel_preparation(request)
+    asyncio.run(exercise())
