@@ -15,6 +15,9 @@ import httpx
 
 from app import chat_service
 from app.inference import InferenceError, InferenceErrorCategory
+from app.inference.contracts import InferenceCancellationToken
+from app.inference.cancellation import cancellation_scope, raise_if_cancelled
+from app.prompting.character import fixed_character_messages
 from app.async_worker import run_sync
 from app.characters.models import CharacterBook
 from app.conversation_history.models import ConversationTurn, TurnStatus
@@ -210,6 +213,28 @@ class ChatService:
         self._conversation_history_service = conversation_history_service
         self._dependencies = dependencies
         self.tools = dependencies.tools
+
+    async def prepare_character_input_tokens(
+        self, character: str, *, timeout_seconds: float,
+    ) -> None:
+        """固定人格だけを既存の正確な計測cacheへ準備し、履歴・記憶には触れない。"""
+        token = InferenceCancellationToken()
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                with cancellation_scope(token):
+                    try:
+                        await run_sync(self._prepare_character_input_tokens, character)
+                    except asyncio.CancelledError:
+                        token.cancel()
+                        raise
+        except TimeoutError as error:
+            raise InferenceError(InferenceErrorCategory.TIMEOUT, retryable=True) from error
+
+    def _prepare_character_input_tokens(self, character: str) -> None:
+        definition = _load_character_definition(character, self._dependencies.character_definition_loader)
+        for message in fixed_character_messages(definition.prompt):
+            raise_if_cancelled()
+            self._dependencies.input_token_counter((message,))
 
     async def generate_reply_async(
         self,

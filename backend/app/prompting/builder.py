@@ -8,6 +8,7 @@ from app.characters.lore_selector import (
     SelectedCharacterLore,
 )
 from app.characters.models import CharacterLorePosition
+from app.prompting.character import character_system_message, post_history_message
 from app.prompting.character_lore import character_lore_messages
 from app.prompting.history import select_history_with_measurements, turn_messages
 from app.prompting.measurement import TokenCounter, TokenMeasurement, TokenMeasurements
@@ -25,13 +26,6 @@ from app.prompting.models import (
 
 logger = logging.getLogger(__name__)
 
-CHARACTER_SECTIONS = (
-    ("キャラクター概要", "description"),
-    ("性格と話し方", "personality"),
-    ("関係と世界観", "scenario"),
-    ("応答方針", "system_prompt"),
-    ("会話例", "mes_example"),
-)
 RAG_HEADING = "## 関連する記憶"
 
 
@@ -175,14 +169,9 @@ class PromptBuilder:
         prompt_input: PromptBuildInput,
         measurements: TokenMeasurements,
     ) -> tuple[PromptMessage | None, TokenMeasurements]:
-        sections = [
-            f"## {heading}\n{value.strip()}"
-            for heading, field in CHARACTER_SECTIONS
-            if (value := getattr(prompt_input.character, field)).strip()
-        ]
-        if not sections:
+        message = character_system_message(prompt_input.character)
+        if message is None:
             return None, measurements
-        message = PromptMessage(PromptRole.SYSTEM, "\n\n".join(sections))
         measured = measurements.measure((message,))
         self._require_within(
             "character",
@@ -236,10 +225,9 @@ class PromptBuilder:
         prompt_input: PromptBuildInput,
         measurements: TokenMeasurements,
     ) -> tuple[PromptMessage | None, TokenMeasurements]:
-        content = prompt_input.character.post_history_instructions.strip()
-        if not content:
+        message = post_history_message(prompt_input.character)
+        if message is None:
             return None, measurements
-        message = PromptMessage(PromptRole.SYSTEM, content)
         measured = measurements.measure((message,))
         if measured.count > prompt_input.budget.post_history:
             return None, measured.measurements
