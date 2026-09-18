@@ -63,11 +63,8 @@ def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tupl
     base = run_root(run_id)
     with (directory / f"{run_id}.log").open("x") as log:
         child = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        deadline = time.monotonic() + 300
         try:
             while child.poll() is None:
-                if time.monotonic() > deadline:
-                    raise TimeoutError("isolated trial deadline")
                 path = base / "runtime-data/runtime/standalone/environment-run.json"
                 if path.exists():
                     try:

@@ -1,3 +1,4 @@
+import {waitForVoicePreparation} from '../../playwright/wait-for-preparation'
 import { readVoiceMeasurementBaseUrl } from '../../playwright/resolved-profile'
 import { measureZeroResponseSessions } from '../../playwright/zero-response-session-diagnostic'
 import { installPlaybackSupplyDiagnostic, readPlaybackSupplyDiagnostic } from '../../playwright/playback-supply-diagnostic'
@@ -90,7 +91,7 @@ test.setTimeout(voiceTestTimeout * (WARMUP_RUNS + MEASURED_RUNS))
 test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnative記録で確認する' : vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割を測定する' : controlProbe ? '実音声再生中の制御往復を診断する' : interruptionCohort ? '実応答の再生中に固定ラベル音声で割り込みを測定する'
   : Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
   ? '同一LiveKit sessionで応答trackの切替を診断する'
-  : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }) => {
+  : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }, testInfo) => {
   const runStartedAt = performance.now()
   const manifestPath = process.env.VOICE_QUALITY_MANIFEST_PATH
   if (manifestPath === undefined) throw new Error('VOICE_QUALITY_MANIFEST_PATH is required')
@@ -185,7 +186,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       initialStateHash ??= state.initial_state_hash
       if (state.initial_state_hash !== initialStateHash) throw new Error('controlled initial state changed between trials')
       await microphone.click()
-      await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      await waitForVoicePreparation(page, testInfo)
       await page.evaluate(() => window.__voiceUserControlProbe!.begin())
       if (sourceFixture) await page.evaluate(() => window.__voiceFixtureClock!.start())
       await driver.waitForSpeechCompletion(page)
