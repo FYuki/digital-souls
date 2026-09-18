@@ -194,3 +194,21 @@ def test_irodori_fault_profile_cannot_target_normal_livekit(tmp_path: Path) -> N
             _validate_dependency(profile_name, "livekit", {
                 "mode": "real", "source": "external", "baseUrl": url, "readinessPath": "/",
             })
+
+
+def test_measurement_formation_setting_is_preserved_in_report_and_backend_container(tmp_path):
+    from profile_resolution import resolve_profile
+    from adapters.backend import BackendAdapter
+    from tests.environment_test_support import RecordingRunner
+    key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
+    paths = resolved_runtime_paths(tmp_path)
+    report = resolve_profile({"DS_PROFILE": "integration-voice", key: "true"}, None, paths)
+    assert report["derivedEnvironment"][key] == "true"
+    adapter = BackendAdapter(tmp_path, paths, RecordingRunner())
+    adapter._write_compose_environment(
+        report["dependencies"]["backend"], report["derivedEnvironment"],
+        host="127.0.0.1", port=18500,
+    )
+    # Composeが読むbackend env fileへ明示キーが渡ることを確認する。
+    env_files = list(paths.data_root.rglob("*.env"))
+    assert any(key + "=" in path.read_text() for path in env_files)

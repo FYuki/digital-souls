@@ -272,6 +272,8 @@ def resolve_profile(
                 model_settings,
                 inference_target_environment(env),
             ),
+            **({key: env[key] for key in ("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION",)
+                if key in env}),
             "DS_ENVIRONMENT_ID": runtime_paths.environment_id,
             "DS_DATA_DIR": str(runtime_paths.data_root),
         },

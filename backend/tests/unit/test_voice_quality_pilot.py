@@ -452,3 +452,14 @@ def test_isolated_normal_trial_keeps_phase_explicit_and_clears_inherited_scope(t
         options.update(kwargs)
         with pytest.raises(ValueError):
             pilot.pilot_environment(inference, livekit, "invalid", **options)
+
+
+def test_memory_formation_isolation_requires_explicit_runner_selection(tmp_path, monkeypatch):
+    inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
+    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\n")
+    livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
+    key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
+    monkeypatch.setenv(key, "true")
+    args = (inference, livekit, "memory-isolation", 1, False)
+    assert key not in pilot.pilot_environment(*args)
+    assert pilot.pilot_environment(*args, disable_memory_formation=True)[key] == "true"

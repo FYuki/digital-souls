@@ -114,3 +114,46 @@ main統合済みをレビュー済みとは扱わず、未レビュー範囲を�
 除外前の認識も予定の相槌とは一致せず、無音controlにも認識segmentが生じた。
 無音除外の撤廃や曖昧な反応の一律相槌化は行わない。元fixture・ラベル・失敗分母を維持し、
 実収録の確認と必要な人の試聴を#350/#424で続ける。
+
+## 専用速度測定からの記憶形成負荷の除外
+
+従来の通常応答runnerは空のdata rootとRAG無効を指定するが、形成・統合schedulerは起動していた。
+これは合意した専用試験の条件を満たさない。過去のpilot値は保持し、形成が遅延の原因だったとは断定しない。
+
+既存runnerに測定専用の設定を追加する。通常起動では形成・統合を維持する。
+`VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION=true` は
+`DS_ENVIRONMENT_ID=test` かつ `VOICE_MEASUREMENT_KIND=controlled_baseline` の場合だけ許可し、
+Character Life有効との併用は拒否する。誤用は推論runtime作成前に検出する。
+
+この設定では既存preference/semantic/episodic形成schedulerを構築せず、会話完了通知は
+何も実行しないsubmitterへ渡す。統合schedulerも開始しない。会話履歴の保存と永続予約の記録、
+privacy、記憶index・参照の経路は維持する。専用data root内の予約は処理・回復せず保持し、
+試験後にそのrootを通常運用へ流用しない。共有サービスの設定は変更しない。
+
+- `run_normal_cohort.py` は各子runnerへ `--disable-memory-formation` を明示する。
+  その他の `run_pilot.py` 実行は既定で形成を維持し、親processからこの無効化設定を引き継がない。
+- resolved Profileへ要求値を保存し、Docker Backendへ限定した環境キーで渡す。
+- Backend起動完了時に専用rootの `voice-metrics/memory-policy.json` を記録する。
+  初期状態検査は要求値とこの記録を照合し、既存の初期状態hashに含める。
+  無効化を要求したのに記録がない場合・不一致の場合は拒否する。
+- 新しい通常応答cohortは各試行の形成・統合停止証跡を必須とする。
+  過去の証跡の読み取り互換性は維持するが、停止を確認できない旧試行を新cohortへ混ぜない。
+
+この変更は測定条件を実装するもので、速度受入の達成ではない。
+正式100独立試行は未実施。第2段階の固定記憶参照計測は第1段階達成後に行う。
+共有推論が停止中のためDocker・実ブラウザを通した今回版の実測は未実施。
+
+### 形成負荷除外のローカル検証
+
+2026-09-19 JST、以下の関連unit/moduleは437件成功（既存Starlette非推奨警告1件）、
+CIと同じmypy対象は364 source filesで成功した。
+起動ガード、通常起動、履歴保存を維持した形成停止、Compose envへの伝播、
+初期状態hashと既存reporter、停止証跡が欠測・不一致のcohort拒否を確認した。
+Moduleの外部推論境界はfixtureで代替しており、実サービス性能の証拠ではない。
+
+```sh
+cd backend
+.venv/bin/python -m pytest tests/unit/test_voice_measurement_memory.py tests/unit/test_voice_quality_state.py tests/unit/test_voice_quality_pilot.py tests/unit/test_voice_quality_normal_cohort.py tests/unit/test_livekit_pilot_report.py tests/module/test_main.py tests/module/test_memory_index_lifespan.py tests/module/test_memory_formation_chat_entrypoints.py tests/module/test_shared_inference_profiles.py tests/module/test_profile_report.py -q
+cd ..
+backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments whisper_service irodori_service
+```
