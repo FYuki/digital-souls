@@ -10,6 +10,10 @@ FEからのspeech通知は拒否する。CPU ONNX RuntimeとWasmtimeで固定モ
 [移行契約](../docs/voice-backend-migration-contract.md)と[検証記録](../docs/validation/voice-backend-vad-358.md)を参照する。
 実サービス・前後性能比較・実マイク受入は未完了。
 
+新規音声SessionはTTS・STT・対応Providerの会話用LLMを準備してからCoreを作成する。
+STTの無音入力とLLMの空messagesを会話履歴へ保存せず、失敗・取消では発話受付を開始しない。
+個別期限・Provider対応・実接続確認は[Inference運用](../docs/inference-operations.md#音声sessionのモデル開始準備)を参照する。
+
 ## 主な責務
 
 | 領域 | 実装入口 |

@@ -1016,6 +1016,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     completed_turn_observer=submit_completed_core_turn,
                     response_provenance_recorder=app_chat_service.record_response_provenance,
                     generate_screen_reply_stream=generate_screen_core_reply_stream,
+                    prepare_inference=lambda: inference_runtime.router.prepare_text(
+                        caller=InferenceCaller.CHAT, target=InferenceTarget.CHAT,
+                        latency_sensitive=True,
+                    ),
                     on_conversation_interruption=(
                         tool_runtime.service.interrupted
                         if tool_runtime is not None

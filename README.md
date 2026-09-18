@@ -8,7 +8,7 @@ LiveKitのVAD・発話区間・入力世代をBackendへ移す#358の導入はPR
 FE／BEはprotocol 2.0へ一組で更新する。残る品質・実接続・実マイク受入等は#424で追跡する。
 採用済みIrodoriの品質は#423、既存の再接続・初回推論待ち・相槌は#350で改善する。
 [共通実行指示書](docs/voice-quality-350-423-424-requirements.md)、[移行契約](docs/voice-backend-migration-contract.md)、
-[検証記録](docs/validation/voice-backend-vad-358.md)を参照する。開始準備・評価の新方針は採用済み要件であり、実装完了ではない。
+[検証記録](docs/validation/voice-backend-vad-358.md)を参照する。この作業ブランチでは開始準備・取消・失敗表示とSTT／対応LLMの事前準備を実装している。正式な性能・品質受入は未完了。
 
 ## 現在の実装範囲
 

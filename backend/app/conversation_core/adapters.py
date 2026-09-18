@@ -117,6 +117,10 @@ class WhisperSttAdapter:
                 self._active_transcriptions -= 1
                 self._capacity.release()
 
+    async def prepare_required(self) -> None:
+        """開始準備では通常の枠・timeoutを使い、失敗を抑止しない。結果は保存しない。"""
+        await self.transcribe(bytes(3_200))
+
     async def prepare(self) -> bool:
         """認識要求がないときだけ準備し、失敗しても本来のSTTへ伝播させない。"""
         cancelled = threading.Event()

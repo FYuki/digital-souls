@@ -135,7 +135,7 @@ def test_factory_waits_for_readiness_and_freezes_voice_until_new_session(monkeyp
             def open_session(self, *args): return object()
         monkeypatch.setattr(production, "load_tts_config", lambda _: selected)
         factory = production.ProductionConversationCoreSessionFactory(
-            transcriber=object(), synthesizer=object(), history_service=History(),
+            transcriber=SimpleNamespace(transcribe=lambda _audio: ""), synthesizer=object(), history_service=History(),
             irodori_client=Client(), generate_reply=lambda *_: "応答。",
         )
         args = dict(session_id=str(uuid4()), character_id="miori", conversation_id=uuid4(), delivery=Delivery())
