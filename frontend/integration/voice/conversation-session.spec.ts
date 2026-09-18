@@ -4,6 +4,7 @@ import {installScheduledFixture, parseScheduledFixture} from '../../playwright/c
 import {hardDeleteSelectedConversation} from '../../playwright/conversation-cleanup'
 import {attachProfileEvidence, getCapabilitySkipReason, readResolvedProfile} from '../../playwright/resolved-profile'
 import {createVoiceChatDriver, createVoiceTestUseOptions, voiceTestTimeout} from '../../playwright/voice-chat-suite'
+import {isIssuedSessionResponse} from '../../playwright/start-measured-session'
 
 const driver = createVoiceChatDriver()
 test.use(createVoiceTestUseOptions())
@@ -131,9 +132,10 @@ for (const manualMute of [false, true]) {
 }
 
 test('同じ実Conversationで音声→text→音声を保存し、textにもTTSを再生する', async ({page}, testInfo) => {
-  const tokenRequests: string[] = []
-  page.on('request', request => {
-    if (request.url().endsWith('/api/voice/livekit/token')) tokenRequests.push(request.url())
+  let sessionIssuances = 0
+  // 同じ開始要求の202 pollは、新しいSessionの発行ではない。
+  page.on('response', response => {
+    if (isIssuedSessionResponse(response)) sessionIssuances += 1
   })
   await driver.enableMicrophone(page)
   const conversationId = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
@@ -181,20 +183,21 @@ test('同じ実Conversationで音声→text→音声を保存し、textにもTTS
   expect(final.filter(turn => turn.user_content === typedText)).toHaveLength(1)
   expect(final.some(turn => turn.turn_id === before[0].turn_id)).toBe(true)
   await expect(page.locator('article.message')).toHaveCount(6)
-  expect(tokenRequests).toHaveLength(1)
+  expect(sessionIssuances).toBe(1)
   expect(await page.evaluate(() => new Set(window.__voiceChatE2E.coreEventDiagnostics
     .map(event => event.sessionId).filter(Boolean)).size)).toBe(1)
   await testInfo.attach('mixed-history-evidence.json', {body: JSON.stringify({
     historyCounts: [before.length, afterText.length, final.length],
-    retainedFirstTurn: true, uniqueTurns: 3, tokenRequests: tokenRequests.length,
+    retainedFirstTurn: true, uniqueTurns: 3, issuedSessionResponses: sessionIssuances,
     textPlaybackSamples: playback.renderedSamples, textPlaybackPackets: playback.packetCount,
   }, null, 2), contentType: 'application/json'})
 })
 
 test('privacyで省略したtextを実LiveKit経由で履歴へ反映し、同じsessionで次の回答を再生する', async ({page}, testInfo) => {
-  let tokenRequests = 0
-  page.on('request', request => {
-    if (request.url().endsWith('/api/voice/livekit/token')) tokenRequests += 1
+  let sessionIssuances = 0
+  // 同じ開始要求の202 pollは、新しいSessionの発行ではない。
+  page.on('response', response => {
+    if (isIssuedSessionResponse(response)) sessionIssuances += 1
   })
   await driver.enableMicrophone(page)
   const conversationId = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
@@ -228,10 +231,10 @@ test('privacyで省略したtextを実LiveKit経由で履歴へ反映し、同�
   const playback = await waitForTextPlayback(page)
   await expect.poll(async () => (await history(page, conversationId!)).length, {timeout: 30_000}).toBe(2)
   await expect(page.getByText('保存されなかったターン')).toHaveCount(1)
-  expect(tokenRequests).toBe(1)
+  expect(sessionIssuances).toBe(1)
   await testInfo.attach('conversation-privacy-real.json', {contentType: 'application/json', body: JSON.stringify({
     source: 'typed_text_with_real_privacy_policy_and_livekit',
-    privacy: privacyEvidence, historyCount: 2, tokenRequests,
+    privacy: privacyEvidence, historyCount: 2, issuedSessionResponses: sessionIssuances,
     followupRenderedSamples: playback.renderedSamples, followupPacketCount: playback.packetCount,
   })})
 })
