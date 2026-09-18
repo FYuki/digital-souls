@@ -130,3 +130,9 @@ mainへのマージはユーザーが行う。文書更新、CI、マージを�
 - [Irodoriの過去検証](irodori-tts-validation-2026-09.md)：speed 1.00等の測定をspeed 1.02の実測に読み替えない
 - [BE移設の過去検証](validation/voice-backend-vad-358.md)、[元要件](epic-358-voice-backend-requirements.md)
 - [採用音声](../characters/miori/voice.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md)
+
+## 既存証跡と残受入の対応
+
+移管元#329/#330/#358/#393〜#398の各条件と、既存証跡・未完了・実行先は
+[残受入対応表](validation/voice-quality-350-423-424-status.md)を参照する。
+元Issueの未チェック欄や過去失敗を一律に合格へ変更せず、今回の検証範囲を記録する。
