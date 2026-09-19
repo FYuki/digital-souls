@@ -125,19 +125,30 @@ export class AudioWorkletPcmRecorder {
   #node: AudioWorkletNode | null = null
   #chunks: ArrayBuffer[] = []
   #stopResolver: (() => void) | null = null
+  #generation = 0
 
   async initialize(stream: MediaStream): Promise<void> {
     if (this.#node !== null) {
       return
     }
 
+    if (this.#context !== null) {
+      throw new Error('PCM recorder is already initializing')
+    }
+    const generation = ++this.#generation
     const context = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE })
     const moduleUrl = createWorkletModuleUrl()
     let source: MediaStreamAudioSourceNode | null = null
     let node: AudioWorkletNode | null = null
 
+    // await前に所有し、初期化が遅れてもcloseでdeviceとcontextを回収する。
+    this.#context = context
+    this.#stream = stream
     try {
       await context.audioWorklet.addModule(moduleUrl)
+      if (generation !== this.#generation) {
+        throw new Error('PCM recorder initialization was cancelled')
+      }
       source = context.createMediaStreamSource(stream)
       node = new AudioWorkletNode(context, PCM_WORKLET_PROCESSOR_NAME, {
         numberOfInputs: 1,
@@ -150,19 +161,23 @@ export class AudioWorkletPcmRecorder {
       source.connect(node)
       node.connect(context.destination)
     } catch (error) {
+      if (node !== null) node.port.onmessage = null
       node?.disconnect()
       source?.disconnect()
-      stream.getTracks().forEach((track) => {
-        track.stop()
-      })
-      await context.close()
+      // 取消後の古い初期化は、新しく所有された資源に触れない。
+      if (this.#context === context) {
+        this.#context = null
+        this.#stream = null
+        stream.getTracks().forEach((track) => {
+          track.stop()
+        })
+        await context.close()
+      }
       throw error
     } finally {
       URL.revokeObjectURL(moduleUrl)
     }
 
-    this.#context = context
-    this.#stream = stream
     this.#source = source
     this.#node = node
   }
@@ -190,26 +205,26 @@ export class AudioWorkletPcmRecorder {
   }
 
   async close(): Promise<void> {
-    // 取消では未確定PCMを破棄し、AudioContextの終了を待たず停止待ちを解放する。
-    this.#chunks = []
-    this.#stopResolver?.()
-    if (this.#node !== null) this.#node.port.onmessage = null
-    this.#node?.disconnect()
-    this.#source?.disconnect()
-    this.#stream?.getTracks().forEach((track) => {
-      track.stop()
-    })
-
-    if (this.#context !== null) {
-      await this.#context.close()
-    }
-
+    ++this.#generation
+    // 古いcloseの完了が再初期化した資源を消さないよう、await前に所有を外す。
+    const node = this.#node
+    const source = this.#source
+    const stream = this.#stream
+    const context = this.#context
     this.#node = null
     this.#source = null
     this.#stream = null
     this.#context = null
+    // 取消では未確定PCMを破棄し、AudioContextの終了を待たず停止待ちを解放する。
     this.#chunks = []
-    this.#stopResolver = null
+    this.#stopResolver?.()
+    if (node !== null) node.port.onmessage = null
+    node?.disconnect()
+    source?.disconnect()
+    stream?.getTracks().forEach((track) => {
+      track.stop()
+    })
+    if (context !== null) await context.close()
   }
 
   private getNode(): AudioWorkletNode {

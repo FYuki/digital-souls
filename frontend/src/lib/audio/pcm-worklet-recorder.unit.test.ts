@@ -217,6 +217,47 @@ describe('AudioWorkletPcmRecorder', () => {
     expect(() => recorder.start()).toThrow('PCM recorder is not initialized')
   })
 
+  test('初期化待ち中のcloseでdeviceを停止し、遅い初期化からgraphを公開しない', async () => {
+    const recorder = new AudioWorkletPcmRecorder()
+    let finishModule!: () => void
+    addModule.mockImplementationOnce(() => new Promise<void>((resolve) => { finishModule = resolve }))
+    const initializing = recorder.initialize(stream)
+    const cancelled = initializing.then(() => null, (error: unknown) => error)
+
+    await recorder.close()
+
+    const stoppedAtClose = stopTrack.mock.calls.length
+    const closedAtClose = contextClose.mock.calls.length
+    finishModule()
+    expect(await cancelled).toEqual(new Error('PCM recorder initialization was cancelled'))
+    expect(stoppedAtClose).toBe(1)
+    expect(closedAtClose).toBe(1)
+    expect(createMediaStreamSource).not.toHaveBeenCalled()
+    expect(FakeAudioWorkletNode.instances).toHaveLength(0)
+    expect(() => recorder.start()).toThrow('PCM recorder is not initialized')
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:pcm-worklet')
+  })
+
+  test('古いcontextのclose完了が再初期化済みのgraphを消さない', async () => {
+    const recorder = new AudioWorkletPcmRecorder()
+    await recorder.initialize(stream)
+    let finishClose!: () => void
+    contextClose.mockImplementationOnce(() => new Promise<void>((resolve) => { finishClose = resolve }))
+    const closing = recorder.close()
+
+    await recorder.initialize(stream)
+    recorder.start()
+    emitWorkletMessage({ type: 'pcm', buffer: new Uint8Array([7, 8]).buffer })
+    finishClose()
+    await closing
+
+    const stopped = recorder.stopAndTake()
+    emitWorkletMessage({ type: 'stopped' })
+    await expect(stopped).resolves.toEqual(new Uint8Array([7, 8]).buffer)
+    expect(FakeAudioWorkletNode.instances).toHaveLength(2)
+    await recorder.close()
+  })
+
   test('should release the media tracks and context when initialization fails', async () => {
     const recorder = new AudioWorkletPcmRecorder()
     const error = new Error('worklet module failed')
