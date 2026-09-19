@@ -1,7 +1,8 @@
 {
   "published": {
     "evidence.json": "d0a2a3331c7bfe3422402a92a258eb215390af630508843fc85b5520704cbaf8",
-    "report.json": "b02f712d10c37a73af3973bb4d131cd265dc1b1794d545188cac3c9fd3ffeb6d"
+    "report.json": "b02f712d10c37a73af3973bb4d131cd265dc1b1794d545188cac3c9fd3ffeb6d",
+    "delay-diagnostic.json": "0901a99b63dcb1f7c995f18a92ac6716c9a7e1e293ae734953c8176bec1a88cf"
   },
   "source_revision": "c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
   "source_sha256": {
