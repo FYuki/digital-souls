@@ -67,6 +67,11 @@ def create_run(tmp_path, monkeypatch, *, failing_build=None):
         } else "ready")
 
     monkeypatch.setattr("adapters.base.probe_http", probe)
+    monkeypatch.setattr("adapters.livekit.probe_http", probe)
+    # 共有serviceの有無で単体の起動順序検証が成功しないよう、実通信を拒否する。
+    def unexpected_connection(*args, **kwargs):
+        pytest.fail("image preparation tests must not contact external services")
+    monkeypatch.setattr("socket.create_connection", unexpected_connection)
     run = EnvironmentRun(
         profile=profile, profile_path=profile_path, store=store, report=report,
         timing=EnvironmentTiming(), ready_gate=profile["readyGate"],
