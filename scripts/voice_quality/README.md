@@ -872,3 +872,37 @@ runnerへ共有接続先の古い環境値を渡しても、解決済みProfile�
 PCM観測用/障害bridge Profileとの同時選択を拒否し、形成停止・空状態・独立試行・
 初期状態hash・匿名reportの契約をそのまま適用する。
 実GPU readinessと合成成功は、正式100試行や聴感受入の代替ではない。
+
+## 専用Irodori workerの失敗・次会話診断
+
+tts_worker_fault.pyとfrontend/integration/voice-quality/tts-worker-recovery.spec.tsは
+専用TTSの実workerにSIGTERMを送り、実UIの失敗表示と同じSessionの後続音声を確認する。
+通常の性能cohortと同時実行しない。共有サービスへ故障を注入しない。
+この手順の追加は実試験成功を意味せず、対象版・各phaseの結果を別の測定証跡へ保存する。
+
+使用前に、所有者が専用port 50026へ検証済みimmutable imageで復旧試験用TTSを起動する。
+container名はds-<owner>、digital-souls.ownerラベルのownerは
+voice-quality-423-recovery-で始める。通常速度測定用のownerは故障対象として拒否する。
+対象ファイルはリポジトリへcommitせず、以下の情報を現在のdocker inspectと照合して保存する。
+
+- container_id: 完全な64桁ID
+- image: sha256:に続く64桁image ID
+- owner: 上記の専用owner
+- base_url: http://127.0.0.1:50026
+- docker_distro: UbuntuからUbuntu-dogfoodのDockerを使う場合だけUbuntu-dogfood
+
+VOICE_TTS_FAULT_TARGET_FILEへ対象ファイルを指定し、既存の
+playwright.livekit-quality.config.tsでtts-worker-recovery.spec.tsだけを実行する。
+VOICE_QUALITY_PROFILE=integration-irodori-cuda-graph、新規VOICE_QUALITY_RUN_ID、
+専用FE/BE imageとtest data rootを使用する。解決済みProfileのIrodori接続先も照合する。
+
+生成中と先頭再生開始後の2ケースを区別し、active=1観測後にID・image・所有を再確認する。
+PID 1のuvicornを親とする単一spawn worker以外は停止しない。
+応答失敗とSession存続を確認し、再準備後は固定音声を実STTへ送り、
+新応答のsample数・gap・旧応答の終端一意性を検査する。
+
+先頭再生開始後のケースでは、既存post-gain workletの数値観測を傍受し、失敗通知時の
+render中quantumを含む上限より後に1秒分の無音を観測し、実出力時計の通過を要求する。
+この上限を失敗直後の完全な無音・停止遅延0msと読み替えない。
+時計・interval欠落を0音声へ補完せず、生成中の試験で旧出力停止を代用しない。
+本試験は固定音声の実接続であり、人の実マイク・試聴の代替ではない。
