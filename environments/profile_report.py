@@ -16,7 +16,7 @@ from app.runtime_paths import (
     SUPPORTED_ENVIRONMENT_IDS,
 )
 from profile_constants import PROFILE_ENV
-from profile_resolution import derive_capabilities, derive_environment, resolve_dependencies
+from profile_resolution import derive_capabilities, derive_environment, resolve_dependencies, measurement_environment
 from profile_types import (
     LegacyBackendReport,
     ProfileError,
@@ -295,6 +295,7 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
         raise ProfileError(str(error)) from error
     expected_environment = {
         **expected_environment,
+        **measurement_environment(derived_environment, runtime["environmentId"]),
         "DS_ENVIRONMENT_ID": runtime["environmentId"],
         "DS_DATA_DIR": str(data_root),
     }

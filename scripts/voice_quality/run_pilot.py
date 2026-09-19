@@ -137,7 +137,7 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False, profile: str = "integration-voice", isolated_normal_phase: str | None = None) -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False, profile: str = "integration-voice", isolated_normal_phase: str | None = None, disable_memory_formation: bool = False) -> dict[str, str]:
     run_root(run_id)
     if isolated_normal_phase is not None and (
         isolated_normal_phase not in ("warmup", "measured") or trials != 1
@@ -253,6 +253,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     env.pop("VOICE_QUALITY_ISOLATED_NORMAL_PHASE", None)
     if isolated_normal_phase is not None:
         env["VOICE_QUALITY_ISOLATED_NORMAL_PHASE"] = isolated_normal_phase
+    env.pop("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION", None)
+    if disable_memory_formation:
+        env["VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"] = "true"
     return env
 
 
@@ -264,7 +267,7 @@ def run(args: argparse.Namespace) -> int:
     from native_sdk import NativeSdkSampler
     from native_sdk_experiment.prepare import REVISION
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False), getattr(args, "profile", "integration-voice"), getattr(args, "isolated_normal_phase", None))
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False), getattr(args, "profile", "integration-voice"), getattr(args, "isolated_normal_phase", None), getattr(args, "disable_memory_formation", False))
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -356,6 +359,8 @@ if __name__ == "__main__":
                         help="通常経路の受信・復号・配送・再生の数値診断。Whisper中継は起動しない。")
     parser.add_argument("--session-lifecycle", action="store_true",
                         help="発話を供給せず、正常終了とbrowser切断の2 sessionを実環境で確認する。trials 2必須。")
+    parser.add_argument("--disable-memory-formation", action="store_true",
+                        help="専用controlled testのみ形成・統合schedulerを無効化する。")
     parser.add_argument("--disable-thinking", action="store_true")
     parser.add_argument("--scheduled-fixture", action="store_true")
     parser.add_argument("--continuous-turns", type=int, default=0,

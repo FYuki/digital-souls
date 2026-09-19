@@ -1,4 +1,4 @@
-"""記憶形成を維持し、新規data rootごとの通常音声を既存runner・reporterで測る。"""
+"""記憶形成・統合を除外し、新規data rootごとの通常音声を既存runner・reporterで測る。"""
 from __future__ import annotations
 
 import argparse
@@ -49,14 +49,31 @@ def verify_stopped(base: Path, revision: str, profile: str = "integration-voice"
     manifest = json.loads((base / "trial-manifest.json").read_text())
     if manifest.get("measurement_revision") != revision or manifest.get("measurement_scope") != "isolated_normal_trial":
         raise ValueError("isolated trial revision not verified")
+    profile_report = json.loads((base / "runtime-data/runtime/standalone/resolved-profile.json").read_text())
+    if profile_report.get("derivedEnvironment", {}).get("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION") != "true":
+        raise ValueError("memory formation isolation was not requested")
+    require_memory_isolation(manifest)
     return manifest
+
+
+def require_memory_isolation(manifest: dict) -> None:
+    trials = manifest.get("trials", [])
+    if not trials:
+        raise ValueError("memory formation isolation evidence unavailable")
+    for trial in trials:
+        evidence = trial.get("initial_state_evidence") or {}
+        policy = evidence.get("memory_scheduler_policy") if isinstance(evidence, dict) else None
+        if (not isinstance(policy, dict) or policy.get("method") != "controlled_memory_schedulers_v1"
+                or policy.get("formation_disabled") is not True
+                or policy.get("consolidation_disabled") is not True):
+            raise ValueError("memory formation isolation evidence unavailable")
 
 
 def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tuple[int, dict]:
     command = [sys.executable, str(ROOT / "scripts/voice_quality/run_pilot.py"),
                "--run-id", run_id, "--inference-env", str(args.inference_env),
                "--livekit-env", str(args.livekit_env), "--trials", "1",
-               "--scheduled-fixture", "--isolated-normal-phase", phase, "--profile", args.profile]
+               "--scheduled-fixture", "--disable-memory-formation", "--isolated-normal-phase", phase, "--profile", args.profile]
     if args.disable_thinking:
         command.append("--disable-thinking")
     images = {}
@@ -148,6 +165,8 @@ def preparation_summary(trials: list[dict]) -> dict:
 
 def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measured: int) -> int:
     manifests = [json.loads((run_root(r) / "trial-manifest.json").read_text()) for r, _ in runs]
+    for manifest in manifests:
+        require_memory_isolation(manifest)
     combined = dict(manifests[0])
     combined.update(measurement_scope="controlled", expected_warmup=5, expected_measured=measured,
                     trials=[m["trials"][0] for m in manifests])
@@ -211,7 +230,7 @@ def main() -> int:
         directory = parent / args.cohort_id
         directory.mkdir(exist_ok=False)
         (directory / "plan.json").write_text(json.dumps({"measurement_revision": revision, "profile": args.profile, "runs": runs,
-            "expected_warmup": 5, "expected_measured": args.measured, "data_root_per_trial": True}, indent=2) + "\n")
+            "expected_warmup": 5, "expected_measured": args.measured, "data_root_per_trial": True, "memory_formation_disabled": True, "memory_consolidation_disabled": True}, indent=2) + "\n")
         with (directory / "execution.jsonl").open("x") as journal:
             for index, (run_id, phase) in enumerate(runs, 1):
                 if (directory / "stop-requested").exists() or measurement_revision(ROOT) != revision:
