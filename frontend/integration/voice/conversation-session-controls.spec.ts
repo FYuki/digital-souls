@@ -3,6 +3,7 @@ import {expect, test, type Page} from '@playwright/test'
 import {installScheduledFixture, parseScheduledFixture} from '../../playwright/controlled-audio-fixture'
 import {attachProfileEvidence, getCapabilitySkipReason, readResolvedProfile} from '../../playwright/resolved-profile'
 import {createVoiceChatDriver, createVoiceTestUseOptions, voiceTestTimeout} from '../../playwright/voice-chat-suite'
+import {isIssuedSessionResponse} from '../../playwright/start-measured-session'
 
 const driver = createVoiceChatDriver()
 const owned = new WeakMap<Page, Set<string>>()
@@ -121,10 +122,12 @@ for (const phase of ['generation', 'playback'] as const) {
 
 test('実音声session Aを維持してBへ通常textを送り、A復帰後の送信でも切替ミュートを保つ', async ({page}, testInfo) => {
   const chatRequests: Array<Record<string, string>> = []
-  let tokens = 0
+  let sessionIssuances = 0
   page.on('request', request => {
     if (request.url().endsWith('/api/chat')) chatRequests.push(request.postDataJSON())
-    if (request.url().endsWith('/api/voice/livekit/token')) tokens += 1
+  })
+  page.on('response', response => {
+    if (isIssuedSessionResponse(response)) sessionIssuances += 1
   })
   await driver.enableMicrophone(page)
   const a = await rememberConversation(page)
@@ -161,9 +164,9 @@ test('実音声session Aを維持してBへ通常textを送り、A復帰後の�
   const next = await waitForResponse(page, [responseA])
   await waitForPlayback(page, next)
   expect(chatRequests).toHaveLength(1)
-  expect(tokens).toBe(1)
+  expect(sessionIssuances).toBe(1)
   await testInfo.attach('thread-routing-evidence.json', {body: JSON.stringify({
-    separateHistories: true, ordinaryChatRequests: 1, voiceTokenRequests: tokens,
+    separateHistories: true, ordinaryChatRequests: 1, issuedSessionResponses: sessionIssuances,
     originalResponseCompleted: true, switchMuteRetained: true,
   }), contentType: 'application/json'})
 })
