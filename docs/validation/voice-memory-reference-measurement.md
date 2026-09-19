@@ -45,4 +45,10 @@ resource/native SDK、実行中image、後始末確認を伴うhost runnerから
 
 全予定数、準備・応答の成功／失敗／欠測、参照あり／未参照、p50/p95、空状態との差を報告する。
 2,000msの合否、記憶形成・長履歴の性能、実マイク・聴感へ拡張しない。
-計測用コードと実測証跡は別PRに保存する。現時点では実サービスの追加計測は未実施。
+計測用コードと実測証跡は別PRに保存する。独立診断では実記憶3件のプロンプト参照、音声再生、sample数一致・gap 0、実native SDKと後始末を確認した。準備失敗と観測Profile許可漏れの先行記録は別の証跡PRに保持する。20試行の比較は未実施。
+
+
+比較cohortは同じrun_normal_cohort.pyへ、専用Profile、--memory-reference、
+--baseline-report（空状態100件の検証済みreport.json）、--measured 20を渡す。
+run IDは350-memory-reference-で始める。集計は既存の音声時計・trace・sample検査を使い、
+初期状態だけ固定参照集合の検査へ切り替える。通常100件の集計は従来どおり空状態を要求する。

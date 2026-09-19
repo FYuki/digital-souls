@@ -46,7 +46,7 @@ def definitions():
         for d in (*_METRIC_CATALOG, *_LIVEKIT_DIAGNOSTIC_CATALOG) if d.name in NAMES
     ]
 
-def observations(trial, trace, fixture, initial_hash):
+def observations(trial, trace, fixture, initial_hash, *, initial_state_validator=_validate_initial_state_evidence):
     catalog = definitions()
     if trial.get("outcome") == "failure":
         return {d.name: (MetricObservation.failed("voice_cycle_incomplete")
@@ -78,7 +78,7 @@ def observations(trial, trace, fixture, initial_hash):
         event = points["first_playback"]
         if event.clock_domain != "client_monotonic" or event.unit != "millisecond" or abs(event.timestamp - playback) >= 1.1:
             raise ValueError("playback clock mismatch")
-        _validate_initial_state_evidence(trial)
+        initial_state_validator(trial)
         validate_packet_playback_observation(trial)
         validate_playback_completion(trial, points)
         start, end = _validate_fixture_clock(trial, sample_rate=fixture["sample_rate_hz"],
