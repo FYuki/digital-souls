@@ -26,6 +26,23 @@ STAGES = frozenset({
 TEXTS = ("こんにちは。", "今日はいい天気ですね。", "少し休憩しましょう。", "窓の外を眺めていたら、小さな鳥が木の枝にとまっていました。", "明日は朝から図書館に出かけて、気になっていた本を探す予定です。そのあと、公園をゆっくり歩いてから帰りたいと思います。")
 
 
+def verify_reference_output(actual, result, equal) -> None:
+    if len(actual) != len(result):
+        raise AssertionError("reference_output_length_mismatch")
+    if not all(equal(left, right) for left, right in zip(actual, result, strict=True)):
+        raise AssertionError("reference_output_mismatch")
+
+
+def comparison_pairs(texts, repetitions):
+    # 奇数組では完全な同数にできないため、全体の通し番号で差を最大1組にする。
+    pair_index = 0
+    for repetition in range(repetitions):
+        for text in texts:
+            order = ("baseline", "reference_reuse") if pair_index % 2 == 0 else ("reference_reuse", "baseline")
+            yield pair_index, repetition, text, order
+            pair_index += 1
+
+
 def measure(voice: dict) -> dict:
     from huggingface_hub import snapshot_download
     from irodori_service.config import (
@@ -128,7 +145,7 @@ def measure(voice: dict) -> dict:
         if verify_reuse:
             actual_messages = []
             actual = reference_loader(runtime, req=req, batch_size=batch_size, messages=actual_messages)
-            assert all(torch.equal(x,y) for x,y in zip(actual, result)), "reference_output_mismatch"
+            verify_reference_output(actual, result, torch.equal)
             assert actual_messages == messages[before_messages:], "reference_messages_mismatch"
             statistic["exact_repeated_output_verified"] = True
         return result
@@ -191,13 +208,13 @@ def measure(voice: dict) -> dict:
         for text in TEXTS:
             rows.append(await once(text, "equivalence"))
         verify_reuse = False
-        for repetition in range(3):
-            for text in TEXTS:
-                for mode in (("baseline", "reference_reuse") if repetition % 2 == 0 else ("reference_reuse", "baseline")):
-                    reuse_enabled = mode == "reference_reuse"
-                    row = await once(text, mode)
-                    row["repetition"] = repetition
-                    rows.append(row)
+        for pair_index, repetition, text, order in comparison_pairs(TEXTS, 3):
+            for position, mode in enumerate(order):
+                reuse_enabled = mode == "reference_reuse"
+                row = await once(text, mode)
+                row.update(repetition=repetition, pair_index=pair_index,
+                           pair_position=position, comparison_order=list(order))
+                rows.append(row)
         runtime_module.sample_euler_rf_cfg = baseline_sampler
         return rows
 

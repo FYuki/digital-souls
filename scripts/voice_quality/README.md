@@ -924,6 +924,20 @@ integration-irodori-cuda-graph-fault を選び、LiveKit 19880、Ollama 11534、
 準備全体の固定上限は設けず、各処理のtimeout・error検出を使う。
 
 
+### マイク許可結果の遅着と会話終了
+
+playwright.microphone-cancel.config.tsは、高速化候補Profile専用の局所診断を収集する。
+run_pilot.pyのpilot_environmentでintegration-irodori-cuda-graph、独立run ID、形成停止を設定し、
+取得した環境変数を使ってFrontend側で次のconfigを実行する。
+
+    node node_modules/@playwright/test/cli.js test --config playwright.microphone-cancel.config.ts
+
+通常のrun_pilot.pyの品質cohort起動とは別に実行する。ブラウザが実際に作った合成入力deviceの
+getUserMedia結果だけを保留し、実Sessionの終了API成功後に返す。遅着trackのended、
+マイクOFF、入力停止、応答開始0件、終了API1回を確認する。
+HTTPの成功応答やSFUはモックへ置換しない。人の実マイク・native許可ダイアログ、
+正式100件の性能や音質の受入ではない。失敗runを上書きせず、所有アプリだけを終了する。
+
 ### 高速化候補のPCM観測（#424）
 
 run_pilot.pyに --profile integration-irodori-cuda-graph --observe-stt-pcm を明示すると、
@@ -937,3 +951,17 @@ runnerが所有する中継50023だけを起動・終了し、共有Whisper 5002
 fault bridge・通信断注入・連続track診断との同時指定、および未定義の他Irodori PCM構成は拒否する。
 report_stt_pcm.pyは候補Profileの実接続先も照合し、既存の全試行・終端入力・端点照合・欠測判定を維持する。
 この追加自体を休止・相槌・割り込みの実接続受入や聴感受入とはしない。
+
+
+### 診断自体による誤判定・動作変更の防止
+
+CUDA Graph対比較のprobeは、各cuda_graph試行にcapture数を記録する。
+captureを1回も観測できない要求はfallbackとし、全体もsuccessにしない。
+これは診断の成立条件であり、製品のRequestGraphが容量・空きVRAMに応じてeager実行へ戻る挙動は維持する。
+
+TTS故障後の出力probeは、監視node数が8を超えても音声nodeの構築を中断しない。
+probe_capacity_exceededを観測全体の欠測として保持し、停止確認を成功にしない。
+故障注入のcontainer IDはDocker呼出し前に64桁の小文字16進表記を要求し、
+その後も既存の所有・image・port・worker同一性検査を行う。
+故障復帰テストの外枠は600秒とし、個々の生成・故障検出・worker回復・再生のtimeoutは維持する。
+過去の測定artifactは変更せず、変更後の診断と以前の実測を区別する。

@@ -1,0 +1,412 @@
+{
+  "rows": [
+    {
+      "started_unix": 1789816838.2744675,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.8280260119354352
+    },
+    {
+      "started_unix": 1789816838.2763398,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.0258230031467974
+    },
+    {
+      "started_unix": 1789816838.7814484,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.6856839938554913
+    },
+    {
+      "started_unix": 1789816838.7831671,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9340109972981736
+    },
+    {
+      "started_unix": 1789816839.2842534,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.5833619982004166
+    },
+    {
+      "started_unix": 1789816839.2858763,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9206379909301177
+    },
+    {
+      "started_unix": 1789816839.7871134,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.7050989990821108
+    },
+    {
+      "started_unix": 1789816839.788853,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.0529919964028522
+    },
+    {
+      "started_unix": 1789816840.2902145,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.7228209908353165
+    },
+    {
+      "started_unix": 1789816840.2919693,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.445508998585865
+    },
+    {
+      "started_unix": 1789816840.7936575,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.5198039909591898
+    },
+    {
+      "started_unix": 1789816840.7952151,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.0471520072314888
+    },
+    {
+      "started_unix": 1789816841.2964172,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.6811660025268793
+    },
+    {
+      "started_unix": 1789816841.298134,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.1805870017269626
+    },
+    {
+      "started_unix": 1789816841.8001285,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.5109329979168251
+    },
+    {
+      "started_unix": 1789816841.8016696,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8691700058989227
+    },
+    {
+      "started_unix": 1789816841.4285486,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.6010639956220984
+    },
+    {
+      "started_unix": 1789816841.4301841,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.4051850012037903
+    },
+    {
+      "started_unix": 1789816841.9317884,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 2.162592005333863
+    },
+    {
+      "started_unix": 1789816841.9339888,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9129039972322062
+    },
+    {
+      "started_unix": 1789816842.4363532,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.863226993009448
+    },
+    {
+      "started_unix": 1789816842.43825,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9862130100373179
+    },
+    {
+      "started_unix": 1789816842.939484,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 2.3220690054586157
+    },
+    {
+      "started_unix": 1789816842.9418385,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9360700059914961
+    },
+    {
+      "started_unix": 1789816843.442945,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.7085029976442456
+    },
+    {
+      "started_unix": 1789816843.4446888,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.178123988211155
+    },
+    {
+      "started_unix": 1789816843.9470146,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.5974950074451044
+    },
+    {
+      "started_unix": 1789816843.9486456,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.865847003296949
+    },
+    {
+      "started_unix": 1789816844.449652,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.5660689969081432
+    },
+    {
+      "started_unix": 1789816844.4512508,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8791930013103411
+    },
+    {
+      "started_unix": 1789816844.9534411,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.8833850044757128
+    },
+    {
+      "started_unix": 1789816844.955364,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8689319947734475
+    },
+    {
+      "started_unix": 1789816845.4577796,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 2.219414003775455
+    },
+    {
+      "started_unix": 1789816845.460032,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9882489976007491
+    },
+    {
+      "started_unix": 1789816845.9612043,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.7464859993197024
+    },
+    {
+      "started_unix": 1789816845.9629846,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8882309921318665
+    },
+    {
+      "started_unix": 1789816846.4640868,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.4815660106251016
+    },
+    {
+      "started_unix": 1789816846.4656005,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8368080016225576
+    },
+    {
+      "started_unix": 1789816846.9677584,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.633519001188688
+    },
+    {
+      "started_unix": 1789816846.9694257,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.908408997929655
+    },
+    {
+      "started_unix": 1789816847.471841,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.636143002542667
+    },
+    {
+      "started_unix": 1789816847.4735088,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9484299953328446
+    },
+    {
+      "started_unix": 1789816847.9746478,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.513456998509355
+    },
+    {
+      "started_unix": 1789816847.9761922,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8062179986154661
+    },
+    {
+      "started_unix": 1789816848.4772472,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 2.068567991955206
+    },
+    {
+      "started_unix": 1789816848.4793992,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.2137849989812821
+    },
+    {
+      "started_unix": 1789816848.9808164,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.7333879950456321
+    },
+    {
+      "started_unix": 1789816848.9825797,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9321010002167895
+    },
+    {
+      "started_unix": 1789816849.4836392,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.668677999987267
+    },
+    {
+      "started_unix": 1789816849.4853387,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8239020098699257
+    },
+    {
+      "started_unix": 1789816849.9865448,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.6500509955221787
+    },
+    {
+      "started_unix": 1789816849.9882314,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9097520087379962
+    },
+    {
+      "started_unix": 1789816850.4895184,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.6102220106404275
+    },
+    {
+      "started_unix": 1789816850.491164,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9264480031561106
+    },
+    {
+      "started_unix": 1789816850.9931643,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.6071420104708523
+    },
+    {
+      "started_unix": 1789816850.9948099,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9529119997750968
+    },
+    {
+      "started_unix": 1789816851.4960973,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.8102260073646903
+    },
+    {
+      "started_unix": 1789816851.4979417,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.0244360018987209
+    },
+    {
+      "started_unix": 1789816851.9993343,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 2.2565300023416057
+    },
+    {
+      "started_unix": 1789816852.0016227,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.0987459972966462
+    },
+    {
+      "started_unix": 1789816852.502927,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.9006630027433857
+    },
+    {
+      "started_unix": 1789816852.5048783,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.0780220036394894
+    },
+    {
+      "started_unix": 1789816853.0060954,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.6507110121892765
+    },
+    {
+      "started_unix": 1789816853.007778,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.9361429983982816
+    },
+    {
+      "started_unix": 1789816853.5089874,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 1.5260670043062419
+    },
+    {
+      "started_unix": 1789816853.5106006,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 1.0947749979095533
+    },
+    {
+      "started_unix": 1789816854.0118923,
+      "route": "tags",
+      "status": 200,
+      "duration_ms": 2.1629730035783723
+    },
+    {
+      "started_unix": 1789816854.014085,
+      "route": "show",
+      "status": 200,
+      "duration_ms": 0.8905499998945743
+    }
+  ]
+}

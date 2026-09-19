@@ -91,6 +91,9 @@ def observations(trial, trace, fixture, initial_hash, *, initial_state_validator
                 session_id=pair[0], utterance_id=pair[1], response_id=pair[2], name=name,
                 stage="fixture", outcome="success", timestamp=timestamp,
                 clock_domain="client_monotonic", unit="millisecond"))
+        # 同じ再生観測をtraceと照合したうえで、小数精度を保つ元の時計値を集計する。
+        matched = [point.model_copy(update={"timestamp": playback}) if point is event else point
+                   for point in matched]
         return {d.name: _metric_observation(d, matched, transport="livekit") for d in catalog}, None
     except (ValueError, TypeError, KeyError):
         return {d.name: MetricObservation.missing("trial_evidence_invalid") for d in catalog}, "trial_evidence_invalid"

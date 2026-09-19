@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Protocol
 from urllib.parse import urlsplit
@@ -106,6 +106,8 @@ class AdapterOperationError(RuntimeError):
 class OperationContext:
     whisper_enabled: bool
     chroma_enabled: bool
+    # 起動runの解決済み環境。単体のデータ準備・検証では渡さない。
+    environment: Mapping[str, str] | None = field(default=None, repr=False)
 
 
 class ServiceOperations(Protocol):

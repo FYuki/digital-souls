@@ -465,11 +465,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raw_trace_root / f"{uuid4()}.jsonl"
         )
         voice_measurement_kind = "dogfood"
-    if voice_measurement_kind == "controlled_baseline":
-        (runtime_paths.data_root / POLICY_PATH).unlink(missing_ok=True)
     from app.restore_intent import require_no_restore_intent
 
     require_no_restore_intent(runtime_paths.restore_intent_path)
+    if voice_measurement_kind == "controlled_baseline":
+        (runtime_paths.data_root / POLICY_PATH).unlink(missing_ok=True)
     policy = resolved_memory_policy()
     remove_legacy_chroma_index_once(runtime_paths, repository_root)
     log_runtime_configuration(runtime_paths)

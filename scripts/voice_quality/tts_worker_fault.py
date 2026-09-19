@@ -70,7 +70,10 @@ def run(target: dict) -> dict:
             raise RuntimeError("owned container operation failed")
         return result.stdout
     def inspect():
-        current = json.loads(docker("inspect", target["container_id"]))
+        identity = target.get("container_id")
+        if not isinstance(identity, str) or not re.fullmatch(r"[0-9a-f]{64}", identity):
+            raise ValueError("exact container identity required")
+        current = json.loads(docker("inspect", identity))
         if not isinstance(current, list) or len(current) != 1:
             raise ValueError("single container required")
         validate_target(target, current[0])

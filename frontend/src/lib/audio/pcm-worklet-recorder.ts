@@ -190,6 +190,10 @@ export class AudioWorkletPcmRecorder {
   }
 
   async close(): Promise<void> {
+    // 取消では未確定PCMを破棄し、AudioContextの終了を待たず停止待ちを解放する。
+    this.#chunks = []
+    this.#stopResolver?.()
+    if (this.#node !== null) this.#node.port.onmessage = null
     this.#node?.disconnect()
     this.#source?.disconnect()
     this.#stream?.getTracks().forEach((track) => {

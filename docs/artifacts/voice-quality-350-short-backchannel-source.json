@@ -9,7 +9,7 @@
   "service_no_speech_max": 0.6,
   "shared_service_modified": false,
   "owned_container_removed": true,
-  "source_result_path": "/home/asa/dev/digital-souls-worktrees/issue-350-diagnostic-preparation/frontend/test-results/vad-quality/350-short-backchannel-segment-diagnostic.jsonl",
+  "source_result_path": "frontend/test-results/vad-quality/350-short-backchannel-segment-diagnostic.jsonl",
   "source_result_sha256": "4bdcd805e6ce34f0d49dd47206781c0ad9abdef2c35993f58c4d885163e161ac",
   "limitations": [
     "source WAV resampling; not browser capture",

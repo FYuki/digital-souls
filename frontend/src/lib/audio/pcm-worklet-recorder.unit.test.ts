@@ -186,6 +186,24 @@ describe('AudioWorkletPcmRecorder', () => {
     )
   })
 
+
+  test('should settle a pending stop with empty PCM before context shutdown completes', async () => {
+    const recorder = new AudioWorkletPcmRecorder()
+    await recorder.initialize(stream)
+    emitWorkletMessage({ type: 'pcm', buffer: new Uint8Array([1, 2]).buffer })
+    const stopped = recorder.stopAndTake()
+    let finishClose!: () => void
+    contextClose.mockImplementationOnce(() => new Promise<void>((resolve) => { finishClose = resolve }))
+
+    const closing = recorder.close()
+
+    await expect(stopped).resolves.toEqual(new ArrayBuffer(0))
+    expect(latestNode().port.onmessage).toBeNull()
+    expect(stopTrack).toHaveBeenCalledTimes(1)
+    finishClose()
+    await closing
+  })
+
   test('should release the graph, media tracks, context, and buffered state on close', async () => {
     const recorder = new AudioWorkletPcmRecorder()
     await recorder.initialize(stream)
