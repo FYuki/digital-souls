@@ -104,3 +104,23 @@ gap 0、観測欠測0、transcript一致とsession終了を確認した。native
 候補版への共有環境更新を承認済み・完了とは扱わない。
 元の誤接続01、準備失敗02、事前接続失敗03を含めて保持する。
 [匿名の実会話証跡](../artifacts/voice-quality-ollama-0342-pilot-0919-04.json)を参照。
+
+## 候補版の独立した小規模cohort
+
+同じ880f61fで、既存run_normal_cohort.pyへ候補Profileを明示し、
+準備5件＋測定3件を事前登録した（350-ollama-0342-small-0919-01）。
+各試行を新しいDB・新しいBackend/Frontendで実行し、8件全てが成功した。
+全件で空状態hashが一致、形成・統合無効、接続先11534、transcript一致、
+Session終了、native SDK検証、所有コンテナの削除を確認した。共有11434は前後ともモデル未ロードだった。
+
+| 測定順 | 発話終了→実再生の区間 | 準備（別計上） | gap |
+|---|---:|---:|---:|
+| 1 | 2166.83–2168.63ms | 1380.40ms | 0ms |
+| 2 | 2249.03–2250.83ms | 1890.00ms | 0ms |
+| 3 | 2320.27–2321.97ms | 2407.30ms | 0ms |
+
+準備5件を含む全8件がgap 0で全文を再生した。ただし測定3件も全て2秒を超える。
+3件だけの分位点を正式100件のp95受入に読み替えない。Stage 1／Stage 2はNOT_RUN。
+runner終了値1は、小規模診断では正式reporterを実行せずfull_acceptance_passed=falseを維持する仕様による。
+summaryのsuccess 8／failure 0と区別する。
+[全8件・計画・元証跡hash](../artifacts/voice-quality-ollama-0342-small-0919-01.json)を参照。

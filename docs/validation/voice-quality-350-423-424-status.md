@@ -159,7 +159,7 @@ cd backend
 .venv/bin/python -m pytest tests/unit/test_voice_measurement_memory.py tests/unit/test_voice_quality_state.py tests/unit/test_voice_quality_pilot.py tests/unit/test_voice_quality_normal_cohort.py tests/unit/test_livekit_pilot_report.py tests/module/test_main.py tests/module/test_memory_index_lifespan.py tests/module/test_memory_formation_chat_entrypoints.py tests/module/test_shared_inference_profiles.py tests/module/test_profile_report.py -q
 cd ..
 backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments whisper_service irodori_service
-
+```
 
 ## #424：発話確定待ちの取消・失敗で後続入力が止まる不具合
 
