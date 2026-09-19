@@ -28,3 +28,12 @@ BE/FEのimage createはそれぞれ11:34:13.513 / 11:34:33.335 UTCで、
 [Docker時刻](../artifacts/voice-startup-image-preparation-20260919/lifecycle.json)、
 [manifest](../artifacts/voice-startup-image-preparation-20260919/manifest.json)を参照。
 共有サービス・設定・dogfoodデータは変更していない。
+
+
+## probeの原記録と公開JSONの対応（最終レビュー補足）
+
+evidence.jsonのraw_sha256.probeは、収集した元JSONLを照合する。
+公開dependency-probe.jsonは138行を同じ順序のrows配列へ格納した整形JSONであり、バイト列のhashは異なる。
+元JSONLのhashと既存raw_sha256.probeの一致、および全138行の値・順序の一致を再確認した。
+[変換対応](../artifacts/voice-startup-image-preparation-20260919/probe-provenance.json)に元hash・公開hash・形式を記録した。
+manifestは引き続き公開ファイルのhashを持つ。元hashを公開版のhashへ置き換えていない。

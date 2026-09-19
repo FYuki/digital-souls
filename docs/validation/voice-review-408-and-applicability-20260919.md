@@ -55,3 +55,23 @@
 #461・#462・#463のCodeRabbitレビュー後に入った差分は、別の最終分割レビューで確認する。
 その結果・必要修正と、最終headのCIおよびContainer imagesが揃うまでは
 #460をマージ可能として扱わない。mainへのマージ操作はユーザーが行う。
+
+
+## 最終分割レビューの結果
+
+CodeRabbit #476はhead 1c3cc3a81dc5588fdea227ccccc1c82145139025の91ファイルをレビューした
+（review 5255970514）。#461/#462/#463との4区間の和集合はmain向け279ファイルを覆い、対象外ファイル0件。
+この状態はレビュー承認や最終CI成功と同義ではない。
+
+- 差分外Major: 録音器の初期化中close。#477でawait前の資源所有・取消世代・古いclose完了の隔離を修正。
+  回帰2件は修正前に失敗し、修正後は関連44件と型検査が成功した。継続LiveKit入力はこの録音器を生成せず、
+  新しい雑音除去や通常応答速度の変更ではない。
+- 公開識別子: [Whisper接続先証跡](../artifacts/voice-practical-microphone-20260919/silence-whisper-routing-0919-01.json)を
+  同一性の比較を維持する匿名ラベルに変更。原本・対応表はGit管理外に保持。
+- probe hash: 元JSONLと公開JSONは形式が異なり、138行は値・順序とも一致。
+  [変換対応](../artifacts/voice-startup-image-preparation-20260919/probe-provenance.json)を追加し、元hashは変更しない。
+- probe順序: run 03の隣接時刻逆転2箇所を確認。
+  [時刻順ビュー](../artifacts/voice-startup-transient-20260919/dependency-probe-03-chronological.json)を追加し、
+  原配列312行・失敗25件を保持した。完全な直列要求だったとの説明は撤回した。
+
+指摘対応PRの現head CI成功・Epic統合と最終head確認は、main向けPR #460で追跡する。

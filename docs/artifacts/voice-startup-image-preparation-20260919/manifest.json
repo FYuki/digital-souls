@@ -2,6 +2,7 @@
   "files": {
     "dependency-probe.json": "4f5f5c04d03a0a84fe99cb9e0d66eaefcaec950b3abace7c53c1f549e908a770",
     "evidence.json": "dcf0bdab61beae829280d02bc21f8c823a15878e927d3add35cd0aa9a34a8d0c",
-    "lifecycle.json": "7b016a03c11369620e179f7cce26565dee2cdc1771d962f4670253c19805f7b0"
+    "lifecycle.json": "7b016a03c11369620e179f7cce26565dee2cdc1771d962f4670253c19805f7b0",
+    "probe-provenance.json": "086911eeba05742c8d0f25328e3cd3763771f0c55ad2c74e511c063bd5ce3e35"
   }
 }

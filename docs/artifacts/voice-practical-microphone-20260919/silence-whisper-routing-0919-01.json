@@ -3,20 +3,27 @@
   "endpoints": [
     {
       "port": 50022,
-      "container_id": "e67d1d5f571cea614dcdf0c1b35562efc6dbaa8b0abe7f361564d01f44051f33",
-      "image_id": "sha256:f9dd497557992fc5a08f484a62b732fe4b935c27cb92437b9746f9839cfa814c",
       "started_at": "2026-09-19T01:31:14.496904668Z",
-      "worker_sha256": "e65a2b46ce485455e4cc601a060fad6c3d306c0789f13ae291baa4bb9ed45ef9",
-      "independent_no_speech_filter": false
+      "independent_no_speech_filter": false,
+      "runtime_label": "runtime-1",
+      "image_label": "image-1",
+      "worker_source_label": "worker-source-1"
     },
     {
       "port": 50025,
-      "container_id": "10b07aa6497568810b5e007fdf41df35a0e05cc2a15cd6e5d487719f32686430",
-      "image_id": "sha256:b4f2c3b7bd410b5d39b8bf8e25973356d2e27ac418ea56f98011dcf8ec9f6342",
       "started_at": "2026-09-19T01:31:10.491485821Z",
-      "worker_sha256": "04cbb8456bf193e32ba103f0872c59e37e658c1b37d9005b27bdd878815ff051",
-      "independent_no_speech_filter": true
+      "independent_no_speech_filter": true,
+      "runtime_label": "runtime-2",
+      "image_label": "image-2",
+      "worker_source_label": "worker-source-2"
     }
   ],
-  "candidate_source_worker_sha256": "04cbb8456bf193e32ba103f0872c59e37e658c1b37d9005b27bdd878815ff051"
+  "candidate_worker_source_label": "worker-source-2",
+  "publication": {
+    "runtimeIdentifiersIncluded": false,
+    "imageIdentifiersIncluded": false,
+    "workerSourceDigestsIncluded": false,
+    "labelsPreserveEquality": true,
+    "originalAndMappingRetainedLocally": true
+  }
 }
