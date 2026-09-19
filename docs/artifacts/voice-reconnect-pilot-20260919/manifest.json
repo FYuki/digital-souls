@@ -1,0 +1,14 @@
+{
+  "published": {
+    "evidence.json": "d0a2a3331c7bfe3422402a92a258eb215390af630508843fc85b5520704cbaf8",
+    "report.json": "b02f712d10c37a73af3973bb4d131cd265dc1b1794d545188cac3c9fd3ffeb6d"
+  },
+  "source_revision": "c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+  "source_sha256": {
+    "scripts/voice_quality/run_reconnect_cohort.py": "14f058917df5769e62badd4172e3b62dce08b99202159049e802d221baaea13b",
+    "scripts/voice_quality/run_pilot.py": "07d06dde263fad76124059958006b2b50543b5b97bf4fab30b5fb12a7b0b132f",
+    "environments/profiles/integration-irodori-cuda-graph-fault.json": "4adc543d1a61b9ac91837c695b5b80d8c996e51515d4050d31066fed44486cdf",
+    "frontend/scripts/report-fault-recovery.mjs": "2106c7b6f6844fb9c8c4c48d58a5f3203fceaca9d8d1d2cd94f02ff9d9468464",
+    "frontend/playwright/fault-recovery-cohort.ts": "f7df23cf529ee6e3541e9ac4a010fab0e4d5ea85b49792d10ceefcc2a72613c8"
+  }
+}
