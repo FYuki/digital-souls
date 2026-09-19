@@ -1,0 +1,71 @@
+{
+  "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "script_sha256": "49eb3aff3a74ed3aef11e985fdf42e47382f45b7590e81787aedb722b2ba0290",
+  "base_revision": "d85b5a825da3a8184cfd3f6986f6dacc521c6dfb",
+  "started_unix": 1789791683.9797602,
+  "finished_unix": 1789791698.4114332,
+  "exit_code": 1,
+  "result": {
+    "status": "failure",
+    "error_type": "AcceleratorError",
+    "diagnostic_error": "CUDA error: operation failed due to a previous error during capture\nSearch for `cudaErrorStreamCaptureInvalidated' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "partial_trials": [
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4727.912501795427
+        },
+        "phase": "warmup",
+        "input_sha256": "a0c3b74a6515d7a0932dfded7fa3fe00b2852c2ec9866a8abe4dd0fbe347ae6b",
+        "elapsed_ms": 9607.092976002605,
+        "wav_sha256": "da9d88c48236e478bb56c45b83ca7a093cb065b9c1433b0392a7bdd9cb5a11b0",
+        "frames": 207360,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 2.2295529997791164,
+          "prepare_reference": 293.5650869985693,
+          "predict_duration": 146.0099550022278,
+          "sample_rf": 687.4177860008786,
+          "unpatchify_latent": 0.008197006536647677,
+          "decode_latent": 42.090943999937735
+        },
+        "total_to_decode_ms": 1172.6216770039173,
+        "seed": 4221,
+        "allocated_bytes": 1983195648,
+        "reserved_bytes": 3770679296
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4443.053489261972
+        },
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 804.331387997081,
+        "wav_sha256": "f7d265bdecf6e4cffe4582777fc337415ba722c46dc6f3cb4e17469a4659c0e8",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5315400048857555,
+          "prepare_reference": 58.36578099842882,
+          "predict_duration": 32.52027699636528,
+          "sample_rf": 672.4334309983533,
+          "unpatchify_latent": 0.00800300040282309,
+          "decode_latent": 31.05107000010321
+        },
+        "total_to_decode_ms": 796.054867998464,
+        "seed": 4221,
+        "allocated_bytes": 1981704704,
+        "reserved_bytes": 3948937216,
+        "repetition": 0
+      }
+    ]
+  },
+  "stderr_present": false
+}

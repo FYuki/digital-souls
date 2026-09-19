@@ -229,3 +229,12 @@ runnerは小規模診断で `fixture_indices` を記録するが、相槌・take
 cd backend
 .venv/bin/python -m pytest tests/unit/test_voice_quality_take_turn_report.py tests/unit/test_voice_quality_backchannel_report.py tests/unit/test_voice_quality_cohort_report_validation.py tests/unit/test_voice_quality_backend_vad_report.py tests/unit/test_voice_quality_vad_report.py tests/unit/test_voice_quality_stt_pcm_report.py tests/unit/test_voice_quality_pilot.py -q
 ```
+
+## Irodori CUDA Graph候補の実測（2026-09-19）
+
+[固定条件の対比較と復旧試験](irodori-cuda-graph-20260919.md)を追加した。
+最終固定イメージの5文×3回対比較で、合成中央値824.13ms→623.26ms（24.4%短縮）。
+40 steps・採用声/seed/speed・BF16は維持し、出力長は全件一致した。
+実装は[PR #442](https://github.com/FYuki/digital-souls/pull/442)で既定OFF。
+実ブラウザの独立100試行、実マイク・聴感、固定記憶参照は未実施で、既存の受入判定を更新しない。
+共有TTSへ配備していない。合成中の専用worker停止は502検出後に再準備・後続合成成功を確認した。

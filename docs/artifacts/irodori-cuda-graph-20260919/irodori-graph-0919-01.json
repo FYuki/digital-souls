@@ -1,0 +1,13 @@
+{
+  "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "script_sha256": "859e0e2f575d28d0afb539b964e1787ecb998ec129833dda0d971fc74cfcbe08",
+  "base_revision": "d85b5a825da3a8184cfd3f6986f6dacc521c6dfb",
+  "started_unix": 1789791621.5148137,
+  "finished_unix": 1789791641.0985303,
+  "exit_code": 1,
+  "result": {
+    "status": "failure",
+    "error_type": "AcceleratorError"
+  },
+  "stderr_present": false
+}
