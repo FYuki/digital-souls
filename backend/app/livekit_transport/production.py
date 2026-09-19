@@ -2258,7 +2258,7 @@ class ProductionRuntimeManager:
                     return
         except asyncio.CancelledError as error:
             permitted = {"microphone_track_replaced", "microphone_track_unsubscribed"}
-            exit_reason = error.args[0] if error.args and error.args[0] in permitted else "cancelled"
+            exit_reason = error.args[0] if error.args and isinstance(error.args[0], str) and error.args[0] in permitted else "cancelled"
             raise
         except Exception as error:
             exit_reason = type(error).__name__

@@ -798,8 +798,8 @@ export class LiveKitRoomClient {
     return room
   }
 
-  private beginStateRecovery(room: Room): void {
-    this.recovering = true
+  private beginStateRecovery(room: Room, awaitingReconnect = true): void {
+    this.recovering = awaitingReconnect
     this.recoveryPending = true
     this.clearRecoveryProbe()
     this.observe({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
@@ -1066,7 +1066,10 @@ export class LiveKitRoomClient {
       await this.publishControlEvent(event({type: 'response_cancel_requested'}))
       // Backendが再送期限切れでunavailableになった場合も、同じsessionの制御を戻す。
       if (this.room === room && this.sessionId === sessionId && this.generation === generation) {
-        await this.requestStateSync(room)
+        // 接続が維持されていても再同期は入力readerの世代を交換する。
+        // 旧認可を先に無効化し、権威状態と制御往復の確認後に新trackを認可する。
+        if (!this.recoveryPending) this.beginStateRecovery(room, false)
+        else await this.requestStateSync(room)
       }
     })().catch(() => {
       if (this.room === room && this.sessionId === sessionId) this.failTransport()
