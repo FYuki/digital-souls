@@ -246,3 +246,23 @@ def test_candidate_ollama_resolves_dedicated_endpoint_and_preserves_shared_profi
             assert candidate["dependencies"][name] == dependency
     assert candidate["dependencies"]["ollama"]["source"] == "external"
     assert candidate["dependencies"]["ollama"]["readinessUrl"] == "http://127.0.0.1:11534/api/tags"
+
+
+def test_cuda_graph_candidate_overrides_stale_shared_endpoints(tmp_path: Path):
+    from profile_resolution import resolve_profile
+
+    candidate = resolve_profile(
+        {"DS_PROFILE": "integration-irodori-cuda-graph",
+         "OLLAMA_BASE_URL": "http://localhost:11434",
+         "IRODORI_BASE_URL": "http://127.0.0.1:50024"},
+        None, resolved_runtime_paths(tmp_path),
+    )
+    shared = _resolve("integration-irodori", tmp_path)
+    assert candidate["derivedEnvironment"]["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
+    assert candidate["derivedEnvironment"]["IRODORI_BASE_URL"] == "http://127.0.0.1:50026"
+    assert shared["derivedEnvironment"]["IRODORI_BASE_URL"] == "http://127.0.0.1:50024"
+    for name, dependency in shared["dependencies"].items():
+        if name not in {"ollama", "irodori"}:
+            assert candidate["dependencies"][name] == dependency
+    assert candidate["dependencies"]["irodori"]["source"] == "external"
+    assert candidate["dependencies"]["irodori"]["readinessUrl"] == "http://127.0.0.1:50026/health/ready"

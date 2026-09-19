@@ -146,9 +146,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         or session_lifecycle
     ):
         raise ValueError("isolated normal trial requires one scheduled independent session")
-    if profile not in {"integration-voice", "integration-irodori", "integration-irodori-ollama-candidate"}:
+    if profile not in {"integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"}:
         raise ValueError("unsupported measurement profile")
-    if profile == "integration-irodori-ollama-candidate" and fault_bridge:
+    if profile in {"integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"} and fault_bridge:
         raise ValueError("candidate profile cannot use the fault bridge profile")
     if profile.startswith("integration-irodori") and observe_stt_pcm:
         raise ValueError("Irodori profile cannot use the PCM observer profile")
@@ -238,6 +238,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     # 常駐モデルの観測先も、Backendが解決するProfileの接続先に揃える。
     selected = json.loads((ROOT / "environments/profiles" / f'{env["DS_PROFILE"]}.json').read_text())
     env["OLLAMA_BASE_URL"] = selected["dependencies"]["ollama"]["baseUrl"]
+    irodori = selected["dependencies"].get("irodori", {})
+    if irodori.get("mode") == "real":
+        env["IRODORI_BASE_URL"] = irodori["baseUrl"]
     if fault_bridge:
         env["VOICE_QUALITY_FAULT_BRIDGE"] = "1"
     env.pop("VOICE_QUALITY_CONTROL_PROBE", None)
@@ -337,7 +340,7 @@ def run(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate"),
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"),
                         default="integration-voice", help="共有TTS検証Profile。声の選択はCCVで行う。")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--isolated-normal-phase", choices=("warmup", "measured"),

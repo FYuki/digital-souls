@@ -465,15 +465,17 @@ def test_memory_formation_isolation_requires_explicit_runner_selection(tmp_path,
     assert pilot.pilot_environment(*args, disable_memory_formation=True)[key] == "true"
 
 
-def test_candidate_profile_is_explicit_and_cannot_select_another_diagnostic(tmp_path):
+@pytest.mark.parametrize("profile", ["integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"])
+def test_candidate_profile_is_explicit_and_cannot_select_another_diagnostic(tmp_path, profile):
     inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
-    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\n")
+    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\nIRODORI_BASE_URL=http://127.0.0.1:50024\n")
     livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
-    options = dict(profile="integration-irodori-ollama-candidate", scheduled_fixture=True)
+    options = dict(profile=profile, scheduled_fixture=True)
     env = pilot.pilot_environment(inference, livekit, "candidate-test", 1, False, **options)
     assert env["DS_PROFILE"] == options["profile"]
     assert env["VOICE_QUALITY_PROFILE"] == options["profile"]
     assert env["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
+    assert env["IRODORI_BASE_URL"] == ("http://127.0.0.1:50026" if profile == "integration-irodori-cuda-graph" else "http://127.0.0.1:50024")
     shared = pilot.pilot_environment(inference, livekit, "shared-test", 1, False, profile="integration-irodori")
     assert shared["OLLAMA_BASE_URL"] == "http://localhost:11434"
     for diagnostic in ({"observe_stt_pcm": True}, {"control_probe": True, "fault_bridge": True}):
