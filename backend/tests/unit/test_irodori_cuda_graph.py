@@ -97,3 +97,42 @@ def test_ineligible_inputs_use_eager_before_capture(restriction):
     value = object() if restriction == "unsupported" else Tensor()
     assert graph(x=value) == "eager"
     assert calls == [{"x": value}]
+
+
+def test_fixed_model_cfg_input_reaches_capture_with_available_vram():
+    # 固定モデルの実測入力合計。64/128MiBでは通常のCFGがeagerへ戻っていた。
+    class Tensor:
+        is_cuda = True
+        requires_grad = False
+        shape = (107161014,)
+        dtype = "bf16"
+        device = "cuda:0"
+
+        def stride(self):
+            return (1,)
+
+        def numel(self):
+            return 107161014
+
+        def element_size(self):
+            return 2
+
+        def clone(self):
+            return self
+
+    class CaptureEntered(Exception):
+        pass
+
+    def capture_stream():
+        raise CaptureEntered
+
+    torch = SimpleNamespace(
+        Tensor=Tensor,
+        cuda=SimpleNamespace(
+            mem_get_info=lambda: (4 * 1024**3, 16 * 1024**3),
+            Stream=capture_stream,
+        ),
+    )
+    graph = cuda_graph.RequestGraph(torch, lambda **kwargs: "eager")
+    with pytest.raises(CaptureEntered):
+        graph(x=Tensor())
