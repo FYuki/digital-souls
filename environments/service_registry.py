@@ -136,6 +136,8 @@ def operation_context_for(
     service: str,
     dependencies: Mapping[str, object],
     registry: ServiceRegistry,
+    *,
+    environment: Mapping[str, str] | None = None,
 ) -> OperationContext:
     contained = {
         name
@@ -152,6 +154,7 @@ def operation_context_for(
     return OperationContext(
         whisper_enabled=enabled("whisper"),
         chroma_enabled=enabled("chroma"),
+        environment=environment,
     )
 
 

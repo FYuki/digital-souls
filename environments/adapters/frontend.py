@@ -40,5 +40,6 @@ class FrontendAdapter(ComposeManagedServiceOperations):
     def prepare(
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> None:
-        del context
         require_resolved_managed_endpoint(dependency, service="frontend")
+        if context.environment is not None:
+            self.prepare_image(dependency, context.environment)
