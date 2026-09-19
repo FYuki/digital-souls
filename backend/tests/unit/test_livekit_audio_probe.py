@@ -214,7 +214,7 @@ def test_cleanup_timeout_does_not_block_session_teardown(rig, monkeypatch):
     asyncio.run(exercise())
 
 
-@pytest.mark.parametrize('profile', ['integration-voice-fault', 'integration-irodori-fault'])
+@pytest.mark.parametrize('profile', ['integration-voice-fault', 'integration-irodori-fault', 'integration-irodori-cuda-graph-fault'])
 def test_probe_gate_requires_every_isolation_setting(profile):
     env = dict(DS_ENVIRONMENT_ID='test', DS_PROFILE=profile, VOICE_MEASUREMENT_KIND='controlled_baseline')
     for url in ['ws://127.0.0.1:19880', 'ws://localhost:19880']:

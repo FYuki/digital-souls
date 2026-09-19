@@ -23,7 +23,7 @@ def planned_runs(cohort_id: str, sessions: int) -> list[str]:
     return [f"{cohort_id}-{index:03d}" for index in range(1, sessions + 1)]
 
 
-def verify_trial(run_id: str, revision: str) -> dict[str, bool]:
+def verify_trial(run_id: str, revision: str, profile: str = "integration-voice") -> dict[str, bool]:
     base = run_root(run_id)
     manifest = json.loads((base / "trial-manifest.json").read_text())
     environment = json.loads((base / "runtime-data/runtime/standalone/environment-run.json").read_text())
@@ -32,7 +32,7 @@ def verify_trial(run_id: str, revision: str) -> dict[str, bool]:
             or manifest.get("fault_clock_process_closed") is not True
             or environment.get("runtime", {}).get("environmentId") != "test"
             or environment.get("runtime", {}).get("dataRoot") != str((base / "runtime-data").resolve())
-            or environment.get("effectiveProfile", {}).get("effectiveProfile") != "integration-voice-fault"
+            or environment.get("effectiveProfile", {}).get("effectiveProfile") != f"{profile}-fault"
             or environment.get("teardown", {}).get("status") != "completed"):
         raise ValueError("trial ownership, revision, or teardown unavailable")
     native = json.loads((base / 'native-sdk.json').read_text())
@@ -56,7 +56,9 @@ def verify_trial(run_id: str, revision: str) -> dict[str, bool]:
 def run_trial(run_id: str, args: argparse.Namespace, log_path: Path) -> int:
     command = [sys.executable, str(ROOT / "scripts/voice_quality/run_pilot.py"),
         "--run-id", run_id, "--inference-env", str(args.inference_env), "--livekit-env", str(args.livekit_env),
-        "--fault-bridge", "--network-fault", "--control-probe", "--trials", "3", "--scheduled-fixture"]
+        "--profile", getattr(args, "profile", "integration-voice"), "--fault-bridge", "--network-fault", "--control-probe", "--trials", "3", "--scheduled-fixture"]
+    if getattr(args, "disable_memory_formation", False):
+        command.append("--disable-memory-formation")
     if args.disable_thinking:
         command.append("--disable-thinking")
     with log_path.open("x") as output:
@@ -91,6 +93,9 @@ def aggregate(run_ids: list[str], output: Path) -> int:
 
 
 def execute(args: argparse.Namespace) -> int:
+    profile = getattr(args, "profile", "integration-voice")
+    if profile not in {"integration-voice", "integration-irodori", "integration-irodori-cuda-graph"}:
+        raise ValueError("unsupported reconnect profile")
     runs = planned_runs(args.cohort_id, args.sessions)
     revision = measurement_revision(ROOT)
     # LiveKitは呼び出し側が専用bridgeで起動する。ここでは共有serviceを起動・停止しない。
@@ -105,7 +110,8 @@ def execute(args: argparse.Namespace) -> int:
         directory.mkdir(exist_ok=False)
         with (directory / "plan.json").open("x") as output:
             json.dump({"measurement_revision": revision, "expected_sessions": len(runs), "run_ids": runs,
-                       "scheduled_fixture": True, "thinking_disabled": args.disable_thinking}, output, indent=2)
+                       "scheduled_fixture": True, "thinking_disabled": args.disable_thinking,
+                       "profile": profile, "memory_formation_disabled": getattr(args, "disable_memory_formation", False)}, output, indent=2)
             output.write("\n")
         with (directory / "execution.jsonl").open("x") as journal:
             def record(value: dict[str, Any]) -> None:
@@ -125,7 +131,7 @@ def execute(args: argparse.Namespace) -> int:
                         raise ValueError("dedicated target changed")
                     record({"event": "trial_started", "index": index, "expected": len(runs)})
                     code = run_trial(run_id, args, directory / f"trial-{index:03d}.log")
-                    checks = verify_trial(run_id, revision)
+                    checks = verify_trial(run_id, revision, profile)
                     completed += 1
                     record({"event": "trial_completed", "index": index, "exit_code": code, **checks})
                 code = aggregate(runs, directory / "report.json")
@@ -139,6 +145,8 @@ def execute(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-cuda-graph"), default="integration-voice")
+    parser.add_argument("--disable-memory-formation", action="store_true")
     parser.add_argument("--cohort-id", required=True)
     parser.add_argument("--sessions", type=int, default=100, help="独立session数。100未満は診断のみ。")
     parser.add_argument("--inference-env", type=Path, required=True)

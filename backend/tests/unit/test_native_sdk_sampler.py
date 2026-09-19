@@ -32,7 +32,7 @@ def test_only_exclusive_test_backend_is_inspected(tmp_path, monkeypatch, options
     assert module.NativeSdkSampler(path).sample() is None
 
 
-@pytest.mark.parametrize("profile", ["integration-voice-fault", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-fault"])
+@pytest.mark.parametrize("profile", ["integration-voice-fault", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-fault", "integration-irodori-cuda-graph-fault"])
 def test_no_sdk_proof_is_invented_before_loading(tmp_path, monkeypatch, profile):
     path, report = setup_report(tmp_path, profile=profile)
     calls = []

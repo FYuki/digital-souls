@@ -908,3 +908,17 @@ render中quantumを含む上限より後の無音interval、一致するfinished
 この上限を失敗直後の完全な無音・停止遅延0msと読み替えない。
 時計・interval欠落を0音声へ補完せず、生成中の試験で旧出力停止を代用しない。
 本試験は固定音声の実接続であり、人の実マイク・試聴の代替ではない。
+
+## 高速化TTS候補の独立再接続cohort
+
+run_reconnect_cohort.py の --profile integration-irodori-cuda-graph は、
+integration-irodori-cuda-graph-fault を選び、LiveKit 19880、Ollama 11534、Irodori 50026へ固定する。
+通常dev・dogfoodのLiveKitや共有推論の配備には変更を加えない。
+--disable-memory-formation を指定して形成・整理のschedulerを止め、各試行で空の専用data rootを使う。
+
+--cohort-id、--inference-env、専用bridgeの --livekit-env を指定する。
+--sessions 100 が正式cohortで、少数件は診断に限る。各sessionは実network障害1回と、
+復旧後の同一sessionでの次の通常音声を含む。復旧境界、10秒以内99%以上、成功p95 3000ms以下、
+重複0、分母・時計・native SDKのcoverage要件は既存reporterを維持する。
+各試行のProfile、所有container削除、fault時計process終了を検証してから次へ進む。
+準備全体の固定上限は設けず、各処理のtimeout・error検出を使う。
