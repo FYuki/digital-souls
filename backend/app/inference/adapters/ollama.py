@@ -20,6 +20,7 @@ from app.inference.contracts import (
     InferenceUsage,
     JsonValue,
     ModelProbeResult,
+    ModelPreparationRequest,
     ProviderTextResult,
     StructuredGenerationRequest,
     TextGenerationRequest,
@@ -50,6 +51,7 @@ class OllamaAdapter:
             InferenceCapability.IMAGE_INPUT,
             InferenceCapability.EMBED,
             InferenceCapability.ESTIMATE_INPUT_TOKENS,
+            InferenceCapability.PREPARE_MODEL,
         }
     )
 
@@ -90,6 +92,28 @@ class OllamaAdapter:
         if "vision" in raw_capabilities:
             capabilities.add(InferenceCapability.IMAGE_INPUT)
         return ModelProbeResult(frozenset(capabilities))
+
+    async def prepare_model(self, request: ModelPreparationRequest) -> None:
+        # 公開APIの空messagesはロードのみ。通常生成と同じnum_ctxを使い、
+        # 準備の直後にcontext変更で再ロードされることを避ける。
+        payload = self._chat_payload(TextGenerationRequest(
+            messages=(), model_id=request.model_id, options=request.options,
+            max_input_tokens=request.max_input_tokens,
+            max_output_tokens=request.max_output_tokens,
+            timeout_seconds=request.timeout_seconds,
+            latency_sensitive=request.latency_sensitive,
+        ), stream=False)
+        try:
+            async with self._async_client_factory(request.timeout_seconds) as client:
+                response = await client.post(self._endpoint("/api/chat"), json=payload)
+                response.raise_for_status()
+                body = self._response_object(response)
+                if body.get("done") is not True or body.get("done_reason") != "load":
+                    raise InferenceError(InferenceErrorCategory.INVALID_RESPONSE, retryable=False)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            self._raise_normalized(error)
 
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         response = self._post_chat(request)

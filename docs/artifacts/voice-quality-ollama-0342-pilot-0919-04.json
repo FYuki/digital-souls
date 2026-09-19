@@ -1,0 +1,168 @@
+{
+  "run_id": "350-ollama-0342-0919-04",
+  "measurement_revision": "880f61f2b933ee5b93cc3a62009466c957e40f55",
+  "classification": "successful_isolated_pilot",
+  "formal_stage1_status": "NOT_RUN",
+  "stage2_status": "NOT_RUN",
+  "planned_measured": 1,
+  "succeeded": 1,
+  "failed": 0,
+  "ttfa_ms": {
+    "lower": 2441.6323333378023,
+    "upper": 2443.332333333332
+  },
+  "preparation_observation": {
+    "method": "browser_click_to_microphone_standby_dom_v1",
+    "clock_domain": "browser_performance",
+    "attempt_count": 1,
+    "started_client_ms": 1649.5,
+    "ready_client_ms": 22662.80000000447,
+    "duration_ms": 21013.30000000447
+  },
+  "stages": {
+    "stt_ms": 146.948234,
+    "prompt_preparation_ms": 154.163467,
+    "llm_request_to_first_token_ms": 167.224682,
+    "tts_ms": 980.318217
+  },
+  "provider_values": {
+    "ollama_estimate_http_requests": 2.0,
+    "ollama_estimate_requested_context_tokens_minimum": 8192.0,
+    "ollama_estimate_requested_context_tokens_maximum": 8192.0,
+    "ollama_estimate_requested_output_tokens_minimum": 1.0,
+    "ollama_estimate_requested_output_tokens_maximum": 1.0,
+    "ollama_estimate_total_ms": 142.034918,
+    "ollama_estimate_load_ms": 1.346949,
+    "ollama_estimate_prompt_eval_ms": 104.00399999999999,
+    "ollama_estimate_generation_ms": 0.002,
+    "ollama_estimate_input_tokens": 555.0,
+    "ollama_estimate_cached_input_tokens": 527.0,
+    "ollama_estimate_output_tokens": 2.0,
+    "ollama_thinking_configured_requests": 1.0,
+    "ollama_thinking_disabled_requests": 1.0,
+    "ollama_generation_http_requests": 1.0,
+    "ollama_generation_requested_context_tokens_minimum": 8192.0,
+    "ollama_generation_requested_context_tokens_maximum": 8192.0,
+    "ollama_generation_requested_output_tokens_minimum": 1024.0,
+    "ollama_generation_requested_output_tokens_maximum": 1024.0,
+    "ollama_generation_total_ms": 375.016435,
+    "ollama_generation_load_ms": 0.707455,
+    "ollama_generation_prompt_eval_ms": 109.115,
+    "ollama_generation_generation_ms": 219.962,
+    "ollama_generation_input_tokens": 536.0,
+    "ollama_generation_cached_input_tokens": 0.0,
+    "ollama_generation_output_tokens": 12.0
+  },
+  "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+  "initial_state_evidence": {
+    "configuration_sha256": {
+      "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+      "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+    },
+    "memory_scheduler_policy": {
+      "consolidation_disabled": true,
+      "formation_disabled": true,
+      "method": "controlled_memory_schedulers_v1"
+    },
+    "method": "sqlite_empty_state_and_configuration_v1",
+    "rag_enabled": false,
+    "row_counts": {
+      "approved_memories": 0,
+      "conversation_turns": 0,
+      "episodic_invalid_sources": 0,
+      "episodic_links": 0,
+      "episodic_merges": 0,
+      "episodic_processed_spans": 0,
+      "episodic_receipts": 0,
+      "episodic_records": 0,
+      "episodic_versions": 0,
+      "memory_index_outbox": 0,
+      "memory_lineage": 0,
+      "memory_response_dependencies": 0,
+      "memory_response_origins": 0,
+      "memory_sources": 0,
+      "memory_write_receipts": 0,
+      "screen_turn_provenance": 0,
+      "semantic_deletion_masks": 0,
+      "semantic_processed_sources": 0,
+      "semantic_reassessment": 0,
+      "semantic_receipts": 0,
+      "semantic_records": 0,
+      "semantic_relations": 0,
+      "semantic_versions": 0,
+      "temporary_provider_records": 0
+    },
+    "schema_versions": {
+      "history": 9,
+      "memory": 6
+    }
+  },
+  "playback_completion": {
+    "expectedSamples": 254400,
+    "inputSamples": 253440,
+    "paddingSamples": 960,
+    "renderedSamples": 254400,
+    "packetCount": 265,
+    "firstOutputFrame": 65152,
+    "lastOutputEndFrame": 319552,
+    "gapSamples": 0,
+    "maximumGapSamples": 0,
+    "gapCount": 0,
+    "firstRtpTimestamp": 3279197211,
+    "lastRtpTimestamp": 3279450651,
+    "outputClockContextTime": 6.658667666666667,
+    "outputClockPerformanceTime": 31354.80000000447,
+    "confirmationObservedAtMs": 31356.70000000298,
+    "sampleRate": 48000
+  },
+  "playback_supply_summary": {
+    "method": "packet_receive_decode_main_render_bounds_v1",
+    "packet_count": 265,
+    "rendered_samples": 254400,
+    "gap_count": 0,
+    "gap_samples": 0,
+    "maximum_gap_samples": 0,
+    "missing_observations": 0,
+    "gap_evidence_overflow": false,
+    "maximum_receive_interval_upper_ms": 27.99999999404099,
+    "maximum_decode_latency_upper_ms": 2.0000000014915713,
+    "maximum_main_delivery_upper_ms": 0.7000000000007276,
+    "maximum_render_after_main_ms": 42.2323333318418,
+    "gaps": []
+  },
+  "session_end_confirmed": true,
+  "transcript_matches": true,
+  "candidate_routing": {
+    "version": {
+      "version": "0.34.2"
+    },
+    "image_digest": "sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532",
+    "dedicated_port": 11534,
+    "shared_model_empty_before_run": true,
+    "changed_connection_keys": [
+      "OLLAMA_BASE_URL"
+    ],
+    "resolved_profile_sha256": "c533ee6e12da32642bb28b7eed3c33c20c1198b55ea92cbe15d3293e17c10fff",
+    "resolved_ollama_url": "http://127.0.0.1:11534",
+    "shared_model_empty_after_run": true
+  },
+  "native_sdk": {
+    "status": "verified",
+    "build": {
+      "schema_version": 1,
+      "python_sdk_version": "1.1.16",
+      "ffi_version": "0.12.73",
+      "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+      "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+      "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+      "reconnect_policy": "short-outage-v1",
+      "target": "x86_64-unknown-linux-gnu",
+      "cuda_video_codecs_enabled": false
+    }
+  },
+  "source_hashes": {
+    "trial-manifest.json": "80754810c3d72f1d70bce3c0f91d5e4a5e5f3a5594b8f71cf95483b87eee6346",
+    "inference-health-observation.json": "7dfdccd70452c6cb73c9c2b90f0133833cd5ffd6a15195c57200e55c2139d63e",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "b58dbb8ed966b5e210afc4934b5fee17a7d925e21429a3dcf6b75cfad7c2ddcf"
+  }
+}

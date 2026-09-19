@@ -1,0 +1,43 @@
+{
+  "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+  "expected_warmup": 5,
+  "expected_measured": 100,
+  "recorded_trials": 105,
+  "success": 105,
+  "failure": 0,
+  "all_owned_environments_stopped": true,
+  "shared_services_modified": false,
+  "all_trial_data_roots_independent": true,
+  "full_acceptance_passed": false,
+  "preparation_by_phase": {
+    "warmup": {
+      "denominator": 5,
+      "ready": 5,
+      "not_ready": 0,
+      "missing": 0,
+      "invalid": 0,
+      "coverage": 1.0,
+      "duration_ms_p50": 1362.8999999985099,
+      "duration_ms_p95": 1795.7999999970198,
+      "duration_ms_max": 1795.7999999970198,
+      "method": "browser_click_to_microphone_standby_dom_v1",
+      "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+    },
+    "measured": {
+      "denominator": 100,
+      "ready": 100,
+      "not_ready": 0,
+      "missing": 0,
+      "invalid": 0,
+      "coverage": 1.0,
+      "duration_ms_p50": 1378.7999999970198,
+      "duration_ms_p95": 1911.6000000014901,
+      "duration_ms_max": 2304.2000000029802,
+      "method": "browser_click_to_microphone_standby_dom_v1",
+      "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+    }
+  },
+  "preparation_evidence_complete": true,
+  "existing_reporter_exit": 1,
+  "resources_note": "CPU・memory・GPU観測は各runに保持。複数containerを一つの累積CPU系列へ連結しない。"
+}

@@ -102,10 +102,13 @@ class EnvironmentRun:
 
     def prepare(self) -> None:
         self._save_phase("prepare")
+        environment = self._service_environment()
         for name in self.runtime.prepare_order:
             require_service_operations(self.registry, name).prepare(
                 self.dependencies[name],
-                operation_context_for(name, self.dependencies, self.registry),
+                operation_context_for(
+                    name, self.dependencies, self.registry, environment=environment
+                ),
             )
 
     def pre_probe(self) -> dict[str, str]:

@@ -1,3 +1,5 @@
+import {waitForVoicePreparation} from './wait-for-preparation'
+import {installPreparationProbe} from './preparation-probe'
 import type {DecodedReceiptSnapshot} from '../src/livekit/decoded-receipt-audit'
 import {installStaleTextProbe} from './stale-text-probe'
 import type {CoreDeliveryObservation} from '../src/livekit/core-delivery-observation'
@@ -11,7 +13,7 @@ import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit
 import type { NetworkObservation } from '../src/livekit/network-observer'
 import type { MediaObservation } from '../src/livekit/media-observer'
 
-import { expect, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 declare global {
   interface Window {
@@ -81,6 +83,7 @@ type CompletedVoiceCycle = {
 }
 
 const installPlaybackProbe = async (page: Page) => {
+  await page.addInitScript(installPreparationProbe)
   await page.addInitScript(installStaleTextProbe)
   await page.addInitScript(installUserControlProbe)
   await page.addInitScript(installInterruptionProbe)
@@ -520,7 +523,7 @@ export const createVoiceChatDriver = () => {
   const enableMicrophone = async (page: Page) => {
     const button = await openVoiceChat(page)
     await button.click()
-    await expect(button).toHaveAttribute('aria-pressed', 'true')
+    await waitForVoicePreparation(page, test.info())
     return button
   }
 

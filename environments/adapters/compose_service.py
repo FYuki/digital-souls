@@ -45,6 +45,7 @@ BACKEND_ENV_PREFIXES = (
 BACKEND_ENV_KEYS = {
     "SCREEN_ALLOWED_ORIGIN",
     "VOICE_MEASUREMENT_KIND",
+    "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION",
     "VOICE_CONTROLLED_TRACE_PATH",
     "DOGFOOD_BACKUP_DIR",
     "DOGFOOD_BACKUP_RETENTION_COUNT",
@@ -74,6 +75,7 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
         self.runtime_paths = runtime_paths
         self.runner = runner if runner is not None else SubprocessRunner()
         self.effective_profile = effective_profile
+        self._prepared_environment: dict[str, str] | None = None
 
     def compose_verification(self) -> VerificationResult:
         result = self.runner.run(("docker", "compose", "version"), self.root_dir)
@@ -102,21 +104,12 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
             dependency, environment, host=host, port=port
         )
         command = self._compose_command(compose_environment)
-        if self.effective_profile == "dogfood":
-            image = compose_environment[f"DS_{self.label.upper()}_IMAGE"]
-            if IMMUTABLE_GHCR_IMAGE.fullmatch(image) is None:
-                raise AdapterOperationError(
-                    "preparation",
-                    f"dogfood {self.label} image must be an immutable GHCR digest",
-                )
-            preparation = (*command, "pull", self.label)
-        else:
-            preparation = (*command, "build", self.label)
-        prepared = self.runner.run(preparation, self.root_dir)
-        if not command_succeeded(prepared):
+        if self._prepared_environment is None:
+            # Adapterの単体起動呼出しとの互換。EnvironmentRunではprepareで完了済み。
+            self._prepare_image_command(command, compose_environment)
+        elif self._prepared_environment != compose_environment:
             raise AdapterOperationError(
-                "preparation",
-                f"{self.label} container image preparation failed: {prepared.get('stderr', '')}",
+                "preparation", f"{self.label} environment changed after image preparation"
             )
         started = self.runner.run(
             (*command, "up", "--detach", "--no-deps", "--no-build", self.label),
@@ -139,6 +132,43 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
         return ServiceStartResult(
             "started", True, container_identity=identity
         )
+
+    def prepare_image(
+        self, dependency: Mapping[str, object], environment: Mapping[str, str]
+    ) -> None:
+        """アプリを起動せずimageを準備し、依存先のpre_probeより前に完了する。"""
+        host, port = require_resolved_managed_endpoint(dependency, service=self.label)
+        if self._container_exists():
+            raise AdapterOperationError(
+                "preparation", f"unowned {self.label} container already exists: {self._container_name()}"
+            )
+        compose_environment = self._write_compose_environment(
+            dependency, environment, host=host, port=port
+        )
+        self._prepare_image_command(
+            self._compose_command(compose_environment), compose_environment
+        )
+        self._prepared_environment = compose_environment
+
+    def _prepare_image_command(
+        self, command: tuple[str, ...], compose_environment: Mapping[str, str]
+    ) -> None:
+        if self.effective_profile == "dogfood":
+            image = compose_environment[f"DS_{self.label.upper()}_IMAGE"]
+            if IMMUTABLE_GHCR_IMAGE.fullmatch(image) is None:
+                raise AdapterOperationError(
+                    "preparation",
+                    f"dogfood {self.label} image must be an immutable GHCR digest",
+                )
+            preparation = (*command, "pull", self.label)
+        else:
+            preparation = (*command, "build", self.label)
+        prepared = self.runner.run(preparation, self.root_dir)
+        if not command_succeeded(prepared):
+            raise AdapterOperationError(
+                "preparation",
+                f"{self.label} container image preparation failed: {prepared.get('stderr', '')}",
+            )
 
     def _write_compose_environment(
         self,

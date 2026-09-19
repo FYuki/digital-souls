@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "scope": "irodori_cuda_graph_diagnostic",
+  "formal_acceptance": false,
+  "implementation_pr": "https://github.com/FYuki/digital-souls/pull/442",
+  "implementation_revision": "f7f43196ad904b30fdc7d5b6c1d4d357aba5f152",
+  "probe_path": "scripts/voice_quality/probe_irodori_cuda_graph.py",
+  "probe_sha256": "cf89e56926600b02ce8019fab2cc596a6f7c769ad31c53112792b25e3cc8e2fd",
+  "artifacts": [
+    {
+      "path": "irodori-candidate-image.json",
+      "sha256": "bb32a97e22562ac0d4d1ddd34f8b584491014372b21509c9278747bdb451e796"
+    },
+    {
+      "path": "irodori-graph-0919-01.json",
+      "sha256": "54242bde3708d906e260b1d44ed2ee5dfccdcbf0ed2b5729ef672e6642067579"
+    },
+    {
+      "path": "irodori-graph-0919-02.json",
+      "sha256": "dd481bc924147fca8e46fb97cf0eb082abfd05de3bc3bc6382733a738b2503d0"
+    },
+    {
+      "path": "irodori-graph-0919-03.json",
+      "sha256": "89c4d7eb8d3a3e5e60c79a432b1bcd534349220a77a56b0ed7d68f0fd2be4fae"
+    },
+    {
+      "path": "irodori-graph-0919-04.json",
+      "sha256": "4410423fdb59b83c08bc89f134a4d1f407d278789ef749f4513b4e38357a5597"
+    },
+    {
+      "path": "irodori-graph-0919-image-01.json",
+      "sha256": "b89e0cf234e27ef5b196e19ea8efa801ed00f3bcc87a520137357d9b4b3e00df"
+    },
+    {
+      "path": "irodori-graph-0919-product-01.json",
+      "sha256": "e517a212bed2356d0213a18483b397f72acf430c5028a8e8e07fd15cc4cb27f4"
+    },
+    {
+      "path": "irodori-graph-0919-product-02.json",
+      "sha256": "4855d4920423d58e44afc278c7674adf8f2a23862fea49b663c6b301957ed601"
+    },
+    {
+      "path": "irodori-graph-service-0919-01.json",
+      "sha256": "8ebec2a4c90681887c6f8aef4c1e6a28cea878b7751c3209d8afb41f93e6207a"
+    },
+    {
+      "path": "irodori-schedule-0919-01.json",
+      "sha256": "d669a1a933f788b42f815c82cd15e25c1922b2df777a4b18e507d03e573ccf6f"
+    }
+  ],
+  "summary": {
+    "paired_baseline_count": 15,
+    "paired_graph_count": 15,
+    "baseline_median_ms": 824.1304920011316,
+    "graph_median_ms": 623.2630319937016,
+    "reduction_percent": 24.373259084212386,
+    "all_same_frames": true
+  },
+  "build_attempts": [
+    {
+      "attempt": 1,
+      "result": "stdin_archive_rejected"
+    },
+    {
+      "attempt": 2,
+      "result": "base64_stdin_archive_rejected"
+    },
+    {
+      "attempt": 3,
+      "result": "buildkit_rejected_local_image_id_reference"
+    },
+    {
+      "attempt": 4,
+      "result": "success_local_tag_verified_by_image_id"
+    }
+  ]
+}

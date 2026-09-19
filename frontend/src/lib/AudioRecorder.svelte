@@ -46,6 +46,11 @@
   let microphoneStream: MediaStream | null = null
   let status: MicStatus = 'off'
   let isLoading = false
+  let destroyed = false
+  let activationGeneration = 0
+  let observedForceOff = forceOff
+
+  const isCurrentActivation = (generation: number) => !destroyed && generation === activationGeneration
   let candidateSpeechStartClientMs: number | null = null
   let capturedAudioStartClientMs: number | null = null
 
@@ -59,7 +64,7 @@
     })
   }
 
-  const buildVadOptions = (stream: MediaStream): Partial<RealTimeVADOptions> => ({
+  const buildVadOptions = (stream: MediaStream, generation: number): Partial<RealTimeVADOptions> => ({
     model: 'legacy',
     baseAssetPath: VAD_ASSET_ROUTE,
     onnxWASMBasePath: VAD_ASSET_ROUTE,
@@ -69,7 +74,7 @@
     resumeStream: async () => stream,
     pauseStream: async () => undefined,
     onSpeechStart: () => {
-      if (continuous) return
+      if (continuous || !isCurrentActivation(generation)) return
       try {
         candidateSpeechStartClientMs = performance.now()
         if (!continuous) getRecorder().start()
@@ -79,17 +84,17 @@
       }
     },
     onSpeechRealStart: () => {
-      if (continuous) return
+      if (continuous || !isCurrentActivation(generation)) return
       capturedAudioStartClientMs = candidateSpeechStartClientMs ?? performance.now()
       candidateSpeechStartClientMs = null
       onSpeechStarted({ clientMs: capturedAudioStartClientMs })
     },
     onVADMisfire: () => {
-      if (continuous) return
+      if (continuous || !isCurrentActivation(generation)) return
       void handleVadMisfire()
     },
     onSpeechEnd: () => {
-      if (continuous) return
+      if (continuous || !isCurrentActivation(generation)) return
       void handleSpeechEnd()
     },
   })
@@ -113,54 +118,81 @@
   const releaseMicrophoneResources = async () => {
     candidateSpeechStartClientMs = null
     capturedAudioStartClientMs = null
-    if (vad !== null) {
-      await vad.destroy()
-      vad = null
-    }
-
-    if (recorder !== null) {
-      await recorder.close()
-      recorder = null
-    }
-    for (const track of microphoneStream?.getTracks() ?? []) track.stop()
+    // 古いcleanupが遅れて完了しても、後の資源を消さないよう先に所有を外す。
+    const previousVad = vad
+    const previousRecorder = recorder
+    const previousStream = microphoneStream
+    vad = null
+    recorder = null
     microphoneStream = null
+    // VAD/AudioContextの終了待ちより先にdeviceを停止する。
+    for (const track of previousStream?.getTracks() ?? []) track.stop()
+    try {
+      if (previousVad !== null) await previousVad.destroy()
+    } finally {
+      if (previousRecorder !== null) await previousRecorder.close()
+    }
   }
 
   const setStatus = (nextStatus: MicStatus) => {
     status = nextStatus
   }
 
-  const getVad = async (stream: MediaStream): Promise<MicVadInstance> => {
+  const getVad = async (stream: MediaStream, generation: number): Promise<MicVadInstance | null> => {
     if (vad !== null) {
       return vad
     }
 
     const {MicVAD} = await import('@ricky0123/vad-web')
-    const instance = await MicVAD.new(buildVadOptions(stream))
+    if (!isCurrentActivation(generation)) return null
+    const instance = await MicVAD.new(buildVadOptions(stream, generation))
+    if (!isCurrentActivation(generation)) {
+      await instance.destroy()
+      return null
+    }
     vad = instance
     return vad
   }
 
   const enableMicrophone = async () => {
+    const generation = ++activationGeneration
     isLoading = true
     try {
       await onBeforeEnable()
+      if (!isCurrentActivation(generation)) return
       if (!continuous && recorder === null) {
         recorder = new AudioWorkletPcmRecorder()
       }
 
       const stream = await requestMicrophoneStream()
+      if (!isCurrentActivation(generation)) {
+        for (const track of stream.getTracks()) track.stop()
+        return
+      }
       microphoneStream = stream
       if (continuous) {
         for (const track of stream.getAudioTracks()) track.enabled = false
       } else {
-        await getRecorder().initialize(stream)
-        const activeVad = await getVad(stream)
+        const activeRecorder = getRecorder()
+        await activeRecorder.initialize(stream)
+        if (!isCurrentActivation(generation)) {
+          await activeRecorder.close()
+          return
+        }
+        const activeVad = await getVad(stream, generation)
+        if (activeVad === null) return
         await activeVad.start()
+        if (!isCurrentActivation(generation)) {
+          await activeVad.destroy()
+          return
+        }
       }
+      if (!isCurrentActivation(generation)) return
       await onMicrophoneEnabled(stream)
+      if (!isCurrentActivation(generation)) return
       setStatus('standby')
     } catch (error) {
+      if (!isCurrentActivation(generation)) return
       try {
         await releaseMicrophoneResources()
       } catch (cleanupError) {
@@ -169,11 +201,17 @@
       setStatus('off')
       reportError(error)
     } finally {
+      // initialize等が取消後に資源を作った場合も、その開始操作の終了までに回収する。
+      if (!isCurrentActivation(generation)) {
+        try { await releaseMicrophoneResources() }
+        catch (error) { if (!destroyed) reportError(error) }
+      }
       isLoading = false
     }
   }
 
   const disableMicrophone = async () => {
+    ++activationGeneration
     try {
       await onMicrophoneDisabled()
     } finally {
@@ -183,6 +221,7 @@
   }
 
   const handleSpeechEnd = async (vadSpeechEndClientMs = performance.now()) => {
+    const generation = activationGeneration
     try {
       if (capturedAudioStartClientMs === null) {
         throw new Error('Speech start timestamp is not available')
@@ -194,6 +233,7 @@
         return
       }
       const pcmData = await getRecorder().stopAndTake()
+      if (!isCurrentActivation(generation)) return
       const utteranceFinalizedClientMs = performance.now()
       onAudioCaptured(pcmData, {
         capturedAudioStartClientMs,
@@ -206,20 +246,22 @@
 
       setStatus('standby')
     } catch (error) {
+      if (!isCurrentActivation(generation)) return
       setStatus('standby')
       reportError(error)
     }
   }
 
   const handleVadMisfire = async () => {
+    const generation = activationGeneration
     candidateSpeechStartClientMs = null
     capturedAudioStartClientMs = null
     try {
       if (!continuous) await getRecorder().stopAndTake()
     } catch (error) {
-      reportError(error)
+      if (isCurrentActivation(generation)) reportError(error)
     } finally {
-      setStatus('standby')
+      if (isCurrentActivation(generation)) setStatus('standby')
     }
   }
 
@@ -248,6 +290,16 @@
     }
   }
 
+  const observeForcedOff = (next: boolean) => {
+    const newlyForcedOff = next && !observedForceOff
+    observedForceOff = next
+    if (!newlyForcedOff) return
+    ++activationGeneration
+    setStatus('off')
+    void releaseMicrophoneResources().catch(reportError)
+  }
+
+  $: observeForcedOff(forceOff)
   $: suspendCapture(continuous && suspended, microphoneStream)
   $: if (forceOff && status !== 'off' && !isLoading) {
     setStatus('off')
@@ -258,6 +310,8 @@
   $: isDisabled = isLoading || disabled || (suspended && status === 'off')
 
   onDestroy(() => {
+    destroyed = true
+    ++activationGeneration
     void releaseMicrophoneResources().catch(reportError)
   })
 </script>

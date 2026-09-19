@@ -560,6 +560,76 @@ describe('AudioRecorder', () => {
     expect(button.classList.contains('mic-active')).toBe(false)
   })
 
+
+  test('非LiveKitのPCM初期化待ちで破棄しても遅れてVADや公開を開始しない', async () => {
+    let initialized!: () => void
+    recorderInitialize.mockImplementationOnce(() => new Promise<void>(resolve => {initialized = resolve}))
+    const onMicrophoneEnabled = vi.fn()
+    const onError = vi.fn()
+    const {component} = render(AudioRecorder, {props: {
+      disabled: false, forceOff: false, continuous: false,
+      onAudioCaptured: createCaptureMock(), onMicrophoneEnabled, onError,
+    }})
+    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
+    await waitFor(() => expect(recorderInitialize).toHaveBeenCalledOnce())
+    component.$destroy()
+    initialized()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(MicVAD.new).not.toHaveBeenCalled()
+    expect(onMicrophoneEnabled).not.toHaveBeenCalled()
+    expect(microphoneTrackStop).toHaveBeenCalled()
+    expect(recorderClose).toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  test('非LiveKitのVAD生成待ちで破棄した遅着instanceを開始せず破棄する', async () => {
+    const instance = {start: vi.fn(async () => {}), destroy: vi.fn(async () => {})}
+    let initialized!: (value: unknown) => void
+    vi.mocked(MicVAD.new).mockImplementationOnce(() => new Promise(resolve => {
+      initialized = resolve as (value: unknown) => void
+    }))
+    const onMicrophoneEnabled = vi.fn()
+    const onError = vi.fn()
+    const {component} = render(AudioRecorder, {props: {
+      disabled: false, forceOff: false, continuous: false,
+      onAudioCaptured: createCaptureMock(), onMicrophoneEnabled, onError,
+    }})
+    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
+    await waitFor(() => expect(MicVAD.new).toHaveBeenCalledOnce())
+    component.$destroy()
+    initialized(instance)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(instance.start).not.toHaveBeenCalled()
+    expect(instance.destroy).toHaveBeenCalledOnce()
+    expect(onMicrophoneEnabled).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+
+  test.each(['destroy', 'forceOff', 'manualOff'])('PCM完了待ちの%s後は遅着の発話を送信しない', async cancellation => {
+    let complete!: (value: ArrayBuffer) => void
+    recorderStopAndTake.mockImplementationOnce(() => new Promise<ArrayBuffer>(resolve => {complete = resolve}))
+    const onAudioCaptured = createCaptureMock()
+    const onError = vi.fn()
+    const {component} = render(AudioRecorder, {props: {
+      disabled: false, forceOff: false, continuous: false, onAudioCaptured, onError,
+    }})
+    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオンにする'}))
+    await waitFor(() => expect(vadStart).toHaveBeenCalledOnce())
+    vadOptions.onSpeechStart()
+    vadOptions.onSpeechRealStart()
+    vadOptions.onSpeechEnd()
+    await waitFor(() => expect(recorderStopAndTake).toHaveBeenCalledOnce())
+    if (cancellation === 'destroy') component.$destroy()
+    else if (cancellation === 'forceOff') await component.$set({forceOff: true})
+    else await fireEvent.click(screen.getByRole('button', {name: 'マイクをオフにする'}))
+    complete(capturedPcmData)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(onAudioCaptured).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+    if (cancellation !== 'destroy') component.$destroy()
+  })
+
   test('should keep OFF status and disable the button when initially forced off', () => {
     render(AudioRecorder, {
       props: {

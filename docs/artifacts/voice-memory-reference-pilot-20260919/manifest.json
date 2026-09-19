@@ -1,0 +1,11 @@
+{
+  "published": {
+    "evidence.json": "33acc3b491ff5d722c7ae3af8f636f8ece3f7509f269fb9314f55f48be1182b0"
+  },
+  "source_revision": "4e41ac35431bb4730cdb1bb3bddad23a121ead88",
+  "source_sha256": {
+    "backend/app/voice_quality_reference_state.py": "694597e044508a551580b345f44a82644cd395ef6dc768285de2f417de4ac48f",
+    "scripts/voice_quality/native_sdk.py": "093c30b61a69cc5223ef79169362854ff5188da96b7e804973e211ea62ec11d9",
+    "backend/app/voice_resource_metrics.py": "0c1b41c49c2ccac7d88dffe741f7bfe05c364ed5e40ba0e2fed7872904810f75"
+  }
+}

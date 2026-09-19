@@ -57,6 +57,16 @@ def gpu_worker(connection: Connection, config: ServiceConfig) -> None:
                 "IRODORI_MODEL_LOAD_TIMEOUT": str(config.startup_timeout),
             })
             upstream = importlib.import_module("irodori_openai_tts.app")
+            if config.cuda_graph:
+                if upstream.settings.compile_model:
+                    raise RuntimeError("irodori_graph_compile_conflict")
+                from irodori_service.cuda_graph import install_cuda_graph_sampler
+
+                install_cuda_graph_sampler()
+            if config.reference_cache:
+                from irodori_service.reference_cache import install_reference_latent_cache
+
+                install_reference_latent_cache()
             UpstreamRequest, create_speech = upstream.SpeechRequest, upstream.create_speech
 
             voices = RegisteredVoices(config.voices_dir)

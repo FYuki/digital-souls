@@ -1,0 +1,94 @@
+{
+  "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "script_sha256": "187fd66e44fc8f336cff3efe0dcf6a9a2695bcbdb7d24d8980b1ee1e9132030f",
+  "base_revision": "d85b5a825da3a8184cfd3f6986f6dacc521c6dfb",
+  "started_unix": 1789791761.8662658,
+  "finished_unix": 1789791775.7020578,
+  "exit_code": 1,
+  "result": {
+    "status": "failure",
+    "error_type": "AcceleratorError",
+    "diagnostic_error": "CUDA error: operation failed due to a previous error during capture\nSearch for `cudaErrorStreamCaptureInvalidated' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "partial_trials": [
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4727.9854503193765
+        },
+        "phase": "warmup",
+        "input_sha256": "a0c3b74a6515d7a0932dfded7fa3fe00b2852c2ec9866a8abe4dd0fbe347ae6b",
+        "elapsed_ms": 9595.82543400029,
+        "wav_sha256": "39fdcf2b72ece9aec2056b0e5b91726dc5ee683b12f1ffc80892a97fb7f482fa",
+        "frames": 207360,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 1.406914001563564,
+          "prepare_reference": 226.21326700027566,
+          "predict_duration": 157.35190899431473,
+          "sample_rf": 697.6835659952485,
+          "unpatchify_latent": 0.008014001650735736,
+          "decode_latent": 42.43340500397608
+        },
+        "total_to_decode_ms": 1126.1340939963702,
+        "seed": 4221,
+        "allocated_bytes": 1983195648,
+        "reserved_bytes": 3770679296
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4443.055023865134
+        },
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 818.6740429955535,
+        "wav_sha256": "5cc3197737ce05102750e73744f577432f1806197b4902f8fdb8c299e6ecfdac",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.36787200224353,
+          "prepare_reference": 53.380438999738544,
+          "predict_duration": 33.907810000528116,
+          "sample_rf": 694.0715809978428,
+          "unpatchify_latent": 0.00816000101622194,
+          "decode_latent": 32.56218099704711
+        },
+        "total_to_decode_ms": 815.6185250045382,
+        "seed": 4221,
+        "allocated_bytes": 1981704704,
+        "reserved_bytes": 3948937216,
+        "repetition": 0
+      }
+    ],
+    "capture_errors": [
+      {
+        "type": "AcceleratorError",
+        "message": "CUDA error: operation not permitted when stream is capturing\nSearch for `cudaErrorStreamCaptureUnsupported' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+        "frames": [
+          {
+            "file": "<string>",
+            "line": 108,
+            "function": "graphed"
+          },
+          {
+            "file": "model.py",
+            "line": 1842,
+            "function": "forward_with_encoded_conditions"
+          },
+          {
+            "file": "model.py",
+            "line": 49,
+            "function": "get_timestep_embedding"
+          }
+        ]
+      }
+    ]
+  },
+  "stderr_present": false
+}

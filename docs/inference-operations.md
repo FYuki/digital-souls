@@ -65,6 +65,41 @@ ruleで確定できるturnではLLMを呼ばず、構造化出力不正、timeou
 縮退する。判定へ渡せる履歴も画面lineageとcloud派生履歴の同意で制限し、新しい共有同意を過去sessionの
 履歴へ遡って適用しない。
 
+## 音声Sessionのモデル開始準備
+
+音声Sessionの新規開始では、TTS準備の後にSTTと会話用LLMを準備し、完了後に会話Coreを作成する。
+発話受付前にWhisperへ16kHz・mono・PCM16の100ms無音を送り、通常STTと同じworker・同時実行枠・
+サービス期限で完了を確認する。準備結果を発話・会話履歴・記憶へ保存しない。準備エラーは抑止せず、
+画面へ安全な理由と段階を返す。共有サービスの起動・停止・設定変更は行わない。
+
+Inferenceの`prepare_text`はChat caller/Targetの既存認可・同時実行枠を使う。
+`PREPARE_MODEL`に明示対応するOllamaでは、[公開APIの空messages](https://docs.ollama.com/faq#how-can-i-preload-a-model-into-ollama-to-get-faster-response-times)
+でモデルをロードし、`done=true`・`done_reason=load`を確認する。会話本文や記憶は要求に含めない。
+`num_ctx`は通常Chatと同じ入力上限＋出力上限、その他のoptionsとlatency-sensitive設定も同じ解決結果を使う。
+keep_aliveやサービスの常駐設定を変更しない。未対応Providerは準備を省略し、ダミー応答の生成・課金要求や
+別Providerへの自動切替を行わない。未対応をモデルロード成功として記録しない。
+
+準備操作の枠待ちとHTTP要求にはChat Targetの`_TIMEOUT_SECONDS`を適用する。
+これはSession開始準備全体の上限ではない。取消時は待機・非同期HTTPを中断し、自分の取得した枠だけを返す。
+STTの同期workerは実処理が終わるまで枠を保持する。失敗後の開始準備全体の再試行はユーザー操作で行う。
+
+観測は`prepare_model`として通常生成と分け、成功・失敗分類・時間・外部要求数を記録する。
+準備成功だけで初回推論のcold待ち解消やp95目標達成とは判定しない。他のTargetや共有利用による
+モデル入替え、常駐期限後の再ロードは残り得る。準備時間・初回応答・継続応答を分ける
+[共通測定条件](voice-quality-350-423-424-requirements.md)で評価する。
+
+### 実サービスの局所確認
+
+既存のテスト専用設定と稼働済みWhisper/Ollamaへ接続し、Backendディレクトリで実行する。
+
+```bash
+RUN_VOICE_MODEL_PREPARATION_TESTS=1 .venv/bin/python -m pytest tests/integration/test_voice_model_preparation_integration.py -q
+```
+
+実Ollamaの準備後contextと後続生成、実Whisperの準備と後続認識を検証する。
+既にwarmなサービスでの成功はcold起動や実ブラウザ・実マイク・音質受入の証明ではない。
+サービスの停止・モデルの強制アンロードは試験に含めない。
+
 ## OpenAI認証
 
 OpenAI APIとChatGPTサブスクリプションは別Providerとして設定する。

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "method": "保存済みmanifestとtraceを全件検証し、実出力時計startedAtの小数精度を保って再集計",
+  "quantileMethod": "hyndman_fan_type_7",
+  "reporterRevision": "f3fd6a09f750dd6d003a0726ab8ec8ba5d723b27",
+  "newVoiceTrials": 0,
+  "originalArtifactsChanged": false,
+  "ttfa": {
+    "empty": {
+      "sourcePublicReport": "docs/artifacts/irodori-reference-formal-20260919/report.json",
+      "sourcePublicReportSha256": "94fb6d87ce4e2a41522a52b9a94af3a44f6778ec86d622bc1d35ee0a7fac790b",
+      "count": 100,
+      "missing": 0,
+      "original": {
+        "p50": 1796.1499999985099,
+        "p95": 1967.6499999999999
+      },
+      "corrected": {
+        "p50": 1796.498999996275,
+        "p95": 1967.9973333331848
+      }
+    },
+    "memory": {
+      "sourcePublicReport": "docs/artifacts/voice-memory-reference-20260919/report.json",
+      "sourcePublicReportSha256": "dae84b79b1f05890c4fca7a372fd7d6ed7aa4c92c44072523f08bc0825e804f4",
+      "count": 20,
+      "missing": 0,
+      "original": {
+        "p50": 2190.25,
+        "p95": 2338.615000005067
+      },
+      "corrected": {
+        "p50": 2190.4323333422744,
+        "p95": 2338.784000005365
+      }
+    }
+  },
+  "correctedDelta": {
+    "p50": 393.9333333459995,
+    "p95": 370.78666667218044
+  },
+  "emptyStageOneThresholdMs": 2000,
+  "emptyStageOneStillPassed": true,
+  "memoryAcceptanceThreshold": null,
+  "validated": {
+    "emptyMeasured": 100,
+    "memoryMeasured": 20,
+    "failure": 0,
+    "missing": 0,
+    "excluded": 0
+  },
+  "publication": {
+    "conversationIdsIncluded": false,
+    "databaseDigestsIncluded": false,
+    "containerIdsIncluded": false
+  }
+}

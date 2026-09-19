@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-09-19T12:24:37.942827+00:00",
+  "endpoints": [
+    {
+      "port": 50022,
+      "started_at": "2026-09-19T01:31:14.496904668Z",
+      "independent_no_speech_filter": false,
+      "runtime_label": "runtime-1",
+      "image_label": "image-1",
+      "worker_source_label": "worker-source-1"
+    },
+    {
+      "port": 50025,
+      "started_at": "2026-09-19T01:31:10.491485821Z",
+      "independent_no_speech_filter": true,
+      "runtime_label": "runtime-2",
+      "image_label": "image-2",
+      "worker_source_label": "worker-source-2"
+    }
+  ],
+  "candidate_worker_source_label": "worker-source-2",
+  "publication": {
+    "runtimeIdentifiersIncluded": false,
+    "imageIdentifiersIncluded": false,
+    "workerSourceDigestsIncluded": false,
+    "labelsPreserveEquality": true,
+    "originalAndMappingRetainedLocally": true
+  }
+}

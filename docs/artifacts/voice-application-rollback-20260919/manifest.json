@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "finish_phase.py",
+      "sha256": "cfe28a6e368b02d2a45d5976fd408a1c21806955fd6139b2002c39bed7b60000"
+    },
+    {
+      "path": "interruption.spec.ts",
+      "sha256": "0fa0c0d8c6b779e30456fd8a4d6fba3ea53b28d49eec4dcab4d485d55c26b46b"
+    },
+    {
+      "path": "playwright.config.ts",
+      "sha256": "d1b32e8844d01b92cf45108106c0d7179620a40299aa4c9f069d3b204e554091"
+    },
+    {
+      "path": "result.json",
+      "sha256": "2bcbd2143edbef9a96f0959331b8fa7c2e83e9dc155789aa62a55f4cbe751f12"
+    },
+    {
+      "path": "roundtrip.spec.ts",
+      "sha256": "cc4b9e7ea5b6a2c7ef7b0ed62a3a38c5ecdf3c9e9f53246018f44aed82d4e03f"
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+{
+  "scope": "candidate_pause_three_trial_diagnostic",
+  "measured_revision": "47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+  "tts_revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+  "runs": [
+    {
+      "run_id": "424-candidate-pause-pilot-0919-01",
+      "revision": "47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+      "runner_exit_code": 1,
+      "host_status": "completed",
+      "planned_trials": 3,
+      "fixture_indices": [
+        33,
+        36,
+        39
+      ],
+      "voice_phase": "NOT_RUN",
+      "failure_category": "backend_startup_inference_unavailable",
+      "environment_status": "failed",
+      "teardown_status": "completed",
+      "owned_services": [
+        {
+          "service": "frontend",
+          "owned_container_removed": true
+        },
+        {
+          "service": "backend",
+          "owned_container_removed": true
+        }
+      ],
+      "images": {
+        "424-candidate-pause-pilot-0919-01:backend": {
+          "image_id": "sha256:f3831d2afb2975abecf32b6265d745f6bd59c9adf101cad2e9f77fb83cfd9247",
+          "image_tag": "digital-souls-voice-quality/backend:47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+          "ollama_url": "http://127.0.0.1:11534"
+        },
+        "424-candidate-pause-pilot-0919-01:frontend": {
+          "image_id": "sha256:cb8aabdfaa94defb329d079cbef84fce5b4eabf0b0ddd850c4a2129156b5f98e",
+          "image_tag": "digital-souls-voice-quality/frontend:47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+          "ollama_url": null
+        }
+      },
+      "raw_sha256": {
+        "host": "1cb02b5f0c6fbb019a0b086e0576a55bc92963c820af3941a9feee18e0b02d54",
+        "environment": "058a43aac889632b27b0dc406e9b957f56fa395b62341406b08c1f0e06d3026b",
+        "runner_log": "1e741234b9d120c1c0f8342d541b94fd3af276fc2c6f1d32010da371c1d3d5c6",
+        "backend_log": "f395aec6915401bdbc03c38558cc24a89cecb358c9cd369b71b861c9f11b586c",
+        "observer": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "profile": "d333a0872c8a53389594d1ff2190ce534d82262bb5cbdcf98eb46e5f00eaaf4a"
+      }
+    },
+    {
+      "run_id": "424-candidate-pause-pilot-0919-02",
+      "revision": "47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+      "runner_exit_code": 1,
+      "host_status": "completed",
+      "planned_trials": 3,
+      "fixture_indices": [
+        33,
+        36,
+        39
+      ],
+      "voice_phase": "NOT_RUN",
+      "failure_category": "labeled_fixture_not_materialized",
+      "environment_status": "completed",
+      "teardown_status": "completed",
+      "owned_services": [
+        {
+          "service": "frontend",
+          "owned_container_removed": true
+        },
+        {
+          "service": "backend",
+          "owned_container_removed": true
+        }
+      ],
+      "images": {
+        "424-candidate-pause-pilot-0919-02:backend": {
+          "image_id": "sha256:74bbb168be8f6c38316a08591118e0153c288132cb7d0990414dfbd164105f66",
+          "image_tag": "digital-souls-voice-quality/backend:47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+          "ollama_url": "http://127.0.0.1:11534"
+        },
+        "424-candidate-pause-pilot-0919-02:frontend": {
+          "image_id": "sha256:c4ca4951ecd25ec7bc6c21ecd97ed1e2cdce1535cfef30abb187d24ae1bd2d37",
+          "image_tag": "digital-souls-voice-quality/frontend:47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+          "ollama_url": null
+        }
+      },
+      "raw_sha256": {
+        "host": "333aa72b6454f6e68a0fafb05c252c70151092d81fce01455766092c197d1997",
+        "environment": "4af418fb798ad7697c21d6ce069cb481fdb8d3d17e406e3378210e8e7dac7338",
+        "runner_log": "d5dfd586e06669adccc772d49a98b3636a8b7291e55945319f483ed5a70bc870",
+        "backend_log": "69b1940d9bf8bb650595fdc1447cbd7f76593e660d0db1e45f81aad469eee4c2",
+        "observer": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "profile": "af11db0bf78fb8d72b96007af945cca9a5f1c99743787fa73dd3784b4a9f7206"
+      }
+    },
+    {
+      "run_id": "424-candidate-pause-pilot-0919-03",
+      "revision": "47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+      "runner_exit_code": 0,
+      "host_status": "completed",
+      "planned_trials": 3,
+      "fixture_indices": [
+        33,
+        36,
+        39
+      ],
+      "voice_phase": "completed",
+      "failure_category": null,
+      "environment_status": "completed",
+      "teardown_status": "completed",
+      "owned_services": [
+        {
+          "service": "frontend",
+          "owned_container_removed": true
+        },
+        {
+          "service": "backend",
+          "owned_container_removed": true
+        }
+      ],
+      "images": {
+        "424-candidate-pause-pilot-0919-03:backend": {
+          "image_id": "sha256:f593f8482c9b3b1512b7de320946807db183748557da72b3acca6b9da3d59070",
+          "image_tag": "digital-souls-voice-quality/backend:47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+          "ollama_url": "http://127.0.0.1:11534"
+        },
+        "424-candidate-pause-pilot-0919-03:frontend": {
+          "image_id": "sha256:bb9c3742d0c97295006b2bc67522b686fe6b3d5f64d3b140847ba96df9f0ed8b",
+          "image_tag": "digital-souls-voice-quality/frontend:47e177c4dfaf2e7a0b31a90c39b4a2c5d05e558f",
+          "ollama_url": null
+        }
+      },
+      "raw_sha256": {
+        "host": "d384ab05073399f5e876c5b22ccd6122fe0e5fccd8e270b047c8da212c1f226c",
+        "environment": "2e14ec1c3268d0095616e388b0820ac58c6bc78f071e21ef1aef49b7415ae010",
+        "runner_log": "b772d4bdd4d536b2a6c521e3f0971200888676188f9497835ef915d5c03c22f7",
+        "backend_log": "3474d88ac3362d53a2b5fea518e576b29cd8499c8d63f3c47be8f4fa958d1692",
+        "trial_manifest": "e34ac2bbe7b331408f72e388a4fce0558eb4508041bd0480a74267ccebb488ec",
+        "observer": "937462edd1e93510674b48a455fab7662f741ea193cece32be8b4d6f5b1fa40f",
+        "trace": "0d29e49e4875761ae4f543f757e2dff4461026cb09e249bde44cef7884713509",
+        "profile": "2a1f8f78cc9a06f944409164b72595d3876530662bf89622d309402d6a180749",
+        "native_sdk": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+      },
+      "native_sdk_status": "verified",
+      "trials": [
+        {
+          "trial_ordinal": 1,
+          "fixture_ordinal": 33,
+          "fixture_sha256": "cfd3108bd4b8af896a441b7afcb327b5af18ace26db6b778f495ca0b33773d23",
+          "outcome": "success",
+          "preparation_duration_ms": 7991.20000000298,
+          "backend_vad": {
+            "status": "observed",
+            "reason": null,
+            "confirmed": 1,
+            "ended": 1,
+            "finalized": 1
+          },
+          "session_end_confirmed": true,
+          "audio_audit_closed": true
+        },
+        {
+          "trial_ordinal": 2,
+          "fixture_ordinal": 36,
+          "fixture_sha256": "f0d6ab14ac8d298afa8be4cfa1b585c4c6dbe0e7583ef92dcf5b4a592c787496",
+          "outcome": "success",
+          "preparation_duration_ms": 1350,
+          "backend_vad": {
+            "status": "observed",
+            "reason": null,
+            "confirmed": 1,
+            "ended": 1,
+            "finalized": 1
+          },
+          "session_end_confirmed": true,
+          "audio_audit_closed": true
+        },
+        {
+          "trial_ordinal": 3,
+          "fixture_ordinal": 39,
+          "fixture_sha256": "ee31e35894b3a4d09b07da98a10239019cbc33326c62f14741460df03836bce9",
+          "outcome": "success",
+          "preparation_duration_ms": 1349.5,
+          "backend_vad": {
+            "status": "observed",
+            "reason": null,
+            "confirmed": 1,
+            "ended": 1,
+            "finalized": 1
+          },
+          "session_end_confirmed": true,
+          "audio_audit_closed": true
+        }
+      ]
+    }
+  ],
+  "startup_failure_root_cause_resolved": false,
+  "fixed_fixture_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3"
+}

@@ -9,7 +9,7 @@ import pytest
 from app.livekit_pilot_report import finalize_livekit_controlled, finalize_livekit_pilot
 
 
-@pytest.fixture(params=['integration-voice', 'integration-irodori'])
+@pytest.fixture(params=['integration-voice', 'integration-irodori', 'integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph'])
 def pilot_inputs(tmp_path, request):
     root = Path(__file__).resolve().parents[3]
     fixture = json.loads((root / 'frontend/playwright/fixtures/speech.metadata.json').read_text())
@@ -550,3 +550,41 @@ def test_pilot_requires_declared_native_network_to_match_each_response(pilot_inp
         assert run()['network']['sent_bytes']['value'] == 100
     else:
         with pytest.raises(ValueError, match='native network summary'): run()
+
+def test_pilot_preserves_verified_playback_fractional_clock(pilot_inputs):
+    manifest, events, run = pilot_inputs
+    for trial in manifest["trials"]:
+        trial["startedAt"] = 1500.75
+    result = run()
+    metric = next(item for item in result["metrics"] if item["name"] == "ttfa")
+    assert metric["p95"] == 460.75
+
+def test_controlled_and_diagnostic_keep_output_clock_precision(controlled_inputs, completion_evidence):
+    import copy
+    import importlib.util
+    from app.voice_metrics import TraceEvent
+    manifest, events, run = controlled_inputs
+    for trial in manifest["trials"]:
+        trial["startedAt"] = 1500.75
+        trial["packet_playback_observation"]["firstOutputAtMs"] = 1500.75
+        trial["packet_playback_observation"]["outputClockPerformanceTime"] = 1510.75
+        completion, source_points = completion_evidence
+        trial["playback_completion"] = copy.deepcopy(completion["playback_completion"])
+        trial["playback_completion"].update(outputClockPerformanceTime=1600.75, confirmationObservedAtMs=1610.75)
+        for point in source_points.values():
+            events.append({**point.model_dump(mode="json"), "event_id": str(uuid4()),
+                           "character_id": "miori", "session_id": trial["sessionId"],
+                           "utterance_id": trial["utteranceId"], "response_id": trial["responseId"]})
+    result = run(controlled=True)
+    metric = next(item for item in result["metrics"] if item["name"] == "ttfa")
+    assert metric["p95"] == 460.75
+
+    path = Path(__file__).resolve().parents[3] / "scripts/voice_quality/report_normal_diagnostic.py"
+    spec = importlib.util.spec_from_file_location("diagnostic_precision_tested", path)
+    diagnostic = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(diagnostic)
+    metrics, reason = diagnostic.observations(
+        manifest["trials"][5], [TraceEvent.model_validate(row) for row in events],
+        manifest["fixture"], manifest["initial_state_hash"])
+    assert reason is None
+    assert metrics["ttfa"].value == 460.75

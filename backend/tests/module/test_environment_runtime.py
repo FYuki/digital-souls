@@ -734,7 +734,10 @@ def test_should_reach_backend_prepare_without_host_whisper_cache(
         dependencies[name] = {"mode": "disabled", "source": None}
     dependencies.pop("livekit")
     profile["dependencies"] = dependencies
-    runner = RecordingRunner()
+    runner = RecordingRunner([
+        {"returncode": 0, "stdout": "", "stderr": ""},
+        {"returncode": 1, "stdout": "", "stderr": ""},
+    ])
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     for launcher in ("setup-backend.sh", "start-backend.sh"):
@@ -772,7 +775,13 @@ def test_should_reach_backend_prepare_without_host_whisper_cache(
     run.verify()
     run.prepare()
 
-    assert runner.calls == [("docker", "compose", "version")]
+    assert runner.calls[:2] == [
+        ("docker", "compose", "version"),
+        ("docker", "inspect", "digital-souls-test-backend"),
+    ]
+    assert len(runner.calls) == 3
+    assert runner.calls[-1][-2:] == ("build", "backend")
+    assert all(command[0] == "docker" for command in runner.calls)
 
 
 def test_should_persist_ollama_observation_before_model_validation_failure(

@@ -1,0 +1,38 @@
+{
+  "source_cohort_id": "350-irodori-reference-full-0919-01",
+  "source_provenance": [
+    {
+      "path": "plan.json",
+      "sha256": "812ec65325d66cf15a25aafc659e3436d7cad55762f58cbc13621062e3677dc0"
+    },
+    {
+      "path": "execution.jsonl",
+      "sha256": "8da1163d68d7097979fc4fa39110f484237ee66784e1480cffbead102261fed6"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "3e330388f209365a1c55881a3ad5a9bc859be391a48fdf9751bb46f3087028d3"
+    },
+    {
+      "path": "reporter.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "report.json",
+      "sha256": "94fb6d87ce4e2a41522a52b9a94af3a44f6778ec86d622bc1d35ee0a7fac790b"
+    },
+    {
+      "path": "trial-manifest.json",
+      "sha256": "98ff1bebb6bf4da811655e2fd2688cd93e98c059a317126f32f91ecb4ab5d3e1"
+    },
+    {
+      "path": "controlled-trace.jsonl",
+      "sha256": "2e9a41126c98f7ded7eba8005674856de59c41d5687be745f592a3e9735c20ea"
+    }
+  ],
+  "files": {
+    "evidence.json": "c9392429343e2af1072368ef63aca44f5cde16b13a0c146d884266a8a22dd6a5",
+    "report.json": "94fb6d87ce4e2a41522a52b9a94af3a44f6778ec86d622bc1d35ee0a7fac790b",
+    "summary.json": "3e330388f209365a1c55881a3ad5a9bc859be391a48fdf9751bb46f3087028d3"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "playwright.config.ts",
+      "sha256": "70bbb5408943bac044aa5004ba30e2e8c12dc2107ee3b018e1109e3290781820"
+    },
+    {
+      "path": "preparation.spec.ts",
+      "sha256": "61aa000bbc745bea66b3af00cf22ab8ed78b081b3a4d639e6dc75961fb90c3bb"
+    },
+    {
+      "path": "result.json",
+      "sha256": "7130e93937fce1fe844aa3bdac47959f2de532c8e596210e09807085e33fac31"
+    },
+    {
+      "path": "tts-proxy.py",
+      "sha256": "ea568b1c34997411037afc29f30898ad6b0e04f687665a0159807b595b43c69d"
+    }
+  ]
+}
