@@ -12,7 +12,7 @@ test('旧音声の無音を実出力時計が通過した場合だけ確認済�
 })
 
 test.each([
-  {missing: 'audit_output_gap'}, {zeroEnd: null}, {outputClockFrame: null},
+  {nonzeroBefore: 0}, {outputCount: 0}, {missing: 'audit_output_gap'}, {zeroEnd: null}, {outputClockFrame: null},
   {outputClockFrame: Number.POSITIVE_INFINITY}, {outputClockFrame: 49000},
   {nonzeroAfter: 1}, {zeroStart: 5000}, {sampleRate: 44100},
 ])('観測欠落・出力待ち・古い音声を無音の成功にしない: %o', changed => {

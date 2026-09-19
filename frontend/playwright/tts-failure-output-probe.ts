@@ -90,7 +90,8 @@ export async function installFailureOutputProbe(page: Page): Promise<void> {
 }
 
 export function hasOneSecondOfObservedSilence(rows: FailureOutputRow[]): boolean {
-  return rows.length > 0 && rows.every(row => row.sampleRate === 48000 && row.missing === null
+  return rows.some(row => row.nonzeroBefore > 0) && rows.every(row => row.sampleRate === 48000 && row.missing === null
+    && Number.isSafeInteger(row.outputCount) && row.outputCount > 0
     && row.failureFrameUpper !== null && row.zeroStart !== null && row.zeroEnd !== null
     && row.zeroStart <= row.failureFrameUpper + 128
     && row.zeroEnd - row.zeroStart >= row.sampleRate
