@@ -1043,7 +1043,8 @@ class _ConversationCoreBridge:
             return VoiceInputPipeline()
         task = asyncio.create_task(asyncio.to_thread(prepare))
         try:
-            pipeline = await asyncio.shield(task)
+            async with preparation_operation("vad", BOOTSTRAP_TIMEOUT_SECONDS):
+                pipeline = await asyncio.shield(task)
         except BaseException:
             def release(done: asyncio.Task[VoiceInputPipeline]) -> None:
                 if not done.cancelled() and done.exception() is None:
@@ -1811,7 +1812,8 @@ class ProductionRuntimeManager:
         )
 
     async def wait_until_ready(self, session_id: str) -> None:
-        await self._ready[session_id].wait()
+        async with preparation_operation("readiness", BOOTSTRAP_TIMEOUT_SECONDS):
+            await self._ready[session_id].wait()
 
     async def start_runtime(self, request: dict[str, object]) -> None:
         rtc_module = _livekit_rtc_module()
@@ -2180,10 +2182,12 @@ class ProductionRuntimeManager:
         self._core_sessions[session_id] = core_session
         self._core_bridges[session_id] = bridge
         await bridge.prepare_audio()
+        if startup_ended():
+            # cleanup後に完成した入力も閉じ、終了Sessionへhandlerを再登録しない。
+            await bridge.close_audio()
+            raise RuntimeError("runtime startup ended")
         if isinstance(self._core_port, ProductionCoreEventInbox):
             self._core_port.bind(session_id, bridge.notify)
-        if startup_ended():
-            raise RuntimeError("runtime startup ended")
         # clientのjoin猶予をモデル準備で消費しない。
         coordinator.start_join_deadline()
         self._ready[session_id].set()
