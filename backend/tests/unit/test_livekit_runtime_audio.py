@@ -2459,8 +2459,8 @@ def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeyp
         def is_current_participant(self, **kwargs):
             return True
     class Bridge:
-        def close_microphone_track(self, sid):
-            closed_tracks.append(sid)
+        def close_microphone_track(self, sid, *, reader_reason):
+            closed_tracks.append((sid, reader_reason))
         async def receive_microphone_frame(self, *args, **kwargs):
             pytest.fail("不正なframeをVADへ配送した")
     async def publish_data(*args):
@@ -2477,7 +2477,11 @@ def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeyp
                 await operation
         else:
             await operation
-        assert closed_tracks == ["TR_first"]
+        expected_reason = {
+            "eof": "stream_ended", "exception": "RuntimeError",
+            "invalid_frame": "invalid_audio_frame", "cancel": "cancelled",
+        }[ending]
+        assert closed_tracks == [("TR_first", expected_reason)]
         assert stream_closed
         assert runtime._microphone_integrities == {}
     asyncio.run(scenario())

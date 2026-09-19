@@ -86,8 +86,8 @@
 | F3 短発話・言い淀み・雑音・長無音／長発話 | 区間処理の導入済みと品質を区別。文中休止2%と境界欠測は残件 |
 | F4 相槌継続・take-turn・判定不能 | 過去の相槌判定不能20件と出力継続欠測を保持。take-turn遅延4指標は過去条件で確認。#350と共通 |
 | F5 生成中／生成後の割込・遅延結果 | 局所試験と固定音声の一部証拠あり。両phase・取消不能provider・後発responseの通し対応が残る |
-| F6 音声/text/focus/mute/thread切替 | [実会話suite](../../frontend/integration/voice/conversation-session.spec.ts)と[controls suite](../../frontend/integration/voice/conversation-session-controls.spec.ts)を実行先とする。今回版で全ケース完了の証拠はまだない |
-| F7 text即時停止・先行音声破棄・確定履歴保持 | text優先moduleとcontrols suiteに対応。実接続の完了記録を追加する |
+| F6 音声/text/focus/mute/thread切替 | [実会話suite](../../frontend/integration/voice/conversation-session.spec.ts)と[controls suite](../../frontend/integration/voice/conversation-session-controls.spec.ts)を実行先とする。d14c394版でcontrolsを含む実接続10件成功（424-functional-0919-02）。固定音声での確認であり、人の実発声・全機能競合の合格とは区別する |
+| F7 text即時停止・先行音声破棄・確定履歴保持 | text優先moduleに加え、d14c394版の実接続suiteで生成中／再生中のtext割込とspeech→text→speechを確認済み。取消不能provider等の全競合は残る |
 | F8 再接続・track交換・順序逆転・世代 | bridge/moduleに導入済み。実再接続の遅延・coverage・後続再生が未達。track等の競合を100件成功率と混同しない |
 | F9 stale出力排除・中断履歴prefix | 過去の旧出力監査と履歴試験を維持。改善後版の取消／complete競合と実再生prefixを確認 |
 | F10 protocol・準備／capacity／TTS失敗・過大buffer | 旧client拒否、開始失敗cleanup等は過去確認。全障害の実スタック一括合格ではない |
@@ -264,6 +264,14 @@ Ollama 0.34.2 + CUDA Graph TTSの小規模cohortは準備5件＋独立測定3件
 原記録は[PR #449](https://github.com/FYuki/digital-souls/pull/449)へ保存した。
 第2段階の記憶参照と他の残受入を完了扱いにしない。
 
+## 空状態の正式100試行（2026-09-19）
+
+[正式測定記録](irodori-graph-formal-20260919.md)を追加した。
+準備5回＋独立100回が完了し、処理失敗0件、TTFA p95 2001.30ms。
+第1段階の速度条件は未達。記憶参照の第2段階と他の残受入は未完了。
+#446/#447は全CI成功後にEpic統合済みだが、統合後のCIとContainer imagesは
+GitHub課金・利用上限エラーで開始されず、復旧後の確認が必要。
+
 ## 参照音声latent再利用後の正式速度結果（2026-09-19）
 
 [正式100独立試行](irodori-reference-formal-20260919.md)はp95 1967.65ms、p50 1796.15ms。
@@ -304,3 +312,9 @@ p50 2190.25ms／p95 2338.62ms、空状態との差は+394.10／+370.97ms。
 [全件・失敗を含む先行診断・固定条件](voice-memory-reference-20260919.md)を保存した。
 ユーザー合意により速度閾値は置かず、この値を理由に未達扱いにしない。形成・長履歴の影響は調査しない。
 CIは実行可能になり未統合PRを再実行中。実マイク・聴感、再接続等の他の残条件は維持する。
+
+## Epic統合の更新（2026-09-19）
+
+#448/#449/#450/#452/#453は各headの全CI成功後にEpicへ統合した。
+GitHub Actionsは再開済みであり、上記の課金・利用上限の記述は当時の状態として保持する。
+第1段階の達成と第2段階の完了は後続cohortの結果であり、先行未達・失敗は取り消さない。
