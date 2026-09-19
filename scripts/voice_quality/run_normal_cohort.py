@@ -244,10 +244,18 @@ def main() -> int:
             raise ValueError("planned run already exists")
         directory = parent / args.cohort_id
         directory.mkdir(exist_ok=False)
+        baseline_snapshot = None
+        baseline_sha256 = None
+        if args.baseline_report is not None:
+            # 外部ファイルは一度だけ読み、比較とplanのhashを同じ固定入力にそろえる。
+            baseline_bytes = args.baseline_report.read_bytes()
+            baseline_sha256 = hashlib.sha256(baseline_bytes).hexdigest()
+            baseline_snapshot = directory / "baseline-report.json"
+            baseline_snapshot.write_bytes(baseline_bytes)
         (directory / "plan.json").write_text(json.dumps({"measurement_revision": revision, "profile": args.profile, "runs": runs,
             "expected_warmup": 5, "expected_measured": args.measured, "data_root_per_trial": True, "memory_formation_disabled": True, "memory_consolidation_disabled": True,
             "memory_reference": args.memory_reference,
-            "baseline_report_sha256": hashlib.sha256(args.baseline_report.read_bytes()).hexdigest() if args.baseline_report else None}, indent=2) + "\n")
+            "baseline_report_sha256": baseline_sha256}, indent=2) + "\n")
         with (directory / "execution.jsonl").open("x") as journal:
             for index, (run_id, phase) in enumerate(runs, 1):
                 if (directory / "stop-requested").exists() or measurement_revision(ROOT) != revision:
@@ -257,7 +265,7 @@ def main() -> int:
                 journal.write(json.dumps(row) + "\n")
                 journal.flush()
                 print(json.dumps(row), flush=True)
-        return aggregate(runs, directory, revision, args.measured, args.baseline_report)
+        return aggregate(runs, directory, revision, args.measured, baseline_snapshot)
 
 
 if __name__ == "__main__":
