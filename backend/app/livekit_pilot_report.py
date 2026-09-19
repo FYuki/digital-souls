@@ -31,7 +31,7 @@ def _finalize_livekit_report(
     """試行数と証拠を検証する。品質合否は個別のevaluatorで判定する。"""
     manifest = _load_manifest(manifest_path)
     profile = json.loads(profile_report_path.read_text())
-    if profile.get("effectiveProfile") not in ("integration-voice", "integration-irodori"):
+    if profile.get("effectiveProfile") not in ("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate"):
         raise ValueError("pilot requires an integration voice measurement profile")
     configured = profile.get("derivedEnvironment", {})
     if controlled and configured.get("RAG_ENABLED") != "false":

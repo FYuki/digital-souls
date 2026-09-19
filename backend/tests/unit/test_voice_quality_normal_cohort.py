@@ -58,7 +58,7 @@ def test_failed_isolated_trials_stay_in_summary_and_do_not_create_acceptance_rep
     assert not (output / "report.json").exists()
 
 
-@pytest.mark.parametrize("profile", ["integration-voice", "integration-irodori"])
+@pytest.mark.parametrize("profile", ["integration-voice", "integration-irodori", "integration-irodori-ollama-candidate"])
 def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standard(tmp_path, monkeypatch, profile):
     from types import SimpleNamespace
 

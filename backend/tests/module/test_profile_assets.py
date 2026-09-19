@@ -619,3 +619,23 @@ def test_dev_stt_endpoint_does_not_cross_profiles(profile_validator, profile_mod
     assert list(profile_validator.iter_errors(raw))
     with pytest.raises(profile_module.ProfileError, match='fixed local service'):
         profile_module.validate_profile(raw, name)
+
+
+@pytest.mark.parametrize("profile_name,port,valid", [
+    ("integration-irodori-ollama-candidate", 11534, True),
+    ("integration-irodori-ollama-candidate", 11434, False),
+    ("integration-irodori", 11534, False),
+    ("dev", 11534, False),
+    ("dogfood", 11534, False),
+])
+def test_candidate_ollama_port_has_same_schema_and_central_boundary(
+    profile_validator, profile_module, profile_name, port, valid,
+):
+    profile = _read_json(ENVIRONMENTS_DIR / "profiles" / f"{profile_name}.json")
+    _dependencies(profile)["ollama"]["baseUrl"] = f"http://127.0.0.1:{port}"
+    assert (not list(profile_validator.iter_errors(profile))) is valid
+    if valid:
+        profile_module.validate_profile(profile, profile_name)
+    else:
+        with pytest.raises(profile_module.ProfileError, match="fixed local service"):
+            profile_module.validate_profile(profile, profile_name)
