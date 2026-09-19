@@ -5,7 +5,7 @@ import {promisify} from 'node:util'
 import {expect, test} from '@playwright/test'
 import {installScheduledFixture, parseScheduledFixture} from '../../playwright/controlled-audio-fixture'
 import {createVoiceChatDriver, createVoiceTestUseOptions} from '../../playwright/voice-chat-suite'
-import {installFailureOutputProbe, hasOneSecondOfObservedSilence} from '../../playwright/tts-failure-output-probe'
+import {installFailureOutputProbe, hasConfirmedStoppedOutput} from '../../playwright/tts-failure-output-probe'
 import {readResolvedProfile} from '../../playwright/resolved-profile'
 
 const targetFile = process.env.VOICE_TTS_FAULT_TARGET_FILE
@@ -83,7 +83,7 @@ for (const phase of ['generation', 'playback'] as const) {
       await expect(page.locator('article.message.failed[data-failed-voice-turn="' + old + '"]')).toBeVisible()
       await expect(page.getByRole('button', {name: '音声会話を終了'})).toBeVisible()
       if (phase === 'playback') {
-        await expect.poll(async () => hasOneSecondOfObservedSilence(
+        await expect.poll(async () => hasConfirmedStoppedOutput(
           await page.evaluate(() => window.__ttsFailureOutput!.snapshot()),
         ), {timeout: 10_000}).toBe(true)
       } else {

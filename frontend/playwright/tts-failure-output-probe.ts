@@ -9,6 +9,8 @@ export type FailureOutputRow = {
   zeroStart: number | null
   zeroEnd: number | null
   outputClockFrame: number | null
+  finishedFrame: number | null
+  disconnected: boolean
   missing: string | null
 }
 declare global {
@@ -57,11 +59,23 @@ export async function installFailureOutputProbe(page: Page): Promise<void> {
         if (entries.length >= 8) throw new Error('failure output probe capacity exceeded')
         const entry: Entry = {context, lastEnd: null, row: {
           sampleRate: context.sampleRate, outputCount: 0, nonzeroBefore: 0, nonzeroAfter: 0,
-          failureFrameUpper: null, zeroStart: null, zeroEnd: null, outputClockFrame: null, missing: null,
+          failureFrameUpper: null, zeroStart: null, zeroEnd: null, outputClockFrame: null, finishedFrame: null, disconnected: false, missing: null,
         }}
         entries.push(entry)
+        // 全接続の切断を記録するだけで、接続・切断の引数と結果は変えない。
+        const disconnect = node.disconnect.bind(node)
+        node.disconnect = ((...args: unknown[]) => {
+          Reflect.apply(disconnect, node, args)
+          if (args.length === 0) entry.row.disconnected = true
+        }) as typeof node.disconnect
         node.port.addEventListener('message', ({data}) => {
           if (data.kind === 'missing') {entry.row.missing = String(data.reason); return}
+          if (data.kind === 'finished') {
+            if (!Number.isSafeInteger(data.endFrame) || data.endFrame !== entry.lastEnd) {
+              entry.row.missing = 'invalid_finished_output'
+            } else entry.row.finishedFrame = data.endFrame
+            return
+          }
           if (data.kind !== 'output') return
           if (!Array.isArray(data.intervals)) {entry.row.missing = 'invalid_intervals'; return}
           for (const interval of data.intervals) {
@@ -89,13 +103,18 @@ export async function installFailureOutputProbe(page: Page): Promise<void> {
   })
 }
 
-export function hasOneSecondOfObservedSilence(rows: FailureOutputRow[]): boolean {
-  return rows.some(row => row.nonzeroBefore > 0) && rows.every(row => row.sampleRate === 48000 && row.missing === null
+// 無音の終端sampleが実出力を通過し、監査nodeの出力接続も切断済みであることを照合する。
+// 破棄後の無観測時間を無音として足したり、finish通知だけで出力済みとはしない。
+export function hasConfirmedStoppedOutput(rows: FailureOutputRow[]): boolean {
+  return rows.length > 0 && rows.some(row => row.nonzeroBefore > 0) && rows.every(row =>
+    row.sampleRate === 48000 && row.missing === null
     && Number.isSafeInteger(row.outputCount) && row.outputCount > 0
-    && row.failureFrameUpper !== null && row.zeroStart !== null && row.zeroEnd !== null
-    && row.zeroStart <= row.failureFrameUpper + 128
-    && row.zeroEnd - row.zeroStart >= row.sampleRate
+    && row.failureFrameUpper !== null && Number.isSafeInteger(row.failureFrameUpper)
+    && row.zeroStart !== null && Number.isSafeInteger(row.zeroStart)
+    && row.zeroEnd !== null && Number.isSafeInteger(row.zeroEnd)
+    && row.zeroStart >= row.failureFrameUpper && row.zeroStart <= row.failureFrameUpper + 128
+    && row.zeroEnd - row.zeroStart >= 128
+    && row.finishedFrame === row.zeroEnd && row.disconnected
     && row.outputClockFrame !== null && Number.isSafeInteger(row.outputClockFrame)
-    && row.outputClockFrame >= row.zeroStart + row.sampleRate
-    && row.nonzeroAfter === 0)
+    && row.outputClockFrame >= row.zeroEnd && row.nonzeroAfter === 0)
 }
