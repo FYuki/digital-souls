@@ -1208,9 +1208,10 @@ class _ConversationCoreBridge:
             return
         try:
             await source.receive(pcm, start_sample=start_sample, grant=grant)
-        except AudioInputFault:
+        except AudioInputFault as error:
             # resetの失敗は当該入力だけを停止する。旧世代の失敗で新入力を止めない。
             if self._voice_input is source and source.revision == grant.input_revision:
+                logger.warning("LiveKit microphone input reset failed: reason=%s", error.code)
                 self._audio_unavailable(grant)
 
     def _audio_unavailable(self, grant: InputGrant) -> None:
@@ -2218,6 +2219,7 @@ class ProductionRuntimeManager:
         monitor = MicrophoneIntegrity(track.get_stats, lambda: clock.samples_seen)
         self._microphone_integrities[key] = monitor
         monitor_task = asyncio.create_task(monitor.run())
+        exit_reason = "stream_ended"
         try:
             async for event in stream:
                 if (
@@ -2227,14 +2229,19 @@ class ProductionRuntimeManager:
                         participant_sid=participant_sid,
                     )
                 ):
+                    exit_reason = "participant_replaced"
                     return
                 frame = event.frame
                 bridge = self._core_bridges.get(session_id)
                 if bridge is None:
+                    exit_reason = "bridge_closed"
                     return
                 try:
                     pcm, start_sample = clock.read(frame)
-                except AudioInputFault:
+                except AudioInputFault as error:
+                    exit_reason = error.code
+                    # 本文やPCMを出さず、時計検証失敗と通常のreader終了を区別する。
+                    logger.warning("LiveKit microphone frame rejected: reason=%s", error.code)
                     return
                 await bridge.receive_microphone_frame(
                     pcm, start_sample=start_sample, track_sid=str(track.sid),
@@ -2245,12 +2252,18 @@ class ProductionRuntimeManager:
                     received_at_ms=int(time.monotonic() * 1000),
                 )
                 if session_id not in self._rooms:
+                    exit_reason = "room_closed"
                     return
-        except Exception:
+        except asyncio.CancelledError:
+            exit_reason = "cancelled"
+            raise
+        except Exception as error:
+            exit_reason = type(error).__name__
             # 端末trackの読取失敗はfinallyで入力停止として通知する。
             # text・終了済み発話・回答再生はこのreaderの所有物ではない。
             logger.warning("LiveKit microphone reader failed")
         finally:
+            logger.info("LiveKit microphone reader ended: reason=%s samples_seen=%s", exit_reason, clock.samples_seen)
             monitor.close()
             monitor_task.cancel()
             await asyncio.gather(monitor_task, return_exceptions=True)
