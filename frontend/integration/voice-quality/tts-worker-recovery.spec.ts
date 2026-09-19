@@ -13,7 +13,8 @@ const inject = promisify(execFile)
 const driver = createVoiceChatDriver()
 test.use(createVoiceTestUseOptions())
 test.describe.configure({mode: 'serial', retries: 0})
-test.setTimeout(240_000)
+// 各操作のtimeoutは維持し、直列の故障検出・worker回復・次応答を収める。
+test.setTimeout(600_000)
 
 for (const phase of ['generation', 'playback'] as const) {
   test('専用Irodoriの実worker停止から同一sessionで復帰する: ' + phase, async ({page}, testInfo) => {
@@ -122,7 +123,9 @@ for (const phase of ['generation', 'playback'] as const) {
         oldCompleted: window.__voiceChatE2E.playbackCompletions?.[previous] !== undefined,
         transportFailures: window.__voiceChatE2E.transportFailures ?? [],
         output: window.__ttsFailureOutput!.snapshot(),
+        probeMissing: window.__ttsFailureOutput!.missing(),
       }), old)
+      expect(final.probeMissing).toBeNull()
       expect(final.terminals).toEqual(['response_failed'])
       expect(final.sessions).toHaveLength(1)
       expect(final.oldCompleted).toBe(false)
@@ -134,6 +137,7 @@ for (const phase of ['generation', 'playback'] as const) {
       const lastObservation = await page.evaluate(() => ({
         coreEvents: window.__voiceChatE2E?.coreEventDiagnostics ?? [],
         output: window.__ttsFailureOutput?.snapshot() ?? [],
+        probeMissing: window.__ttsFailureOutput?.missing() ?? null,
         transportFailures: window.__voiceChatE2E?.transportFailures ?? [],
         microphoneStates: window.__voiceChatE2E?.micStates ?? [],
         mediaTimelineInterruptions: window.__voiceChatE2E?.mediaTimelineInterruptions ?? [],

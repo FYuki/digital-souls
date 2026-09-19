@@ -951,3 +951,17 @@ runnerが所有する中継50023だけを起動・終了し、共有Whisper 5002
 fault bridge・通信断注入・連続track診断との同時指定、および未定義の他Irodori PCM構成は拒否する。
 report_stt_pcm.pyは候補Profileの実接続先も照合し、既存の全試行・終端入力・端点照合・欠測判定を維持する。
 この追加自体を休止・相槌・割り込みの実接続受入や聴感受入とはしない。
+
+
+### 診断自体による誤判定・動作変更の防止
+
+CUDA Graph対比較のprobeは、各cuda_graph試行にcapture数を記録する。
+captureを1回も観測できない要求はfallbackとし、全体もsuccessにしない。
+これは診断の成立条件であり、製品のRequestGraphが容量・空きVRAMに応じてeager実行へ戻る挙動は維持する。
+
+TTS故障後の出力probeは、監視node数が8を超えても音声nodeの構築を中断しない。
+probe_capacity_exceededを観測全体の欠測として保持し、停止確認を成功にしない。
+故障注入のcontainer IDはDocker呼出し前に64桁の小文字16進表記を要求し、
+その後も既存の所有・image・port・worker同一性検査を行う。
+故障復帰テストの外枠は600秒とし、個々の生成・故障検出・worker回復・再生のtimeoutは維持する。
+過去の測定artifactは変更せず、変更後の診断と以前の実測を区別する。

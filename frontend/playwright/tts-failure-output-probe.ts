@@ -16,6 +16,7 @@ export type FailureOutputRow = {
 declare global {
   interface Window {
     __ttsFailureOutput?: {
+      missing: () => string | null
       markFailure: () => void
       snapshot: () => FailureOutputRow[]
     }
@@ -31,7 +32,9 @@ export async function installFailureOutputProbe(page: Page): Promise<void> {
       lastEnd: number | null
     }
     const entries: Entry[] = []
+    let probeMissing: string | null = null
     window.__ttsFailureOutput = {
+      missing: () => probeMissing,
       markFailure: () => {
         for (const entry of entries) {
           if (entry.row.failureFrameUpper !== null) continue
@@ -47,7 +50,7 @@ export async function installFailureOutputProbe(page: Page): Promise<void> {
           || !Number.isFinite(contextTime) || !Number.isFinite(performanceTime)
           || contextTime <= 0 || performanceTime <= 0 || performanceTime > performance.now() + 0.2
           ? null : Math.floor(contextTime * entry.context.sampleRate)
-        return {...entry.row, outputClockFrame: frame}
+        return {...entry.row, missing: entry.row.missing ?? probeMissing, outputClockFrame: frame}
       }),
     }
     const Original = window.AudioWorkletNode
@@ -56,7 +59,11 @@ export async function installFailureOutputProbe(page: Page): Promise<void> {
         const node = Reflect.construct(target, args, newTarget) as AudioWorkletNode
         const [context, name] = args
         if (name !== 'post-gain-audit' || !(context instanceof AudioContext)) return node
-        if (entries.length >= 8) throw new Error('failure output probe capacity exceeded')
+        if (entries.length >= 8) {
+          // 観測上限は欠測にし、音声nodeの生成・接続を妨げない。
+          probeMissing = 'probe_capacity_exceeded'
+          return node
+        }
         const entry: Entry = {context, lastEnd: null, row: {
           sampleRate: context.sampleRate, outputCount: 0, nonzeroBefore: 0, nonzeroAfter: 0,
           failureFrameUpper: null, zeroStart: null, zeroEnd: null, outputClockFrame: null, finishedFrame: null, disconnected: false, missing: null,

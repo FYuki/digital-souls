@@ -96,3 +96,20 @@ def test_rejects_arbitrary_docker_distribution_before_any_command(monkeypatch):
     monkeypatch.setattr(fault.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("must not execute"))
     with pytest.raises(ValueError, match="distribution"):
         fault.run(target)
+
+
+@pytest.mark.parametrize("identity", [None, "", "abc123", "--help", "a" * 63, "a" * 65, "A" * 64, 123, ["a" * 64]])
+def test_rejects_invalid_identity_before_docker(monkeypatch, identity):
+    target, _ = fixture()
+    target["container_id"] = identity
+    monkeypatch.setattr(fault.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("must not execute"))
+    with pytest.raises(ValueError, match="exact container identity"):
+        fault.run(target)
+
+
+def test_rejects_missing_identity_before_docker(monkeypatch):
+    target, _ = fixture()
+    del target["container_id"]
+    monkeypatch.setattr(fault.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("must not execute"))
+    with pytest.raises(ValueError, match="exact container identity"):
+        fault.run(target)

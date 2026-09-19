@@ -26,6 +26,22 @@ STAGES = frozenset({
 TEXTS = ("こんにちは。", "今日はいい天気ですね。", "少し休憩しましょう。", "窓の外を眺めていたら、小さな鳥が木の枝にとまっていました。", "明日は朝から図書館に出かけて、気になっていた本を探す予定です。そのあと、公園をゆっくり歩いてから帰りたいと思います。")
 
 
+
+def graph_trial_status(statistics: list[dict]) -> str:
+    """captureを観測できない要求をGraph成功へ読み替えない。"""
+    if statistics and all(
+        type(item.get("captures")) is int and item["captures"] >= 1
+        for item in statistics
+    ):
+        return "success"
+    return "fallback"
+
+
+def graph_run_status(rows: list[dict]) -> str:
+    trials = [row for row in rows if row.get("phase") == "cuda_graph"]
+    return "success" if trials and all(row.get("status") == "success" for row in trials) else "fallback"
+
+
 def measure(voice: dict) -> dict:
     from huggingface_hub import snapshot_download
     from irodori_service.config import (
@@ -160,7 +176,11 @@ def measure(voice: dict) -> dict:
             for text in TEXTS:
                 for mode in (("baseline", "cuda_graph") if repetition % 2 == 0 else ("cuda_graph", "baseline")):
                     runtime_module.sample_euler_rf_cfg = baseline_sampler if mode == "baseline" else graph_sampler
+                    graph_start = len(graph_statistics)
                     row = await once(text, mode)
+                    if mode == "cuda_graph":
+                        row["graph_statistics"] = [dict(item) for item in graph_statistics[graph_start:]]
+                        row["status"] = graph_trial_status(row["graph_statistics"])
                     row["repetition"] = repetition
                     rows.append(row)
         runtime_module.sample_euler_rf_cfg = baseline_sampler
@@ -169,7 +189,7 @@ def measure(voice: dict) -> dict:
     try:
         rows = asyncio.run(run())
         return {
-            "status": "success", "graph_statistics": graph_statistics, "scope": "paired_request_scoped_cuda_graph_diagnostic",
+            "status": graph_run_status(rows), "graph_statistics": graph_statistics, "scope": "paired_request_scoped_cuda_graph_diagnostic",
             "formal_acceptance": False, "compile_model": upstream.settings.compile_model,
             "empty_cache_interval": upstream.settings.empty_cache_interval,
             "model_revision": MODEL_REVISION, "codec_revision": CODEC_REVISION,
