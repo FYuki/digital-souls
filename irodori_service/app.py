@@ -78,6 +78,7 @@ def create_app(
             "serverRevision": SERVER_REVISION, "irodoriRevision": IRODORI_REVISION,
             "device": "cuda", "precision": "bf16", "quantized": False,
             "cudaGraphRequested": config.cuda_graph,
+            "referenceCacheRequested": config.reference_cache,
             "globalInflight": 1, "maxPending": config.max_pending,
             "maxVoiceChecks": config.max_voice_checks,
             "queueTimeoutSeconds": config.queue_timeout,
