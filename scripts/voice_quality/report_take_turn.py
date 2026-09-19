@@ -229,6 +229,21 @@ def fixture_latency(
         return MetricObservation.missing("fixture_boundary_unavailable"), None
 
 
+def select_diagnostic_fixtures(
+    fixtures: dict[str, Any], cohort: str, count: int, indices: object,
+) -> list[dict[str, Any]]:
+    """元catalogの順番を保ち、事前記録した小規模診断の選択だけを許可する。"""
+    available = [row for row in fixtures["trials"] if row["cohort"] == cohort]
+    if indices is None:
+        return available[:count]
+    if (not isinstance(indices, list) or count > 10 or len(indices) != count
+            or any(type(index) is not int or not 1 <= index <= min(100, len(available))
+                   for index in indices)
+            or len(set(indices)) != count):
+        raise ValueError("invalid diagnostic fixture selection")
+    return [available[index - 1] for index in indices]
+
+
 def summarize(
     manifest: dict[str, Any], events: Sequence[TraceEvent], fixtures: dict[str, Any]
 ) -> dict[str, Any]:
@@ -269,9 +284,9 @@ def summarize(
         or len(trials) != count
     ):
         raise ValueError("all expected trials must be recorded before reporting")
-    selected = [
-        trial for trial in fixtures["trials"] if trial["cohort"] == "take_turn"
-    ][:count]
+    selected = select_diagnostic_fixtures(
+        fixtures, "take_turn", count, manifest.get("fixture_indices"),
+    )
     if len(selected) != count or [t["fixture_sha256"] for t in trials] != [
         t["audio_sha256"] for t in selected
     ]:

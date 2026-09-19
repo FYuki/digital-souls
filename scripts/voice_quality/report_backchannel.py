@@ -18,7 +18,7 @@ from app.livekit_pilot_report import (
 from app.voice_baseline import _assert_anonymous, _load_trace
 from app.voice_metrics import MetricObservation, TraceEvent, aggregate_metric
 from jsonschema import Draft202012Validator
-from report_take_turn import STAGES, bounds_valid, number
+from report_take_turn import STAGES, bounds_valid, number, select_diagnostic_fixtures
 
 SOURCE_COUNTS = (
     "response_audio_input_samples",
@@ -105,7 +105,9 @@ def summarize(
         or len(trials) != count
     ):
         raise ValueError("all expected trials must be recorded before reporting")
-    selected = [t for t in fixtures["trials"] if t["cohort"] == "backchannel"][:count]
+    selected = select_diagnostic_fixtures(
+        fixtures, "backchannel", count, manifest.get("fixture_indices"),
+    )
     if (
         len(selected) != count
         or [t.get("fixture_sha256") for t in trials]
