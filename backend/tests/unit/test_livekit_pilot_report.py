@@ -9,7 +9,7 @@ import pytest
 from app.livekit_pilot_report import finalize_livekit_controlled, finalize_livekit_pilot
 
 
-@pytest.fixture(params=['integration-voice', 'integration-irodori'])
+@pytest.fixture(params=['integration-voice', 'integration-irodori', 'integration-irodori-ollama-candidate'])
 def pilot_inputs(tmp_path, request):
     root = Path(__file__).resolve().parents[3]
     fixture = json.loads((root / 'frontend/playwright/fixtures/speech.metadata.json').read_text())
