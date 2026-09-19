@@ -51,6 +51,19 @@ VAD推論失敗は発話を破棄して静音後に回復する。reset失敗・
 [移行契約](voice-backend-migration-contract.md)と[検証記録](validation/voice-backend-vad-358.md)を参照する。
 実サービス・前後性能比較・人の実マイク受入は未完了である。
 
+音声Sessionの新規開始は、同じrequest IDの非同期準備をHTTP 202で確認する。
+UIは「準備中」を表示し、token取得・接続完了までマイクを開始しない。
+準備全体の固定期限はなく、Session確保・Room作成・token発行・transport接続等には個別期限がある。
+TTS/VAD/STT/会話用LLMの準備失敗と個別操作のtimeoutは安全なcode・stageから表示し、再試行はユーザー操作で行う。
+準備の取消、アプリ終了、状態確認が30秒途絶えた場合は、その要求が所有する資源を回収する。
+この30秒は放置資源の回収猶予であり、状態確認を続ける準備全体の上限ではない。
+ブラウザ参加の猶予は必要な準備の完了後に開始する。既存Sessionへの再接続は準備を再実行しない。
+STTは100msの無音PCMを通常の認識経路へ送り、会話用LLMは明示的なモデル準備に対応するProviderで
+実際のChatと同じcontext・設定を使う。準備要求に会話本文・記憶を渡さず、認識結果も履歴へ保存しない。
+Ollama以外の未対応Providerへダミー会話やfallbackを送らない。詳細は[Inference運用](inference-operations.md#音声sessionのモデル開始準備)を参照する。
+準備成功は、その後のモデル常駐・速度目標の達成を保証しない。正式性能受入は別途行う。
+全体の要求・受入は[共通指示書](voice-quality-350-423-424-requirements.md)を参照する。
+
 ## 自作BE/FE構成
 
 `digital-souls`のCoreは、自作BE（FastAPI）+ 自作FE（Vite + Svelte）で実装している。

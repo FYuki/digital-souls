@@ -2481,3 +2481,66 @@ def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeyp
         assert stream_closed
         assert runtime._microphone_integrities == {}
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("waiting_stage", ["tts", "vad"])
+def test_join_deadline_starts_only_after_all_preparation(monkeypatch, waiting_stage):
+    """準備中は参加期限を消費せず、準備完了後の未参加は従来どおり終了する。"""
+    from uuid import uuid4
+    production = importlib.import_module("app.livekit_transport.production")
+
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def pause(stage):
+            if stage == waiting_stage:
+                entered.set()
+                await release.wait()
+        class Room:
+            def __init__(self):
+                self.local_participant = SimpleNamespace(publish_data=AsyncMock())
+            def on(self, _event):
+                return lambda callback: callback
+            async def connect(self, *_args):
+                pass
+            async def disconnect(self):
+                pass
+        monkeypatch.setattr(production, "_livekit_rtc_module", lambda: SimpleNamespace(Room=Room))
+        async def create(**_kwargs):
+            await pause("tts")
+            return NoopCoreSession()
+        async def prepare_vad(_self):
+            await pause("vad")
+        monkeypatch.setattr(production._ConversationCoreBridge, "prepare_audio", prepare_vad)
+        room_manager = SimpleNamespace(delete=AsyncMock())
+        session_repository = SimpleNamespace(delete=AsyncMock())
+        runtime = production.ProductionRuntimeManager(
+            livekit_url="ws://127.0.0.1:7880",
+            signer=SimpleNamespace(issue_token=AsyncMock(return_value="character-token")),
+            room_manager=room_manager,
+            session_repository=session_repository,
+            core_port=SimpleNamespace(notify=lambda _payload: None),
+            core_session_factory=SimpleNamespace(create=create, create_ready=create),
+        )
+        runtime._prepare_output_track = AsyncMock(return_value=SimpleNamespace(
+            aclose=AsyncMock(), clear=lambda _response=None: None,
+        ))
+        session_id = str(uuid4())
+        pending = asyncio.create_task(runtime.start_runtime({
+            "session_id": session_id, "identity": "character", "character_id": "miori",
+            "conversation_id": str(uuid4()), "core_participant_id": str(uuid4()),
+            "reconnect_grace_ms": 60_000,
+        }))
+        await asyncio.wait_for(entered.wait(), 1)
+        coordinator = runtime._coordinators[session_id]
+        assert coordinator._deadline_task is None
+        assert not runtime._ready[session_id].is_set()
+        release.set()
+        await asyncio.wait_for(pending, 1)
+        assert runtime._ready[session_id].is_set()
+        assert coordinator._deadline_task is not None
+        await coordinator._expire_after(0)
+        assert not runtime._rooms and not runtime._coordinators
+        assert not runtime._core_sessions and not runtime._audio_sources
+        room_manager.delete.assert_awaited_once()
+        session_repository.delete.assert_awaited_once()
+    asyncio.run(scenario())

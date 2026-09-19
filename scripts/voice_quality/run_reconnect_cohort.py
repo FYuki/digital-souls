@@ -62,7 +62,8 @@ def run_trial(run_id: str, args: argparse.Namespace, log_path: Path) -> int:
     with log_path.open("x") as output:
         child = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            return child.wait(timeout=300)
+            # 開始準備全体には固定期限を置かない。各処理と試験内の期限を使う。
+            return child.wait()
         except BaseException:
             # runnerとPlaywrightを同じ所有process groupで止め、後片付けを待つ。
             # 他の試行や共有serviceのprocessにはsignalを送らない。

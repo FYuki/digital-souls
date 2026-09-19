@@ -1,9 +1,10 @@
+import {startMeasuredSession} from './start-measured-session'
 import {readBackendVadObservation} from './backend-vad-diagnostic'
 import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 import { selectPcmFixture, snapshotPcmInputs } from './whisper-pcm-observer'
 import {installServerClockProbe} from './server-clock-probe'
 // 固定ラベル音声を実応答の再生中へ入れる。通常応答の100試行とは別の分母を持つ。
-import { expect, type Browser, type Page } from '@playwright/test'
+import { expect, type Browser, type Page, type TestInfo } from '@playwright/test'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { dirname } from 'node:path'
@@ -50,7 +51,7 @@ const snapshot = (page: Page) => page.evaluate(() => ({
 }))
 
 export async function measureLabeledInterruptions(browser: Browser, initial: ScheduledFixture,
-  cohort: Cohort, count: number, output: string): Promise<void> {
+  cohort: Cohort, count: number, output: string, testInfo: TestInfo): Promise<void> {
   if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error('invalid interruption trial count')
   const manifestBytes = await readFile(new URL('./fixtures/voice-quality-v2/manifest.json', import.meta.url))
   const manifest = JSON.parse(manifestBytes.toString()) as {trials: LabeledTrial[]}
@@ -121,18 +122,11 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       const microphone = await driver.openVoiceChat(page)
       // 初回の再生が失敗しても、作成済みsessionの終了応答を照合できるよう先に記録する。
       // token本文やsecretは証跡へ保存せず、session_idだけを取り出す。
-      const issuedResponse = page.waitForResponse(response => response.request().method() === 'POST'
-        && new URL(response.url()).pathname.endsWith('/voice/livekit/token'), {timeout: 10000}).catch(() => null)
-      await microphone.click()
-      const issued = await issuedResponse
-      if (issued === null || !issued.ok()) throw new Error('session creation response unavailable')
-      const {session_id: issuedSessionId} = await issued.json() as {session_id?: unknown}
-      if (typeof issuedSessionId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(issuedSessionId)) {
-        throw new Error('session creation identity unavailable')
-      }
-      trial.session_id = issuedSessionId
       stage = 'microphone_activation'
-      await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      await startMeasuredSession(page, microphone, testInfo, ({sessionId}) => {
+        trial.session_id = sessionId
+      })
+      trial.preparation_observation = await page.evaluate(() => window.__voicePreparationProbe!.snapshot())
       await page.evaluate(() => window.__voiceUserControlProbe!.begin())
       stage = 'initial_response'
       await page.evaluate(() => window.__voiceFixtureClock!.start())
@@ -219,9 +213,19 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         cycle.responseId, {timeout: 5000})
       } else {
         // ラベルとの一致を検査する前に、保留・誤判定時も旧応答の終端まで観測する。
-        await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId]
-          || window.__voiceChatE2E.coreEventDiagnostics.some(event =>
-            event.type === 'response_cancelled' && event.responseId === responseId), cycle.responseId, {timeout: 10000})
+        // 通常会話と同じ完了観測期限。応答開始の遅延基準とは別で、
+        // 長い音声を10秒で打ち切って完了欠測を作らない。
+        await page.waitForFunction(responseId => {
+          const state = window.__voiceChatE2E
+          if (state.transportFailures?.length) throw new Error('voice transport failed')
+          if (state.coreEventDiagnostics.some(event =>
+            event.type === 'response_failed' && event.responseId === responseId)) {
+            throw new Error('voice response failed')
+          }
+          return !!state.playbackCompletions?.[responseId]
+            || state.coreEventDiagnostics.some(event =>
+              event.type === 'response_cancelled' && event.responseId === responseId)
+        }, cycle.responseId, {timeout: 60_000})
         const cancelled = await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
           event.type === 'response_cancelled' && event.responseId === responseId), cycle.responseId)
         expect(cancelled).toBe(false)
@@ -237,6 +241,8 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         clockProbeStatuses: window.__voiceServerClockProbe?.snapshot().observations.map(row => row.status) ?? [],
       })).catch(() => ({browser_state_unavailable: true}))
     } finally {
+      trial.preparation_observation = await page.evaluate(() => window.__voicePreparationProbe?.snapshot() ?? null)
+        .catch(() => trial.preparation_observation ?? null)
       trial.evidence = await snapshot(page).catch(() => ({browser_state_unavailable: true}))
       let ended = false
       if (typeof trial.session_id === 'string') {

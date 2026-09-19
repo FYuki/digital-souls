@@ -524,3 +524,16 @@ def test_should_preserve_reports_when_resolved_and_legacy_paths_collide(tmp_path
     assert result.returncode != 0
     assert str(shared_report_path) in result.stderr
     assert shared_report_path.read_bytes() == original
+
+
+def test_measurement_policy_survives_resolve_load_and_backend_environment(tmp_path):
+    import base64
+    environments_dir = _copy_environments(tmp_path)
+    report_path = _report_path(tmp_path)
+    key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
+    result = _resolve(environments_dir, report_path, "integration-voice", **{key: "true"})
+    assert result.returncode == 0, result.stderr
+    result = _run(environments_dir, "backend-environment", "--report", str(report_path),
+                  env=_clean_env())
+    assert result.returncode == 0, result.stderr
+    assert key + "\t" + base64.b64encode(b"true").decode() in result.stdout

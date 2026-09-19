@@ -25,6 +25,7 @@ from app.conversation_core.adapters import (
     PromptLlmAdapter,
     SpeakerSynthesizer,
     SyncTranscriber,
+    SttCapacityError,
     VoicevoxTtsAdapter,
     WhisperSttAdapter,
     ScreenLineageResponseState,
@@ -36,6 +37,7 @@ from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
     BootstrapService,
+    preparation_operation,
     CharacterConversationBindingValidator,
     InMemorySessionBindingRepository,
 )
@@ -49,6 +51,9 @@ from app.livekit_transport.coordinator import (
 )
 from app.livekit_transport.delivery import CoreNotificationPort, TerminalProtocolError
 from app.livekit_transport.errors import RoomCleanupPendingError
+from app.livekit_transport.preparation import VoiceModelPreparationError
+from app.inference.errors import InferenceError
+from app.stt.remote_whisper_client import RemoteWhisperError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.microphone_frames import (
@@ -328,6 +333,8 @@ class ProductionConversationCoreSessionFactory:
             ],
             AsyncIterator[str],
         ] | None = None,
+        prepare_inference: Callable[[], Awaitable[bool]] | None = None,
+        prepare_prompt: Callable[[str], Awaitable[None]] | None = None,
         measurement_kind: MeasurementKind = "automated_test",
         trace_record: Callable[[TraceEvent], None] | None = None,
         measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
@@ -342,6 +349,8 @@ class ProductionConversationCoreSessionFactory:
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
         self._generate_screen_reply_stream = generate_screen_reply_stream
+        self._prepare_inference = prepare_inference
+        self._prepare_prompt = prepare_prompt
         self._measurement_kind = measurement_kind
         self._trace_record = trace_record
         self._measurement_clock_ns = measurement_clock_ns
@@ -382,6 +391,25 @@ class ProductionConversationCoreSessionFactory:
         tts = self._tts_adapter(load_tts_config(character_id))
         if isinstance(tts, IrodoriTtsAdapter):
             await tts.prepare()
+        try:
+            await self._stt.prepare_required()
+        except (RemoteWhisperError, SttCapacityError) as error:
+            raise VoiceModelPreparationError(stage="stt", code=error.error_code) from error
+        except Exception as error:
+            raise VoiceModelPreparationError(stage="stt", code="stt_preparation_failed") from error
+        if self._prepare_inference is not None:
+            try:
+                prepared = await self._prepare_inference()
+                if prepared and self._prepare_prompt is not None:
+                    await self._prepare_prompt(character_id)
+            except InferenceError as error:
+                raise VoiceModelPreparationError(
+                    stage="inference", code=f"inference_{error.category.value}",
+                ) from error
+            except Exception as error:
+                raise VoiceModelPreparationError(
+                    stage="inference", code="inference_preparation_failed",
+                ) from error
         return self._create(
             session_id=session_id, character_id=character_id,
             conversation_id=conversation_id, delivery=delivery,
@@ -1083,12 +1111,12 @@ class _ConversationCoreBridge:
             and self._microphone_received_bytes // 2 + capture.media_offset_samples
             == detection.detected_sample
         )
-        await self._publish_audio(self._speech_event("speech_stopped", boundary))
-        if self._measurement is not None:
-            self._measurement.record_utterance_event(
-                utterance_id=boundary.utterance_id, name="vad_speech_end", stage="vad",
-            )
         try:
+            await self._publish_audio(self._speech_event("speech_stopped", boundary))
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=boundary.utterance_id, name="vad_speech_end", stage="vad",
+                )
             if self._verify_audio_integrity is None:
                 raise AudioInputFault("audio_integrity_unavailable")
             await self._verify_audio_integrity(
@@ -1105,6 +1133,14 @@ class _ConversationCoreBridge:
             # 先行発話が失敗しても、別世代で終了・検証済みの後続を滞留させない。
             await self._finalize_user_audio_if_ready()
             return
+        except BaseException:
+            # track交換や切断はreaderの確定待ちも取り消す。未検証の先頭captureを
+            # 残すと、別trackで検証済みの後続発話までSTTへ進めなくなる。
+            # text優先で既に破棄済みなら重ねて通知しない。取消・元例外は伝播する。
+            if any(item is capture for item in self._user_audio_captures):
+                self._audio_discarded(boundary.utterance_id, "audio_integrity_unavailable")
+                self._schedule(self._finalize_user_audio_if_ready())
+            raise
         if not any(item is capture for item in self._user_audio_captures):
             return
         # BE自身がPCM境界を検出するため、FE通知後のmedia tail待機は不要。
@@ -1112,7 +1148,12 @@ class _ConversationCoreBridge:
         await self._finalize_user_audio_if_ready()
 
     def _audio_discarded(self, utterance_id: str | None, reason: str) -> None:
-        self._microphone_preroll.clear()
+        # 終了済み発話の検証失敗は、新trackで蓄積中のprerollを所有しない。
+        if utterance_id is None or any(
+            item.utterance_id == utterance_id and not item.finalized
+            for item in self._user_audio_captures
+        ):
+            self._microphone_preroll.clear()
         if utterance_id is not None:
             self._user_audio_captures = deque(
                 item for item in self._user_audio_captures if item.utterance_id != utterance_id
@@ -1779,17 +1820,18 @@ class ProductionRuntimeManager:
             )
         room_name = f"voice-{session_id}"
         user_identity = f"user-{session_id}"
-        token = await self._signer.issue_token(
-            {
-                "identity": request["identity"],
-                "room": room_name,
-                "ttl_seconds": 90,
-                "can_subscribe": True,
-                "can_publish": True,
-                "can_publish_data": True,
-                "can_publish_sources": ["microphone"],
-            }
-        )
+        async with preparation_operation("token", BOOTSTRAP_TIMEOUT_SECONDS):
+            token = await self._signer.issue_token(
+                {
+                    "identity": request["identity"],
+                    "room": room_name,
+                    "ttl_seconds": 90,
+                    "can_subscribe": True,
+                    "can_publish": True,
+                    "can_publish_data": True,
+                    "can_publish_sources": ["microphone"],
+                }
+            )
         room: rtc.Room = rtc_module.Room()
 
         if self._audio_probe_enabled:
@@ -2062,11 +2104,12 @@ class ProductionRuntimeManager:
                 or coordinator.phase == "ended"
             )
 
-        await room.connect(self._livekit_url, token)
+        async with preparation_operation("transport", BOOTSTRAP_TIMEOUT_SECONDS):
+            await room.connect(self._livekit_url, token)
         if startup_ended():
             raise RuntimeError("runtime startup ended")
-        coordinator.start_join_deadline()
-        audio_source = await self._prepare_output_track(room)
+        async with preparation_operation("output", BOOTSTRAP_TIMEOUT_SECONDS):
+            audio_source = await self._prepare_output_track(room)
         if startup_ended():
             await audio_source.aclose()
             raise RuntimeError("runtime startup ended")
@@ -2136,6 +2179,10 @@ class ProductionRuntimeManager:
         await bridge.prepare_audio()
         if isinstance(self._core_port, ProductionCoreEventInbox):
             self._core_port.bind(session_id, bridge.notify)
+        if startup_ended():
+            raise RuntimeError("runtime startup ended")
+        # clientのjoin猶予をモデル準備で消費しない。
+        coordinator.start_join_deadline()
         self._ready[session_id].set()
 
     async def _observe_microphone(
