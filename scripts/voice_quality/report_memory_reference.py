@@ -115,9 +115,10 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     manifest = json.loads((args.cohort_root / "trial-manifest.json").read_text())
-    baseline = json.loads(args.baseline_report.read_text())
+    baseline_bytes = args.baseline_report.read_bytes()
+    baseline = json.loads(baseline_bytes)
     result = summarize(manifest, _load_trace(args.cohort_root / "controlled-trace.jsonl"), baseline)
-    result["baseline_report_sha256"] = hashlib.sha256(args.baseline_report.read_bytes()).hexdigest()
+    result["baseline_report_sha256"] = hashlib.sha256(baseline_bytes).hexdigest()
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     return 0
 

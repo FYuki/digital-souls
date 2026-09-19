@@ -155,3 +155,31 @@ def test_formal_aggregation_launches_real_reporter_without_pythonpath(tmp_path, 
     assert summary["failure"] == 105
     assert summary["existing_reporter_exit"] == 1
     assert not (output / "report.json").exists()
+
+def test_baseline_snapshot_survives_external_update_during_trials(tmp_path, monkeypatch):
+    import hashlib
+    baseline = tmp_path / "external-baseline.json"
+    original = b'{"metrics": "original"}'
+    baseline.write_bytes(original)
+    monkeypatch.setattr(cohort, "ROOT", tmp_path)
+    monkeypatch.setattr(cohort, "measurement_revision", lambda root: "revision")
+    monkeypatch.setattr(cohort, "run_root", lambda run_id: tmp_path / "runs" / run_id)
+    monkeypatch.setattr(sys, "argv", ["runner", "--cohort-id", "snapshot-test", "--measured", "1",
+        "--profile", "integration-irodori-memory-reference", "--memory-reference",
+        "--baseline-report", str(baseline), "--inference-env", str(tmp_path / "inference"),
+        "--livekit-env", str(tmp_path / "livekit")])
+
+    def trial(*args):
+        baseline.write_text('{"metrics": "changed"}')
+        return 0, {}
+
+    def aggregate(runs, directory, revision, measured, snapshot):
+        assert snapshot != baseline
+        assert snapshot.read_bytes() == original
+        plan = json.loads((directory / "plan.json").read_text())
+        assert plan["baseline_report_sha256"] == hashlib.sha256(snapshot.read_bytes()).hexdigest()
+        return 0
+
+    monkeypatch.setattr(cohort, "trial", trial)
+    monkeypatch.setattr(cohort, "aggregate", aggregate)
+    assert cohort.main() == 0

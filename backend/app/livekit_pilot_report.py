@@ -195,6 +195,9 @@ def _finalize_livekit_report(
                 name="manual_operations", stage="session", outcome="success", value=operations,
                 timestamp=observed_at, clock_domain="client_monotonic", unit="millisecond",
             ))
+        # traceの整数msへの丸めではなく、照合済みの実出力時計の小数精度を保持する。
+        events = [event.model_copy(update={"timestamp": playback}) if event is point else event
+                  for event in events]
         fixture_start, fixture_end = _validate_fixture_clock(
             trial, sample_rate=sample_rate, start_sample=start_sample, end_sample=end_sample,
             controlled=controlled,
