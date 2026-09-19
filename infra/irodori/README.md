@@ -190,7 +190,8 @@ RF forwardを要求内のCUDA Graphで実行する。共有サービスへの配
 timestep埋込みの定数だけを同じCUDA演算順で要求内に保持し、capture中のCPUからGPUへの転送を避ける。
 upstream関数のsource hashが異なる場合は準備失敗とし、未知revisionへ無条件で適用しない。
 
-Graphは要求ごとに最大2形状、入力tensor合計64MiBまでとし、capture前の空きVRAMが
+固定モデルの通常CFG入力は約204MiBのため、64/128MiB上限ではその形状が通常forwardへ戻る。
+Graphは要求ごとに最大2形状、入力tensor合計256MiBまでとし、capture前の空きVRAMが
 入力容量と1GiBの余裕を下回る場合は通常forwardで実行する。これはcapture中の一時VRAM使用量の
 厳密な上限ではない。capture失敗・OOMは通常の推論失敗としてworkerを破棄し、既存の準備合成から再生成する。
 同じ形状でも全入力を毎回コピーし、出力も独立させる。要求の終了・失敗時に差替えを復元し、
