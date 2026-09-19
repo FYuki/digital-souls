@@ -58,7 +58,7 @@ def test_failed_isolated_trials_stay_in_summary_and_do_not_create_acceptance_rep
     assert not (output / "report.json").exists()
 
 
-@pytest.mark.parametrize("profile", ["integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"])
+@pytest.mark.parametrize("profile", ["integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"])
 def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standard(tmp_path, monkeypatch, profile):
     from types import SimpleNamespace
 
@@ -73,8 +73,9 @@ def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standa
     }
     (path / "environment-run.json").write_text(json.dumps(report))
     (tmp_path / "native-sdk.json").write_text(json.dumps({"status": "verified"}))
+    scope = "isolated_memory_reference_trial" if profile == "integration-irodori-memory-reference" else "isolated_normal_trial"
     (tmp_path / "trial-manifest.json").write_text(json.dumps({
-        "measurement_revision": "revision", "measurement_scope": "isolated_normal_trial",
+        "measurement_revision": "revision", "measurement_scope": scope,
         "trials": [{"initial_state_evidence": {"memory_scheduler_policy": POLICY}}],
     }))
     (path / "resolved-profile.json").write_text(json.dumps({"derivedEnvironment": {
@@ -82,7 +83,7 @@ def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standa
     }}))
     monkeypatch.setattr(cohort.subprocess, "run",
                         lambda *a, **kw: SimpleNamespace(returncode=1, stderr="No such object"))
-    assert cohort.verify_stopped(tmp_path, "revision", profile)["measurement_scope"] == "isolated_normal_trial"
+    assert cohort.verify_stopped(tmp_path, "revision", profile)["measurement_scope"] == scope
     report["effectiveProfile"]["effectiveProfile"] = "integration-voice-pcm"
     (path / "environment-run.json").write_text(json.dumps(report))
     with pytest.raises(ValueError, match="teardown"):

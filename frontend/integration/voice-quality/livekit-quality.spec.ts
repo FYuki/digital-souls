@@ -47,7 +47,7 @@ const pilot = process.env.VOICE_QUALITY_PILOT_TRIALS
 if (pilot !== undefined && !(/^[1-9][0-9]?$/.test(pilot) || (pilot === '100' && (interruptionCohort !== undefined || vadCohort !== undefined)))) {
   throw new Error('VOICE_QUALITY_PILOT_TRIALS must be between 1 and 99')
 }
-// 記憶形成を止めず、cohort runnerが試行ごとに新規data rootを所有する。
+// cohort runnerが試行ごとに新規data rootを所有する。形成停止は実receiptで照合する。
 const isolatedNormalPhase = process.env.VOICE_QUALITY_ISOLATED_NORMAL_PHASE
 if (isolatedNormalPhase !== undefined && (
   !['warmup', 'measured'].includes(isolatedNormalPhase) || pilot !== '1'
@@ -55,6 +55,13 @@ if (isolatedNormalPhase !== undefined && (
   || vadCohort !== undefined || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
   || process.env.VOICE_QUALITY_FAULT_BRIDGE === '1' || process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
 )) throw new Error('isolated normal trial requires one scheduled independent session')
+const memoryReference = process.env.VOICE_QUALITY_MEMORY_REFERENCE === '1'
+if ((process.env.VOICE_QUALITY_MEMORY_REFERENCE !== undefined && !memoryReference)
+  || (process.env.VOICE_QUALITY_PROFILE === 'integration-irodori-memory-reference') !== memoryReference
+  || (memoryReference && (isolatedNormalPhase === undefined
+    || process.env.VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION !== 'true'))) {
+  throw new Error('reference measurement requires its isolated profile and disabled formation')
+}
 const WARMUP_RUNS = isolatedNormalPhase === undefined ? (pilot === undefined ? 5 : 1) : Number(isolatedNormalPhase === 'warmup')
 const MEASURED_RUNS = isolatedNormalPhase === undefined ? (pilot === undefined ? 100 : Number(pilot)) : Number(isolatedNormalPhase === 'measured')
 const fixtureMetadataUrl = new URL(
@@ -144,7 +151,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
   const persistManifest = async (diagnostics?: Record<string, number>) => {
     await mkdir(dirname(manifestPath), { recursive: true })
     await writeFile(manifestPath, JSON.stringify({
-      measurement_scope: isolatedNormalPhase === undefined ? (pilot === undefined ? "controlled" : "pilot") : "isolated_normal_trial",
+      measurement_scope: memoryReference ? 'isolated_memory_reference_trial' : isolatedNormalPhase === undefined ? (pilot === undefined ? "controlled" : "pilot") : "isolated_normal_trial",
       measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
       playback_supply_observation_enabled: observePlaybackSupply,
       stt_pcm_observation_enabled: process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1',
@@ -179,7 +186,8 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       if (!conversationId || !dataRoot || !profilePath) throw new Error('initial state evidence is unavailable')
       const repositoryRoot = resolve('..')
       const stateResult = await runFile(resolve(repositoryRoot, 'backend/.venv/bin/python'), [
-        '-m', 'app.voice_quality_state', '--data-root', dataRoot, '--profile', profilePath,
+        '-m', memoryReference ? 'app.voice_quality_reference_state' : 'app.voice_quality_state',
+        ...(memoryReference ? ['initial'] : []), '--data-root', dataRoot, '--profile', profilePath,
         '--repository-root', repositoryRoot, '--conversation-id', conversationId,
       ], { cwd: repositoryRoot, env: { ...process.env, PYTHONPATH: resolve(repositoryRoot, 'backend') } })
       const state: { initial_state_hash: string; evidence: Record<string, unknown> } = JSON.parse(stateResult.stdout)
@@ -216,7 +224,16 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       expect(endResponse.ok()).toBe(true)
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
+      let referenceObservation: Record<string, unknown> | undefined
+      if (memoryReference) {
+        const referenceResult = await runFile(resolve(repositoryRoot, 'backend/.venv/bin/python'), [
+          '-m', 'app.voice_quality_reference_state', 'references', '--data-root', dataRoot,
+          '--repository-root', repositoryRoot, '--conversation-id', conversationId,
+        ], { cwd: repositoryRoot, env: { ...process.env, PYTHONPATH: resolve(repositoryRoot, 'backend') } })
+        referenceObservation = JSON.parse(referenceResult.stdout)
+      }
       trials.push({
+        ...(referenceObservation ? {memory_reference_observation: referenceObservation} : {}),
         preparation_observation: await page.evaluate(() => window.__voicePreparationProbe?.snapshot()),
         pcm_input_observation: await snapshotPcmInputs(index + 1),
         ...(observePlaybackSupply ? {

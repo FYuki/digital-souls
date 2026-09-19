@@ -497,3 +497,26 @@ def test_cuda_graph_fault_keeps_dedicated_inference_endpoints(tmp_path):
     assert env["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
     assert env["IRODORI_BASE_URL"] == "http://127.0.0.1:50026"
     assert env["LIVEKIT_URL"] == "ws://127.0.0.1:19880"
+
+
+@pytest.mark.parametrize("profile,explicit,phase,disabled,valid", [
+    ("integration-irodori-memory-reference", True, "measured", True, True),
+    ("integration-irodori-memory-reference", False, "measured", True, False),
+    ("integration-irodori-cuda-graph", True, "measured", True, False),
+    ("integration-irodori-memory-reference", True, None, True, False),
+    ("integration-irodori-memory-reference", True, "measured", False, False),
+])
+def test_reference_scope_requires_explicit_isolation(tmp_path, profile, explicit, phase, disabled, valid):
+    inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
+    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\n")
+    livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
+    args = dict(profile=profile, memory_reference=explicit, isolated_normal_phase=phase,
+                disable_memory_formation=disabled)
+    if not valid:
+        with pytest.raises(ValueError, match="reference"):
+            pilot.pilot_environment(inference, livekit, "350-memory-reference-unit", 1, False, True, **args)
+    else:
+        result = pilot.pilot_environment(inference, livekit, "350-memory-reference-unit", 1, False, True, **args)
+        assert result["VOICE_QUALITY_MEMORY_REFERENCE"] == "1"
+        assert result["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
+        assert result["IRODORI_BASE_URL"] == "http://127.0.0.1:50026"
