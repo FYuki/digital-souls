@@ -1,0 +1,889 @@
+{
+  "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "script_sha256": "94e1d40fec8853dc81d68d183f0eb95c9fbccd9a616904edad683dfebdb7691a",
+  "base_revision": "d85b5a825da3a8184cfd3f6986f6dacc521c6dfb",
+  "started_unix": 1789792475.9617946,
+  "finished_unix": 1789792516.8227274,
+  "exit_code": 0,
+  "result": {
+    "status": "success",
+    "graph_statistics": [],
+    "scope": "paired_request_scoped_cuda_graph_diagnostic",
+    "formal_acceptance": false,
+    "compile_model": false,
+    "empty_cache_interval": 10,
+    "model_revision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codec_revision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "voice_config_sha256": "39a19d9534e28495b37e081ff5e4a0f9950338cbb98d46bd4a4e9ecb205e585c",
+    "trials": [
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4727.958919611541
+        },
+        "phase": "warmup",
+        "input_sha256": "a0c3b74a6515d7a0932dfded7fa3fe00b2852c2ec9866a8abe4dd0fbe347ae6b",
+        "elapsed_ms": 13531.485116000113,
+        "wav_sha256": "d442a343706ef87901d2d5e0c008a3609de2747c399f427eb55a5f347d23b586",
+        "frames": 207360,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 1.6551780063309707,
+          "prepare_reference": 299.40247500053374,
+          "predict_duration": 159.7855840009288,
+          "sample_rf": 760.0807999988319,
+          "unpatchify_latent": 0.010334995749872178,
+          "decode_latent": 41.470698997727595
+        },
+        "total_to_decode_ms": 1263.502369998605,
+        "seed": 4221,
+        "allocated_bytes": 1983195648,
+        "reserved_bytes": 3776970752
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4443.127946298253
+        },
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 833.1658039969625,
+        "wav_sha256": "cbfe6435261ad9387bf29d10c5f988d8cf768778f79b466d99093bd102ed725b",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5695500003639609,
+          "prepare_reference": 53.548533003777266,
+          "predict_duration": 35.48719699756475,
+          "sample_rf": 701.7625970038353,
+          "unpatchify_latent": 0.007763999747112393,
+          "decode_latent": 34.41696699883323
+        },
+        "total_to_decode_ms": 826.8137289996957,
+        "seed": 4221,
+        "allocated_bytes": 1981704704,
+        "reserved_bytes": 3955228672,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 144.0,
+          "rms_error_pcm16": 13.038310200894012,
+          "reference_rms_pcm16": 4443.127946298253
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 626.5543560002698,
+        "wav_sha256": "1e286b6c917442a064cbae45d5e5e1f34d7030d247bd02e86298f53d27fcb779",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.358808996679727,
+          "prepare_reference": 65.30199100234313,
+          "predict_duration": 34.27078900131164,
+          "sample_rf": 507.96862200513715,
+          "unpatchify_latent": 0.009859999408945441,
+          "decode_latent": 9.332929999800399
+        },
+        "total_to_decode_ms": 618.9664989942685,
+        "seed": 4221,
+        "allocated_bytes": 2001828352,
+        "reserved_bytes": 2889875456,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4762.591004553998
+        },
+        "phase": "baseline",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 801.8483809937607,
+        "wav_sha256": "68409703e8483f45f891238c4bde753e74d5b1af9cff9fc3a579c905f6861720",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.34922400664072484,
+          "prepare_reference": 53.55127700022422,
+          "predict_duration": 34.3439659991418,
+          "sample_rf": 682.0102950005094,
+          "unpatchify_latent": 0.008672999683767557,
+          "decode_latent": 25.59607200237224
+        },
+        "total_to_decode_ms": 796.7189449991565,
+        "seed": 4221,
+        "allocated_bytes": 2002223616,
+        "reserved_bytes": 3238002688,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 15.231133506230433,
+          "reference_rms_pcm16": 4762.591004553998
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 619.3519850057783,
+        "wav_sha256": "829f4afb53348348ac1f9ab05b59ec54ea279b2a6a0f46f19025746256c0c094",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.41828700341284275,
+          "prepare_reference": 48.75876000005519,
+          "predict_duration": 32.7088720005122,
+          "sample_rf": 510.9824109968031,
+          "unpatchify_latent": 0.010247000318486243,
+          "decode_latent": 14.489929002593271
+        },
+        "total_to_decode_ms": 608.8076800006093,
+        "seed": 4221,
+        "allocated_bytes": 2015402496,
+        "reserved_bytes": 2936012800,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 4308.2974684616975
+        },
+        "phase": "baseline",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 810.8574110010522,
+        "wav_sha256": "51bb62f4fb70d95946cdd2d660462b2868a21e40c798f7cf84414bb0d3651e92",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3630680002970621,
+          "prepare_reference": 56.3156380012515,
+          "predict_duration": 32.60101500200108,
+          "sample_rf": 691.7755779941217,
+          "unpatchify_latent": 0.009436000254936516,
+          "decode_latent": 25.650796997069847
+        },
+        "total_to_decode_ms": 807.6137640018715,
+        "seed": 4221,
+        "allocated_bytes": 2011494912,
+        "reserved_bytes": 3372220416,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 16.88175353541674,
+          "reference_rms_pcm16": 4308.2974684616975
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 614.2659100005403,
+        "wav_sha256": "bea9bad463b437afd1f56a5125addb2b5ba35699eb31c012fce4a0a3ba1a756a",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.6251240047276951,
+          "prepare_reference": 49.55233600048814,
+          "predict_duration": 33.97055399545934,
+          "sample_rf": 508.9352310023969,
+          "unpatchify_latent": 0.010083000233862549,
+          "decode_latent": 13.893242001358885
+        },
+        "total_to_decode_ms": 609.6502579966909,
+        "seed": 4221,
+        "allocated_bytes": 2023680512,
+        "reserved_bytes": 2873098240,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5190.990756346434
+        },
+        "phase": "baseline",
+        "input_sha256": "e176421bb308470eefd205e0afc681faf0cda8253b6c87843f9520c2c3455d6c",
+        "elapsed_ms": 833.33331799804,
+        "wav_sha256": "d9af37d11a0fc650d22bc0d636059d9e630c3018ece7e56c6b1590b1fcb55ee0",
+        "frames": 301440,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.6215390021679923,
+          "prepare_reference": 55.72256199957337,
+          "predict_duration": 32.72102199844085,
+          "sample_rf": 694.2745189953712,
+          "unpatchify_latent": 0.00925500353332609,
+          "decode_latent": 42.368932998215314
+        },
+        "total_to_decode_ms": 827.3922820008011,
+        "seed": 4221,
+        "allocated_bytes": 2021190656,
+        "reserved_bytes": 3397386240,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5190.990756346434
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e176421bb308470eefd205e0afc681faf0cda8253b6c87843f9520c2c3455d6c",
+        "elapsed_ms": 635.8779240035801,
+        "wav_sha256": "d9af37d11a0fc650d22bc0d636059d9e630c3018ece7e56c6b1590b1fcb55ee0",
+        "frames": 301440,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3832800066447817,
+          "prepare_reference": 48.49863699928392,
+          "predict_duration": 33.4603800001787,
+          "sample_rf": 510.35747199784964,
+          "unpatchify_latent": 0.011035001080017537,
+          "decode_latent": 37.004785997851286
+        },
+        "total_to_decode_ms": 630.6632889973116,
+        "seed": 4221,
+        "allocated_bytes": 2031524864,
+        "reserved_bytes": 3189768192,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5051.392263045022
+        },
+        "phase": "baseline",
+        "input_sha256": "e67029b4776e196192f56d20a4e7197b6bb30e084060720fdac0b95966bb14ba",
+        "elapsed_ms": 934.2078780027805,
+        "wav_sha256": "b9db86dd737422a7e971a0c3b24109d5115c6394f099d1d45d5b14e3462fc389",
+        "frames": 545280,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.7200930049293675,
+          "prepare_reference": 53.10073600412579,
+          "predict_duration": 32.75007000047481,
+          "sample_rf": 752.7715350006474,
+          "unpatchify_latent": 0.00847400224301964,
+          "decode_latent": 76.72241300315363
+        },
+        "total_to_decode_ms": 917.0899219971034,
+        "seed": 4221,
+        "allocated_bytes": 2030995968,
+        "reserved_bytes": 2543845376,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5051.392263045022
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e67029b4776e196192f56d20a4e7197b6bb30e084060720fdac0b95966bb14ba",
+        "elapsed_ms": 768.0666739979642,
+        "wav_sha256": "b9db86dd737422a7e971a0c3b24109d5115c6394f099d1d45d5b14e3462fc389",
+        "frames": 545280,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.580518004426267,
+          "prepare_reference": 56.134289006877225,
+          "predict_duration": 34.920050005894154,
+          "sample_rf": 600.804319998133,
+          "unpatchify_latent": 0.009682000381872058,
+          "decode_latent": 68.1038959955913
+        },
+        "total_to_decode_ms": 761.8766790037625,
+        "seed": 4221,
+        "allocated_bytes": 2040728064,
+        "reserved_bytes": 3416260608,
+        "repetition": 0
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 144.0,
+          "rms_error_pcm16": 12.340434403696243,
+          "reference_rms_pcm16": 4443.127946298253
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 612.3040149977896,
+        "wav_sha256": "dce0a89bfbfa972e9421af0e7bf6564bc91042b4f027669052bfd2e4d2d09a7b",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5062099953647703,
+          "prepare_reference": 49.448403995484114,
+          "predict_duration": 34.63770200323779,
+          "sample_rf": 509.1288280018489,
+          "unpatchify_latent": 0.012138996680732816,
+          "decode_latent": 9.78949099953752
+        },
+        "total_to_decode_ms": 604.6992519986816,
+        "seed": 4221,
+        "allocated_bytes": 2048797184,
+        "reserved_bytes": 2772434944,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 181.0,
+          "rms_error_pcm16": 12.490295575070736,
+          "reference_rms_pcm16": 4443.127946298253
+        },
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 809.9509449966718,
+        "wav_sha256": "e52ab5d75649bb898259eb26f86660c697c34a883ff4f9bf2836fd72f389c849",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.41209300252376124,
+          "prepare_reference": 54.699088002962526,
+          "predict_duration": 33.30292199825635,
+          "sample_rf": 701.9044029948418,
+          "unpatchify_latent": 0.008656003046780825,
+          "decode_latent": 9.446536998439115
+        },
+        "total_to_decode_ms": 800.7513699994888,
+        "seed": 4221,
+        "allocated_bytes": 2050021888,
+        "reserved_bytes": 3208642560,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 14.35811940849908,
+          "reference_rms_pcm16": 4762.591004553998
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 594.7313140059123,
+        "wav_sha256": "66ea002bb9096ee96f58584403c96e5f029d0e9bf3d9bd4d48540c1bcd81a83e",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5222750041866675,
+          "prepare_reference": 49.749766003515106,
+          "predict_duration": 32.45546300604474,
+          "sample_rf": 493.8768619977054,
+          "unpatchify_latent": 0.025066998205147684,
+          "decode_latent": 14.540759999363218
+        },
+        "total_to_decode_ms": 592.204814995057,
+        "seed": 4221,
+        "allocated_bytes": 2060929536,
+        "reserved_bytes": 2797600768,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 216.0,
+          "rms_error_pcm16": 14.87366455974779,
+          "reference_rms_pcm16": 4762.591004553998
+        },
+        "phase": "baseline",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 805.1650350025739,
+        "wav_sha256": "53e350cfee9603856288834abf3ef5f3da21ee3fcbc0ead821184d997db6e971",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5650749953929335,
+          "prepare_reference": 54.51132600137498,
+          "predict_duration": 34.469371996237896,
+          "sample_rf": 697.5990049977554,
+          "unpatchify_latent": 0.00869399809744209,
+          "decode_latent": 14.442403000430204
+        },
+        "total_to_decode_ms": 803.0891570015228,
+        "seed": 4221,
+        "allocated_bytes": 2063071744,
+        "reserved_bytes": 3233808384,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 16.386755216569806,
+          "reference_rms_pcm16": 4308.2974684616975
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 605.1605660031782,
+        "wav_sha256": "fe3265f8c5e7fae5926e54aa11698d312ba1a7771d5994997f953afbe95adace",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5255290016066283,
+          "prepare_reference": 47.52682500111405,
+          "predict_duration": 32.68372199818259,
+          "sample_rf": 504.7755990017322,
+          "unpatchify_latent": 0.009281000529881567,
+          "decode_latent": 13.236606995633338
+        },
+        "total_to_decode_ms": 600.0702180026565,
+        "seed": 4221,
+        "allocated_bytes": 2070649344,
+        "reserved_bytes": 2820669440,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 17.29689805403462,
+          "reference_rms_pcm16": 4308.2974684616975
+        },
+        "phase": "baseline",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 815.7151420018636,
+        "wav_sha256": "732e27f8a582a0c7fc4089196e87a1f3300d903aedb7ea5ececba382ef907655",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3533229973982088,
+          "prepare_reference": 53.532728998106904,
+          "predict_duration": 33.34917900065193,
+          "sample_rf": 710.2918519958621,
+          "unpatchify_latent": 0.008501003321725875,
+          "decode_latent": 13.376239003264345
+        },
+        "total_to_decode_ms": 813.6881199970958,
+        "seed": 4221,
+        "allocated_bytes": 2068507136,
+        "reserved_bytes": 3256877056,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5190.990756346434
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e176421bb308470eefd205e0afc681faf0cda8253b6c87843f9520c2c3455d6c",
+        "elapsed_ms": 645.8001770006376,
+        "wav_sha256": "d9af37d11a0fc650d22bc0d636059d9e630c3018ece7e56c6b1590b1fcb55ee0",
+        "frames": 301440,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5330389976734295,
+          "prepare_reference": 50.22862799523864,
+          "predict_duration": 33.74091799923917,
+          "sample_rf": 514.9220550010796,
+          "unpatchify_latent": 0.009249000868294388,
+          "decode_latent": 36.34611999586923
+        },
+        "total_to_decode_ms": 637.72393099498,
+        "seed": 4221,
+        "allocated_bytes": 2078984704,
+        "reserved_bytes": 2961178624,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5190.990756346434
+        },
+        "phase": "baseline",
+        "input_sha256": "e176421bb308470eefd205e0afc681faf0cda8253b6c87843f9520c2c3455d6c",
+        "elapsed_ms": 850.1785349944839,
+        "wav_sha256": "d9af37d11a0fc650d22bc0d636059d9e630c3018ece7e56c6b1590b1fcb55ee0",
+        "frames": 301440,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.4318850042182021,
+          "prepare_reference": 58.36617599561578,
+          "predict_duration": 33.90723399934359,
+          "sample_rf": 713.9915020015906,
+          "unpatchify_latent": 0.009172996215056628,
+          "decode_latent": 37.931907005258836
+        },
+        "total_to_decode_ms": 845.6871480011614,
+        "seed": 4221,
+        "allocated_bytes": 2079607296,
+        "reserved_bytes": 3309305856,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5051.392263045022
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e67029b4776e196192f56d20a4e7197b6bb30e084060720fdac0b95966bb14ba",
+        "elapsed_ms": 774.9864340003114,
+        "wav_sha256": "b9db86dd737422a7e971a0c3b24109d5115c6394f099d1d45d5b14e3462fc389",
+        "frames": 545280,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.4360230013844557,
+          "prepare_reference": 52.94969399983529,
+          "predict_duration": 35.98775299906265,
+          "sample_rf": 601.613400001952,
+          "unpatchify_latent": 0.008845003321766853,
+          "decode_latent": 67.05622199660866
+        },
+        "total_to_decode_ms": 759.0034820022993,
+        "seed": 4221,
+        "allocated_bytes": 2087713280,
+        "reserved_bytes": 2770337792,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5051.392263045022
+        },
+        "phase": "baseline",
+        "input_sha256": "e67029b4776e196192f56d20a4e7197b6bb30e084060720fdac0b95966bb14ba",
+        "elapsed_ms": 929.0402450060355,
+        "wav_sha256": "b9db86dd737422a7e971a0c3b24109d5115c6394f099d1d45d5b14e3462fc389",
+        "frames": 545280,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.43886499770451337,
+          "prepare_reference": 53.92097999720136,
+          "predict_duration": 34.48277700226754,
+          "sample_rf": 768.4892510005739,
+          "unpatchify_latent": 0.009205999958794564,
+          "decode_latent": 65.13375299982727
+        },
+        "total_to_decode_ms": 923.5797189976438,
+        "seed": 4221,
+        "allocated_bytes": 2089335296,
+        "reserved_bytes": 3688890368,
+        "repetition": 1
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 128.0,
+          "rms_error_pcm16": 12.467184447510418,
+          "reference_rms_pcm16": 4443.127946298253
+        },
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 802.2313970068353,
+        "wav_sha256": "3db1cf8b6188850c1642bf3d70b91378ce3e909e60f29a0b1fdfb36bad3cc596",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.41311800305265933,
+          "prepare_reference": 48.595952001051046,
+          "predict_duration": 34.7840879985597,
+          "sample_rf": 701.3483580012689,
+          "unpatchify_latent": 0.009285002306569368,
+          "decode_latent": 9.103196003707126
+        },
+        "total_to_decode_ms": 795.1944069936872,
+        "seed": 4221,
+        "allocated_bytes": 2088507904,
+        "reserved_bytes": 3688890368,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 144.0,
+          "rms_error_pcm16": 12.3840156331359,
+          "reference_rms_pcm16": 4443.127946298253
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 621.4628259986057,
+        "wav_sha256": "bdd72e4d41b428f5c141d16297090499af0c2a461fb6f0c26ec9ac4bbf85b323",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.45056499948259443,
+          "prepare_reference": 50.903355004265904,
+          "predict_duration": 33.86868599773152,
+          "sample_rf": 522.9719479975756,
+          "unpatchify_latent": 0.009342998964712024,
+          "decode_latent": 9.249634000298101
+        },
+        "total_to_decode_ms": 618.511993001448,
+        "seed": 4221,
+        "allocated_bytes": 2098452992,
+        "reserved_bytes": 2887778304,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 14.223597898544769,
+          "reference_rms_pcm16": 4762.591004553998
+        },
+        "phase": "baseline",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 810.5696870043175,
+        "wav_sha256": "de919f42d1238bb882758c461368824b9660a8cceda2ca7842cab4fb2f75bcbf",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3567609965102747,
+          "prepare_reference": 53.78765799832763,
+          "predict_duration": 33.391106997441966,
+          "sample_rf": 701.7104810001911,
+          "unpatchify_latent": 0.008288996468763798,
+          "decode_latent": 14.781074001803063
+        },
+        "total_to_decode_ms": 806.3449830005993,
+        "seed": 4221,
+        "allocated_bytes": 2099741184,
+        "reserved_bytes": 3323985920,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 272.0,
+          "rms_error_pcm16": 14.954720387187932,
+          "reference_rms_pcm16": 4762.591004553998
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 621.2656169955153,
+        "wav_sha256": "398f542934369a83ea1c3d8c3c42111da40536f662c350d96fb7084370dd569f",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5319810006767511,
+          "prepare_reference": 50.270065999939106,
+          "predict_duration": 35.63640500215115,
+          "sample_rf": 512.9132579968427,
+          "unpatchify_latent": 0.009215000318363309,
+          "decode_latent": 14.427913003601134
+        },
+        "total_to_decode_ms": 615.5586739987484,
+        "seed": 4221,
+        "allocated_bytes": 2109391360,
+        "reserved_bytes": 2915041280,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 17.29683306353443,
+          "reference_rms_pcm16": 4308.2974684616975
+        },
+        "phase": "baseline",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 785.0816559948726,
+        "wav_sha256": "572ae52eb82d9fe6cd8e1e614c21d21e1b976a0e459fa6b1137a96b1dfbc7588",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3582029967219569,
+          "prepare_reference": 53.16663599660387,
+          "predict_duration": 33.36919699358987,
+          "sample_rf": 679.0950829963549,
+          "unpatchify_latent": 0.00882899621501565,
+          "decode_latent": 14.282026997534558
+        },
+        "total_to_decode_ms": 782.5372509978479,
+        "seed": 4221,
+        "allocated_bytes": 2108422656,
+        "reserved_bytes": 3351248896,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": false,
+          "maximum_absolute_pcm16": 192.0,
+          "rms_error_pcm16": 17.451182903236738,
+          "reference_rms_pcm16": 4308.2974684616975
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 617.5381989960442,
+        "wav_sha256": "7cc7b55301a973f7ba13a4c7bb8b566884290aeacaed0120913bfa322470fb6b",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.38192600186448544,
+          "prepare_reference": 50.713880998955574,
+          "predict_duration": 35.49188200122444,
+          "sample_rf": 503.22197700006654,
+          "unpatchify_latent": 0.009620001947041601,
+          "decode_latent": 13.445306998619344
+        },
+        "total_to_decode_ms": 604.7774820035556,
+        "seed": 4221,
+        "allocated_bytes": 2118515200,
+        "reserved_bytes": 2938109952,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5190.990756346434
+        },
+        "phase": "baseline",
+        "input_sha256": "e176421bb308470eefd205e0afc681faf0cda8253b6c87843f9520c2c3455d6c",
+        "elapsed_ms": 875.3658209971036,
+        "wav_sha256": "d9af37d11a0fc650d22bc0d636059d9e630c3018ece7e56c6b1590b1fcb55ee0",
+        "frames": 301440,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.45490299817174673,
+          "prepare_reference": 53.66722000326263,
+          "predict_duration": 33.58182300144108,
+          "sample_rf": 745.792158995755,
+          "unpatchify_latent": 0.009800998668652028,
+          "decode_latent": 36.37214800255606
+        },
+        "total_to_decode_ms": 870.8492719961214,
+        "seed": 4221,
+        "allocated_bytes": 2117054976,
+        "reserved_bytes": 3374317568,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5190.990756346434
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e176421bb308470eefd205e0afc681faf0cda8253b6c87843f9520c2c3455d6c",
+        "elapsed_ms": 648.7248660050682,
+        "wav_sha256": "d9af37d11a0fc650d22bc0d636059d9e630c3018ece7e56c6b1590b1fcb55ee0",
+        "frames": 301440,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.6479060029960237,
+          "prepare_reference": 48.66818099981174,
+          "predict_duration": 33.48190800170414,
+          "sample_rf": 518.5452240039012,
+          "unpatchify_latent": 0.009106006473302841,
+          "decode_latent": 35.90274300222518
+        },
+        "total_to_decode_ms": 638.5044790004031,
+        "seed": 4221,
+        "allocated_bytes": 2127227392,
+        "reserved_bytes": 3076521984,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5051.392263045022
+        },
+        "phase": "baseline",
+        "input_sha256": "e67029b4776e196192f56d20a4e7197b6bb30e084060720fdac0b95966bb14ba",
+        "elapsed_ms": 916.7748729960294,
+        "wav_sha256": "b9db86dd737422a7e971a0c3b24109d5115c6394f099d1d45d5b14e3462fc389",
+        "frames": 545280,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.390366003557574,
+          "prepare_reference": 53.75025900139008,
+          "predict_duration": 33.04523700353457,
+          "sample_rf": 748.1798590015387,
+          "unpatchify_latent": 0.008861003152560443,
+          "decode_latent": 66.03437599551398
+        },
+        "total_to_decode_ms": 902.3391419977997,
+        "seed": 4221,
+        "allocated_bytes": 2125345280,
+        "reserved_bytes": 2845835264,
+        "repetition": 2
+      },
+      {
+        "comparison": {
+          "same_frames": true,
+          "pcm_equal": true,
+          "maximum_absolute_pcm16": 0.0,
+          "rms_error_pcm16": 0.0,
+          "reference_rms_pcm16": 5051.392263045022
+        },
+        "phase": "cuda_graph",
+        "input_sha256": "e67029b4776e196192f56d20a4e7197b6bb30e084060720fdac0b95966bb14ba",
+        "elapsed_ms": 767.2400480005308,
+        "wav_sha256": "b9db86dd737422a7e971a0c3b24109d5115c6394f099d1d45d5b14e3462fc389",
+        "frames": 545280,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.44736800191458315,
+          "prepare_reference": 54.080478999821935,
+          "predict_duration": 35.115534003125504,
+          "sample_rf": 605.4173440061277,
+          "unpatchify_latent": 0.009361996490042657,
+          "decode_latent": 66.48071800009347
+        },
+        "total_to_decode_ms": 762.4518220036407,
+        "seed": 4221,
+        "allocated_bytes": 2135529984,
+        "reserved_bytes": 3628072960,
+        "repetition": 2
+      }
+    ]
+  },
+  "stderr_present": false
+}
