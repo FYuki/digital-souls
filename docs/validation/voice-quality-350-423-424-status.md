@@ -157,6 +157,54 @@ cd backend
 cd ..
 backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments whisper_service irodori_service
 
+
+## #424：発話確定待ちの取消・失敗で後続入力が止まる不具合
+
+2026-09-19 JST、Epicの基準版 `fb0d8582387fea99a8b2774f2b80b19aa95d687a` に対し、
+入力世代・欠落確認・track交換の範囲をコードレビューした。
+対象は `voice_input/{detector,models,pipeline,session}.py`、
+`livekit_transport/{microphone_frames,microphone_integrity}.py` と
+`production.py` の音声入力bridge／reader部分。#408全差分やCodeRabbitレビューの完了ではない。
+
+終了通知または欠落確認を待つreaderがtrack交換・切断で取消されると、
+未検証の終了済みcaptureがキュー先頭に残り、後続の検証済み発話もSTTへ進めなかった。
+終了通知の例外でも同様に滞留する。また、旧発話の破棄が新trackのprerollまで消していた。
+
+[bridge](../../backend/app/livekit_transport/production.py)で、確認を終えられない発話を
+`audio_integrity_unavailable` として破棄し、後続の処理を再開する。
+取消・元例外は伝播し、未検証PCMを正常な発話として採用しない。
+終了済み発話の破棄から、新trackで蓄積中のprerollを保護する。
+
+[実VADを通すmodule試験](../../backend/tests/module/test_backend_voice_bridge.py)で、
+終了通知待ちの取消／通知失敗／欠落確認待ちの取消と、
+後続が未開始／検証済み／preroll蓄積中の組合せ9件を追加した。
+修正前には後続STT開始0件、preroll保護を加える前には3件のバッファ消失を再現した。
+
+最終修正の局所検証は以下の10ファイル、196 passed（30.20秒）。
+初回のVAD前後比較43件は新規worktreeのNode依存未準備で失敗し、
+`npm ci` 後の単独再実行43件と、最終修正後の下記全体再実行で成功した。
+
+```bash
+cd backend
+.venv/bin/python -m pytest -q \
+  tests/module/test_backend_voice_bridge.py \
+  tests/module/test_backend_voice_input.py \
+  tests/module/test_microphone_integrity.py \
+  tests/module/test_microphone_frames.py \
+  tests/unit/test_voice_input_pipeline.py \
+  tests/module/test_voice_input_vad_parity.py \
+  tests/unit/test_livekit_runtime_audio.py \
+  tests/unit/test_livekit_input_suppression.py \
+  tests/unit/test_livekit_stt_capture_lineage.py \
+  tests/module/test_conversation_text_priority.py
+```
+
+CIと同じ対象のmypyは363 source filesで成功。既存のStarlette依存によるdeprecation warningが1件。
+この検証は実CPU VADと模擬Core／track認可・欠落確認を使用し、
+実STT・LLM・TTS・LiveKit・ブラウザ接続の確認ではない。
+共有推論環境の起動確認待ちのため、改善版での実track交換・混在入力は未実施。
+正式100試行・速度／品質の受入状態も変更しない。
+
 ## 割り込み診断のfixture番号指定と集計の整合
 
 #408の残レビューとして、VAD/PCM/割り込みreporterと匿名cohort検証を照合した。
