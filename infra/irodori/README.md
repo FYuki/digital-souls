@@ -181,3 +181,21 @@ PCM観測用／障害bridge用Profileとの同時指定は拒否する。
 冷状態のモデル準備時間は通常TTFAから分離する。p50/p95、件数、失敗・欠測、
 GPU共有条件、応答区間の音質・間合いを記録し、実ブラウザ再生開始まで測る。
 GPUなしのテスト成功、image build、cache確認を実会話・音質・遅延の受入として扱わない。
+
+## CUDA Graph候補（既定無効）
+
+専用候補コンテナだけで DS_IRODORI_CUDA_GRAPH=true を指定すると、固定revisionの
+RF forwardを要求内のCUDA Graphで実行する。共有サービスへの配備操作は別途所有者が行う。
+40 steps、採用声・caption・seed・speed、BF16、duration推定は変更せず、torch.compileとの併用は拒否する。
+timestep埋込みの定数だけを同じCUDA演算順で要求内に保持し、capture中のCPUからGPUへの転送を避ける。
+upstream関数のsource hashが異なる場合は準備失敗とし、未知revisionへ無条件で適用しない。
+
+Graphは要求ごとに最大2形状、入力tensor合計64MiBまでとし、capture前の空きVRAMが
+入力容量と1GiBの余裕を下回る場合は通常forwardで実行する。これはcapture中の一時VRAM使用量の
+厳密な上限ではない。capture失敗・OOMは通常の推論失敗としてworkerを破棄し、既存の準備合成から再生成する。
+同じ形状でも全入力を毎回コピーし、出力も独立させる。要求の終了・失敗時に差替えを復元し、
+Graphと入力を次の要求へ持ち越さない。上限外の形状は通常forwardを使う。
+
+/versionの cudaGraphRequested は起動設定であり、全forwardのGraph適用を保証する値ではない。
+既定OFFで候補検証に使用し、実GPU計測・長短文・音質試聴・ブラウザ再生を含むTTFAの受入は別途記録する。
+この変更の導入だけで #350 / #423 / #424 の100試行や実マイク受入が完了したとは扱わない。
