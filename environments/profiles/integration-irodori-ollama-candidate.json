@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "name": "integration-irodori-ollama-candidate",
+  "description": "共有Irodoriと専用Ollama候補版を使う実音声計測。共有Ollamaの配備は変更しない。",
+  "readyGate": {
+    "baseUrl": "http://127.0.0.1:18574"
+  },
+  "dependencies": {
+    "frontend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:18573",
+      "readinessPath": "/"
+    },
+    "backend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:18500",
+      "readinessPath": "/health/ready",
+      "reload": true
+    },
+    "ollama": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:11534",
+      "readinessPath": "/api/tags"
+    },
+    "voicevox": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50021",
+      "readinessPath": "/version"
+    },
+    "livekit": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:7880",
+      "readinessPath": "/"
+    },
+    "whisper": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50022",
+      "readinessPath": "/health/ready"
+    },
+    "chroma": {
+      "mode": "disabled",
+      "source": null
+    },
+    "irodori": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50024",
+      "readinessPath": "/health/ready"
+    }
+  }
+}

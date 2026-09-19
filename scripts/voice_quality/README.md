@@ -829,3 +829,16 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_normal_
 固定音声、独立した試行、初期状態、時計、packetと全再生の証拠を既存validatorで確認する。
 失敗試行の時間は欠測、処理失敗は失敗として保持する。p50／p95は確認できた試行だけの参考分布であり、
 失敗・欠測を含む前後比較を受入合格へ変換しない。測定リビジョン、入力・reporter・schemaのhashを保持する。
+
+
+## 専用Ollama候補版との比較
+
+共有Ollamaを更新せず比較する場合は、所有する候補版を127.0.0.1:11534で起動し、
+run_pilot.py / run_normal_cohort.pyへ --profile integration-irodori-ollama-candidate を明示する。
+モデル・生成設定・CCV・共有Irodoriは比較元と揃える。候補版のimage digestとAPI versionは別途証跡へ残す。
+このProfileは候補版をexternalとして扱い、起動・停止しない。障害bridge／PCM観測との組合せは未対応である。
+
+OLLAMA_BASE_URLだけを.envで変えても、接続先はProfileのderivedEnvironmentで確定する。
+起動後のresolved-profile.jsonでdependencies.ollama.baseUrlとderivedEnvironment.OLLAMA_BASE_URLが
+ともにhttp://127.0.0.1:11534であることを確認する。共有のintegration-irodoriは11434を維持する。
+接続先を確認できない試行は候補版の性能証跡にせず、設定不一致として元の記録を残す。
