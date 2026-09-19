@@ -81,4 +81,4 @@ summaryのexisting_reporter_exit=1はその初期値であり、このcohortの�
 今回のhost runnerにはPYTHONPATH=backendを明示し、固定済みBE/FEと測定コードは変更していない。
 
 この診断後、同じ候補条件で350-irodori-reference-full-0919-01（準備5回＋100独立試行）を
-事前登録して開始した。この文書は診断結果のみであり、実行中の正式cohortの最終結果を含めない。
+事前登録して完走した。[正式結果](irodori-reference-formal-20260919.md)はp95 1967.65ms、測定100/100成功で第1段階達成。本書の小規模診断と正式分母は混ぜない。
