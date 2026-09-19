@@ -11,6 +11,7 @@ SCRIPTS = Path(__file__).resolve().parents[3] / "scripts/voice_quality"
 sys.path.insert(0, str(SCRIPTS))
 spec = importlib.util.spec_from_file_location("normal_cohort_tested", SCRIPTS / "run_normal_cohort.py")
 assert spec and spec.loader
+POLICY = {"method": "controlled_memory_schedulers_v1", "formation_disabled": True, "consolidation_disabled": True}
 cohort = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cohort)
 
@@ -47,7 +48,7 @@ def test_failed_isolated_trials_stay_in_summary_and_do_not_create_acceptance_rep
         trace.mkdir(parents=True)
         (trace / "controlled-trace.jsonl").write_text("")
         (base / "trial-manifest.json").write_text(json.dumps({
-            "initial_state_hash": "same-state", "trials": [{"phase": phase, "outcome": "failure"}],
+            "initial_state_hash": "same-state", "trials": [{"phase": phase, "outcome": "failure", "initial_state_evidence": {"memory_scheduler_policy": POLICY}}],
         }))
     assert cohort.aggregate(runs, output, "revision", 1) == 1
     summary = json.loads((output / "summary.json").read_text())
@@ -74,7 +75,11 @@ def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standa
     (tmp_path / "native-sdk.json").write_text(json.dumps({"status": "verified"}))
     (tmp_path / "trial-manifest.json").write_text(json.dumps({
         "measurement_revision": "revision", "measurement_scope": "isolated_normal_trial",
+        "trials": [{"initial_state_evidence": {"memory_scheduler_policy": POLICY}}],
     }))
+    (path / "resolved-profile.json").write_text(json.dumps({"derivedEnvironment": {
+        "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION": "true",
+    }}))
     monkeypatch.setattr(cohort.subprocess, "run",
                         lambda *a, **kw: SimpleNamespace(returncode=1, stderr="No such object"))
     assert cohort.verify_stopped(tmp_path, "revision", profile)["measurement_scope"] == "isolated_normal_trial"
@@ -109,3 +114,12 @@ def test_preparation_summary_keeps_missing_failed_and_invalid_attempts():
     empty = cohort.preparation_summary([])
     assert empty["duration_ms_p95"] is None
     assert empty["coverage"] == 0
+
+
+@pytest.mark.parametrize("policy", [None, {}, {**POLICY, "formation_disabled": False},
+                                  {**POLICY, "consolidation_disabled": False}])
+def test_normal_cohort_rejects_missing_or_active_memory_scheduler_policy(policy):
+    with pytest.raises(ValueError, match="isolation evidence"):
+        cohort.require_memory_isolation({"trials": [{"initial_state_evidence": {
+            "memory_scheduler_policy": policy,
+        }}]})
