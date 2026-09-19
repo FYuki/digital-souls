@@ -10,6 +10,12 @@
 
 最新の固定記憶参照20試行は[第2段階の計測結果](voice-memory-reference-20260919.md)を参照。測定は完了、速度合否は適用しない。
 
+再接続100独立Sessionは[正式証跡](voice-reconnect-formal-20260919.md)で10秒以内100/100、
+p95 2696.97msを確認。重複観測の範囲と旧版比較の制約は同文書に従う。
+高速化候補の休止は[3件pilot](voice-pause-pilot-20260919.md)で誤分割0・境界/PCM欠測0。
+100件は実行中で、相槌・割込・実マイク・聴感・移行・残レビューを含む全体受入は未完了。
+
+
 ## 統合状態と今回の実施順
 
 - Irodori導入は[PR #375](https://github.com/FYuki/digital-souls/pull/375)、BE音声判断移設は
