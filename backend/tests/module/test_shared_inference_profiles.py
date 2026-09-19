@@ -266,3 +266,22 @@ def test_cuda_graph_candidate_overrides_stale_shared_endpoints(tmp_path: Path):
             assert candidate["dependencies"][name] == dependency
     assert candidate["dependencies"]["irodori"]["source"] == "external"
     assert candidate["dependencies"]["irodori"]["readinessUrl"] == "http://127.0.0.1:50026/health/ready"
+
+def test_cuda_graph_fault_keeps_candidate_services_and_rejects_shared_endpoints(tmp_path):
+    from profile_validation import _validate_dependency
+    from profile_types import ProfileError
+    profile = "integration-irodori-cuda-graph-fault"
+    report = _resolve(profile, tmp_path)
+    expected = {"ollama": "http://127.0.0.1:11534",
+                "irodori": "http://127.0.0.1:50026", "livekit": "http://127.0.0.1:19880"}
+    for name, url in expected.items():
+        assert report["dependencies"][name]["baseUrl"] == url
+        assert report["dependencies"][name]["source"] == "external"
+    for name, urls in {"ollama": ["http://127.0.0.1:11434"],
+                       "irodori": ["http://127.0.0.1:50024"],
+                       "livekit": ["http://127.0.0.1:7880", "http://127.0.0.1:17880"]}.items():
+        dependency = {key: report["dependencies"][name][key]
+                      for key in ("mode", "source", "baseUrl", "readinessPath")}
+        for url in urls:
+            with pytest.raises(ProfileError, match="fixed local service"):
+                _validate_dependency(profile, name, {**dependency, "baseUrl": url})

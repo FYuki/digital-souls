@@ -30,7 +30,7 @@ def rig(tmp_path, monkeypatch):
     def run(run_id, args, log):
         calls.append(('run', run_id))
         return 1 if run_id.endswith('002') else 0
-    def verify(run_id, revision):
+    def verify(run_id, revision, profile):
         calls.append(('verify', run_id))
         return dict(session_end_confirmed=True, reported_success=not run_id.endswith('002'), owned_containers_deleted=True)
     def aggregate(runs, output):
@@ -59,7 +59,7 @@ def test_sequential_cleanup_before_next_trial_and_failed_trial_remains_in_denomi
 @pytest.mark.parametrize('problem', ['cleanup', 'revision', 'stop'])
 def test_does_not_start_next_environment_after_uncertain_cleanup_or_changed_revision(rig, monkeypatch, problem):
     args, calls, directory = rig
-    def verify(run_id, revision):
+    def verify(run_id, revision, profile):
         if problem == 'cleanup':
             raise ValueError('private service error')
         if problem == 'revision':
@@ -93,8 +93,9 @@ def test_plan_rejects_path_escape_or_invalid_denominator(identifier, count):
         cohort.planned_runs(identifier, count)
 
 
+@pytest.mark.parametrize('profile', ['integration-voice', 'integration-irodori', 'integration-irodori-cuda-graph'])
 @pytest.mark.parametrize('problem', ['none','live_container','permission_error','wrong_root','wrong_profile','wrong_owner','open_child','unverified_sdk'])
-def test_verifier_requires_actual_deletion_and_exclusive_test_ownership(tmp_path, monkeypatch, problem):
+def test_verifier_requires_actual_deletion_and_exclusive_test_ownership(tmp_path, monkeypatch, problem, profile):
     base=tmp_path/'test-001'; runtime=base/'runtime-data/runtime/standalone'; runtime.mkdir(parents=True)
     monkeypatch.setattr(cohort,'run_root',lambda run_id:base)
     manifest=dict(measurement_scope='livekit_fault_recovery_session_diagnostic', measurement_revision='a'*40,
@@ -102,17 +103,17 @@ def test_verifier_requires_actual_deletion_and_exclusive_test_ownership(tmp_path
     (base/'trial-manifest.json').write_text(json.dumps(manifest))
     (base/'native-sdk.json').write_text(json.dumps({'status': 'missing' if problem=='unverified_sdk' else 'verified', 'build': {}}))
     env=dict(runtime=dict(environmentId='test', dataRoot=str(base/'runtime-data') if problem!='wrong_root' else '/other'),
-             effectiveProfile=dict(effectiveProfile='integration-voice-fault' if problem!='wrong_profile' else 'dogfood'),
+             effectiveProfile=dict(effectiveProfile=f'{profile}-fault' if problem!='wrong_profile' else 'dogfood'),
              teardown=dict(status='completed'), services={name:dict(owned=problem!='wrong_owner',
                 containerIdentity=dict(containerId=('a' if name=='frontend' else 'b')*64)) for name in ['frontend','backend']})
     (runtime/'environment-run.json').write_text(json.dumps(env))
     monkeypatch.setattr(cohort.subprocess,'run',lambda *args,**kwargs:SimpleNamespace(
         returncode=0 if problem=='live_container' else 1, stderr='permission denied' if problem=='permission_error' else 'Error: No such object'))
     if problem=='none':
-        assert cohort.verify_trial('test-001','a'*40) == dict(session_end_confirmed=False,reported_success=False,owned_containers_deleted=True)
+        assert cohort.verify_trial('test-001','a'*40,profile) == dict(session_end_confirmed=False,reported_success=False,owned_containers_deleted=True)
     else:
         with pytest.raises(ValueError):
-            cohort.verify_trial('test-001','a'*40)
+            cohort.verify_trial('test-001','a'*40,profile)
 
 
 def test_interruption_signals_only_the_owned_child_process_group(tmp_path, monkeypatch):
@@ -160,3 +161,22 @@ def test_trial_has_no_fixed_preparation_deadline(tmp_path, monkeypatch):
                               livekit_env=tmp_path/"keys.env", disable_thinking=False)
     assert cohort.run_trial("run", args, tmp_path/"trial.log") == 1
     assert waits == [None]
+
+def test_candidate_reconnect_propagates_profile_and_formation_isolation(tmp_path, monkeypatch):
+    commands = []
+    class Child:
+        def wait(self): return 0
+    monkeypatch.setattr(cohort.subprocess, "Popen", lambda command, **kw: (commands.append(command), Child())[1])
+    args = argparse.Namespace(inference_env=tmp_path/"inference.env", livekit_env=tmp_path/"keys.env",
+        disable_thinking=False, profile="integration-irodori-cuda-graph", disable_memory_formation=True)
+    assert cohort.run_trial("candidate", args, tmp_path/"trial.log") == 0
+    assert commands[0][commands[0].index("--profile") + 1] == args.profile
+    assert "--disable-memory-formation" in commands[0]
+
+
+def test_reconnect_rejects_undefined_profile_before_starting(rig):
+    args, calls, directory = rig
+    args.profile = "integration-irodori-memory-reference"
+    with pytest.raises(ValueError, match="unsupported reconnect profile"):
+        cohort.execute(args)
+    assert not calls and not directory.exists()

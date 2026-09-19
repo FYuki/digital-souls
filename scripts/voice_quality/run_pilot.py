@@ -152,7 +152,7 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         raise ValueError("isolated normal trial requires one scheduled independent session")
     if profile not in {"integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"}:
         raise ValueError("unsupported measurement profile")
-    if profile in {"integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"} and fault_bridge:
+    if profile in {"integration-irodori-ollama-candidate", "integration-irodori-memory-reference"} and fault_bridge:
         raise ValueError("candidate profile cannot use the fault bridge profile")
     if profile.startswith("integration-irodori") and observe_stt_pcm:
         raise ValueError("Irodori profile cannot use the PCM observer profile")

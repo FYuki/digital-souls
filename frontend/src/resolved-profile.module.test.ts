@@ -118,7 +118,7 @@ describe('resolved profile reader', () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  test.each(['integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph', 'integration-irodori-memory-reference'])(
+  test.each(['integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph', 'integration-irodori-cuda-graph-fault', 'integration-irodori-memory-reference'])(
     '候補Profileは実際の計測URL読取まで通り、dogfoodからの利用を拒否する: %s',
     async profile => {
       const report = createResolvedEndpointReport()

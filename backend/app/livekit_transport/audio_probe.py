@@ -23,7 +23,7 @@ CLEANUP_TIMEOUT_SECONDS = 1
 
 def audio_probe_enabled(environment: Mapping[str, str], livekit_url: str) -> bool:
     return (environment.get("DS_ENVIRONMENT_ID") == "test"
-            and environment.get("DS_PROFILE") in {"integration-voice-fault", "integration-irodori-fault"}
+            and environment.get("DS_PROFILE") in {"integration-voice-fault", "integration-irodori-fault", "integration-irodori-cuda-graph-fault"}
             and environment.get("VOICE_MEASUREMENT_KIND") == "controlled_baseline"
             and livekit_url in {"ws://127.0.0.1:19880", "ws://localhost:19880"})
 

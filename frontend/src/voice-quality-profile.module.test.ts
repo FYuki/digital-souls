@@ -71,9 +71,21 @@ test.each(['integration-irodori-ollama-candidate', 'integration-irodori-cuda-gra
   expect(server.url).toBe('http://127.0.0.1:18574/ready')
 })
 
-test.each(['integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph', 'integration-irodori-memory-reference'])('候補版を未定義の障害Profileへ切り替えない: %s', async profile => {
+test.each(['integration-irodori-ollama-candidate', 'integration-irodori-memory-reference'])('候補版を未定義の障害Profileへ切り替えない: %s', async profile => {
   process.env.VOICE_QUALITY_PROFILE = profile
   process.env.VOICE_QUALITY_FAULT_BRIDGE = '1'
   process.env.VOICE_QUALITY_CONTROL_PROBE = '1'
   await expect(import('../playwright.livekit-quality.config')).rejects.toThrow('invalid voice quality profile')
+})
+
+test('高速化TTS候補の再接続は専用bridge用Profileを使う', async () => {
+  process.env.VOICE_QUALITY_PROFILE = 'integration-irodori-cuda-graph'
+  process.env.VOICE_QUALITY_FAULT_BRIDGE = '1'
+  process.env.VOICE_QUALITY_CONTROL_PROBE = '1'
+  process.env.VOICE_QUALITY_NETWORK_FAULT = '1'
+  const {default: config} = await import('../playwright.livekit-quality.config')
+  const server = config.webServer as {env: Record<string, string>; url: string}
+  expect(server.env.DS_PROFILE).toBe('integration-irodori-cuda-graph-fault')
+  expect(process.env.DS_PROFILE).toBe(server.env.DS_PROFILE)
+  expect(server.url).toBe('http://127.0.0.1:18574/ready')
 })
