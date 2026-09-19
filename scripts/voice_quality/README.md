@@ -829,3 +829,82 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_normal_
 固定音声、独立した試行、初期状態、時計、packetと全再生の証拠を既存validatorで確認する。
 失敗試行の時間は欠測、処理失敗は失敗として保持する。p50／p95は確認できた試行だけの参考分布であり、
 失敗・欠測を含む前後比較を受入合格へ変換しない。測定リビジョン、入力・reporter・schemaのhashを保持する。
+
+## Irodoriの工程診断
+
+probe_irodori_stages.pyは専用の一時コンテナ内で実行する補助診断。
+標準入力へcharacters/miori/miori.card.jsonのdata.extensions.digital_souls.tts_configをJSONとして渡す。
+製品と同じimageのPythonを使い、既存モデルcacheを/models/huggingface、
+登録音声を/voicesへ読取専用でmountする。ネットワークは無効、/tmpだけ一時書込みを許可する。
+HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1を設定し、共有サービスの実行process内では起動しない。
+
+warmup 1件とスクリプト内の固定短文3件を上流の通常API関数で合成する。
+生成本文は出力せず、既存工程時間・sample数・hash・設定hash・GPUメモリ数値だけを返す。
+初回準備失敗も新しいrun IDへ保存し、成功で置き換えない。
+HTTP queueや音声会話全体のTTFAは測らない。
+実行後は所有コンテナだけを回収し、共有サービスの稼働を確認する。
+[実行条件と限定診断結果](../../docs/validation/voice-quality-runtime-stages-20260919.md)を参照。
+
+
+## 専用Ollama候補版との比較
+
+共有Ollamaを更新せず比較する場合は、所有する候補版を127.0.0.1:11534で起動し、
+run_pilot.py / run_normal_cohort.pyへ --profile integration-irodori-ollama-candidate を明示する。
+モデル・生成設定・CCV・共有Irodoriは比較元と揃える。候補版のimage digestとAPI versionは別途証跡へ残す。
+このProfileは候補版をexternalとして扱い、起動・停止しない。障害bridge／PCM観測との組合せは未対応である。
+
+OLLAMA_BASE_URLだけを.envで変えても、接続先はProfileのderivedEnvironmentで確定する。
+起動後のresolved-profile.jsonでdependencies.ollama.baseUrlとderivedEnvironment.OLLAMA_BASE_URLが
+ともにhttp://127.0.0.1:11534であることを確認する。共有のintegration-irodoriは11434を維持する。
+接続先を確認できない試行は候補版の性能証跡にせず、設定不一致として元の記録を残す。
+
+
+### CUDA Graph TTS候補とOllama候補を組み合わせる
+
+--profile integration-irodori-cuda-graph はOllama 11534とIrodori 50026に固定する。
+Frontend/Backend/ready gateは18573/18500/18574で、他の音声測定Profileと同時起動しない。
+両候補はexternalであり、runnerが共有サービスを起動・更新・停止することはない。
+所有者が先に専用TTS候補を DS_IRODORI_CUDA_GRAPH=true で準備し、固定image IDと
+/versionの要求フラグを確認する。声・step・speed・CCVと入力音声は比較元と揃える。
+
+runnerへ共有接続先の古い環境値を渡しても、解決済みProfileでは候補先を使用する。
+固定Profileを変えて共有TTSへ誤接続した計測を候補の証跡へ混ぜない。
+PCM観測用/障害bridge Profileとの同時選択を拒否し、形成停止・空状態・独立試行・
+初期状態hash・匿名reportの契約をそのまま適用する。
+実GPU readinessと合成成功は、正式100試行や聴感受入の代替ではない。
+
+## 専用Irodori workerの失敗・次会話診断
+
+tts_worker_fault.pyとfrontend/integration/voice-quality/tts-worker-recovery.spec.tsは
+専用TTSの実workerにSIGTERMを送り、実UIの失敗表示と同じSessionの後続音声を確認する。
+通常の性能cohortと同時実行しない。共有サービスへ故障を注入しない。
+この手順の追加は実試験成功を意味せず、対象版・各phaseの結果を別の測定証跡へ保存する。
+
+使用前に、所有者が専用port 50026へ検証済みimmutable imageで復旧試験用TTSを起動する。
+container名はds-<owner>、digital-souls.ownerラベルのownerは
+voice-quality-423-recovery-で始める。通常速度測定用のownerは故障対象として拒否する。
+対象ファイルはリポジトリへcommitせず、以下の情報を現在のdocker inspectと照合して保存する。
+
+- container_id: 完全な64桁ID
+- image: sha256:に続く64桁image ID
+- owner: 上記の専用owner
+- base_url: http://127.0.0.1:50026
+- docker_distro: UbuntuからUbuntu-dogfoodのDockerを使う場合だけUbuntu-dogfood
+
+VOICE_TTS_FAULT_TARGET_FILEへ対象ファイルを指定し、既存の
+playwright.livekit-quality.config.tsでtts-worker-recovery.spec.tsだけを実行する。
+VOICE_QUALITY_PROFILE=integration-irodori-cuda-graph、新規VOICE_QUALITY_RUN_ID、
+専用FE/BE imageとtest data rootを使用する。解決済みProfileのIrodori接続先も照合する。
+
+生成中と先頭再生開始後の2ケースを区別し、active=1観測後にID・image・所有を再確認する。
+PID 1のuvicornを親とする単一spawn worker以外は停止しない。
+応答失敗とSession存続を確認し、再準備後は固定音声を実STTへ送り、
+新応答のsample数・gap・旧応答の終端一意性を検査する。
+
+先頭再生開始後のケースでは、既存post-gain workletの数値観測を傍受し、失敗通知時の
+render中quantumを含む上限より後の無音interval、一致するfinished終端frame、
+その終端の実出力時計通過、監査node全出力の切断を要求する。
+監査nodeは失敗後に破棄されるため、破棄後の欠測時間を1秒の無音へ補完しない。
+この上限を失敗直後の完全な無音・停止遅延0msと読み替えない。
+時計・interval欠落を0音声へ補完せず、生成中の試験で旧出力停止を代用しない。
+本試験は固定音声の実接続であり、人の実マイク・試聴の代替ではない。

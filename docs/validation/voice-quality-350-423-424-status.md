@@ -5,6 +5,9 @@
 「過去確認」は記載版・条件での証拠であり、現在の設定・改善後版の受入成功を意味しない。
 試験ファイルへの参照は実行先の案内であり、その存在を実行済みの証明にしない。
 
+共有環境起動後の最新の限定実接続結果は[2026-09-19検証記録](voice-quality-350-423-424-live-20260919.md)を参照。
+機能10件・native 12件・3往復の確認と、空状態1件のTTFA未達・連続再生gapを分けている。
+
 ## 統合状態と今回の実施順
 
 - Irodori導入は[PR #375](https://github.com/FYuki/digital-souls/pull/375)、BE音声判断移設は
@@ -81,8 +84,8 @@
 | F3 短発話・言い淀み・雑音・長無音／長発話 | 区間処理の導入済みと品質を区別。文中休止2%と境界欠測は残件 |
 | F4 相槌継続・take-turn・判定不能 | 過去の相槌判定不能20件と出力継続欠測を保持。take-turn遅延4指標は過去条件で確認。#350と共通 |
 | F5 生成中／生成後の割込・遅延結果 | 局所試験と固定音声の一部証拠あり。両phase・取消不能provider・後発responseの通し対応が残る |
-| F6 音声/text/focus/mute/thread切替 | [実会話suite](../../frontend/integration/voice/conversation-session.spec.ts)と[controls suite](../../frontend/integration/voice/conversation-session-controls.spec.ts)を実行先とする。今回版で全ケース完了の証拠はまだない |
-| F7 text即時停止・先行音声破棄・確定履歴保持 | text優先moduleとcontrols suiteに対応。実接続の完了記録を追加する |
+| F6 音声/text/focus/mute/thread切替 | [実会話suite](../../frontend/integration/voice/conversation-session.spec.ts)と[controls suite](../../frontend/integration/voice/conversation-session-controls.spec.ts)を実行先とする。d14c394版でcontrolsを含む実接続10件成功（424-functional-0919-02）。固定音声での確認であり、人の実発声・全機能競合の合格とは区別する |
+| F7 text即時停止・先行音声破棄・確定履歴保持 | text優先moduleに加え、d14c394版の実接続suiteで生成中／再生中のtext割込とspeech→text→speechを確認済み。取消不能provider等の全競合は残る |
 | F8 再接続・track交換・順序逆転・世代 | bridge/moduleに導入済み。実再接続の遅延・coverage・後続再生が未達。track等の競合を100件成功率と混同しない |
 | F9 stale出力排除・中断履歴prefix | 過去の旧出力監査と履歴試験を維持。改善後版の取消／complete競合と実再生prefixを確認 |
 | F10 protocol・準備／capacity／TTS失敗・過大buffer | 旧client拒否、開始失敗cleanup等は過去確認。全障害の実スタック一括合格ではない |
@@ -156,7 +159,7 @@ cd backend
 .venv/bin/python -m pytest tests/unit/test_voice_measurement_memory.py tests/unit/test_voice_quality_state.py tests/unit/test_voice_quality_pilot.py tests/unit/test_voice_quality_normal_cohort.py tests/unit/test_livekit_pilot_report.py tests/module/test_main.py tests/module/test_memory_index_lifespan.py tests/module/test_memory_formation_chat_entrypoints.py tests/module/test_shared_inference_profiles.py tests/module/test_profile_report.py -q
 cd ..
 backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments whisper_service irodori_service
-
+```
 
 ## #424：発話確定待ちの取消・失敗で後続入力が止まる不具合
 
@@ -226,3 +229,42 @@ runnerは小規模診断で `fixture_indices` を記録するが、相槌・take
 cd backend
 .venv/bin/python -m pytest tests/unit/test_voice_quality_take_turn_report.py tests/unit/test_voice_quality_backchannel_report.py tests/unit/test_voice_quality_cohort_report_validation.py tests/unit/test_voice_quality_backend_vad_report.py tests/unit/test_voice_quality_vad_report.py tests/unit/test_voice_quality_stt_pcm_report.py tests/unit/test_voice_quality_pilot.py -q
 ```
+
+## Irodori CUDA Graph候補の実測（2026-09-19）
+
+[固定条件の対比較と復旧試験](irodori-cuda-graph-20260919.md)を追加した。
+最終固定イメージの5文×3回対比較で、合成中央値824.13ms→623.26ms（24.4%短縮）。
+40 steps・採用声/seed/speed・BF16は維持し、出力長は全件一致した。
+実装は[PR #442](https://github.com/FYuki/digital-souls/pull/442)で既定OFF。
+実ブラウザの独立100試行、実マイク・聴感、固定記憶参照は未実施で、既存の受入判定を更新しない。
+共有TTSへ配備していない。合成中の専用worker停止は502検出後に再準備・後続合成成功を確認した。
+
+## CUDA Graph候補の実ブラウザ確認（2026-09-19）
+
+[専用Profileと実ブラウザ証跡](irodori-graph-browser-20260919.md)を追加した。
+#442/#443は全CI成功後にEpicへ統合済み。候補計測基盤は#444で別管理する。
+Ollama 0.34.2 + CUDA Graph TTSの小規模cohortは準備5件＋独立測定3件が全成功、全件gap 0。
+測定TTFAは約2.12/2.17/1.95秒で、2秒受入は未達。
+事前接続timeout、Frontend計測URLのProfile漏れによる失敗と修正後の成功を分離して保存した。
+正式100件、記憶参照の第2段階、人の実マイク/聴感、他の残条件を完了扱いにしない。
+専用TTSは試験後に回収し、共有サービスは維持した。
+
+## CUDA Graph入力上限と正式速度計測（2026-09-19）
+
+[容量上限の原因診断と再測定](irodori-graph-capacity-20260919.md)を追加した。
+通常CFG入力約204MiBが64MiB上限を超えていたため、#446で256MiBへ修正した。
+単体対比較では両形状がGraph化され、同一runの中央値709.19ms→557.86ms。
+出力保護や固定品質設定は維持する。
+
+修正版の小規模測定3件は約1.86/1.83/1.92秒で、測定側gap 0。
+準備1件の64 samplesのgapは保持する。正式な準備5回＋独立100試行を
+350-irodori-graph256-full-0919-01として開始し、結果は未確定。
+第2段階の記憶参照と他の残受入を完了扱いにしない。
+
+## 空状態の正式100試行（2026-09-19）
+
+[正式測定記録](irodori-graph-formal-20260919.md)を追加した。
+準備5回＋独立100回が完了し、処理失敗0件、TTFA p95 2001.30ms。
+第1段階の速度条件は未達。記憶参照の第2段階と他の残受入は未完了。
+#446/#447は全CI成功後にEpic統合済みだが、統合後のCIとContainer imagesは
+GitHub課金・利用上限エラーで開始されず、復旧後の確認が必要。

@@ -27,7 +27,7 @@ def plan(cohort_id: str, measured: int) -> list[tuple[str, str]]:
 
 
 def verify_stopped(base: Path, revision: str, profile: str = "integration-voice") -> dict:
-    if profile not in ("integration-voice", "integration-irodori"):
+    if profile not in ("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"):
         raise ValueError("unsupported independent normal profile")
     report = json.loads((base / "runtime-data/runtime/standalone/environment-run.json").read_text())
     if (report.get("runtime", {}).get("environmentId") != "test"
@@ -192,11 +192,12 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
     code = 1
     if measured == 100:
         with (directory / "reporter.log").open("x") as log:
+            # app packageのあるcwdから起動し、親のPYTHONPATHへ依存しない。
             code = subprocess.run([sys.executable, "-m", "app.livekit_pilot_report", "--scope", "controlled",
                 "--manifest", str(target), "--trace", str(trace), "--output", str(directory / "report.json"),
                 "--schema", str(ROOT / "docs/schemas/voice-quality-artifact-v1.schema.json"),
                 "--profile-report", str(run_root(runs[0][0]) / "runtime-data/runtime/standalone/resolved-profile.json"),
-                "--run-id", directory.name], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=False).returncode
+                "--run-id", directory.name], cwd=ROOT / "backend", stdout=log, stderr=subprocess.STDOUT, check=False).returncode
     summary["preparation_by_phase"] = {phase: preparation_summary(
         [trial for trial in combined["trials"] if trial.get("phase") == phase]
     ) for phase in ("warmup", "measured")}
@@ -212,7 +213,7 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori"), default="integration-voice")
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"), default="integration-voice")
     parser.add_argument("--cohort-id", required=True)
     parser.add_argument("--measured", type=int, default=100)
     parser.add_argument("--inference-env", type=Path, required=True)

@@ -1,0 +1,12 @@
+{
+  "run_id": "350-ollama-0342-0919-01",
+  "classification": "configuration_mismatch",
+  "candidate_comparison_eligible": false,
+  "reason": "inference_envの候補URLはProfile解決で共有11434に置換された。candidate-provider.jsonは意図した候補APIの観測でありBackend接続の証明ではない。",
+  "intended_ollama_url": "http://127.0.0.1:11534",
+  "resolved_ollama_url": "http://localhost:11434",
+  "derived_ollama_url": "http://localhost:11434",
+  "resolved_profile_sha256": "0dfc64c94f4c02cd816e6444fa393dd8e61ccc97d6f3c51806037381860f87dd",
+  "original_artifacts_preserved": true,
+  "formal_stage1_status": "NOT_RUN"
+}

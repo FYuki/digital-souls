@@ -11,7 +11,7 @@ from app.memory.persistence.schema import PERSONA_MEMORY_TABLES
 from app.voice_quality_state import inspect_controlled_initial_state
 
 
-@pytest.fixture(params=['integration-voice', 'integration-irodori'])
+@pytest.fixture(params=['integration-voice', 'integration-irodori', 'integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph'])
 def state_inputs(tmp_path, request):
     data = tmp_path / 'data'
     data.mkdir()

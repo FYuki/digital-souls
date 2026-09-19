@@ -60,3 +60,20 @@ test('Irodoriの障害診断も専用ポートと共有TTSを維持する', asyn
   expect(process.env.DS_PROFILE).toBe('integration-irodori-fault')
   expect(server.url).toBe('http://127.0.0.1:18574/ready')
 })
+
+
+test.each(['integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph'])('候補版の専用Profileを起動と計測で共有する: %s', async profile => {
+  process.env.VOICE_QUALITY_PROFILE = profile
+  const {default: config} = await import('../playwright.livekit-quality.config')
+  const server = config.webServer as {env: Record<string, string>; url: string}
+  expect(server.env.DS_PROFILE).toBe(profile)
+  expect(process.env.DS_PROFILE).toBe(profile)
+  expect(server.url).toBe('http://127.0.0.1:18574/ready')
+})
+
+test.each(['integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph'])('候補版を未定義の障害Profileへ切り替えない: %s', async profile => {
+  process.env.VOICE_QUALITY_PROFILE = profile
+  process.env.VOICE_QUALITY_FAULT_BRIDGE = '1'
+  process.env.VOICE_QUALITY_CONTROL_PROBE = '1'
+  await expect(import('../playwright.livekit-quality.config')).rejects.toThrow('invalid voice quality profile')
+})

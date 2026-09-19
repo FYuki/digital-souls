@@ -1,0 +1,26 @@
+{
+  "run_id": "350-ollama-0342-0919-02",
+  "measurement_revision": "8489b2fa69f061bf859b1dd9fcafb9c271091c49",
+  "classification": "preparation_failure",
+  "reason": "初期状態validatorが候補Profileを許可しておらず、発話入力前に停止。native SDK採取も時間不足で未検証。",
+  "planned_measured": 1,
+  "succeeded": 0,
+  "failed": 1,
+  "ttfa_ms": null,
+  "routing": {
+    "version": {
+      "version": "0.34.2"
+    },
+    "image_digest": "sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532",
+    "dedicated_port": 11534,
+    "shared_model_empty_before_run": true,
+    "changed_connection_keys": [
+      "OLLAMA_BASE_URL"
+    ],
+    "resolved_profile_sha256": "1e981526b1b86b2ac83f76d872881b9b375fbc2a256332848a5af39cce2c3b38",
+    "resolved_ollama_url": "http://127.0.0.1:11534",
+    "shared_model_empty_after_run": true
+  },
+  "formal_stage1_status": "NOT_RUN",
+  "manifest_sha256": "89a5cf2bea044f1192a1a1b443b11e8015a95104ff8945e57518bfd904d17aa1"
+}

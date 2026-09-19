@@ -11,6 +11,7 @@ import {
   attachProfileEvidence,
   getCapabilitySkipReason,
   readResolvedProfile,
+  readVoiceMeasurementBaseUrl,
 } from '../playwright/resolved-profile'
 import { DEPENDENCY_NAMES, parseResolvedProfile } from '../resolved-profile'
 
@@ -116,6 +117,23 @@ describe('resolved profile reader', () => {
     vi.unstubAllEnvs()
     await rm(tempDir, { recursive: true, force: true })
   })
+
+  test.each(['integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph'])(
+    '候補Profileは実際の計測URL読取まで通り、dogfoodからの利用を拒否する: %s',
+    async profile => {
+      const report = createResolvedEndpointReport()
+      await writeReport({
+        ...report,
+        requestedProfile: profile,
+        effectiveProfile: profile,
+        profile: { schemaVersion: 1, name: profile },
+      })
+      vi.stubEnv('DS_ENVIRONMENT_ID', 'test')
+      await expect(readVoiceMeasurementBaseUrl()).resolves.toBe('http://localhost:15173')
+      vi.stubEnv('DS_ENVIRONMENT_ID', 'dogfood')
+      await expect(readVoiceMeasurementBaseUrl()).rejects.toThrow('resolved test profile')
+    },
+  )
 
   test('should read a valid V1 report with typed backend mode and capabilities', async () => {
     await writeReport(createReport())

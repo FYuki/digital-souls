@@ -33,8 +33,9 @@ if (process.env.VOICE_QUALITY_OBSERVE_STT_PCM !== undefined && (!pcmObserver || 
   throw new Error('invalid PCM observer selection')
 }
 const measurementProfile = process.env.VOICE_QUALITY_PROFILE ?? 'integration-voice'
-if (!['integration-voice', 'integration-irodori'].includes(measurementProfile)
-  || (measurementProfile === 'integration-irodori' && pcmObserver)) {
+if (!['integration-voice', 'integration-irodori', 'integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph'].includes(measurementProfile)
+  || (measurementProfile.startsWith('integration-irodori') && pcmObserver)
+  || (['integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph'].includes(measurementProfile) && faultBridge)) {
   throw new Error('invalid voice quality profile selection')
 }
 const selectedProfile = pcmObserver ? 'integration-voice-pcm' : (faultBridge ? measurementProfile + '-fault' : measurementProfile)
