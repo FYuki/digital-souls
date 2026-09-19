@@ -200,3 +200,20 @@ Graphと入力を次の要求へ持ち越さない。上限外の形状は通常
 /versionの cudaGraphRequested は起動設定であり、全forwardのGraph適用を保証する値ではない。
 既定OFFで候補検証に使用し、実GPU計測・長短文・音質試聴・ブラウザ再生を含むTTFAの受入は別途記録する。
 この変更の導入だけで #350 / #423 / #424 の100試行や実マイク受入が完了したとは扱わない。
+
+## 登録参照音声のlatent再利用候補（既定無効）
+
+DS_IRODORI_REFERENCE_CACHE=true は、固定upstreamの単一参照WAV変換をruntimeごとに
+最大1件再利用する。各要求の登録音声のhash検証は継続し、再利用側でもWAV全体のSHA-256、
+正規化・長さ上限・model/codec・dtype・形状条件を照合する。本文、caption、生成結果は保存しない。
+声の変更・非対応条件では既存entryを解放する。変換中の条件変更も保存対象から外す。
+
+対象は16MiB以下の参照WAVと2MiB以下のlatent/mask。決定的encode・eval・inference mode、
+単一candidateに限り、compile、LoRA、複数参照、事前latent、speaker embedding等は通常処理へ戻る。
+保存・返却時にtensorを複製し、呼出側の変更を次の要求へ持ち越さない。
+upstream参照変換関数のsource hashが違う場合は準備失敗とする。
+workerの終了・再生成でcacheも破棄する。音声設定、duration推定、BF16、40 stepsは変更しない。
+
+/versionのreferenceCacheRequestedは起動設定であり、個々の要求のcache hitを保証しない。
+CUDA Graphとは独立した既定無効の候補で、共有サービスへ自動配備しない。
+速度・音質・実ブラウザTTFAの測定証跡と受入判定は実装PRから分離する。

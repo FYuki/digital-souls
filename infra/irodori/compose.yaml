@@ -13,6 +13,7 @@ services:
     environment:
       NVIDIA_VISIBLE_DEVICES: "0"
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      DS_IRODORI_REFERENCE_CACHE: ${DS_IRODORI_REFERENCE_CACHE:-false}
       DS_IRODORI_CUDA_GRAPH: ${DS_IRODORI_CUDA_GRAPH:-false}
       DS_IRODORI_VOICES_DIR: /voices
       DS_IRODORI_MODEL_CACHE: /models/huggingface

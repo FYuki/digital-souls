@@ -63,6 +63,10 @@ def gpu_worker(connection: Connection, config: ServiceConfig) -> None:
                 from irodori_service.cuda_graph import install_cuda_graph_sampler
 
                 install_cuda_graph_sampler()
+            if config.reference_cache:
+                from irodori_service.reference_cache import install_reference_latent_cache
+
+                install_reference_latent_cache()
             UpstreamRequest, create_speech = upstream.SpeechRequest, upstream.create_speech
 
             voices = RegisteredVoices(config.voices_dir)
