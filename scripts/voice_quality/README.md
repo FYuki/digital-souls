@@ -829,3 +829,18 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_normal_
 固定音声、独立した試行、初期状態、時計、packetと全再生の証拠を既存validatorで確認する。
 失敗試行の時間は欠測、処理失敗は失敗として保持する。p50／p95は確認できた試行だけの参考分布であり、
 失敗・欠測を含む前後比較を受入合格へ変換しない。測定リビジョン、入力・reporter・schemaのhashを保持する。
+
+## Irodoriの工程診断
+
+probe_irodori_stages.pyは専用の一時コンテナ内で実行する補助診断。
+標準入力へcharacters/miori/miori.card.jsonのdata.extensions.digital_souls.tts_configをJSONとして渡す。
+製品と同じimageのPythonを使い、既存モデルcacheを/models/huggingface、
+登録音声を/voicesへ読取専用でmountする。ネットワークは無効、/tmpだけ一時書込みを許可する。
+HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1を設定し、共有サービスの実行process内では起動しない。
+
+warmup 1件とスクリプト内の固定短文3件を上流の通常API関数で合成する。
+生成本文は出力せず、既存工程時間・sample数・hash・設定hash・GPUメモリ数値だけを返す。
+初回準備失敗も新しいrun IDへ保存し、成功で置き換えない。
+HTTP queueや音声会話全体のTTFAは測らない。
+実行後は所有コンテナだけを回収し、共有サービスの稼働を確認する。
+[実行条件と限定診断結果](../../docs/validation/voice-quality-runtime-stages-20260919.md)を参照。
