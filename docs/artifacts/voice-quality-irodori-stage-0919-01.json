@@ -1,0 +1,13 @@
+{
+  "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "script_sha256": "d9a0a64bb43e583cde4ab803cae7db7c148e7341e60f18b260df576aaa26a418",
+  "base_revision": "f06279023a029d3b5e220690d52f719bc9b699cc",
+  "started_unix": 1789788829.21173,
+  "finished_unix": 1789788830.9504194,
+  "exit_code": 1,
+  "result": {
+    "status": "failure",
+    "error_type": "IncompleteSnapshotError"
+  },
+  "stderr_present": false
+}

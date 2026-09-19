@@ -1,0 +1,208 @@
+{
+  "scope": "同一モデル・短文によるOllama版比較の診断。正式会話TTFAではない。",
+  "request": {
+    "model": "gemma4:e4b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "こんにちは。"
+      }
+    ],
+    "stream": false,
+    "think": false,
+    "options": {
+      "num_ctx": 8192,
+      "num_predict": 1,
+      "temperature": 0
+    }
+  },
+  "servers": [
+    {
+      "port": 11434,
+      "version": "0.32.5",
+      "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+      "before": {
+        "models": []
+      },
+      "trials": [
+        {
+          "ordinal": 1,
+          "elapsed_ms": 11762.845077995735,
+          "outcome": "success",
+          "load_duration": 11689369417,
+          "total_duration": 11762287866,
+          "prompt_eval_duration": 71294000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 2,
+          "elapsed_ms": 292.84176899818704,
+          "outcome": "success",
+          "load_duration": 253315713,
+          "total_duration": 292234681,
+          "prompt_eval_duration": 37573000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 3,
+          "elapsed_ms": 285.0841999970726,
+          "outcome": "success",
+          "load_duration": 256625620,
+          "total_duration": 284472853,
+          "prompt_eval_duration": 26535000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 4,
+          "elapsed_ms": 287.431426004332,
+          "outcome": "success",
+          "load_duration": 258350397,
+          "total_duration": 286859772,
+          "prompt_eval_duration": 27373000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 5,
+          "elapsed_ms": 299.87946600158466,
+          "outcome": "success",
+          "load_duration": 261045904,
+          "total_duration": 299282855,
+          "prompt_eval_duration": 36772000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        }
+      ],
+      "after": {
+        "models": [
+          {
+            "name": "gemma4:e4b",
+            "model": "gemma4:e4b",
+            "size": 3367921253,
+            "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "gemma4",
+              "families": [
+                "gemma4"
+              ],
+              "parameter_size": "8.0B",
+              "quantization_level": "Q4_K_M"
+            },
+            "expires_at": "2026-09-19T12:44:04.637190108+09:00",
+            "size_vram": 3367921253,
+            "context_length": 8192
+          }
+        ]
+      }
+    },
+    {
+      "port": 11534,
+      "version": "0.34.2",
+      "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+      "before": {
+        "models": []
+      },
+      "trials": [
+        {
+          "ordinal": 1,
+          "elapsed_ms": 38083.48273100273,
+          "outcome": "success",
+          "load_duration": 25443662871,
+          "total_duration": 38082617353,
+          "prompt_eval_duration": 12635628000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 2,
+          "elapsed_ms": 1219.443994006724,
+          "outcome": "success",
+          "load_duration": 633319,
+          "total_duration": 1218511244,
+          "prompt_eval_duration": 1216654000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 3,
+          "elapsed_ms": 39.95762800332159,
+          "outcome": "success",
+          "load_duration": 642347,
+          "total_duration": 38953957,
+          "prompt_eval_duration": 36756000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 4,
+          "elapsed_ms": 32.382650999352336,
+          "outcome": "success",
+          "load_duration": 639877,
+          "total_duration": 31562480,
+          "prompt_eval_duration": 28920000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        },
+        {
+          "ordinal": 5,
+          "elapsed_ms": 33.70237399940379,
+          "outcome": "success",
+          "load_duration": 1216474,
+          "total_duration": 32634412,
+          "prompt_eval_duration": 29773000,
+          "eval_duration": 1000,
+          "prompt_eval_count": 11,
+          "eval_count": 1,
+          "done_reason": "length"
+        }
+      ],
+      "after": {
+        "models": [
+          {
+            "name": "gemma4:e4b",
+            "model": "gemma4:e4b",
+            "size": 3367921253,
+            "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+            "details": {
+              "parent_model": "",
+              "format": "gguf",
+              "family": "gemma4",
+              "families": [
+                "gemma4"
+              ],
+              "parameter_size": "8.0B",
+              "quantization_level": "Q4_K_M"
+            },
+            "expires_at": "2026-09-19T03:44:43.485250211Z",
+            "size_vram": 3367921253,
+            "context_length": 8192
+          }
+        ]
+      }
+    }
+  ],
+  "formal_acceptance": false
+}

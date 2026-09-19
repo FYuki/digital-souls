@@ -1,0 +1,101 @@
+{
+  "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "script_sha256": "925a4dc5872e9befd71bd832aea2e6c2316394459621ffdc7a07d6b0ce1cd5df",
+  "base_revision": "f06279023a029d3b5e220690d52f719bc9b699cc",
+  "started_unix": 1789788860.8137167,
+  "finished_unix": 1789788881.5735402,
+  "exit_code": 0,
+  "result": {
+    "status": "success",
+    "scope": "isolated_fixed_text_tts_stage_diagnostic",
+    "formal_acceptance": false,
+    "compile_model": false,
+    "empty_cache_interval": 10,
+    "model_revision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codec_revision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "voice_config_sha256": "39a19d9534e28495b37e081ff5e4a0f9950338cbb98d46bd4a4e9ecb205e585c",
+    "trials": [
+      {
+        "phase": "warmup",
+        "input_sha256": "a0c3b74a6515d7a0932dfded7fa3fe00b2852c2ec9866a8abe4dd0fbe347ae6b",
+        "elapsed_ms": 13755.385311000282,
+        "wav_sha256": "1e8a294d9539166f2a35a64f732952143b1b537315f16d36a686458602053edb",
+        "frames": 207360,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 1.4886989956721663,
+          "prepare_reference": 278.2616640033666,
+          "predict_duration": 167.76826499699382,
+          "sample_rf": 707.502174002002,
+          "unpatchify_latent": 0.009224000677932054,
+          "decode_latent": 45.0455719983438
+        },
+        "total_to_decode_ms": 1201.3027959983447,
+        "seed": 4221,
+        "allocated_bytes": 1983195648,
+        "reserved_bytes": 3770679296
+      },
+      {
+        "phase": "diagnostic",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 839.1374000057112,
+        "wav_sha256": "d1360ffbb368facd10057845d16b004f27189a8e708fb2d89347e17fc8530057",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.4317069979151711,
+          "prepare_reference": 56.00226500246208,
+          "predict_duration": 32.71366800618125,
+          "sample_rf": 710.132750995399,
+          "unpatchify_latent": 0.007996000931598246,
+          "decode_latent": 32.43645699694753
+        },
+        "total_to_decode_ms": 833.0614189981134,
+        "seed": 4221,
+        "allocated_bytes": 1981704704,
+        "reserved_bytes": 3948937216
+      },
+      {
+        "phase": "diagnostic",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 858.5655729984865,
+        "wav_sha256": "7d46ed5aa2bf265b55c6cf48a5239b1c06fb67c332e228c4764e55bdf31d5b32",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.446738995378837,
+          "prepare_reference": 68.72663499962073,
+          "predict_duration": 33.07846700045047,
+          "sample_rf": 723.5794870066456,
+          "unpatchify_latent": 0.00768699828768149,
+          "decode_latent": 26.731903999461792
+        },
+        "total_to_decode_ms": 855.2734490003786,
+        "seed": 4221,
+        "allocated_bytes": 1984102912,
+        "reserved_bytes": 3948937216
+      },
+      {
+        "phase": "diagnostic",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 825.3370559978066,
+        "wav_sha256": "9fdb3ac9d5b5d1f29e38e28e1a31177b6bf63c5a3b343bf6187d0f52b01e71e7",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5552670045290142,
+          "prepare_reference": 60.1658059968031,
+          "predict_duration": 32.43860300426604,
+          "sample_rf": 700.7793590018991,
+          "unpatchify_latent": 0.008397000783588737,
+          "decode_latent": 25.352791999466717
+        },
+        "total_to_decode_ms": 820.7308380005998,
+        "seed": 4221,
+        "allocated_bytes": 1984948736,
+        "reserved_bytes": 3948937216
+      }
+    ]
+  },
+  "stderr_present": false
+}
