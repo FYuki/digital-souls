@@ -952,7 +952,16 @@ def test_real_livekit_rejects_legacy_bootstrap_before_resource_creation(
     ):
         monkeypatch.setattr(target, method, observe(label, getattr(target, method)))
 
-    inference_counts = {}
+    inference_counts = {"prepare_text": 0}
+    router = client.app.state.inference_router
+    original_prepare_text = router.prepare_text
+
+    async def observe_preparation(*args, **kwargs):
+        inference_counts["prepare_text"] += 1
+        return await original_prepare_text(*args, **kwargs)
+
+    monkeypatch.setattr(router, "prepare_text", observe_preparation)
+
     def observe_inference(name, original):
         def invoke(*args, **kwargs):
             inference_counts[name] += 1
@@ -960,7 +969,6 @@ def test_real_livekit_rejects_legacy_bootstrap_before_resource_creation(
         return invoke
     for method in ("generate_text", "generate_structured", "embed", "estimate_input_tokens"):
         inference_counts[method] = 0
-        router = client.app.state.inference_router
         monkeypatch.setattr(router, method, observe_inference(method, getattr(router, method)))
 
     async def exercise() -> None:
@@ -994,6 +1002,8 @@ def test_real_livekit_rejects_legacy_bootstrap_before_resource_creation(
                     assert response.json()["detail"]["code"] == expected_code
                     assert set(response.json()) == {"detail"}
                     assert counts == {"session": 0, "room": 0, "runtime": 0, "token": 0}
+                    # 拒否時はモデル準備・固定人格の入力長計測も開始しない。
+                    assert all(value == 0 for value in inference_counts.values())
                     assert {
                         item.name for item in (
                             await livekit_api.room.list_rooms(api.ListRoomsRequest())
@@ -1015,7 +1025,11 @@ def test_real_livekit_rejects_legacy_bootstrap_before_resource_creation(
                     },
                 ) == {f"user-{session_id}", f"character-{CHARACTER_ID}-{session_id}"}
                 assert all(value > 0 for value in counts.values())
-                assert all(value == 0 for value in inference_counts.values())
+                # 正常開始はモデル準備・入力長計測を許可する。本文生成や記憶処理は不要。
+                assert inference_counts["prepare_text"] > 0
+                assert all(inference_counts[name] == 0 for name in (
+                    "generate_text", "generate_structured", "embed",
+                ))
                 assert not room.local_participant.track_publications
                 client.delete(f"/voice/livekit/sessions/{session_id}").raise_for_status()
                 assert await _wait_for_room_cleanup(
