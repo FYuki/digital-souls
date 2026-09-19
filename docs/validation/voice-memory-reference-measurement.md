@@ -1,0 +1,54 @@
+# 固定記憶参照の追加計測
+
+第1段階の空状態100試行とは別の第2段階。速度や参照件数の合格閾値は置かない。
+基点は第1段階のBE/FEと同じ93c8aa7。製品経路を変更せず、既存の独立音声測定へ明示指定の分岐を追加する。
+
+## 固定条件
+
+- fixture「synthetic-greeting-preferences-v1」。挨拶に関する架空のUSER_PREFERENCE 3件。
+  本文はbackend/app/voice_quality_reference_state.pyへ固定し、本文・集合・正本行のhashを保存する。
+  実ユーザーやdogfoodの記憶を使用しない。記憶の抽出・形成を試すfixtureではない。
+- speech-v2の入力、CHATモデル・options、Irodoriの採用声・seed4221・40steps・speed1.02・BF16を第1段階と揃える。
+- 各試行は新規data root、空の会話履歴。記憶形成・統合の無効receiptを検査する。
+- integration-irodori-memory-referenceは専用Ollama11534／TTS50026、Chroma in_process。
+  共有サービスの設定・データは変更しない。
+- 記憶は新規rootだけに登録する。再実行・上書き・別root・symlinkは拒否する。
+  正本の登録後、既存index workerが実embeddingで派生indexを構築する。
+  index処理の失敗と120秒の個別timeoutを検出する。Session準備全体の上限ではない。
+- 検索した記憶が実際の応答プロンプトへ入ったことをmemory_response_dependenciesの記憶ID・版と照合する。
+  未参照0件、実行失敗、観測欠測を区別し、成功例だけに差し替えない。
+- 発話終了→実ブラウザ再生の測定境界と時計区間、sample/gap照合、Session終了・teardownを既存基盤から維持する。
+
+## 実行
+
+最初に独立1試行で接続・正本・index・実参照の観測を検証する。これは正式比較の分母に入れない。
+その後、準備5試行＋測定20独立試行を事前登録して完了した。件数はユーザーから委任された範囲で選び、
+100件の空状態受入とは別の探索的な分布比較とする。失敗・欠測があっても分母20を保持する。
+cohort開始前にコード・image・設定・集合・版・試行計画を固定する。
+
+単独診断の入口:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --profile integration-irodori-memory-reference \
+  --run-id 350-memory-reference-pilot-0919-01 \
+  --inference-env /path/to/private-inference.env \
+  --livekit-env /path/to/private-livekit.env \
+  --trials 1 --scheduled-fixture --isolated-normal-phase measured \
+  --disable-memory-formation --memory-reference --disable-thinking
+```
+
+秘密値をIssueやログへ載せない。上記は入口であり、サービスidentity／revisionのpreflightと
+resource/native SDK、実行中image、後始末確認を伴うhost runnerから実行する。
+
+## 結果の扱い
+
+全予定数、準備・応答の成功／失敗／欠測、参照あり／未参照、p50/p95、空状態との差を報告する。
+2,000msの合否、記憶形成・長履歴の性能、実マイク・聴感へ拡張しない。
+計測用コードと実測証跡は別PRに保存する。独立診断では実記憶3件のプロンプト参照、音声再生、sample数一致・gap 0、実native SDKと後始末を確認した。準備失敗と観測Profile許可漏れの先行記録は別の証跡PRに保持する。20試行の比較も093b423で完了し、[別PR #451の記録](https://github.com/FYuki/digital-souls/blob/4066cd1f96929022dfd00c40e5291796e6944659/docs/validation/voice-memory-reference-20260919.md)へ保存した。測定20/20成功・実参照あり、p50 2190.25ms／p95 2338.62ms。受入閾値は適用しない。
+
+
+比較cohortは同じrun_normal_cohort.pyへ、専用Profile、--memory-reference、
+--baseline-report（空状態100件の検証済みreport.json）、--measured 20を渡す。
+run IDは350-memory-reference-で始める。集計は既存の音声時計・trace・sample検査を使い、
+初期状態だけ固定参照集合の検査へ切り替える。通常100件の集計は従来どおり空状態を要求する。

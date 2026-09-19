@@ -27,7 +27,7 @@ def plan(cohort_id: str, measured: int) -> list[tuple[str, str]]:
 
 
 def verify_stopped(base: Path, revision: str, profile: str = "integration-voice") -> dict:
-    if profile not in ("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"):
+    if profile not in ("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"):
         raise ValueError("unsupported independent normal profile")
     report = json.loads((base / "runtime-data/runtime/standalone/environment-run.json").read_text())
     if (report.get("runtime", {}).get("environmentId") != "test"
@@ -47,7 +47,8 @@ def verify_stopped(base: Path, revision: str, profile: str = "integration-voice"
         if probe.returncode == 0 or not any(s in probe.stderr.lower() for s in ("no such object", "no such container")):
             raise ValueError("owned container deletion not verified")
     manifest = json.loads((base / "trial-manifest.json").read_text())
-    if manifest.get("measurement_revision") != revision or manifest.get("measurement_scope") != "isolated_normal_trial":
+    scope = "isolated_memory_reference_trial" if profile == "integration-irodori-memory-reference" else "isolated_normal_trial"
+    if manifest.get("measurement_revision") != revision or manifest.get("measurement_scope") != scope:
         raise ValueError("isolated trial revision not verified")
     profile_report = json.loads((base / "runtime-data/runtime/standalone/resolved-profile.json").read_text())
     if profile_report.get("derivedEnvironment", {}).get("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION") != "true":
@@ -74,6 +75,8 @@ def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tupl
                "--run-id", run_id, "--inference-env", str(args.inference_env),
                "--livekit-env", str(args.livekit_env), "--trials", "1",
                "--scheduled-fixture", "--disable-memory-formation", "--isolated-normal-phase", phase, "--profile", args.profile]
+    if getattr(args, "memory_reference", False):
+        command.append("--memory-reference")
     if args.disable_thinking:
         command.append("--disable-thinking")
     images = {}
@@ -163,12 +166,12 @@ def preparation_summary(trials: list[dict]) -> dict:
     }
 
 
-def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measured: int) -> int:
+def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measured: int, baseline_report: Path | None = None) -> int:
     manifests = [json.loads((run_root(r) / "trial-manifest.json").read_text()) for r, _ in runs]
     for manifest in manifests:
         require_memory_isolation(manifest)
     combined = dict(manifests[0])
-    combined.update(measurement_scope="controlled", expected_warmup=5, expected_measured=measured,
+    combined.update(measurement_scope="fixed_memory_reference_measurement" if baseline_report else "controlled", expected_warmup=5, expected_measured=measured,
                     trials=[m["trials"][0] for m in manifests])
     # 片側の初期状態を都合よく補完しない。各試行の証拠は既存reporterで再検証する。
     hashes = {m.get("initial_state_hash") for m in manifests if m.get("initial_state_hash")}
@@ -190,7 +193,13 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
                "all_owned_environments_stopped": True, "shared_services_modified": False,
                "all_trial_data_roots_independent": True, "full_acceptance_passed": False}
     code = 1
-    if measured == 100:
+    if baseline_report is not None:
+        with (directory / "reporter.log").open("x") as log:
+            code = subprocess.run([sys.executable, str(ROOT / "scripts/voice_quality/report_memory_reference.py"),
+                "--cohort-root", str(directory), "--baseline-report", str(baseline_report),
+                "--output", str(directory / "report.json")], cwd=ROOT, stdout=log,
+                stderr=subprocess.STDOUT, check=False).returncode
+    elif measured == 100:
         with (directory / "reporter.log").open("x") as log:
             # app packageのあるcwdから起動し、親のPYTHONPATHへ依存しない。
             code = subprocess.run([sys.executable, "-m", "app.livekit_pilot_report", "--scope", "controlled",
@@ -213,13 +222,18 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"), default="integration-voice")
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"), default="integration-voice")
     parser.add_argument("--cohort-id", required=True)
     parser.add_argument("--measured", type=int, default=100)
     parser.add_argument("--inference-env", type=Path, required=True)
     parser.add_argument("--livekit-env", type=Path, required=True)
     parser.add_argument("--disable-thinking", action="store_true")
+    parser.add_argument("--memory-reference", action="store_true")
+    parser.add_argument("--baseline-report", type=Path)
     args = parser.parse_args()
+    if ((args.profile == "integration-irodori-memory-reference") != args.memory_reference
+            or (args.baseline_report is not None) != args.memory_reference):
+        parser.error("reference measurement requires its profile and empty-state baseline report")
     runs = plan(args.cohort_id, args.measured)
     revision = measurement_revision(ROOT)
     parent = ROOT / "frontend/test-results/livekit-quality/cohorts"
@@ -231,7 +245,9 @@ def main() -> int:
         directory = parent / args.cohort_id
         directory.mkdir(exist_ok=False)
         (directory / "plan.json").write_text(json.dumps({"measurement_revision": revision, "profile": args.profile, "runs": runs,
-            "expected_warmup": 5, "expected_measured": args.measured, "data_root_per_trial": True, "memory_formation_disabled": True, "memory_consolidation_disabled": True}, indent=2) + "\n")
+            "expected_warmup": 5, "expected_measured": args.measured, "data_root_per_trial": True, "memory_formation_disabled": True, "memory_consolidation_disabled": True,
+            "memory_reference": args.memory_reference,
+            "baseline_report_sha256": hashlib.sha256(args.baseline_report.read_bytes()).hexdigest() if args.baseline_report else None}, indent=2) + "\n")
         with (directory / "execution.jsonl").open("x") as journal:
             for index, (run_id, phase) in enumerate(runs, 1):
                 if (directory / "stop-requested").exists() or measurement_revision(ROOT) != revision:
@@ -241,7 +257,7 @@ def main() -> int:
                 journal.write(json.dumps(row) + "\n")
                 journal.flush()
                 print(json.dumps(row), flush=True)
-        return aggregate(runs, directory, revision, args.measured)
+        return aggregate(runs, directory, revision, args.measured, args.baseline_report)
 
 
 if __name__ == "__main__":

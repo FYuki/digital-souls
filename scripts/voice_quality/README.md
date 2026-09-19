@@ -648,7 +648,7 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
   --inference-env /home/asa/dev/digital-souls/backend/.env --observe-stt-pcm
 ```
 
-明示指定時だけ`integration-voice-pcm`を選び、runnerがlocalhost:50023の中継を所有する。
+明示指定時だけ選択元Profileの`-pcm`構成を選び、runnerがlocalhost:50023の中継を所有する。
 Whisperの実POSTを既存localhost:50022へバイト列を変えずに転送し、HTTP statusと応答本文を返す。
 入力はメモリ内でfixtureへ照合し、数値だけを`whisper-input-pcm.jsonl`へ保存する。
 fixtureはrepositoryの固定hashから選び、trial ordinalとinitial／labeledの別をNode側で登録する。
@@ -802,7 +802,7 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/run_normal_coh
 準備5回と測定100回の各回に新規data root・FE／BEを割り当てる。
 共有推論サービス、モデル、生成options、固定音声は維持する。
 既存の通常応答reporterに対応するintegration-voiceを使用し、Whisperへ直接接続する。
-STT入力PCMの中継観測はintegration-voice-pcmの相槌・割り込み・pause cohortで行い、
+STT入力PCMの中継観測はintegration-voice-pcm、またはintegration-irodori-cuda-graph-pcmの相槌・割り込み・pause cohortで行い、
 中継の有無を含む測定条件を記録する。
 アプリプロセス内のcacheも各回で新しくなるため、同じ方式の移設前後を比較し、
 以前の同一プロセス100試行と同じ条件だったとは扱わない。
@@ -908,3 +908,32 @@ render中quantumを含む上限より後の無音interval、一致するfinished
 この上限を失敗直後の完全な無音・停止遅延0msと読み替えない。
 時計・interval欠落を0音声へ補完せず、生成中の試験で旧出力停止を代用しない。
 本試験は固定音声の実接続であり、人の実マイク・試聴の代替ではない。
+
+## 高速化TTS候補の独立再接続cohort
+
+run_reconnect_cohort.py の --profile integration-irodori-cuda-graph は、
+integration-irodori-cuda-graph-fault を選び、LiveKit 19880、Ollama 11534、Irodori 50026へ固定する。
+通常dev・dogfoodのLiveKitや共有推論の配備には変更を加えない。
+--disable-memory-formation を指定して形成・整理のschedulerを止め、各試行で空の専用data rootを使う。
+
+--cohort-id、--inference-env、専用bridgeの --livekit-env を指定する。
+--sessions 100 が正式cohortで、少数件は診断に限る。各sessionは実network障害1回と、
+復旧後の同一sessionでの次の通常音声を含む。復旧境界、10秒以内99%以上、成功p95 3000ms以下、
+重複0、分母・時計・native SDKのcoverage要件は既存reporterを維持する。
+各試行のProfile、所有container削除、fault時計process終了を検証してから次へ進む。
+準備全体の固定上限は設けず、各処理のtimeout・error検出を使う。
+
+
+### 高速化候補のPCM観測（#424）
+
+run_pilot.pyに --profile integration-irodori-cuda-graph --observe-stt-pcm を明示すると、
+integration-irodori-cuda-graph-pcmを使う。Whisperへの同一PCMの透過中継・匿名数値観測は
+既存方式を再利用し、専用Ollama 11534・Irodori 50026・通常LiveKit 7880を維持する。
+FE 18573、BE 18500、ready gate 18574も候補構成と同じであり、他の候補コホートと同時実行しない。
+runnerが所有する中継50023だけを起動・終了し、共有Whisper 50022は再起動・変更しない。
+
+--scheduled-fixture --vad-cohort pause、または --interruption-cohort backchannel / take_turnを指定する。
+記憶形成負荷を混ぜない試験では --disable-memory-formation を明示する。
+fault bridge・通信断注入・連続track診断との同時指定、および未定義の他Irodori PCM構成は拒否する。
+report_stt_pcm.pyは候補Profileの実接続先も照合し、既存の全試行・終端入力・端点照合・欠測判定を維持する。
+この追加自体を休止・相槌・割り込みの実接続受入や聴感受入とはしない。

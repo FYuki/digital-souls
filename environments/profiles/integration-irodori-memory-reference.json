@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "name": "integration-irodori-memory-reference",
+  "description": "固定合成記憶の検索・参照のみを計測する専用Profile。速度受入判定を行わない。",
+  "readyGate": {
+    "baseUrl": "http://127.0.0.1:18574"
+  },
+  "dependencies": {
+    "frontend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:18573",
+      "readinessPath": "/"
+    },
+    "backend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:18500",
+      "readinessPath": "/health/ready",
+      "reload": true
+    },
+    "ollama": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:11534",
+      "readinessPath": "/api/tags"
+    },
+    "voicevox": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50021",
+      "readinessPath": "/version"
+    },
+    "livekit": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:7880",
+      "readinessPath": "/"
+    },
+    "whisper": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50022",
+      "readinessPath": "/health/ready"
+    },
+    "chroma": {
+      "mode": "real",
+      "source": "in_process"
+    },
+    "irodori": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50026",
+      "readinessPath": "/health/ready"
+    }
+  }
+}

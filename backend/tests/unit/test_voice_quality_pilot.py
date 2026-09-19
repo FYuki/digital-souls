@@ -478,6 +478,67 @@ def test_candidate_profile_is_explicit_and_cannot_select_another_diagnostic(tmp_
     assert env["IRODORI_BASE_URL"] == ("http://127.0.0.1:50026" if profile == "integration-irodori-cuda-graph" else "http://127.0.0.1:50024")
     shared = pilot.pilot_environment(inference, livekit, "shared-test", 1, False, profile="integration-irodori")
     assert shared["OLLAMA_BASE_URL"] == "http://localhost:11434"
-    for diagnostic in ({"observe_stt_pcm": True}, {"control_probe": True, "fault_bridge": True}):
+    for diagnostic in ([{"observe_stt_pcm": True}, {"control_probe": True, "fault_bridge": True}]
+                       if profile == "integration-irodori-ollama-candidate" else []):
         with pytest.raises(ValueError, match="profile"):
             pilot.pilot_environment(inference, livekit, "candidate-test", 1, False, **options, **diagnostic)
+
+def test_cuda_graph_fault_keeps_dedicated_inference_endpoints(tmp_path):
+    inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
+    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\nIRODORI_BASE_URL=http://127.0.0.1:50024\n")
+    livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
+    env = pilot.pilot_environment(
+        inference, livekit, "candidate-fault", 3, False, scheduled_fixture=True,
+        profile="integration-irodori-cuda-graph", control_probe=True,
+        fault_bridge=True, network_fault=True, disable_memory_formation=True,
+    )
+    assert env["DS_PROFILE"] == "integration-irodori-cuda-graph-fault"
+    assert env["VOICE_QUALITY_PROFILE"] == "integration-irodori-cuda-graph"
+    assert env["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
+    assert env["IRODORI_BASE_URL"] == "http://127.0.0.1:50026"
+    assert env["LIVEKIT_URL"] == "ws://127.0.0.1:19880"
+
+
+@pytest.mark.parametrize("profile,explicit,phase,disabled,valid", [
+    ("integration-irodori-memory-reference", True, "measured", True, True),
+    ("integration-irodori-memory-reference", False, "measured", True, False),
+    ("integration-irodori-cuda-graph", True, "measured", True, False),
+    ("integration-irodori-memory-reference", True, None, True, False),
+    ("integration-irodori-memory-reference", True, "measured", False, False),
+])
+def test_reference_scope_requires_explicit_isolation(tmp_path, profile, explicit, phase, disabled, valid):
+    inference, livekit = tmp_path / "inference.env", tmp_path / "livekit.env"
+    inference.write_text("INFERENCE_TARGET_CHAT=ollama/test\n")
+    livekit.write_text("LIVEKIT_KEYS=test:test-only\n")
+    args = dict(profile=profile, memory_reference=explicit, isolated_normal_phase=phase,
+                disable_memory_formation=disabled)
+    if not valid:
+        with pytest.raises(ValueError, match="reference"):
+            pilot.pilot_environment(inference, livekit, "350-memory-reference-unit", 1, False, True, **args)
+    else:
+        result = pilot.pilot_environment(inference, livekit, "350-memory-reference-unit", 1, False, True, **args)
+        assert result["VOICE_QUALITY_MEMORY_REFERENCE"] == "1"
+        assert result["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
+        assert result["IRODORI_BASE_URL"] == "http://127.0.0.1:50026"
+
+
+@pytest.mark.parametrize('cohort', ['pause', 'backchannel', 'take_turn'])
+def test_candidate_pcm_keeps_inference_and_explicit_observation(tmp_path, monkeypatch, cohort):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\nIRODORI_BASE_URL=http://127.0.0.1:50024\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    monkeypatch.setenv('VOICE_QUALITY_OBSERVE_STT_PCM', '1')
+    options = {'vad_cohort': 'pause'} if cohort == 'pause' else {'interruption_cohort': cohort}
+    args = (inference, livekit, 'candidate-pcm', 100, False)
+    env = pilot.pilot_environment(*args, scheduled_fixture=True, profile='integration-irodori-cuda-graph',
+                                  observe_stt_pcm=True, disable_memory_formation=True, **options)
+    assert env['DS_PROFILE'] == 'integration-irodori-cuda-graph-pcm'
+    assert env['VOICE_QUALITY_PROFILE'] == 'integration-irodori-cuda-graph'
+    assert env['OLLAMA_BASE_URL'] == 'http://127.0.0.1:11534'
+    assert env['IRODORI_BASE_URL'] == 'http://127.0.0.1:50026'
+    assert env['LIVEKIT_URL'] == 'ws://127.0.0.1:7880'
+    assert env['VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION'] == 'true'
+    plain = pilot.pilot_environment(*args, scheduled_fixture=True,
+                                    profile='integration-irodori-cuda-graph', **options)
+    assert plain['DS_PROFILE'] == 'integration-irodori-cuda-graph'
+    assert 'VOICE_QUALITY_OBSERVE_STT_PCM' not in plain
