@@ -1,0 +1,261 @@
+{
+  "scope": "candidate_reconnect_delay_diagnostic",
+  "acceptance_applicable": false,
+  "complete_cohort": false,
+  "selection": "正式cohort実行中の通常例1件と最初の3秒超過2件。性能分布・合否集計には使用しない。",
+  "measurement_revision": "c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+  "sdk": {
+    "name": "livekit-client",
+    "version": "2.22.1",
+    "package_integrity": "sha512-kCxTlGOV2XWYXZ7zK01UUKjgpVydvJ0CBgdHuv2I+s4q08tn0UTzpHfFqXPb5Aba4h6KdNU0TjQCHzv4Lww7fQ==",
+    "source_file": "src/room/RTCEngine.ts",
+    "source_sha256": "30c7ea365e5be0761f7e3221f3fbf7971c30c22c6079af58a55841354de597a2",
+    "minimum_reconnect_wait_ms": 2000,
+    "source_observation": "waitForPCReconnectedは2秒待った後にensurePCTransportConnectionを呼ぶ。待機完了だけで成功にはしない。"
+  },
+  "trials": [
+    {
+      "trial_index": 1,
+      "raw_manifest_sha256": "5b49543b364f646421809b7c6f49373f0ab3ac4540675cd30bb0d90ae25c310a",
+      "clock_domain": "browser_monotonic",
+      "recovery": {
+        "control_recovery_upper_ms": 2531.11929500103,
+        "audio_recovery_upper_ms": 2648.194961670677,
+        "recovery_upper_ms": 2648.194961670677,
+        "duplicate_packet_output_intervals": 0,
+        "packet_evidence_missing": 0,
+        "output_path_failures": 0,
+        "output_evidence_complete": true,
+        "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+        "audio_missing_reason": null
+      },
+      "same_session_followup_succeeded": true,
+      "reconnected_after_restore_lower_ms": [
+        2510.0192950069904
+      ],
+      "first_fresh_control_ack_after_restore_lower_ms": 2531.11929500103,
+      "audio_probe_requested_after_restore_lower_ms": 2533.2192950099707,
+      "authoritative_state_after_restore_lower_ms": [
+        {
+          "at_ms": 703.61929500103,
+          "generation": 1
+        },
+        {
+          "at_ms": 704.0192950069904,
+          "generation": 1
+        },
+        {
+          "at_ms": 704.11929500103,
+          "generation": 1
+        },
+        {
+          "at_ms": 706.0192950069904,
+          "generation": 1
+        },
+        {
+          "at_ms": 707.11929500103,
+          "generation": 1
+        },
+        {
+          "at_ms": 708.7192950099707,
+          "generation": 1
+        },
+        {
+          "at_ms": 709.8192950040102,
+          "generation": 1
+        },
+        {
+          "at_ms": 710.7192950099707,
+          "generation": 1
+        },
+        {
+          "at_ms": 711.9192949980497,
+          "generation": 1
+        },
+        {
+          "at_ms": 712.9192949980497,
+          "generation": 1
+        },
+        {
+          "at_ms": 714.0192950069904,
+          "generation": 1
+        },
+        {
+          "at_ms": 715.11929500103,
+          "generation": 1
+        },
+        {
+          "at_ms": 2517.31929500401,
+          "generation": 1
+        }
+      ],
+      "send_bursts": [
+        {
+          "after_restore_lower_ms": 2512,
+          "send_calls": 28,
+          "maximum_buffered_bytes": 5334
+        }
+      ]
+    },
+    {
+      "trial_index": 4,
+      "raw_manifest_sha256": "6e733bbdaf94c7837d931118858baaf0bb060d523576194e928ebcaaff91839e",
+      "clock_domain": "browser_monotonic",
+      "recovery": {
+        "control_recovery_upper_ms": 3822.547443985939,
+        "audio_recovery_upper_ms": 3940.902110652605,
+        "recovery_upper_ms": 3940.902110652605,
+        "duplicate_packet_output_intervals": 0,
+        "packet_evidence_missing": 0,
+        "output_path_failures": 0,
+        "output_evidence_complete": true,
+        "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+        "audio_missing_reason": null
+      },
+      "same_session_followup_succeeded": true,
+      "reconnected_after_restore_lower_ms": [
+        2069.2474439889193
+      ],
+      "first_fresh_control_ack_after_restore_lower_ms": 3822.547443985939,
+      "audio_probe_requested_after_restore_lower_ms": 3824.547443985939,
+      "authoritative_state_after_restore_lower_ms": [
+        {
+          "at_ms": 380.34744399785995,
+          "generation": 1
+        },
+        {
+          "at_ms": 3716.34744399786,
+          "generation": 2
+        },
+        {
+          "at_ms": 3717.547443985939,
+          "generation": 2
+        },
+        {
+          "at_ms": 3722.4474439918995,
+          "generation": 2
+        },
+        {
+          "at_ms": 3722.6474439948797,
+          "generation": 2
+        },
+        {
+          "at_ms": 3724.4474439918995,
+          "generation": 2
+        },
+        {
+          "at_ms": 3725.7474439889193,
+          "generation": 2
+        },
+        {
+          "at_ms": 3726.84744399786,
+          "generation": 2
+        },
+        {
+          "at_ms": 3727.9474439918995,
+          "generation": 2
+        },
+        {
+          "at_ms": 3728.9474439918995,
+          "generation": 2
+        },
+        {
+          "at_ms": 3730.047443985939,
+          "generation": 2
+        },
+        {
+          "at_ms": 3730.9474439918995,
+          "generation": 2
+        }
+      ],
+      "send_bursts": [
+        {
+          "after_restore_lower_ms": 2070,
+          "send_calls": 5,
+          "maximum_buffered_bytes": 1851
+        },
+        {
+          "after_restore_lower_ms": 2071,
+          "send_calls": 24,
+          "maximum_buffered_bytes": 6912
+        }
+      ]
+    },
+    {
+      "trial_index": 10,
+      "raw_manifest_sha256": "7b3e725f878fe94c13c5a15f7f08d7c07d5c392eac3dce5ec5244e4d231c8713",
+      "clock_domain": "browser_monotonic",
+      "recovery": {
+        "control_recovery_upper_ms": 3144.2240020036697,
+        "audio_recovery_upper_ms": 3266.4516686762963,
+        "recovery_upper_ms": 3266.4516686762963,
+        "duplicate_packet_output_intervals": 0,
+        "packet_evidence_missing": 0,
+        "output_path_failures": 0,
+        "output_evidence_complete": true,
+        "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+        "audio_missing_reason": null
+      },
+      "same_session_followup_succeeded": true,
+      "reconnected_after_restore_lower_ms": [
+        3100.7240020036697
+      ],
+      "first_fresh_control_ack_after_restore_lower_ms": 3144.2240020036697,
+      "audio_probe_requested_after_restore_lower_ms": 3148.0240020155907,
+      "authoritative_state_after_restore_lower_ms": [
+        {
+          "at_ms": 154.6240020096302,
+          "generation": 1
+        },
+        {
+          "at_ms": 680.42400200665,
+          "generation": 1
+        },
+        {
+          "at_ms": 687.0240020155907,
+          "generation": 1
+        },
+        {
+          "at_ms": 688.0240020155907,
+          "generation": 1
+        },
+        {
+          "at_ms": 689.2240020036697,
+          "generation": 1
+        },
+        {
+          "at_ms": 690.3240020126104,
+          "generation": 1
+        },
+        {
+          "at_ms": 691.3240020126104,
+          "generation": 1
+        },
+        {
+          "at_ms": 692.2240020036697,
+          "generation": 1
+        },
+        {
+          "at_ms": 693.2240020036697,
+          "generation": 1
+        },
+        {
+          "at_ms": 694.2240020036697,
+          "generation": 1
+        },
+        {
+          "at_ms": 3115.92400200665,
+          "generation": 1
+        }
+      ],
+      "send_bursts": [
+        {
+          "after_restore_lower_ms": 3102,
+          "send_calls": 20,
+          "maximum_buffered_bytes": 4833
+        }
+      ]
+    }
+  ],
+  "interpretation": "固定待機と制御送信の滞留は一致するが、3秒超過の全原因を単独では説明しない。4件目には世代再交換と追加配送待ちもある。計測中のSDK・製品・条件は変更していない。"
+}
