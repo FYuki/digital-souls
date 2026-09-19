@@ -9,7 +9,7 @@ if (!process.argv.includes('--list') && (!process.env.VOICE_QUALITY_RUN_ID
 
 export default defineConfig({
   ...base,
-  testDir: './diagnostics/voice-startup',
+  testDir: './diagnostics/microphone-cancel',
   testMatch: 'microphone-cancel.spec.ts',
   workers: 1,
   fullyParallel: false,
