@@ -655,3 +655,24 @@ def test_cuda_graph_profile_tts_port_matches_schema_and_resolver(
     else:
         with pytest.raises(profile_module.ProfileError, match="fixed local service"):
             profile_module.validate_profile(profile, name)
+
+
+def test_candidate_pcm_changes_only_observed_whisper_endpoint(profile_validator, profile_module):
+    standard = profile_module.load_profile('integration-irodori-cuda-graph')
+    observed = profile_module.load_profile('integration-irodori-cuda-graph-pcm')
+    profile_validator.validate(observed)
+    assert observed['dependencies']['whisper']['baseUrl'] == 'http://127.0.0.1:50023'
+    assert observed['readyGate'] == standard['readyGate']
+    assert {k: v for k, v in observed['dependencies'].items() if k != 'whisper'} == {
+        k: v for k, v in standard['dependencies'].items() if k != 'whisper'}
+
+
+@pytest.mark.parametrize('dependency,port', [('whisper', 50022), ('whisper', 50025),
+                                           ('ollama', 11434), ('irodori', 50024)])
+def test_candidate_pcm_rejects_unobserved_or_shared_inference(profile_validator, profile_module, dependency, port):
+    name = 'integration-irodori-cuda-graph-pcm'
+    raw = _read_json(ENVIRONMENTS_DIR / 'profiles' / f'{name}.json')
+    raw['dependencies'][dependency]['baseUrl'] = f'http://127.0.0.1:{port}'
+    assert list(profile_validator.iter_errors(raw))
+    with pytest.raises(profile_module.ProfileError, match='fixed local service'):
+        profile_module.validate_profile(raw, name)

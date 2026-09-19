@@ -61,13 +61,13 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "name": { "enum": ["integration-irodori-cuda-graph", "integration-irodori-cuda-graph-fault", "integration-irodori-memory-reference"] } }, "required": ["name"] },
+      "if": { "properties": { "name": { "enum": ["integration-irodori-cuda-graph", "integration-irodori-cuda-graph-pcm", "integration-irodori-cuda-graph-fault", "integration-irodori-memory-reference"] } }, "required": ["name"] },
       "then": { "properties": { "dependencies": { "properties": { "irodori": { "properties": {
         "baseUrl": { "enum": ["http://127.0.0.1:50026", "http://127.0.0.1:50026/"] }
       } } } } } }
     },
     {
-      "if": { "properties": { "name": { "enum": ["integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-cuda-graph-fault", "integration-irodori-memory-reference"] } }, "required": ["name"] },
+      "if": { "properties": { "name": { "enum": ["integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-cuda-graph-pcm", "integration-irodori-cuda-graph-fault", "integration-irodori-memory-reference"] } }, "required": ["name"] },
       "then": { "properties": { "dependencies": { "properties": { "ollama": { "properties": {
         "baseUrl": { "enum": ["http://127.0.0.1:11534", "http://127.0.0.1:11534/"] }
       } } } } } },
@@ -76,7 +76,7 @@
       } } } } } }
     },
     {
-      "if": { "properties": { "name": { "const": "integration-voice-pcm" } }, "required": ["name"] },
+      "if": { "properties": { "name": { "enum": ["integration-voice-pcm", "integration-irodori-cuda-graph-pcm"] } }, "required": ["name"] },
       "then": { "properties": { "dependencies": { "properties": { "whisper": { "properties": {
         "baseUrl": { "enum": ["http://127.0.0.1:50023", "http://127.0.0.1:50023/"] }
       } } } } } },
