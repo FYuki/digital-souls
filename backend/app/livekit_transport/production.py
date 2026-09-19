@@ -1223,6 +1223,7 @@ class _ConversationCoreBridge:
 
     def close_microphone_track(
         self, track_sid: str, *, reason: str = "microphone_track_unavailable",
+        reader_reason: str | None = None,
     ) -> None:
         source = self._voice_input
         if source is not None and source.grant is not None and source.grant.track_sid == track_sid:
@@ -1231,6 +1232,7 @@ class _ConversationCoreBridge:
             self._microphone_preroll.clear()
             if reason == "microphone_track_unavailable":
                 # 無音中のreader終了にも通知し、聴取中表示を残さない。
+                logger.warning("LiveKit authorized microphone reader ended: reason=%s", reader_reason or reason)
                 self._audio_unavailable(grant)
 
     async def close_audio(self) -> None:
@@ -2263,7 +2265,6 @@ class ProductionRuntimeManager:
             # text・終了済み発話・回答再生はこのreaderの所有物ではない。
             logger.warning("LiveKit microphone reader failed")
         finally:
-            logger.info("LiveKit microphone reader ended: reason=%s samples_seen=%s", exit_reason, clock.samples_seen)
             monitor.close()
             monitor_task.cancel()
             await asyncio.gather(monitor_task, return_exceptions=True)
@@ -2271,7 +2272,7 @@ class ProductionRuntimeManager:
                 self._microphone_integrities.pop(key, None)
             bridge = self._core_bridges.get(session_id)
             if bridge is not None:
-                bridge.close_microphone_track(str(track.sid))
+                bridge.close_microphone_track(str(track.sid), reader_reason=exit_reason)
             await stream.aclose()
 
     def _schedule_task(
