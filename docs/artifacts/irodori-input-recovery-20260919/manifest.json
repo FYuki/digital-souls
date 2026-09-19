@@ -1,0 +1,19 @@
+{
+  "files": {
+    "evidence.json": "81c6ffb12e705e1d25c3878305b7657e8b615d9e8ef381d981d91e42928f79b6"
+  },
+  "test_sources": [
+    {
+      "path": "frontend/integration/voice-quality/tts-worker-recovery.spec.ts",
+      "sha256": "3ecda8080eb97671e8cc8b9cf113aab785a08a67adf9e089eb215f12fd2f61a8"
+    },
+    {
+      "path": "frontend/playwright/tts-failure-output-probe.ts",
+      "sha256": "bfa5a6f754872bd8cb070e0133e3421ec5b18d58e68a464a93f8f7236f12679c"
+    },
+    {
+      "path": "scripts/voice_quality/tts_worker_fault.py",
+      "sha256": "678b20c4817eb6b0a143a4e6da2f9f6656524b3a5ee7a0f8a9f12f0c3a2a8ff9"
+    }
+  ]
+}
