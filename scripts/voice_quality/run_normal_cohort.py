@@ -27,7 +27,7 @@ def plan(cohort_id: str, measured: int) -> list[tuple[str, str]]:
 
 
 def verify_stopped(base: Path, revision: str, profile: str = "integration-voice") -> dict:
-    if profile not in ("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate"):
+    if profile not in ("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"):
         raise ValueError("unsupported independent normal profile")
     report = json.loads((base / "runtime-data/runtime/standalone/environment-run.json").read_text())
     if (report.get("runtime", {}).get("environmentId") != "test"
@@ -212,7 +212,7 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate"), default="integration-voice")
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph"), default="integration-voice")
     parser.add_argument("--cohort-id", required=True)
     parser.add_argument("--measured", type=int, default=100)
     parser.add_argument("--inference-env", type=Path, required=True)

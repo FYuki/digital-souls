@@ -857,3 +857,18 @@ OLLAMA_BASE_URLだけを.envで変えても、接続先はProfileのderivedEnvir
 起動後のresolved-profile.jsonでdependencies.ollama.baseUrlとderivedEnvironment.OLLAMA_BASE_URLが
 ともにhttp://127.0.0.1:11534であることを確認する。共有のintegration-irodoriは11434を維持する。
 接続先を確認できない試行は候補版の性能証跡にせず、設定不一致として元の記録を残す。
+
+
+### CUDA Graph TTS候補とOllama候補を組み合わせる
+
+--profile integration-irodori-cuda-graph はOllama 11534とIrodori 50026に固定する。
+Frontend/Backend/ready gateは18573/18500/18574で、他の音声測定Profileと同時起動しない。
+両候補はexternalであり、runnerが共有サービスを起動・更新・停止することはない。
+所有者が先に専用TTS候補を DS_IRODORI_CUDA_GRAPH=true で準備し、固定image IDと
+/versionの要求フラグを確認する。声・step・speed・CCVと入力音声は比較元と揃える。
+
+runnerへ共有接続先の古い環境値を渡しても、解決済みProfileでは候補先を使用する。
+固定Profileを変えて共有TTSへ誤接続した計測を候補の証跡へ混ぜない。
+PCM観測用/障害bridge Profileとの同時選択を拒否し、形成停止・空状態・独立試行・
+初期状態hash・匿名reportの契約をそのまま適用する。
+実GPU readinessと合成成功は、正式100試行や聴感受入の代替ではない。

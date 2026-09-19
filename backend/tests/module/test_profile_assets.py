@@ -623,6 +623,8 @@ def test_dev_stt_endpoint_does_not_cross_profiles(profile_validator, profile_mod
 
 @pytest.mark.parametrize("profile_name,port,valid", [
     ("integration-irodori-ollama-candidate", 11534, True),
+    ("integration-irodori-cuda-graph", 11534, True),
+    ("integration-irodori-cuda-graph", 11434, False),
     ("integration-irodori-ollama-candidate", 11434, False),
     ("integration-irodori", 11534, False),
     ("dev", 11534, False),
@@ -639,3 +641,17 @@ def test_candidate_ollama_port_has_same_schema_and_central_boundary(
     else:
         with pytest.raises(profile_module.ProfileError, match="fixed local service"):
             profile_module.validate_profile(profile, profile_name)
+
+@pytest.mark.parametrize("port,valid", [(50026, True), (50024, False), (50025, False)])
+def test_cuda_graph_profile_tts_port_matches_schema_and_resolver(
+    profile_validator, profile_module, port, valid,
+):
+    name = "integration-irodori-cuda-graph"
+    profile = _read_json(ENVIRONMENTS_DIR / "profiles" / f"{name}.json")
+    _dependencies(profile)["irodori"]["baseUrl"] = f"http://127.0.0.1:{port}"
+    assert (not list(profile_validator.iter_errors(profile))) is valid
+    if valid:
+        profile_module.validate_profile(profile, name)
+    else:
+        with pytest.raises(profile_module.ProfileError, match="fixed local service"):
+            profile_module.validate_profile(profile, name)
