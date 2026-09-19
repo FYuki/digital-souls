@@ -71,12 +71,14 @@ for (const phase of ['generation', 'playback'] as const) {
         terminal: window.__voiceChatE2E.coreEventDiagnostics.some(event => event.responseId === id
           && ['response_completed', 'response_cancelled', 'response_failed'].includes(String(event.type))),
       }), old)
+      evidence = {...evidence, before}
       expect(before).toEqual({rendered: phase === 'playback', terminal: false})
       const fault = await inject('python3', [
         fileURLToPath(new URL('../../../scripts/voice_quality/tts_worker_fault.py', import.meta.url)),
         '--target-file', targetFile,
       ], {timeout: 60_000, maxBuffer: 64 * 1024})
       const faultResult = JSON.parse(fault.stdout)
+      evidence = {...evidence, fault: faultResult}
       expect(faultResult.active_observed).toBe(1)
       await page.waitForFunction(id => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
         event.type === 'response_failed' && event.responseId === id), old, {timeout: 60_000})
@@ -133,6 +135,9 @@ for (const phase of ['generation', 'playback'] as const) {
         coreEvents: window.__voiceChatE2E?.coreEventDiagnostics ?? [],
         output: window.__ttsFailureOutput?.snapshot() ?? [],
         transportFailures: window.__voiceChatE2E?.transportFailures ?? [],
+        microphoneStates: window.__voiceChatE2E?.micStates ?? [],
+        mediaTimelineInterruptions: window.__voiceChatE2E?.mediaTimelineInterruptions ?? [],
+        mediaPacketLosses: window.__voiceChatE2E?.mediaPacketLosses ?? [],
       })).catch(() => null)
       evidence = {...evidence, lastObservation}
       await testInfo.attach('tts-worker-recovery.json', {body: JSON.stringify(evidence), contentType: 'application/json'})
