@@ -8,9 +8,11 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from uuid import UUID
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+
+from app.livekit_transport.bootstrap import BootstrapTimeoutError
 
 from tests.conversation_core_test_support import make_pcm16_wav
 from tests.voice_capture_test_support import begin_capture, finish_capture, capture_harness
@@ -2352,7 +2354,7 @@ def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() 
     assert all("terminal_state_bounds_ns" not in event for event in wire)
 
 
-@pytest.mark.parametrize("waiting_stage", ["connect", "output", "tts"])
+@pytest.mark.parametrize("waiting_stage", ["connect", "output", "tts", "vad"])
 def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypatch, waiting_stage):
     from uuid import uuid4
     production = importlib.import_module("app.livekit_transport.production")
@@ -2391,12 +2393,21 @@ def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypat
         async def create(**_kwargs):
             await pause("tts")
             return Core()
+        pipeline_closed = []
+        async def prepare_vad(bridge):
+            await pause("vad")
+            bridge._voice_input = SimpleNamespace(close=AsyncMock(
+                side_effect=lambda: pipeline_closed.append("vad")))
+        monkeypatch.setattr(production._ConversationCoreBridge, "prepare_audio", prepare_vad)
+        inbox = production.ProductionCoreEventInbox()
+        bind = Mock(wraps=inbox.bind)
+        monkeypatch.setattr(inbox, "bind", bind)
         runtime = production.ProductionRuntimeManager(
             livekit_url="ws://127.0.0.1:7880",
             signer=SimpleNamespace(issue_token=token),
             room_manager=SimpleNamespace(delete=delete),
             session_repository=SimpleNamespace(delete=delete),
-            core_port=SimpleNamespace(notify=lambda _payload: None),
+            core_port=inbox,
             core_session_factory=SimpleNamespace(create=create, create_ready=create),
         )
         runtime._prepare_output_track = prepare
@@ -2421,7 +2432,9 @@ def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypat
         assert runtime._ready == {}
         assert runtime._cleanup_states == {}
         assert closed == ([] if waiting_stage == "connect" else ["audio"])
-        assert ended == (["core"] if waiting_stage == "tts" else [])
+        assert ended == (["core"] if waiting_stage in {"tts", "vad"} else [])
+        assert pipeline_closed == (["vad"] if waiting_stage == "vad" else [])
+        bind.assert_not_called()
         assert len(deleted) == 2
     asyncio.run(scenario())
 
@@ -2547,4 +2560,48 @@ def test_join_deadline_starts_only_after_all_preparation(monkeypatch, waiting_st
         assert not runtime._core_sessions and not runtime._audio_sources
         room_manager.delete.assert_awaited_once()
         session_repository.delete.assert_awaited_once()
+    asyncio.run(scenario())
+
+
+def test_readiness_wait_has_an_individual_deadline(monkeypatch):
+    production = importlib.import_module("app.livekit_transport.production")
+    monkeypatch.setattr(production, "BOOTSTRAP_TIMEOUT_SECONDS", 0.01)
+
+    async def scenario():
+        runtime = _runtime_shell(production)
+        runtime._ready["session"] = asyncio.Event()
+        with pytest.raises(BootstrapTimeoutError) as caught:
+            await runtime.wait_until_ready("session")
+        assert caught.value.stage == "readiness"
+        runtime._ready["session"].set()
+        await runtime.wait_until_ready("session")
+    asyncio.run(scenario())
+
+
+def test_vad_preparation_timeout_closes_late_pipeline(monkeypatch):
+    import threading
+    production = importlib.import_module("app.livekit_transport.production")
+    monkeypatch.setattr(production, "BOOTSTRAP_TIMEOUT_SECONDS", 0.01)
+    release, entered, closed = threading.Event(), threading.Event(), threading.Event()
+
+    def prepare():
+        entered.set()
+        if not release.wait(2):
+            raise RuntimeError("test preparation was not released")
+        return SimpleNamespace(close=closed.set)
+
+    monkeypatch.setattr(production, "check_ready", lambda: None)
+    monkeypatch.setattr(production, "VoiceInputPipeline", prepare)
+
+    async def scenario():
+        bridge = production._ConversationCoreBridge(NoopCoreSession(), lambda task: None)
+        try:
+            with pytest.raises(BootstrapTimeoutError) as caught:
+                await bridge.prepare_audio()
+            assert caught.value.stage == "vad"
+            assert entered.is_set()
+            assert bridge._voice_input is None
+        finally:
+            release.set()
+        assert await asyncio.to_thread(closed.wait, 1)
     asyncio.run(scenario())

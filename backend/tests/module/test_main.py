@@ -203,3 +203,21 @@ def test_memory_isolation_guard_runs_before_inference_creation(monkeypatch):
             with TestClient(main.app):
                 pass
     create.assert_not_called()
+
+
+def test_restore_rejection_preserves_controlled_memory_policy(monkeypatch, runtime_paths):
+    from app import main
+    from app.backup_restore.models import RestoreRecoveryRequiredError
+    from app.voice_measurement_memory import POLICY_PATH
+
+    policy = runtime_paths.data_root / POLICY_PATH
+    policy.parent.mkdir(parents=True, exist_ok=True)
+    evidence = b'{"previous_measurement":true}\n'
+    policy.write_bytes(evidence)
+    runtime_paths.restore_intent_path.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("VOICE_MEASUREMENT_KIND", "controlled_baseline")
+    monkeypatch.setenv("VOICE_CONTROLLED_TRACE_PATH", str(runtime_paths.data_root / "controlled.jsonl"))
+    with pytest.raises(RestoreRecoveryRequiredError):
+        with TestClient(main.app):
+            pass
+    assert policy.read_bytes() == evidence
