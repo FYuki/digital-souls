@@ -1881,7 +1881,7 @@ class ProductionRuntimeManager:
                 return
             microphone_readers.pop(key, None)
             if old is not None and old[4] is not None:
-                old[4].cancel()
+                old[4].cancel("microphone_track_replaced")
                 await asyncio.gather(old[4], return_exceptions=True)
             if not coordinator.is_current_participant(identity=identity, participant_sid=participant_sid):
                 return
@@ -2094,7 +2094,7 @@ class ProductionRuntimeManager:
                     old = microphone_readers.pop(id(track), None)
                     microphone_changed.set()
                     if old is not None and old[4] is not None:
-                        old[4].cancel()
+                        old[4].cancel("microphone_track_unsubscribed")
                         await asyncio.gather(old[4], return_exceptions=True)
 
             self._schedule_serialized_participant_operation(session_id, handle_track_unsubscribed)
@@ -2256,8 +2256,9 @@ class ProductionRuntimeManager:
                 if session_id not in self._rooms:
                     exit_reason = "room_closed"
                     return
-        except asyncio.CancelledError:
-            exit_reason = "cancelled"
+        except asyncio.CancelledError as error:
+            permitted = {"microphone_track_replaced", "microphone_track_unsubscribed"}
+            exit_reason = error.args[0] if error.args and error.args[0] in permitted else "cancelled"
             raise
         except Exception as error:
             exit_reason = type(error).__name__
