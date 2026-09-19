@@ -192,11 +192,12 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
     code = 1
     if measured == 100:
         with (directory / "reporter.log").open("x") as log:
+            # app packageのあるcwdから起動し、親のPYTHONPATHへ依存しない。
             code = subprocess.run([sys.executable, "-m", "app.livekit_pilot_report", "--scope", "controlled",
                 "--manifest", str(target), "--trace", str(trace), "--output", str(directory / "report.json"),
                 "--schema", str(ROOT / "docs/schemas/voice-quality-artifact-v1.schema.json"),
                 "--profile-report", str(run_root(runs[0][0]) / "runtime-data/runtime/standalone/resolved-profile.json"),
-                "--run-id", directory.name], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=False).returncode
+                "--run-id", directory.name], cwd=ROOT / "backend", stdout=log, stderr=subprocess.STDOUT, check=False).returncode
     summary["preparation_by_phase"] = {phase: preparation_summary(
         [trial for trial in combined["trials"] if trial.get("phase") == phase]
     ) for phase in ("warmup", "measured")}

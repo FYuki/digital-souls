@@ -123,3 +123,34 @@ def test_normal_cohort_rejects_missing_or_active_memory_scheduler_policy(policy)
         cohort.require_memory_isolation({"trials": [{"initial_state_evidence": {
             "memory_scheduler_policy": policy,
         }}]})
+
+
+def test_formal_aggregation_launches_real_reporter_without_pythonpath(tmp_path, monkeypatch):
+    # 集計subprocessをmockせず、環境依存なしで既存reporterの入力検証へ到達させる。
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    runs = cohort.plan("normal-launch", 100)
+    monkeypatch.setattr(cohort, "run_root", lambda run_id: tmp_path / run_id)
+    output = tmp_path / "summary"
+    output.mkdir()
+    for run_id, phase in runs:
+        base = tmp_path / run_id
+        trace = base / "runtime-data/voice-metrics"
+        trace.mkdir(parents=True)
+        (trace / "controlled-trace.jsonl").write_text("")
+        (base / "trial-manifest.json").write_text(json.dumps({
+            "initial_state_hash": "same-state",
+            "trials": [{"phase": phase, "outcome": "failure",
+                        "initial_state_evidence": {"memory_scheduler_policy": POLICY}}],
+        }))
+    profile = tmp_path / runs[0][0] / "runtime-data/runtime/standalone/resolved-profile.json"
+    profile.parent.mkdir(parents=True)
+    profile.write_text(json.dumps({"effectiveProfile": "unsupported"}))
+
+    assert cohort.aggregate(runs, output, "revision", 100) == 1
+    log = (output / "reporter.log").read_text()
+    assert "pilot requires an integration voice measurement profile" in log
+    assert "ModuleNotFoundError" not in log
+    summary = json.loads((output / "summary.json").read_text())
+    assert summary["failure"] == 105
+    assert summary["existing_reporter_exit"] == 1
+    assert not (output / "report.json").exists()
