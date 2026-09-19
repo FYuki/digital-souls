@@ -1,0 +1,560 @@
+{
+  "schema_version": "1.0",
+  "full_acceptance_passed": false,
+  "tts_failure_recovery_passed": false,
+  "scope": "専用候補TTSの生成中/先頭再生後のworker停止診断。正式速度cohortとは別。",
+  "limitations": [
+    "実マイク・聴感ではない",
+    "起動失敗と監査不成立を成功で上書きしない",
+    "入力停止原因は未確定",
+    "旧出力停止の境界は失敗通知時点のrender上限+256frames以降で、停止遅延0msではない"
+  ],
+  "runs": [
+    {
+      "run_id": "423-tts-recovery-0919-01",
+      "harness_revision": "196d23619495e8deda187198b5a584056c03a190",
+      "application_source_equivalent_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "exit_code": 1,
+      "startup_status": "failed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [],
+      "backend_image_observed": null,
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "準備時Backend readiness timeout。故障注入・試験ケース未実行。根本原因未確定。",
+      "provenance": [
+        {
+          "path": "423-tts-recovery-0919-01-host.json",
+          "sha256": "c94e7fd24db08e1e51a18219ac4b350612ba653ae0528fb60002ff96eb2f6132"
+        },
+        {
+          "path": "423-tts-recovery-0919-01.log",
+          "sha256": "39972a72dff0d728110d581ae471d57c5448aec843a34524fadab46d24a94310"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-01/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "487c459e47f5c3c09301cbf84af55cfb4e97696b9dce80c28acd20daeeb9efa5"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-01/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "17b0877338696619b5a85d34242874ffe2bdbb6cabef304a162eb19723b385f7"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-01/playwright-results.json",
+          "sha256": "b10151ea18bd497e2cc54c5616b5928bd2a943ccc58134f550ba01fd67a86a3f"
+        }
+      ]
+    },
+    {
+      "run_id": "423-tts-recovery-0919-02",
+      "harness_revision": "196d23619495e8deda187198b5a584056c03a190",
+      "application_source_equivalent_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "exit_code": 1,
+      "startup_status": "completed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "phase": "generation",
+          "completed": true,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 5651,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 60672,
+              "zeroStart": 60672,
+              "zeroEnd": 724224,
+              "outputClockFrame": 1222784,
+              "missing": null
+            },
+            {
+              "sampleRate": 48000,
+              "outputCount": 3808,
+              "nonzeroBefore": 452160,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": null,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 1222784,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 2,
+            "user_input_result": 1,
+            "response_delta": 91,
+            "response_failed": 1,
+            "speech_started": 1,
+            "speech_stopped": 1,
+            "utterance_finalized": 1,
+            "response_audio_segment": 3,
+            "observation": 1,
+            "response_completed": 1
+          },
+          "error_codes": [],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "before": {
+            "rendered": false,
+            "terminal": false
+          },
+          "fault": {
+            "active_observed": 1,
+            "wait_seconds": 0.7655130080020172,
+            "worker_pid": 9,
+            "signal": "SIGTERM"
+          },
+          "stopped_output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 464,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 60672,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 61184,
+              "missing": null
+            }
+          ],
+          "recovered_playback": {
+            "expectedSamples": 452160,
+            "renderedSamples": 452160,
+            "packetCount": 471,
+            "gapSamples": 0,
+            "maximumGapSamples": 0,
+            "gapCount": 0
+          },
+          "old_response_terminals": [
+            "response_failed"
+          ],
+          "old_completed": false
+        },
+        {
+          "phase": "playback",
+          "completed": false,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 1604,
+              "nonzeroBefore": 160512,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 205568,
+              "zeroStart": 205568,
+              "zeroEnd": 206208,
+              "outputClockFrame": 206336,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 1,
+            "user_input_result": 1,
+            "response_delta": 35,
+            "response_audio_segment": 1,
+            "observation": 1,
+            "response_failed": 1,
+            "error": 1
+          },
+          "error_codes": [
+            "audio_input_unavailable"
+          ],
+          "session_count": 1,
+          "transport_failure_count": 0
+        }
+      ],
+      "backend_image_observed": "sha256:01df6d1ea52b4f8f45136273ef3b3e4c9d71ffe42cf2d0e1da7e4149d95e6c01",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "生成中の復旧成功。再生後は旧監査node破棄により1秒無音条件を満たせず。停止証跡の検査を後続版で修正。",
+      "provenance": [
+        {
+          "path": "423-tts-recovery-0919-02-host.json",
+          "sha256": "fdfb891e6bb1cd14317484e1dd6cc7c18e30c71118ef2bfb27998f62b1aa7bf8"
+        },
+        {
+          "path": "423-tts-recovery-0919-02.log",
+          "sha256": "33b409d9fa07ac6d2789b9ed31febfc2120e702d4785589793b9b9fb0c3f5f33"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-02/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "a3582a9266751d7046d6c93e47732b2e6cb12c35ae20b1baea4aad7f1c107536"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-02/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "42a5ba3071d230015617da572a04db47f1551512d2af89068c12cad0e1f83f88"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-02/playwright-results.json",
+          "sha256": "f7036e7b8b44d3b4578ead9f1d76c8a5cc9757dde4c2be7fa165fbb85946c0d2"
+        },
+        {
+          "path": "423-tts-recovery-0919-02-backend-startup.log",
+          "sha256": "d497d87d6952d0d6ee351e7b4b5ed4d25c60e56589581304aa2d788fe80bef1b"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-02/runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "0cc6ebfb9bb23f400667ff867bbedbced00029943eb5b4f7e29aa97b2eeebae9"
+        }
+      ]
+    },
+    {
+      "run_id": "423-tts-recovery-0919-03",
+      "harness_revision": "1c42bee4bb97523d9f0ab17994379a33710e9e06",
+      "application_source_equivalent_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "exit_code": 1,
+      "startup_status": "failed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [],
+      "backend_image_observed": "sha256:e6f967c270df03dce199c5c697419834f5b5b1b539052e29ad7f03b6f12ec0b9",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "準備時Backend startup probeでmemory-consolidation/embeddingのunavailable。別途11534到達timeout後に復帰を観測。故障注入未実行。",
+      "provenance": [
+        {
+          "path": "423-tts-recovery-0919-03-host.json",
+          "sha256": "ef7727a69eb54a85cd903ef4b918e2413a28cc6c9f443d5dec4b1ce80be90510"
+        },
+        {
+          "path": "423-tts-recovery-0919-03.log",
+          "sha256": "39972a72dff0d728110d581ae471d57c5448aec843a34524fadab46d24a94310"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-03/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "0351fcaca14c0fd90032e245bb4624d7218e0569fe22c73d61bf74146d39d32c"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-03/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "fd4f5207a16a65b0d371c135a336268b56c1c0e2c69874ea43c8621329455a61"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-03/playwright-results.json",
+          "sha256": "21c26e5cd042c33e3385bf311f77e0f54c5ea08cdb67557b8cdc549df1369689"
+        },
+        {
+          "path": "423-tts-recovery-0919-03-backend-startup.log",
+          "sha256": "a62be4840aff81f7f1ea92011304b7970566fff0c44debfb6f460676bbf26537"
+        }
+      ]
+    },
+    {
+      "run_id": "423-tts-recovery-0919-04",
+      "harness_revision": "1c42bee4bb97523d9f0ab17994379a33710e9e06",
+      "application_source_equivalent_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "exit_code": 1,
+      "startup_status": "completed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "phase": "generation",
+          "completed": true,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 6060,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 62720,
+              "zeroStart": 62720,
+              "zeroEnd": 776448,
+              "outputClockFrame": 1025024,
+              "finishedFrame": 776448,
+              "disconnected": true,
+              "missing": null
+            },
+            {
+              "sampleRate": 48000,
+              "outputCount": 1856,
+              "nonzeroBefore": 208320,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": null,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 1025024,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 2,
+            "user_input_result": 1,
+            "response_delta": 81,
+            "response_failed": 1,
+            "speech_started": 1,
+            "speech_stopped": 1,
+            "utterance_finalized": 1,
+            "response_audio_segment": 2,
+            "observation": 1,
+            "response_completed": 1
+          },
+          "error_codes": [],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "before": {
+            "rendered": false,
+            "terminal": false
+          },
+          "fault": {
+            "active_observed": 1,
+            "wait_seconds": 0.7671681229985552,
+            "worker_pid": 252,
+            "signal": "SIGTERM"
+          },
+          "stopped_output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 480,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 62720,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 63488,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "recovered_playback": {
+            "expectedSamples": 208320,
+            "renderedSamples": 208320,
+            "packetCount": 217,
+            "gapSamples": 0,
+            "maximumGapSamples": 0,
+            "gapCount": 0
+          },
+          "old_response_terminals": [
+            "response_failed"
+          ],
+          "old_completed": false
+        },
+        {
+          "phase": "playback",
+          "completed": false,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 1867,
+              "nonzeroBefore": 172928,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 239104,
+              "zeroStart": 239104,
+              "zeroEnd": 239872,
+              "outputClockFrame": 240000,
+              "finishedFrame": 239872,
+              "disconnected": true,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 1,
+            "user_input_result": 1,
+            "response_delta": 111,
+            "response_audio_segment": 1,
+            "observation": 1,
+            "response_failed": 1,
+            "error": 1
+          },
+          "error_codes": [
+            "audio_input_unavailable"
+          ],
+          "session_count": 1,
+          "transport_failure_count": 0
+        }
+      ],
+      "backend_image_observed": "sha256:d001b105e2120b562496ddd979f49bed074bbb191ca28f88f9dfaa4d19edf7f6",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "生成中の復旧成功。再生後は旧出力停止確認を通過したが、audio_input_unavailableで次音声応答を90秒内に確認できず。全復旧受入未達。",
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:d001b105e2120b562496ddd979f49bed074bbb191ca28f88f9dfaa4d19edf7f6",
+          "image_tag": "digital-souls-voice-quality/backend:1c42bee4bb97523d9f0ab17994379a33710e9e06"
+        },
+        "frontend": {
+          "image_id": "sha256:362a4739d9fbc07b3b3978489fcad826f314a5a8dfd2f60c78e4155552192953",
+          "image_tag": "digital-souls-voice-quality/frontend:1c42bee4bb97523d9f0ab17994379a33710e9e06"
+        }
+      },
+      "provenance": [
+        {
+          "path": "423-tts-recovery-0919-04-host.json",
+          "sha256": "83482c57c5fdee78ac366eb40138e8614607e42cb936ab2222fc7847125b9804"
+        },
+        {
+          "path": "423-tts-recovery-0919-04.log",
+          "sha256": "877aa8929fea3ffc1e9d07d17e705a4b9b839cd2951b1887ef4ef26053966c85"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-04/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "5d274d1143072aab2f21e3a2de02d078902098ababc7a2cf9d21b8f99ed4a00c"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-04/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "e139cd6fdf5862364afc52df0fafae3790e558544cb70c3f6a1eab5a67bd278f"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-04/playwright-results.json",
+          "sha256": "778a2c7a9d51eba444f3a0d6a86cc689eb156dd6e6121f0d1f3796db5a0b5f09"
+        },
+        {
+          "path": "423-tts-recovery-0919-04-running-images.json",
+          "sha256": "95912c6f571ab98b753fa73a5c8bf88d0cbe06be9a3b2d5ecc9e2be248b733ad"
+        },
+        {
+          "path": "423-tts-recovery-0919-04-backend-startup.log",
+          "sha256": "f26de0fce3bec61ceba52d81c4459ba75ad697bbec6e3bf90dbea0f6cee5df0e"
+        },
+        {
+          "path": "livekit-quality/runs/423-tts-recovery-0919-04/runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "a437dff985ea16a7f7352445926f0260cb7f5b4c4c6e09b3a85516f5e783da38"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "published": {
+    "evidence.json": "d1e255aa92f55fc17448e3c829024509d7e11ebdad9818dabb272bab07eb1254",
+    "report.json": "dae84b79b1f05890c4fca7a372fd7d6ed7aa4c92c44072523f08bc0825e804f4",
+    "summary.json": "a12dc1e902299b2387e413e2e38050d863316897bd28e51d1e6eea5355ddd925"
+  },
+  "raw_cohort_sha256": {
+    "plan.json": "8e51617bee0a7510ec9b28897e3ebe226fb85561611a703e4a00d2cfbfd96ee6",
+    "execution.jsonl": "d3cce7cb09c8d8f3ef7f8641d0f780d63377a37cc3e58816aea8adf2d25ed605",
+    "trial-manifest.json": "2cd0e5d9381ce5b283c85b42b0074bfdbf6e40447c3d31379f618d08a019c29a",
+    "controlled-trace.jsonl": "2c3e767265bb93662b00cbeea2c9b38766cedb49df04a35081e29c7bcfed7d99",
+    "report.json": "dae84b79b1f05890c4fca7a372fd7d6ed7aa4c92c44072523f08bc0825e804f4",
+    "summary.json": "a12dc1e902299b2387e413e2e38050d863316897bd28e51d1e6eea5355ddd925"
+  },
+  "source_revision": "093b4238406a02bc64513d47c8d527b6de06d05e",
+  "source_sha256": {
+    "scripts/voice_quality/run_normal_cohort.py": "5004047a45dc64992fcc4dfb475a274c6bec034773d7486db1b8f8ed9499da7c",
+    "scripts/voice_quality/report_memory_reference.py": "dd366a28f7c1a3eb4e83dc3c4d8d2d1493e35b3a5b7102b97caabd965b4e558e",
+    "scripts/voice_quality/report_normal_diagnostic.py": "dcc2cf3ecccc85f469bc6013552330be635a04c286b6d824b1e6b2dd6fb6544d",
+    "backend/app/voice_quality_reference_state.py": "694597e044508a551580b345f44a82644cd395ef6dc768285de2f417de4ac48f",
+    "frontend/integration/voice-quality/livekit-quality.spec.ts": "d5cf7686451b0aa6cfa5199be6689de56d9f716746a00fbb15f9e2a5c80f68af"
+  }
+}

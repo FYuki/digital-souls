@@ -1,0 +1,445 @@
+{
+  "scope": "fixed_memory_reference_pilot",
+  "acceptance_applicable": false,
+  "runs": [
+    {
+      "run_id": "350-memory-reference-pilot-0919-01",
+      "revision": "d015c1a7a0948189e1ef1897c603a3cda2834536",
+      "host_exit": 1,
+      "outcome": "setup_failed",
+      "teardown_completed": true,
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:49536ce94331707f5e01ce2ccd4c1bcdc277dbe634d6d49f7fad00efafd6c635",
+          "image_tag": "digital-souls-voice-quality/backend:d015c1a7a0948189e1ef1897c603a3cda2834536"
+        },
+        "frontend": {
+          "image_id": "sha256:2f606421114d244fc77967b79acfdf6cc1a98f3c9f5f15da625cef242a52129d",
+          "image_tag": "digital-souls-voice-quality/frontend:d015c1a7a0948189e1ef1897c603a3cda2834536"
+        }
+      },
+      "raw_sha256": {
+        "host": "446428565e3c5ae346603c2f1c4708a24ec748fc91080b523bf2fe531f658783",
+        "environment_run": "ec0b175eea2c58f4de6bb9ba2ec526a2873f3513e11ad9cc643fc23baa1847d2",
+        ".log": "2f6c74825b061d73cb4e122129d7a781702ae57e6565ad60b6ea3d257adaf8c8"
+      },
+      "native_sdk_verified": false,
+      "voice_outcome": "NOT_RUN",
+      "reference": {
+        "reference_outcome": "not_observed"
+      },
+      "failure_reason": "backend_readiness_timeout"
+    },
+    {
+      "run_id": "350-memory-reference-pilot-0919-02",
+      "revision": "d015c1a7a0948189e1ef1897c603a3cda2834536",
+      "host_exit": 1,
+      "outcome": "completed",
+      "teardown_completed": true,
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:3977ba8ff2a656776d3f511b45d264bf0cd94d74423f958bd1f69e9381f9b4ed",
+          "image_tag": "digital-souls-voice-quality/backend:d015c1a7a0948189e1ef1897c603a3cda2834536"
+        },
+        "frontend": {
+          "image_id": "sha256:4dfaa764777e3003fb12aa93fe420c17d1ed12052814922e85d23aa320568d0c",
+          "image_tag": "digital-souls-voice-quality/frontend:d015c1a7a0948189e1ef1897c603a3cda2834536"
+        }
+      },
+      "raw_sha256": {
+        "host": "a1e1a209b1b75d71e769e39e36945d8c9dd025115f3bdfc9821288f413f218df",
+        "environment_run": "3e668de0765d6f24f8fac567bf7f1ee00b718029260aecd7d83f67f4b3128707",
+        "manifest": "8092e86bdc5f4ea6e1a09401a857f2a906259be0f6a5fdf8a208edca8e59b070",
+        "trace": "1fdb193b730e878069b6d07f8b8ef05d8f202c4e95a965891e2b3d3247ea7e85",
+        ".log": "5dc648f271ac607447ceeb6d5fb5ff4a5e8d3450829031b5d30c49c9eb4f9788",
+        "-backend.log": "731a788da79a8d750cc88f1e1bf465519858621b045e371f4c2f77a1923445e9"
+      },
+      "native_sdk_verified": false,
+      "voice_outcome": "success",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "initial_state": {
+        "approved_rows_sha256": "ffd098cea036bbbe99a7c14ccacdbdf119d68e5bfca16378db7af9db6766fd78",
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "embedding_fingerprint": {
+          "dimension": 768,
+          "model_id": "nomic-embed-text:latest",
+          "provider_id": "ollama"
+        },
+        "fixture_sha256": "e297bc644054ba369f18eb5dade91de6f21eb8df073bb07c1d7659186412e89b",
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "index_count": 3,
+        "memory_count": 3,
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_fixed_reference_state_v1",
+        "rag_enabled": true,
+        "row_counts": {
+          "approved_memories": 3,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 3,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 3,
+          "memory_write_receipts": 3,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "source_rows_sha256": "09e9d49d5a4cf61d93d18d36ddae8af275a80884e07a2abd551aee6c59b7c1b7"
+      },
+      "fixture": {
+        "fixture_version": "speech-v2",
+        "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+        "sample_rate_hz": 48000,
+        "speech_start_sample": 15840,
+        "speech_end_sample": 45120
+      },
+      "trace_validation_reason": null,
+      "metrics": {
+        "stt_start_latency": {
+          "status": "measured",
+          "value": 968.477806,
+          "reason_code": null
+        },
+        "stt_processing": {
+          "status": "measured",
+          "value": 143.606778,
+          "reason_code": null
+        },
+        "llm_start_latency": {
+          "status": "measured",
+          "value": 15.101183,
+          "reason_code": null
+        },
+        "first_text_latency": {
+          "status": "measured",
+          "value": 2339.805432,
+          "reason_code": null
+        },
+        "llm_completion": {
+          "status": "measured",
+          "value": 2449.800737,
+          "reason_code": null
+        },
+        "tts_start_latency": {
+          "status": "measured",
+          "value": 15.803382,
+          "reason_code": null
+        },
+        "first_audio_generation": {
+          "status": "measured",
+          "value": 548.290369,
+          "reason_code": null
+        },
+        "client_playback_latency": {
+          "status": "measured",
+          "value": 44.0,
+          "reason_code": null
+        },
+        "ttfa": {
+          "status": "measured",
+          "value": 3856.6000000089407,
+          "reason_code": null
+        },
+        "vad_leading_boundary": {
+          "status": "missing",
+          "value": null,
+          "reason_code": "vad_speech_start_client_event_missing"
+        },
+        "vad_trailing_boundary": {
+          "status": "missing",
+          "value": null,
+          "reason_code": "speech_stopped_event_missing"
+        },
+        "processing_failure": {
+          "status": "measured",
+          "value": 0.0,
+          "reason_code": null
+        },
+        "client_decode_latency": {
+          "status": "measured",
+          "value": 1.0,
+          "reason_code": null
+        },
+        "decoded_to_playback_latency": {
+          "status": "measured",
+          "value": 43.0,
+          "reason_code": null
+        },
+        "prompt_preparation": {
+          "status": "measured",
+          "value": 2283.888892,
+          "reason_code": null
+        },
+        "llm_capacity_wait": {
+          "status": "measured",
+          "value": 0.006799,
+          "reason_code": null
+        },
+        "llm_http_headers_latency": {
+          "status": "measured",
+          "value": 29.668147,
+          "reason_code": null
+        },
+        "llm_first_token_latency": {
+          "status": "measured",
+          "value": 29.788736,
+          "reason_code": null
+        }
+      },
+      "playback": {
+        "expectedSamples": 279360,
+        "renderedSamples": 279360,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 291
+      },
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 14207.79999999702,
+        "ready_client_ms": 21165.89999999106,
+        "duration_ms": 6958.0999999940395
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "run_id": "350-memory-reference-pilot-0919-03",
+      "revision": "4e41ac35431bb4730cdb1bb3bddad23a121ead88",
+      "host_exit": 0,
+      "outcome": "completed",
+      "teardown_completed": true,
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:34d3b550cd750347b92aee3f37b7d9be2a3c2e446cfcfd8462c35aea275b1b0b",
+          "image_tag": "digital-souls-voice-quality/backend:4e41ac35431bb4730cdb1bb3bddad23a121ead88"
+        },
+        "frontend": {
+          "image_id": "sha256:b0ffc366b3a80f702eec3b399b6aa2e5489d227130904411e990d9c03b6a1b7e",
+          "image_tag": "digital-souls-voice-quality/frontend:4e41ac35431bb4730cdb1bb3bddad23a121ead88"
+        }
+      },
+      "raw_sha256": {
+        "host": "d3e22fedd028bc641953cfc101d08b6fa83ccec78233a2eb9f561974c1795fd9",
+        "environment_run": "98b6189c018dd02e2d9824f41ad5284b4ad09131f67258dd4c82256e9840cf3b",
+        "native_sdk": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "manifest": "ea37c5196bf727e162558deecaa8a6cf89e8f65709748b44d7a56f9ef7bac37a",
+        "trace": "e76eeaf07b1eab092cc596502b93ae42b68654f5c402f6e6a9eb09d1a045f3c6",
+        ".log": "9b053f3d88205b804f4ff63c7580f42001afbf4d829f828d20277488afab9271",
+        "-backend.log": "ae91f957e725b8d21be8e732eda5d90e775ed545abac709b4cfef2dc469b4ca7"
+      },
+      "native_sdk_verified": true,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "voice_outcome": "success",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "initial_state": {
+        "approved_rows_sha256": "ffd098cea036bbbe99a7c14ccacdbdf119d68e5bfca16378db7af9db6766fd78",
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "embedding_fingerprint": {
+          "dimension": 768,
+          "model_id": "nomic-embed-text:latest",
+          "provider_id": "ollama"
+        },
+        "fixture_sha256": "e297bc644054ba369f18eb5dade91de6f21eb8df073bb07c1d7659186412e89b",
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "index_count": 3,
+        "memory_count": 3,
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_fixed_reference_state_v1",
+        "rag_enabled": true,
+        "row_counts": {
+          "approved_memories": 3,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 3,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 3,
+          "memory_write_receipts": 3,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "source_rows_sha256": "09e9d49d5a4cf61d93d18d36ddae8af275a80884e07a2abd551aee6c59b7c1b7"
+      },
+      "fixture": {
+        "fixture_version": "speech-v2",
+        "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+        "sample_rate_hz": 48000,
+        "speech_start_sample": 15840,
+        "speech_end_sample": 45120
+      },
+      "trace_validation_reason": null,
+      "metrics": {
+        "stt_start_latency": {
+          "status": "measured",
+          "value": 973.268473,
+          "reason_code": null
+        },
+        "stt_processing": {
+          "status": "measured",
+          "value": 141.818547,
+          "reason_code": null
+        },
+        "llm_start_latency": {
+          "status": "measured",
+          "value": 41.343332,
+          "reason_code": null
+        },
+        "first_text_latency": {
+          "status": "measured",
+          "value": 691.951241,
+          "reason_code": null
+        },
+        "llm_completion": {
+          "status": "measured",
+          "value": 1044.791619,
+          "reason_code": null
+        },
+        "tts_start_latency": {
+          "status": "measured",
+          "value": 14.439845,
+          "reason_code": null
+        },
+        "first_audio_generation": {
+          "status": "measured",
+          "value": 619.01173,
+          "reason_code": null
+        },
+        "client_playback_latency": {
+          "status": "measured",
+          "value": 43.0,
+          "reason_code": null
+        },
+        "ttfa": {
+          "status": "measured",
+          "value": 2292.7999999970198,
+          "reason_code": null
+        },
+        "vad_leading_boundary": {
+          "status": "missing",
+          "value": null,
+          "reason_code": "vad_speech_start_client_event_missing"
+        },
+        "vad_trailing_boundary": {
+          "status": "missing",
+          "value": null,
+          "reason_code": "speech_stopped_event_missing"
+        },
+        "processing_failure": {
+          "status": "measured",
+          "value": 0.0,
+          "reason_code": null
+        },
+        "client_decode_latency": {
+          "status": "measured",
+          "value": 1.0,
+          "reason_code": null
+        },
+        "decoded_to_playback_latency": {
+          "status": "measured",
+          "value": 42.0,
+          "reason_code": null
+        },
+        "prompt_preparation": {
+          "status": "measured",
+          "value": 615.570025,
+          "reason_code": null
+        },
+        "llm_capacity_wait": {
+          "status": "measured",
+          "value": 0.005431,
+          "reason_code": null
+        },
+        "llm_http_headers_latency": {
+          "status": "measured",
+          "value": 23.445932,
+          "reason_code": null
+        },
+        "llm_first_token_latency": {
+          "status": "measured",
+          "value": 23.558888,
+          "reason_code": null
+        }
+      },
+      "playback": {
+        "expectedSamples": 542400,
+        "renderedSamples": 542400,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 565
+      },
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1997.7000000029802,
+        "ready_client_ms": 3367.5,
+        "duration_ms": 1369.7999999970198
+      },
+      "session_end_confirmed": true
+    }
+  ],
+  "interpretation": "01は準備timeoutでNOT_RUN。02は実参照・再生成功だが観測Profile許可漏れでSDK/resource未検証。03は修正後の実参照・実再生・SDK・後始末まで成功。正式比較の分母とは別。"
+}
