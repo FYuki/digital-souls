@@ -177,16 +177,25 @@ def summarize(manifest: dict, observed: list[dict], events: list[dict], catalog:
                 gates=gates, passed=all(gates.values()))
 
 
+def validate_observer_profile(profile: dict) -> None:
+    environment = profile.get('derivedEnvironment', {})
+    if (profile.get('effectiveProfile') not in ('integration-voice-pcm', 'integration-irodori-cuda-graph-pcm')
+            or environment.get('DS_ENVIRONMENT_ID') != 'test'
+            or environment.get('WHISPER_BASE_URL') != 'http://127.0.0.1:50023'):
+        raise ValueError('resolved PCM observer test profile required')
+    if profile['effectiveProfile'] == 'integration-irodori-cuda-graph-pcm' and (
+            environment.get('OLLAMA_BASE_URL') != 'http://127.0.0.1:11534'
+            or environment.get('IRODORI_BASE_URL') != 'http://127.0.0.1:50026'):
+        raise ValueError('resolved PCM candidate inference endpoints required')
+
+
 def build_report(run_root: Path) -> PcmReport:
     paths = {'manifest': run_root / 'trial-manifest.json', 'observer': run_root / 'whisper-input-pcm.jsonl',
              'trace': run_root / 'runtime-data/voice-metrics/controlled-trace.jsonl',
              'profile': run_root / 'runtime-data/runtime/standalone/resolved-profile.json'}
     raw = {name: path.read_bytes() for name, path in paths.items()}
     profile = json.loads(raw['profile'])
-    if (profile.get('effectiveProfile') != 'integration-voice-pcm'
-            or profile.get('derivedEnvironment', {}).get('DS_ENVIRONMENT_ID') != 'test'
-            or profile.get('derivedEnvironment', {}).get('WHISPER_BASE_URL') != 'http://127.0.0.1:50023'):
-        raise ValueError('resolved PCM observer test profile required')
+    validate_observer_profile(profile)
     fixture_root = ROOT / 'frontend/playwright/fixtures'
     normal = json.loads((fixture_root / 'speech.metadata.json').read_text())
     labeled_bytes = (fixture_root / 'voice-quality-v2/manifest.json').read_bytes()

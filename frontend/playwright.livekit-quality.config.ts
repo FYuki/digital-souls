@@ -34,11 +34,11 @@ if (process.env.VOICE_QUALITY_OBSERVE_STT_PCM !== undefined && (!pcmObserver || 
 }
 const measurementProfile = process.env.VOICE_QUALITY_PROFILE ?? 'integration-voice'
 if (!['integration-voice', 'integration-irodori', 'integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph', 'integration-irodori-memory-reference'].includes(measurementProfile)
-  || (measurementProfile.startsWith('integration-irodori') && pcmObserver)
+  || (!['integration-voice', 'integration-irodori-cuda-graph'].includes(measurementProfile) && pcmObserver)
   || (['integration-irodori-ollama-candidate', 'integration-irodori-memory-reference'].includes(measurementProfile) && faultBridge)) {
   throw new Error('invalid voice quality profile selection')
 }
-const selectedProfile = pcmObserver ? 'integration-voice-pcm' : (faultBridge ? measurementProfile + '-fault' : measurementProfile)
+const selectedProfile = pcmObserver ? measurementProfile + '-pcm' : (faultBridge ? measurementProfile + '-fault' : measurementProfile)
 const base = createSuiteConfig('integration-voice', selectedProfile !== 'integration-voice' ? {
   loadProfile: () => JSON.parse(readFileSync(join(frontendRoot, '..', 'environments', 'profiles', `${selectedProfile}.json`), 'utf8')),
 } : undefined)
