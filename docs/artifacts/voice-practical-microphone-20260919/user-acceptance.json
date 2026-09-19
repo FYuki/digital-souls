@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "method": "physical_microphone_and_user_listening",
+  "source": "user_report_in_task_2026-09-19",
+  "app_revision_first": "3bb9a0917dc4764d026c94078902fbd14ff01f5d",
+  "app_revision_recheck": "3409662760c3b04498dab9a582c207be2a8ec638",
+  "production_code_between_revisions": "unchanged; only CI test isolation changed",
+  "tts_revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+  "whisper_port_actual": 50022,
+  "user_report": {
+    "evaluation_items": "問題ない",
+    "initial_issue": "無音をユーザー入力とし、ご視聴ありがとうございましたと認識",
+    "timing": "開始直後と発話後の両方",
+    "recheck": "再発せず、普通の発話も認識される",
+    "final_instruction": "クリック音はマイク位置の調整で解消したため対応不要"
+  },
+  "acceptance": "user_accepted_with_microphone_position_adjustment",
+  "scope_limitations": [
+    "クリック音・環境雑音の一般的な除外保証ではない",
+    "修正入りWhisperへの切替で人の確認に成功したとは認定しない",
+    "この記録は性能の再計測ではない"
+  ],
+  "operational_attempts": [
+    {
+      "run": "350-practical-microphone-0919-02",
+      "actual_whisper_port": 50022,
+      "result": "human_evaluation_and_issue_report"
+    },
+    {
+      "run": "350-practical-microphone-0919-03",
+      "actual_whisper_port": 50022,
+      "result": "environment_override_did_not_change_profile_route; user_recheck_on_original_route"
+    },
+    {
+      "run": "350-practical-microphone-0919-04",
+      "result": "NOT_RUN",
+      "reason": "Profile fixed-local-service validation rejected changed endpoint before applications started"
+    },
+    {
+      "run": "350-practical-microphone-0919-05",
+      "actual_whisper_port": 50022,
+      "result": "original_route_restored_and_verified; same_test_history_preserved"
+    }
+  ],
+  "additional_click_work": "not_requested; unpublished routing branch not adopted",
+  "shared_services_modified": false,
+  "history_at_restoration": {
+    "completed": 1,
+    "interrupted": 9
+  }
+}
