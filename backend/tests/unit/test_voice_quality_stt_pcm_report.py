@@ -171,3 +171,24 @@ def test_saved_v3_report_remains_schema_readable_without_becoming_v4_evidence():
     validate(historical, schema)
     assert historical['edge_alignment_method'] != report.BOUNDED_EDGE_METHOD
     assert historical['passed'] is False
+
+
+@pytest.mark.parametrize('name', ['integration-voice-pcm', 'integration-irodori-cuda-graph-pcm'])
+def test_observer_report_requires_actual_pcm_endpoint_and_test_environment(name):
+    profile = {'effectiveProfile': name, 'derivedEnvironment': {
+        'DS_ENVIRONMENT_ID': 'test', 'WHISPER_BASE_URL': 'http://127.0.0.1:50023',
+        'OLLAMA_BASE_URL': 'http://127.0.0.1:11534', 'IRODORI_BASE_URL': 'http://127.0.0.1:50026'}}
+    report.validate_observer_profile(profile)
+    for field, wrong in [('DS_ENVIRONMENT_ID', 'dogfood'),
+                         ('WHISPER_BASE_URL', 'http://127.0.0.1:50022')]:
+        changed = copy.deepcopy(profile)
+        changed['derivedEnvironment'][field] = wrong
+        with pytest.raises(ValueError, match='PCM observer'):
+            report.validate_observer_profile(changed)
+    if name.endswith('cuda-graph-pcm'):
+        for field, wrong in [('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
+                             ('IRODORI_BASE_URL', 'http://127.0.0.1:50024')]:
+            changed = copy.deepcopy(profile)
+            changed['derivedEnvironment'][field] = wrong
+            with pytest.raises(ValueError, match='candidate inference'):
+                report.validate_observer_profile(changed)

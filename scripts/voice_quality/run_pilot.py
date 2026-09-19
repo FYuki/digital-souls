@@ -154,7 +154,7 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         raise ValueError("unsupported measurement profile")
     if profile in {"integration-irodori-ollama-candidate", "integration-irodori-memory-reference"} and fault_bridge:
         raise ValueError("candidate profile cannot use the fault bridge profile")
-    if profile.startswith("integration-irodori") and observe_stt_pcm:
+    if profile not in {"integration-voice", "integration-irodori-cuda-graph"} and observe_stt_pcm:
         raise ValueError("Irodori profile cannot use the PCM observer profile")
     if type(session_lifecycle) is not bool or (session_lifecycle and (
         trials != 2 or not scheduled_fixture or controlled or continuous_turns
@@ -237,7 +237,7 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         env["VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY"] = "1"
     if observe_stt_pcm:
         env["VOICE_QUALITY_OBSERVE_STT_PCM"] = "1"
-    env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else (f"{profile}-fault" if fault_bridge else profile)
+    env["DS_PROFILE"] = f"{profile}-pcm" if observe_stt_pcm else (f"{profile}-fault" if fault_bridge else profile)
     env["VOICE_QUALITY_PROFILE"] = profile
     # 常駐モデルの観測先も、Backendが解決するProfileの接続先に揃える。
     selected = json.loads((ROOT / "environments/profiles" / f'{env["DS_PROFILE"]}.json').read_text())
