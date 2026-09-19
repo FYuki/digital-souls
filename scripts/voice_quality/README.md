@@ -922,3 +922,18 @@ integration-irodori-cuda-graph-fault を選び、LiveKit 19880、Ollama 11534、
 重複0、分母・時計・native SDKのcoverage要件は既存reporterを維持する。
 各試行のProfile、所有container削除、fault時計process終了を検証してから次へ進む。
 準備全体の固定上限は設けず、各処理のtimeout・error検出を使う。
+
+
+### マイク許可結果の遅着と会話終了
+
+playwright.microphone-cancel.config.tsは、高速化候補Profile専用の局所診断を収集する。
+run_pilot.pyのpilot_environmentでintegration-irodori-cuda-graph、独立run ID、形成停止を設定し、
+取得した環境変数を使ってFrontend側で次のconfigを実行する。
+
+    node node_modules/@playwright/test/cli.js test --config playwright.microphone-cancel.config.ts
+
+通常のrun_pilot.pyの品質cohort起動とは別に実行する。ブラウザが実際に作った合成入力deviceの
+getUserMedia結果だけを保留し、実Sessionの終了API成功後に返す。遅着trackのended、
+マイクOFF、入力停止、応答開始0件、終了API1回を確認する。
+HTTPの成功応答やSFUはモックへ置換しない。人の実マイク・native許可ダイアログ、
+正式100件の性能や音質の受入ではない。失敗runを上書きせず、所有アプリだけを終了する。
