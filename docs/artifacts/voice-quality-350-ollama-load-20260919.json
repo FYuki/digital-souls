@@ -1,0 +1,84 @@
+{
+  "purpose": "合成短文によるOllama内部時間の限定診断。会話TTFA・正式受入ではない。",
+  "version": {
+    "version": "0.32.5"
+  },
+  "before": [],
+  "requests": [
+    {
+      "ordinal": 1,
+      "elapsed_ms": 6063.811253996391,
+      "total_duration": 6063296355,
+      "load_duration": 5994500941,
+      "prompt_eval_duration": 66372000,
+      "eval_duration": 1000,
+      "prompt_eval_count": 11,
+      "eval_count": 1,
+      "done_reason": "length"
+    },
+    {
+      "ordinal": 2,
+      "elapsed_ms": 292.44650899636326,
+      "total_duration": 291872468,
+      "load_duration": 252684249,
+      "prompt_eval_duration": 37926000,
+      "eval_duration": 1000,
+      "prompt_eval_count": 11,
+      "eval_count": 1,
+      "done_reason": "length"
+    },
+    {
+      "ordinal": 3,
+      "elapsed_ms": 287.8963620023569,
+      "total_duration": 287336889,
+      "load_duration": 257677466,
+      "prompt_eval_duration": 28490000,
+      "eval_duration": 1000,
+      "prompt_eval_count": 11,
+      "eval_count": 1,
+      "done_reason": "length"
+    },
+    {
+      "ordinal": 4,
+      "elapsed_ms": 288.40461900108494,
+      "total_duration": 287864548,
+      "load_duration": 257927652,
+      "prompt_eval_duration": 28682000,
+      "eval_duration": 1000,
+      "prompt_eval_count": 11,
+      "eval_count": 1,
+      "done_reason": "length"
+    },
+    {
+      "ordinal": 5,
+      "elapsed_ms": 298.4383169969078,
+      "total_duration": 297908190,
+      "load_duration": 259474056,
+      "prompt_eval_duration": 37236000,
+      "eval_duration": 1000,
+      "prompt_eval_count": 11,
+      "eval_count": 1,
+      "done_reason": "length"
+    }
+  ],
+  "after": [
+    {
+      "name": "gemma4:e4b",
+      "size_vram": 3367921253,
+      "context_length": 8192,
+      "digest": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb",
+      "expires_at": "2026-09-19T11:16:48.693515544+09:00"
+    }
+  ],
+  "diagnostic_request": {
+    "model": "gemma4:e4b",
+    "synthetic_input": "こんにちは。",
+    "stream": false,
+    "think": false,
+    "num_ctx": 8192,
+    "num_predict": 1,
+    "temperature": 0
+  },
+  "load_duration_interpretation": "Ollama 0.32.5ではrequest開始からscheduleRunner完了までの時間。常にモデル再ロードそのものを意味しない。",
+  "source": "https://github.com/ollama/ollama/blob/v0.32.5/server/routes.go#L2272-L2463"
+}
