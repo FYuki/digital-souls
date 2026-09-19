@@ -164,9 +164,14 @@ Profile は次の5種類である。各依存の完全な接続先と readiness 
 `dev` では次の順序で起動確認を行う。
 
 1. host側のEnvironment CLIがProfileとruntime data rootを検証する
-2. Ubuntu-dogfood所有のOllama、VOICEVOX、Whisper、LiveKitのreadinessを確認する
-3. managed adapterがdev用Backend／Frontend imageをbuildし、environment専用Compose projectを起動する
+2. prepare段階でdev用Backend／Frontendの両imageをbuildする
+3. 両imageの準備後にOllama、VOICEVOX、Whisper、LiveKit等のreadinessをpre-probeし、environment専用Compose projectのアプリを起動する
 4. Backend `:8000`、Frontend `:5173`、ready gate `:4174`を確認する
+
+Backend起動中にFrontend imageをbuildしない。image準備の失敗時はアプリを起動せず、
+準備後にimage名などの解決済み環境が変わった場合も起動を拒否する。
+dogfoodでは同じ順序で固定digestの両imageをpullし、buildは行わない。
+直接Adapterを呼ぶ単体起動は従来のbuild/pullを伴う互換経路で、標準Environment CLIと区別する。
 
 Ollama、VOICEVOX、WhisperまたはLiveKitが未起動の場合、`dev`または`integration-*`は共通serviceを作成・起動せずreadiness失敗として終了する。構築と復旧は`infra/dogfood/README.md`に従う。
 
