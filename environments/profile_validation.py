@@ -121,6 +121,9 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_
         raise ProfileError(f"{path}.mode mock is only valid for backend/browser")
     if mode == "mock" and ("baseUrl" in dependency or "readinessPath" in dependency):
         raise ProfileError(f"{path} mock/browser cannot define connection fields")
+    if mode == "real" and name == "irodori" and profile_name in {"integration-irodori-cuda-graph", "integration-irodori-cuda-graph-pcm", "integration-irodori-cuda-graph-fault", "integration-irodori-memory-reference"}:
+        if dependency.get("baseUrl") not in {"http://127.0.0.1:50026", "http://127.0.0.1:50026/"}:
+            raise ProfileError(f"{path}.baseUrl must identify the fixed local service")
     if mode == "real" and name == "irodori" and source != "external":
         raise ProfileError(f"{path}.source must be external when mode is real")
     if mode == "real" and name == "irodori" and dependency.get("readinessPath") != "/health/ready":
@@ -140,10 +143,13 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_
             raise ProfileError(f"{path}.readinessPath is required for real/{source}")
     if mode == "real" and name in FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS:
         fixed_base_urls, fixed_readiness_path = FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS[name]
-        if name == "livekit" and profile_name in {"integration-voice-fault", "integration-irodori-fault"}:
+        if name == "ollama" and profile_name in {"integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-cuda-graph-pcm", "integration-irodori-cuda-graph-fault", "integration-irodori-memory-reference"}:
+            # 候補版だけを専用portへ固定し、共有Ollamaの契約は変えない。
+            fixed_base_urls = {"http://127.0.0.1:11534", "http://127.0.0.1:11534/"}
+        if name == "livekit" and profile_name in {"integration-voice-fault", "integration-irodori-fault", "integration-irodori-cuda-graph-fault"}:
             # 通常dev/dogfoodの許可先は拡張せず、専用Profileだけを障害注入先へ固定する。
             fixed_base_urls = {"http://127.0.0.1:19880", "http://127.0.0.1:19880/"}
-        if name == "whisper" and profile_name == "integration-voice-pcm":
+        if name == "whisper" and profile_name in {"integration-voice-pcm", "integration-irodori-cuda-graph-pcm"}:
             # 実入力の観測用中継。通常ProfileのWhisper接続先は拡張しない。
             fixed_base_urls = {"http://127.0.0.1:50023", "http://127.0.0.1:50023/"}
         if name == "whisper" and profile_name == "dev-stt-validation":

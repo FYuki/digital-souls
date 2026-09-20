@@ -854,3 +854,35 @@ def test_worker_rereads_queued_turn_and_skips_deleted_source(
                 extractor_request.release.set()
 
     assert len(extractor_request.calls) == 1
+
+
+def test_controlled_measurement_preserves_history_without_formation_or_consolidation(
+    monkeypatch, runtime_paths, conversation_history_database_path,
+):
+    from unittest.mock import AsyncMock
+    from app.voice_measurement_memory import POLICY_PATH
+
+    monkeypatch.setenv("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION", "true")
+    monkeypatch.setenv("VOICE_MEASUREMENT_KIND", "controlled_baseline")
+    monkeypatch.setenv("VOICE_CONTROLLED_TRACE_PATH", str(runtime_paths.data_root / "controlled.jsonl"))
+    monkeypatch.setenv("RAG_ENABLED", "false")
+    for name in ("MemoryFormationScheduler", "CombinedFormationScheduler",
+                 "build_semantic_scheduler", "build_episodic_scheduler"):
+        monkeypatch.setattr(main, name, MagicMock(side_effect=AssertionError("formation must not be built")))
+    consolidation_start = AsyncMock()
+    consolidation_stop = AsyncMock()
+    monkeypatch.setattr(main.MemoryConsolidationScheduler, "start", consolidation_start)
+    monkeypatch.setattr(main.MemoryConsolidationScheduler, "stop", consolidation_stop)
+    with patch("app.main.load_character_card", return_value=_character_card()):
+        with patch("app.llm.router.generate_response", return_value="synthetic reply"):
+            with TestClient(main.app) as client:
+                _send_http_message(client, "synthetic measurement input")
+                policy = json.loads((runtime_paths.data_root / POLICY_PATH).read_text())
+                assert policy == {
+                    "method": "controlled_memory_schedulers_v1",
+                    "formation_disabled": True, "consolidation_disabled": True,
+                }
+    consolidation_start.assert_not_awaited()
+    consolidation_stop.assert_not_awaited()
+    with sqlite3.connect(conversation_history_database_path) as connection:
+        assert connection.execute("SELECT count(*) FROM conversation_turns").fetchone()[0] == 1

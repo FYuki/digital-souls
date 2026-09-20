@@ -1,6 +1,7 @@
+import {startMeasuredSession} from './start-measured-session'
 import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 // 発話を供給せず、実Roomの正常終了と切断後の終了を確認する。通常100件とは別の診断。
-import { expect, type Browser } from '@playwright/test'
+import { expect, type Browser, type TestInfo } from '@playwright/test'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { installScheduledFixture, type ScheduledFixture } from './controlled-audio-fixture'
@@ -15,7 +16,7 @@ type NativeRow = {
 }
 
 export async function measureZeroResponseSessions(
-  browser: Browser, fixture: ScheduledFixture, output: string,
+  browser: Browser, fixture: ScheduledFixture, output: string, testInfo: TestInfo,
 ): Promise<void> {
   const dataRoot = process.env.DS_DATA_DIR
   if (!dataRoot) throw new Error('dedicated test data root is required')
@@ -55,23 +56,16 @@ export async function measureZeroResponseSessions(
       // start/replayを呼ばないため、マイクtrackには無音だけを流す。
       await installScheduledFixture(page, fixture)
       const microphone = await driver.openVoiceChat(page)
-      const issuedResponse = page.waitForResponse(response => response.request().method() === 'POST'
-        && new URL(response.url()).pathname.endsWith('/voice/livekit/token'), { timeout: 10_000 })
-      await microphone.click()
-      const issued = await issuedResponse
-      expect(issued.ok()).toBe(true)
-      const { session_id: issuedId, reconnect_grace_ms: graceMs } = await issued.json() as {
-        session_id: unknown; reconnect_grace_ms: unknown
-      }
-      // 認証tokenと接続先はmanifestへ保存しない。
-      if (typeof issuedId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(issuedId)
-        || typeof graceMs !== 'number' || !Number.isInteger(graceMs) || graceMs < 1 || graceMs > 120_000) {
-        throw new Error('session identity or reconnect deadline unavailable')
-      }
-      sessionId = issuedId
-      record.session_id = sessionId
-      record.reconnect_grace_ms = graceMs
-      await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      let graceMs = 0
+      await startMeasuredSession(page, microphone, testInfo, issued => {
+        sessionId = issued.sessionId
+        graceMs = issued.reconnectGraceMs
+        record.session_id = sessionId
+        record.reconnect_grace_ms = graceMs
+      })
+      if (sessionId === undefined) throw new Error('session identity unavailable')
+      const issuedId = sessionId
+      record.preparation_observation = await page.evaluate(() => window.__voicePreparationProbe!.snapshot())
       stage = 'native_activation'
       await expect.poll(async () => {
         const rows = await readSession(issuedId)
@@ -125,6 +119,8 @@ export async function measureZeroResponseSessions(
       record.failure_stage = stage
       throw error
     } finally {
+      record.preparation_observation = await page.evaluate(() => window.__voicePreparationProbe?.snapshot() ?? null)
+        .catch(() => record.preparation_observation ?? null)
       await persist()
       if (!page.isClosed()) {
         if (!ended) await driver.endVoiceSession(page).catch(() => undefined)

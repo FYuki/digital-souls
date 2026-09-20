@@ -1,0 +1,1720 @@
+{
+  "scope": "fixed_memory_reference_measurement",
+  "run_id": "350-memory-reference-full-0919-01",
+  "measurement_revision": "093b4238406a02bc64513d47c8d527b6de06d05e",
+  "fixture": {
+    "fixture_version": "speech-v2",
+    "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+    "sample_rate_hz": 48000,
+    "speech_start_sample": 15840,
+    "speech_end_sample": 45120
+  },
+  "initial_state": {
+    "approved_rows_sha256": "ffd098cea036bbbe99a7c14ccacdbdf119d68e5bfca16378db7af9db6766fd78",
+    "configuration_sha256": {
+      "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+      "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+    },
+    "embedding_fingerprint": {
+      "dimension": 768,
+      "model_id": "nomic-embed-text:latest",
+      "provider_id": "ollama"
+    },
+    "fixture_sha256": "e297bc644054ba369f18eb5dade91de6f21eb8df073bb07c1d7659186412e89b",
+    "fixture_version": "synthetic-greeting-preferences-v1",
+    "index_count": 3,
+    "memory_count": 3,
+    "memory_scheduler_policy": {
+      "consolidation_disabled": true,
+      "formation_disabled": true,
+      "method": "controlled_memory_schedulers_v1"
+    },
+    "method": "sqlite_fixed_reference_state_v1",
+    "rag_enabled": true,
+    "row_counts": {
+      "approved_memories": 3,
+      "episodic_invalid_sources": 0,
+      "episodic_links": 0,
+      "episodic_merges": 0,
+      "episodic_processed_spans": 0,
+      "episodic_receipts": 0,
+      "episodic_records": 0,
+      "episodic_versions": 0,
+      "memory_index_outbox": 3,
+      "memory_lineage": 0,
+      "memory_response_dependencies": 0,
+      "memory_response_origins": 0,
+      "memory_sources": 3,
+      "memory_write_receipts": 3,
+      "semantic_deletion_masks": 0,
+      "semantic_processed_sources": 0,
+      "semantic_reassessment": 0,
+      "semantic_receipts": 0,
+      "semantic_records": 0,
+      "semantic_relations": 0,
+      "semantic_versions": 0,
+      "temporary_provider_records": 0
+    },
+    "source_rows_sha256": "09e9d49d5a4cf61d93d18d36ddae8af275a80884e07a2abd551aee6c59b7c1b7"
+  },
+  "same_audio_character_policy_as_empty_state": true,
+  "tts_revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+  "tts_image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+  "trials": [
+    {
+      "trial_index": 1,
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:996ae379930b4dbfd420e6bc06a7db7b0230ce7002dc28e233921bbc58ced0e4",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:399d2a4a0b32cbedf93e30f1e09814ddbcd91bb9c7a4073b0551bfe9b0f1493c",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2282.6323333303535,
+      "ttfa_lower_ms": 2280.9323333273733,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1999.2000000029802,
+        "ready_client_ms": 5388.9000000059605,
+        "duration_ms": 3389.7000000029802
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 361920,
+        "renderedSamples": 361920,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 377
+      },
+      "teardown_completed": true,
+      "resource_samples": 46,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "fe0c636e01fc35f8e61c2b1475376d028894e3b1c62fab0568b84b82418d79a4",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "e1f864c63b1063f84f5a0df637d61297a2127250e76b11f742b1183c3b8961bc",
+        "runtime-data/runtime/standalone/environment-run.json": "6611789e218df7a1391516bc6b4f6dddfaf566d5bf67f92d63efcf7aaa512610",
+        "runtime-data/runtime/standalone/resolved-profile.json": "e9997d70a02f49c6bd8a4d5043333df8b92c6dc3470bf9b28d3d8756d741cff5",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "e0f7c529c58d1a903223992c0dc2a74702be3166f9514cd24f42848c6d164121",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 2,
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:d474867e3ced7b07ecf46a5da37d2fd60aeaa7912b1b11889cabc86877bb1351",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:5fbab8fc40b960cfa16752dec5d106b3412fc73a5de31dc302eb7be3b5a49175",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2192.8323333333337,
+      "ttfa_lower_ms": 2191.1323333303535,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1986.8999999910593,
+        "ready_client_ms": 3350.5999999940395,
+        "duration_ms": 1363.7000000029802
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 281280,
+        "renderedSamples": 281280,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 293
+      },
+      "teardown_completed": true,
+      "resource_samples": 34,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "94305c1cebcf1755bbd99bd2c2953391d78b68d7fcde6d82713f748f295a5b68",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "3e6de718d682bbae2a78d09d2538982b0e8c5e713afff4f7507171c3b896b1df",
+        "runtime-data/runtime/standalone/environment-run.json": "e24dd3370bafed49024fecb7883d76e7dbac1375e95b7b5b79e649419f2917ae",
+        "runtime-data/runtime/standalone/resolved-profile.json": "37c1b67242ad00af314c6191773138289ae396ac805e43b4e509928805958051",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "97c615ff5f4897c6c440e2996d856cffc9ad2f771c53594c797e3592aec90873",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 3,
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:2fb9ef2f949044014d4f948e4ca3428b1b60a4b4d9c992d8678af349d0db345e",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:af05ffe747f0e22e6e47263fe852434e19af6fff0a85b549d2951639b6a82966",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2225.5656666726272,
+      "ttfa_lower_ms": 2224.0656666726272,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1991,
+        "ready_client_ms": 3377.3999999910593,
+        "duration_ms": 1386.3999999910593
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 438720,
+        "renderedSamples": 438720,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 457
+      },
+      "teardown_completed": true,
+      "resource_samples": 40,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "39b4d2f446b1b50e7ed6cc36595f763e1661ae53ff67dee0d9ed6141210ccbc8",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "ea3d8a62ee09c4b554614f296fbcf993438ed255b82ac642d20f5ad8dd7591df",
+        "runtime-data/runtime/standalone/environment-run.json": "b077c2039c1c85a36f3b6cada6c063242c529a46d8c3c7b38c961df70de4b487",
+        "runtime-data/runtime/standalone/resolved-profile.json": "30e8f1383480a7c553d738eb4ce33667b951cbaf875191df9b49f70cbc0a0131",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "4897b814bc933f9cab4ea28394cf3380a2dd4b1be7f928199c4f5abd5dc6718b",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 4,
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:87df4cc45e781bd8d7127de74657ad5939e98b35b4c486c94b4cee8ce5d45ab1",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:8d34d5e864f665c7e0fd134913a2b83c40277316d29a97912bd0db9265f07b11",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2262.4656666785877,
+      "ttfa_lower_ms": 2260.6656666666668,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1987.5999999940395,
+        "ready_client_ms": 3363,
+        "duration_ms": 1375.4000000059605
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 246720,
+        "renderedSamples": 246720,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 257
+      },
+      "teardown_completed": true,
+      "resource_samples": 33,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "41e3de4b8d50cbd594003615a95c271c5850e8ca0ca503437dc66ffbe9c21959",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "5da96685269c6ab3c95a38afd966bed0de6b1b7fe9ec417c16a6051c3dadc02f",
+        "runtime-data/runtime/standalone/environment-run.json": "7ffa7a8ecab6f54a3b0af4002143e47e6d0fb874720dc587a072885a2f3c9bd6",
+        "runtime-data/runtime/standalone/resolved-profile.json": "a52637fd49301aa32562507a6e45aafb1ce350aff04f83b9f6cf6cef0d7aef8e",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "dc451378952ead2ed41fb9d56e3614ae1738f87037222f4b68784e5fc7280b8d",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 5,
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:6dc4599a6b7950b972431bdd722644555df9cde36c2bc3146616d21b112740b8",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:3bce25ffd9e84ba4d8352b73bacfa9f414e31f507ea74e890cd456c6c76ba5cd",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2354.365666669647,
+      "ttfa_lower_ms": 2352.6656666666668,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2001.3999999910593,
+        "ready_client_ms": 3372.2999999970198,
+        "duration_ms": 1370.9000000059605
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 575040,
+        "renderedSamples": 575040,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 599
+      },
+      "teardown_completed": true,
+      "resource_samples": 45,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "a6e691f1f30e52dc462c2d2622e42e5fee5e3df26d25c6e5c4e1ef65e579b903",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "9f52af1794091e90b8372fb0a64f0cde2551c7c63150df95d68c1833f51271db",
+        "runtime-data/runtime/standalone/environment-run.json": "d65270e7bfff2f01d672a60179d863e12a9da36f9478be28afad9d74128cc2b9",
+        "runtime-data/runtime/standalone/resolved-profile.json": "323decb5f0ce1bb2d8b60f2a3aaa9a01a3f84e00b9ff7a29046020c4bfa8c7e4",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "2b7fd480dc82785387afecf7cefe4cde4fe1b50a2fd57d10c68a62fc3a9d7e2f",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 6,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:27d3f8d7542816380271b610468e037c3689ddaa4a63652292956978bc10c784",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:0356a3ad0118a7dab2fe6da04ab0a65a239f6f77054ecdf3b4a5b552c22af176",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2239.732333339294,
+      "ttfa_lower_ms": 2237.8323333333337,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2028.7000000029802,
+        "ready_client_ms": 3387.5999999940395,
+        "duration_ms": 1358.8999999910593
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 269760,
+        "renderedSamples": 269760,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 281
+      },
+      "teardown_completed": true,
+      "resource_samples": 33,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "3203dac35c4d7bad7003ab2306443001e16aad5c7da4743ee65d61d24f7004fb",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "28b73fbd21f8418b5139456137b59a4cf87ecaddb78f995ffed70ddc224ba813",
+        "runtime-data/runtime/standalone/environment-run.json": "349ae8f0d5e4da04cc6a6125fdfe32091e7d8457ef6345c84943fb9bab0dc642",
+        "runtime-data/runtime/standalone/resolved-profile.json": "eeaf1c40712672a5da5e20c9f81663bdf91ec0162e22a5939eeb89fe9a603e9d",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "560823ac711939997a87e82bf6e95486090f75a7a8a8cc81f0e82e19e1ad1aa5",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 7,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:f3b59ac4e0c1d60d5e2486e5c9bcc0d36bc2a69bda4f3ad3310d485e083ab1ae",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:9d6580fb23bdc96627cb5b9b804e4b39a311f3244f22e9be09101925518026ad",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 3131.4323333273724,
+      "ttfa_lower_ms": 3129.7323333392933,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1999.5,
+        "ready_client_ms": 3350.6000000089407,
+        "duration_ms": 1351.1000000089407
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 279360,
+        "renderedSamples": 279360,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 291
+      },
+      "teardown_completed": true,
+      "resource_samples": 36,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "124e50efd640ea252c1fd18e3b2e5196c725f4b70aae801178f88e9ba1b2ac55",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "74cceafca3ec78f914df9b15f6bfc1b1aab3cabd1c9c0d0d909ecbd9a4e31b1f",
+        "runtime-data/runtime/standalone/environment-run.json": "4b251c759e43586d7f69c840c78a2a95fa0f3ad25954b3d64bf7547fb73df6f2",
+        "runtime-data/runtime/standalone/resolved-profile.json": "0e8e0668d3b604251516482c317152a31857b5b0894ae941387b6960d44e6999",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "54eb1e148155083e66367dd89611f8b7ab4f32b8aa1ea8c819db221d3be8961b",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 8,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:aaeb846cd9b74a379db02f5f3f2aa64bfb9f17b25892ae634d2e3ab7f468efba",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:80bbca7a2ffa0e187456bcfde20768209bda9611eb31b7bd0530ab9e584959fc",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2201.7656666756075,
+      "ttfa_lower_ms": 2199.9656666636865,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2012,
+        "ready_client_ms": 3384.4000000059605,
+        "duration_ms": 1372.4000000059605
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 240960,
+        "renderedSamples": 240960,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 251
+      },
+      "teardown_completed": true,
+      "resource_samples": 32,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "188e17b6bf298338959fa91d994299d1f6414221b077b0fda7f8d342aa143de4",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "1b77fb8069366c476e8fd165876436a9e6acdcd6e922a68993768ce771d21eec",
+        "runtime-data/runtime/standalone/environment-run.json": "e519df7e93460f02f86e5e0c6286f30231587d955c2cd6e8de86d1ace135df33",
+        "runtime-data/runtime/standalone/resolved-profile.json": "2e4db9ebd2f8a05e06400eb8aa4720d2e3a5e93fe61c62ac178d68d02833ba12",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "165490750da49a6175ba43be060cf55179d725ea1996941fbc3c09608f92536f",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 9,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:c3834b6846294871c00081c70ef7e02104aad93210e6e9366667ef6fe72f3c44",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:641fde6830af4570a7ea9a1cb8d1d51c2c1778fe0bdd358a5cef1fbdb9e4eb8f",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2193.4323333422744,
+      "ttfa_lower_ms": 2191.732333339294,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1997.300000011921,
+        "ready_client_ms": 3357.4000000059605,
+        "duration_ms": 1360.0999999940395
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 398400,
+        "renderedSamples": 398400,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 415
+      },
+      "teardown_completed": true,
+      "resource_samples": 39,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "bceb07c973eb2c3b0ea126ad96a2c19a92f5a397683020f0bbbc72ca7a6ff505",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "eb53832be1a6160487969aaf0e73498583c4c7d4fe37fd885178bd26b65e0f13",
+        "runtime-data/runtime/standalone/environment-run.json": "d35113c07758daa62cf9b9aca7f97ccb4049e70a0667284c578f0b4840187898",
+        "runtime-data/runtime/standalone/resolved-profile.json": "6179fb99c69513b7a075a3d41383b5e9f7c4c7a713cd08ebe5147efab842abbd",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "d5b652b54b5eedac0e6e612aa325bea574e26371b0e960195e3d8e5ae258c586",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 10,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:af48ecce2f44b65b7ebf21a655cc88adf715528d82ec8e6c35a2067a5eddd6d0",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:9cba5a2d2a517613ccad7eba00a0d3be53eeb02d7501d6dfef5b6887be07983f",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2175.8323333333337,
+      "ttfa_lower_ms": 2174.032333336314,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2018.2999999970198,
+        "ready_client_ms": 3393.7999999970198,
+        "duration_ms": 1375.5
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 296640,
+        "renderedSamples": 296640,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 309
+      },
+      "teardown_completed": true,
+      "resource_samples": 34,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "f067178d0abbcb4c23fbe26934bde2de745c055dc0e0aa7967807ff72a7bd0cc",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "eaa3a803deeb84e5cddabf16998696887acb71181f184b4dd3ca2c465df94279",
+        "runtime-data/runtime/standalone/environment-run.json": "54227a13853f582f6118e25743a9f3eddea0dffb5527e7ff13d4c4bd9acd2b3a",
+        "runtime-data/runtime/standalone/resolved-profile.json": "d0c2ae6d8cd4d92e38e6fd3c5ce28071fbe21d1322ce36d053bc40d92baad085",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "d1798f153496daf2866e1eb297e07d73f75c3238763ea5d12eec50d2490c7f5e",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 11,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:18deaa2de4ff504a9272638018104f15f7b727c2b12817e96ad9e3b403219948",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:d988f3e68726f9e1dad1cca6681faf88c89e4ce2cbabdbe9971c31d2315b7027",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2128.9656666785877,
+      "ttfa_lower_ms": 2127.1656666666668,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2008.7000000029802,
+        "ready_client_ms": 3374.5999999940395,
+        "duration_ms": 1365.8999999910593
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 229440,
+        "renderedSamples": 229440,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 239
+      },
+      "teardown_completed": true,
+      "resource_samples": 31,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "27cb06895845f51834963f73151923d87ac221f861ec43eb904eb183f66f1bc5",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "e68a5af0ce68f6de806c41a2eb8955fa59abae12aa9e87d9ef0f51f4d5054969",
+        "runtime-data/runtime/standalone/environment-run.json": "4fb1156ee4821f7f40221a02a394bb13b36e647ddba9529dd7ce8ccc2dfdfd10",
+        "runtime-data/runtime/standalone/resolved-profile.json": "76869cc7b867f4bb967e42c71b8c1e2484b694758b5b44ef6bad19ee6a10becc",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "05e1328645eb3ab05568278e30a8d6d177d174634a26f8eb16967350ae319ecf",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 12,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:8657a84d99e13113a6f61c1405ac361014b6d31dba10b157c58c207fe627bc41",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:0e3b0e0f8b3207c272c4f95ce0649dceaf18a372e10e8473e01ba3287e3567f5",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2282.2656666756075,
+      "ttfa_lower_ms": 2280.4656666636865,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2012.5,
+        "ready_client_ms": 3887.5999999940395,
+        "duration_ms": 1875.0999999940395
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 406080,
+        "renderedSamples": 406080,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 423
+      },
+      "teardown_completed": true,
+      "resource_samples": 40,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "f03c1ea359034dce18d6b2d31a47279531c4c40996625acd114c0783a595474c",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "89ac3e9d6d3a96b472177e9577410775ce9510539f96893db5606ca1c61e420d",
+        "runtime-data/runtime/standalone/environment-run.json": "3f0da78a4d4b09ef80eacf2d5c6c4c68a0fe41a9f9eb5fc328939f955b55666a",
+        "runtime-data/runtime/standalone/resolved-profile.json": "3ec6f6221c4f2b6900aee3a87605ab2e419040ce7f3617b05e2032812515cc06",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "31521e64284a9991d4f4e9690021d5b507c70f7fbb8160ef93d7bd0701696493",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 13,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:a45b53569e21ab00755a98b2eede4eab3f5984645638626fb2339173e1a67c25",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:e62fea61cee9b13a34d6f807ab4668a96abe79c25d14565cbd0a76e93c467c12",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2172.1323333303535,
+      "ttfa_lower_ms": 2170.4323333422744,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2010.699999988079,
+        "ready_client_ms": 3379.7999999970198,
+        "duration_ms": 1369.1000000089407
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 267840,
+        "renderedSamples": 267840,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 279
+      },
+      "teardown_completed": true,
+      "resource_samples": 33,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "108707168ec256b8a6316bbbcabb896e44a7fa7a5ad70cb4e7492136875a357a",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "9ac8d52d7a482c33bda65de695b9065197cb2f18c2e369e1564a6a12f8dbd560",
+        "runtime-data/runtime/standalone/environment-run.json": "6be54ca988c3c2cad8ec92d8efb2caa8125e913f7e30f6fa9c9a47d944b46a47",
+        "runtime-data/runtime/standalone/resolved-profile.json": "0638753c940833b0badd71d106eacb14555b309f194892146bbad4a566d356fe",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "4401cc6196199435d6ad9cc76972a33d9ed17b44d245253922a307e73f6bb71f",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 14,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:622652080614559e705da054bc7f1daff63a82e427d005c3052ffbe6a0bc8e4d",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:23e004262ac72bd6801cbda6b7ffb36a6b472ab0d04548be656759c579b7448e",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2157.232333339294,
+      "ttfa_lower_ms": 2155.4323333422744,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2016.2000000029802,
+        "ready_client_ms": 3367.300000011921,
+        "duration_ms": 1351.1000000089407
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 325440,
+        "renderedSamples": 325440,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 339
+      },
+      "teardown_completed": true,
+      "resource_samples": 36,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "7644c7f969a2e97970517a9382d42a29ff5ff27dd723340318ab49b4eb3342c1",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "4ecb66926b10e2c54b2e9ddea32fa14bd0e7b6614d51d133a8543220cadebd27",
+        "runtime-data/runtime/standalone/environment-run.json": "564840a8c634d4fed400743fa742359bcd2b0fac3d126c216027b601be181cf5",
+        "runtime-data/runtime/standalone/resolved-profile.json": "a53c4c18e30bf0869272ed3d709ba67059e7b1e17658f20729743b9e95dc5d27",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "11b5e16664fb10cdd598354c982dabd74f33676d106670510f2ff17289c77d0c",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 15,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:a2351063d9342f75fefdf3a800396f5529e982e295b707ddd19aa054cb399e1c",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:d2190ed2b7816dd4a3d33ed9d9fe46a733c9b08fb99aa4481aa9109733871a0b",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2142.9323333422744,
+      "ttfa_lower_ms": 2141.232333339294,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2034.0999999940395,
+        "ready_client_ms": 3402.3999999910593,
+        "duration_ms": 1368.2999999970198
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 271680,
+        "renderedSamples": 271680,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 283
+      },
+      "teardown_completed": true,
+      "resource_samples": 33,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "131ea1d6773329d2b871e324f07d6513811d83f3fbc7127b7a64dab04472aec8",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "c318668260121a6ff6300132e6092e14ec4ca17b086bd0386072848a4f70aed5",
+        "runtime-data/runtime/standalone/environment-run.json": "adcdd9bbd6293fbd1be587fc6bc06020370d89c944e4fa6d6c4b340343c6c3cc",
+        "runtime-data/runtime/standalone/resolved-profile.json": "5a64e5ed268d4c08075131edd3382b13b627c9dc1e3c82466136ecd48222d5e8",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "4a5c2fcf75f7468861992579d613b3c831ab220e8922413a8c09d69f8bf9c422",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 16,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:c8329744b7a2ea674ea39d78c92d850e1844109c19aeba114ab4d1e07f8e7385",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:a676834561cef4e635663457e9a594397c62087708d3f55300af7eae8e75c341",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2244.732333339294,
+      "ttfa_lower_ms": 2243.1323333303535,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1994.2000000029802,
+        "ready_client_ms": 3353.7999999970198,
+        "duration_ms": 1359.5999999940395
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 415680,
+        "renderedSamples": 415680,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 433
+      },
+      "teardown_completed": true,
+      "resource_samples": 40,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "a88bb5f8a1b988f720506b72c1ee3a06d78746872c6fc251ae384506fcafd494",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "ad316bd81bea42529c8a2727316fc4367ba3ea65f0045cc833839f96fe0dcc87",
+        "runtime-data/runtime/standalone/environment-run.json": "850b18bcf602e96fd60320057392152025c8b50b38328949e163e10cfab8af84",
+        "runtime-data/runtime/standalone/resolved-profile.json": "4f032e5db506bedf7fd38a047b4cd02bf96814e534367e7b509bdf1dc2651830",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "fc396813e34ae1aff6ceefef71a56d20b65cfb7a765206598adfdea2317e5c1c",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 17,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:bbd0616061414d0958651edbf65b8fd9e9ce2034badb629ffca43d923e987d03",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:f9db07e6d27b0194a4479ca73d293db2c84a53fc7824e842f53975671da66a80",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2169.6656666666668,
+      "ttfa_lower_ms": 2167.9656666636865,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1991.8999999910593,
+        "ready_client_ms": 3353.5999999940395,
+        "duration_ms": 1361.7000000029802
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 202560,
+        "renderedSamples": 202560,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 211
+      },
+      "teardown_completed": true,
+      "resource_samples": 30,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "ee52a9433aee8bba7c3c1ddeef78dc22d9ef11a59f4ede4f10c5a17560f4f711",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "f8e8c96cb26d07f5ae9784be8351b0d4c38fe13ab1ab793f419d51dcca99ff29",
+        "runtime-data/runtime/standalone/environment-run.json": "e98f593dca179df015635d201f01e8b1ec70073450235bb2ad738fc79332c346",
+        "runtime-data/runtime/standalone/resolved-profile.json": "2127da8f6a04418f25935c2dd782c2b54752a1323d4befcff7906b79e85580dd",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "925e271cf536c779379952e4bb003b57415a1c69f080fa93de0c9a3452597401",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 18,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:72abc1bdca17f647c9a6adaaa3bca824e71df4838b77651cc50feda3f8492e9f",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:030cf798836e2e9920369da784dd989d94d580f55bb85e724def17046fafc721",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2297.0656666726272,
+      "ttfa_lower_ms": 2295.5656666726272,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1989.3999999910593,
+        "ready_client_ms": 3353.199999988079,
+        "duration_ms": 1363.7999999970198
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 396480,
+        "renderedSamples": 396480,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 413
+      },
+      "teardown_completed": true,
+      "resource_samples": 39,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "ec0d6fbe3db17a4a12d8f11f6bdb61d41a24a5c19282d3110b35af7adec0c247",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "4918c1994d61f97e2cb38e684a3563829b155d40b50ac9266f3c52b701de4e25",
+        "runtime-data/runtime/standalone/environment-run.json": "ec3c20b6758d51645ed34acbc70f95735dea2dcae51604332ea89d1b79e951ad",
+        "runtime-data/runtime/standalone/resolved-profile.json": "67916be3b3b327db441ec0ca4a233b76c6845a358c714506b00924aa9ace3439",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "8c61eecdc61c6f53a6009e0e0052abb09fe04ca4973090e7d4b84a64f4ec5a18",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 19,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:e4781d460bcd1d5af8b3dfe497c69bc882959e3c63e7b477215b7fc17a376284",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:9a533a2f35527f368b62de121aeda3a924bb545bcb03078e05005f88510dfdd2",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2187.4323333422744,
+      "ttfa_lower_ms": 2185.6323333452547,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1981.9000000059605,
+        "ready_client_ms": 3347.5,
+        "duration_ms": 1365.5999999940395
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 214080,
+        "renderedSamples": 214080,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 223
+      },
+      "teardown_completed": true,
+      "resource_samples": 31,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "056b75ac69501d6964c093837f8d350a67913cad61362d7dc0886973612a1c55",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "8562f9d953877f63f48e95c51edae7393f249ce9836c418b6cf1ed5f1e93f47c",
+        "runtime-data/runtime/standalone/environment-run.json": "0d2b0ae5cd2c8d68d024f43fc263ad0bd5130da6dd1c9b09de78fffb57e08d7a",
+        "runtime-data/runtime/standalone/resolved-profile.json": "d678d0f210bca91bb7e562c900683dafda60ed1d41836a430a58868f141763a6",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "c03863f75978cc596980b0b62c59098f549294329e2935e9d906920afb79ec41",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 20,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:9e2ecbbb276e3b2b3a2b40338e1b809293ed4e80972c5806b70caa8c59377404",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:a7422d2a42a8deb49e3840da17e4348edb2654e39e9ad4028ee134e46f5490a8",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2156.032333321413,
+      "ttfa_lower_ms": 2154.3323333333337,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2000.5,
+        "ready_client_ms": 3369.6000000089407,
+        "duration_ms": 1369.1000000089407
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 429120,
+        "renderedSamples": 429120,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 447
+      },
+      "teardown_completed": true,
+      "resource_samples": 40,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "23869e4ba5abc25231f429ad6e1ff60027e67764b7f054d90b988510fbd791f8",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "fe5e5506f866fee26aebfcd2484654a27e9751e94a2004fce204eb3ae5426fdb",
+        "runtime-data/runtime/standalone/environment-run.json": "bdc72dafb66d36e5013e76e184a271bf695934f655588415dfd453df2a74adac",
+        "runtime-data/runtime/standalone/resolved-profile.json": "809ab9a6146754cb5c178685623551d78bde38fd1841e268e8c0c6ef8ebe9c9c",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "b0d7635d9665eadf75ace9d5d3b350be94b01f3b40f2b989a86ad9eda62c8c4c",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 21,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:bf141e80c75c71ed65ed2baaee49388b2878a0632e67ae41dc9c17229682d4b3",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:25e826abf3ef10a9ab9075c95970458eca93e56dc1e394d7b4cb85cf1cc3eb0e",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2226.1656666666668,
+      "ttfa_lower_ms": 2224.4656666636865,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2004.0999999940395,
+        "ready_client_ms": 3896.5999999940395,
+        "duration_ms": 1892.5
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 246720,
+        "renderedSamples": 246720,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 257
+      },
+      "teardown_completed": true,
+      "resource_samples": 34,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "80c9438cfb89f9c549a1486a861157ca714d49a806666b8c6b987893270bbdc8",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "a208a53f30c3f97d94ed77a49918cf033a621a93dbc60ebd6c7c2dedf2a577ab",
+        "runtime-data/runtime/standalone/environment-run.json": "ea490aaa0aecc99ee99574174e74229bf933be95cef3a55e7407a58101e17a23",
+        "runtime-data/runtime/standalone/resolved-profile.json": "614bb718de0b3b1f76934e88fb484e4ca13db32aee9ef57dc8e6fd977d83bb41",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "10b2f4f977208d1cdf88b1541568bb52adc5715d0fdce4b80721babd95e1a453",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 22,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:0cc421021e1422d9f2bca5540abc4cd455c739ab63060b9b43562391e8a58ce5",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:9b2db472005d6ad3b67e3ba2aaac07f13f70a495bb87c236c5bcb0d8d1a76e6d",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2150.032333336313,
+      "ttfa_lower_ms": 2148.332333333333,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2011.5999999940395,
+        "ready_client_ms": 3372.2000000029802,
+        "duration_ms": 1360.6000000089407
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 202560,
+        "renderedSamples": 202560,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 211
+      },
+      "teardown_completed": true,
+      "resource_samples": 30,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "051a3ebb7d7c0afe8646709a3e84dd5f14bfed1ce04f49590c3fee5f2dc8b595",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "8d65f799b0f47b5450bdfc145f4c342733a2627fd346443a1ecc19c14d91d89f",
+        "runtime-data/runtime/standalone/environment-run.json": "cc900c44820e60bf159a6a3a4b4cd5388a2d74333394aa139d9bf890220d82eb",
+        "runtime-data/runtime/standalone/resolved-profile.json": "cd602bb39e5bc5e1027e05ee897637b2d1e8e3a9d7f25c3ce4ca59c9a172daaf",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "e0814afb5420ea18948220a7eb3f0160f3de8708200b05c4e16702719a54f900",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 23,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:b61bb2ad3bd89bfc62b5a53aa5e2e8738da0ca23961752311990f163c1161818",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:cc69f090baf1a7f03adac7f38432d13ad4ec3e0899fd5f1611dd1c15212cc6a8",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2197.232333339294,
+      "ttfa_lower_ms": 2195.532333336314,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2030.5,
+        "ready_client_ms": 3409.9000000059605,
+        "duration_ms": 1379.4000000059605
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 279360,
+        "renderedSamples": 279360,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 291
+      },
+      "teardown_completed": true,
+      "resource_samples": 34,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "efc1547225b656199f883de5b807a13801ac7e283f45687ce92ae104023bcbb8",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "1874a8de4f8dc79976637d7172b0d09df56e6cb8a50e530e96b4493a35de3b81",
+        "runtime-data/runtime/standalone/environment-run.json": "2959949ee0a3fde0e09250803775bfe2ba4d96c3f958bf7ccc003b7d68111069",
+        "runtime-data/runtime/standalone/resolved-profile.json": "866988c89fa7ec8675e7019f0d0979380fedef51379dad26ccd10219bf8d22ef",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "010bc860ef1b5a08b6a34cd3d4d93fc16868ba0369a7fd2782ebf987e96c502b",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 24,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:adac353ea345bc911c1d23d1635ac0e7ddfac195c7255326cdc6267902ed92bd",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:df260f1cb3a3231e2189adbc2d3271495ba216fa7ec5844ac79f7b388787fd78",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2147.4656666785877,
+      "ttfa_lower_ms": 2145.7656666756075,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 1987.5,
+        "ready_client_ms": 3353.0999999940395,
+        "duration_ms": 1365.5999999940395
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 300480,
+        "renderedSamples": 300480,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 313
+      },
+      "teardown_completed": true,
+      "resource_samples": 34,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "fa724caaf713a5ff657b1c33af35cf4d7fd8188076452593ebd4bfb8c34689a2",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "d048d0d6a0b13d51a56a0a69443ccc8b918c9939e59d585c32f036f2cf549fc3",
+        "runtime-data/runtime/standalone/environment-run.json": "41befe0cadc1ab9afa39391c610d1bc6b42234ce20252f4ba12daf8a7b50dc00",
+        "runtime-data/runtime/standalone/resolved-profile.json": "599786eeb5ebce624bb00697ff3c83ccc175ff471de6eab4bcfb6d876dc521d4",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "2ec41dc2b4305a4a35717c27f4f9258e1e2416edd027612102c41b6d9d3de4a7",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    },
+    {
+      "trial_index": 25,
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "native_sdk": {
+        "schema_version": 1,
+        "python_sdk_version": "1.1.16",
+        "ffi_version": "0.12.73",
+        "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+        "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+        "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+        "reconnect_policy": "short-outage-v1",
+        "target": "x86_64-unknown-linux-gnu",
+        "cuda_video_codecs_enabled": false
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:671be88ca20c1d6e9987dd53b87472e741d2319f22d1e21a0ca0a6f0ce748036",
+          "image_tag": "digital-souls-voice-quality/backend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        },
+        "frontend": {
+          "image_id": "sha256:1f1b3dab0f3f4a5e10d03a18a37a7ac8971e1b1d73a82a608fd2a7737e24ec5e",
+          "image_tag": "digital-souls-voice-quality/frontend:093b4238406a02bc64513d47c8d527b6de06d05e"
+        }
+      },
+      "initial_state_hash": "83c695736edadeca9138dabcd500cb7261e8d707526e27b0394300f4783c557a",
+      "reference": {
+        "fixture_version": "synthetic-greeting-preferences-v1",
+        "method": "response_prompt_memory_dependencies_v1",
+        "reference_outcome": "referenced",
+        "reference_versions_sha256": "de4d39175061244e48555ebe903d1a3b9a25b641ba745cc787f58af3526bd407",
+        "referenced_count": 3,
+        "response_count": 1
+      },
+      "ttfa_conservative_ms": 2194.032333336313,
+      "ttfa_lower_ms": 2192.532333336313,
+      "preparation": {
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "clock_domain": "browser_performance",
+        "attempt_count": 1,
+        "started_client_ms": 2014.5999999940395,
+        "ready_client_ms": 3396.9000000059605,
+        "duration_ms": 1382.300000011921
+      },
+      "session_end_confirmed": true,
+      "playback": {
+        "expectedSamples": 269760,
+        "renderedSamples": 269760,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "packetCount": 281
+      },
+      "teardown_completed": true,
+      "resource_samples": 33,
+      "backend_resource_samples": 0,
+      "raw_sha256": {
+        "trial-manifest.json": "19edb74709ab62cf02749f8ac4cfc5e4bbec7b4b86b80c5919a9acab14fd0447",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "inference-runtime.jsonl": "9cadba2d4de444aa42676bd8a7a496899bc637ad56a2cf266cb250830f05e04c",
+        "runtime-data/runtime/standalone/environment-run.json": "a7fc755c8fa0a3d532b792774c0993979377fdddad3fec27958263c50969d06b",
+        "runtime-data/runtime/standalone/resolved-profile.json": "f5e93e19a2dd3438a4a4eb796b72ca0026636890d3d8e5cf1e9b392636d93eb7",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "f880398a0172be5582c8aa78f74d70f7f2f4f29d5c2effd2990177581f7d96b0",
+        "runtime-data/voice-metrics/reference-fixture.json": "f4c1c5220531e561f63bcba8b17b2cf681f773a23d03a79ed7007f2600bb4c4e"
+      }
+    }
+  ],
+  "acceptance_applicable": false,
+  "model_digests_observed_after_run": {
+    "nomic-embed-text:latest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+    "gemma4:e4b": "c6eb396dbd5992bbe3f5cdb947e8bbc0ee413d7c17e2beaae69f5d569cf982eb"
+  }
+}

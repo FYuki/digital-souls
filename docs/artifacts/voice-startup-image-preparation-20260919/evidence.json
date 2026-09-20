@@ -1,0 +1,60 @@
+{
+  "scope": "image_preparation_before_backend_start_diagnostic",
+  "run_id": "350-image-preparation-browser-0919-01",
+  "revision": "3bb9a0917dc4764d026c94078902fbd14ff01f5d",
+  "product_pr": 467,
+  "formal_latency_acceptance": false,
+  "physical_microphone_tested": false,
+  "runner_exit_code": 0,
+  "browser_test_count": 1,
+  "browser_evidence": {
+    "scope": "real_browser_synthetic_device_delayed_permission_result",
+    "acquired": 1,
+    "released": true,
+    "trackStates": [
+      "ended"
+    ],
+    "responseStartedCount": 0,
+    "deleteCount": 1,
+    "endedHttpStatus": 200,
+    "physicalMicrophoneTested": false
+  },
+  "native_verified": true,
+  "images": {
+    "backend": {
+      "image_id": "sha256:02d31c850dcead920a37e3402a224652c6ae90a323d47ce9d820537524097c74",
+      "image_tag": "digital-souls-voice-quality/backend:3bb9a0917dc4764d026c94078902fbd14ff01f5d"
+    },
+    "frontend": {
+      "image_id": "sha256:1e84d2bb7e0a48f78f8c4a48e66300e8e1492b6aafb8edabef0c657958133ef2",
+      "image_tag": "digital-souls-voice-quality/frontend:3bb9a0917dc4764d026c94078902fbd14ff01f5d"
+    }
+  },
+  "owned_apps_removed": true,
+  "teardown_status": "completed",
+  "dependency_disconnect_root_cause_resolved": false,
+  "environment_started_at": "2026-09-19T11:34:11.247069+00:00",
+  "backend_started_at": "2026-09-19T11:34:33.861942997Z",
+  "frontend_started_at": "2026-09-19T11:34:34.11868977Z",
+  "probe_count": 138,
+  "probe_failure_count": 32,
+  "probe_failures_before_environment": 7,
+  "probe_failures_after_backend_start": 0,
+  "error_types": {
+    "ReadTimeout": 18,
+    "RemoteProtocolError": 1,
+    "ReadError": 13
+  },
+  "last_failed_request_end_unix": 1789817670.6650846,
+  "raw_sha256": {
+    "host": "71980b58dc35fc351f0ef40c5b77f15e0874118d6482ff7641d4b4e9a408d6ec",
+    "environment": "776ad347426e32290413bd52a9af6c787da03b44da431a99f33341f55c28e875",
+    "probe": "2ff8b50e7b73ddb8ee08bb678391484464a7839cfc62ff5b450ccd53021362a8",
+    "lifecycle": "7b016a03c11369620e179f7cce26565dee2cdc1771d962f4670253c19805f7b0",
+    "runner_log": "061f141f7dfa6a15a8bc4592e538af6f21b008a67dacd5f754f2c23050da1d13",
+    "backend_log": "7e6dda7646d486bea7b91b6cb4210d7e7abc023094ac5f9b6911500713500310",
+    "playwright": "8663d879d45c17c77c679f88a5f4ea223730b170b677268c140d4304822697cb",
+    "native": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "profile": "fde46b0bc9e75bacc35ba32d46dce0a3f8b165ebb14330d175b0623466c38cfa"
+  }
+}

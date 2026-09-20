@@ -776,7 +776,7 @@ def test_tts_preparation_failure_returns_code_and_releases_session(
     response = client.post("/voice/livekit/token", json=_bootstrap_request())
 
     assert response.status_code == 503
-    assert response.json() == {"detail": {"code": code}}
+    assert response.json()["detail"] == {"code": code, "stage": "tts"}
     assert "PRIVATE_CONFIG_SENTINEL" not in response.text
     assert resources.token_signer.token_issues == []
     assert not resources.session_repository.contains("20000000-0000-4000-8000-000000000001")
@@ -815,3 +815,47 @@ def test_old_core_client_is_rejected_without_starting_resources(client, monkeypa
     assert resources.session_repository.session_creations == []
     assert resources.runtime_manager.runtime_starts == []
     assert resources.token_signer.token_issues == []
+
+
+def test_preparation_poll_returns_pending_then_token_and_supports_cancellation(client, monkeypatch):
+    from threading import Event
+    resources = _install_livekit_resource_ports(client, monkeypatch)
+    release = Event()
+    async def wait_ready(session_id):
+        while not release.is_set():
+            await asyncio.sleep(0.001)
+    monkeypatch.setattr(resources.runtime_manager, "wait_until_ready", wait_ready)
+    body = {**_bootstrap_request(), "wait_for_ready": False}
+    pending = client.post("/voice/livekit/token", json=body)
+    assert pending.status_code == 202
+    assert pending.json() == {"status": "preparing", "request_id": body["request_id"]}
+    assert resources.token_signer.token_issues == []
+    assert client.post("/voice/livekit/token", json=body).status_code == 202
+    release.set()
+    for _ in range(50):
+        response = client.post("/voice/livekit/token", json=body)
+        if response.status_code != 202:
+            break
+    assert response.status_code == 200
+    assert len(resources.runtime_manager.runtime_starts) == 1
+    cancelled = client.post("/voice/livekit/preparation/cancel", json=body)
+    assert cancelled.status_code == 204
+    assert not resources.session_repository.contains(response.json()["session_id"])
+
+
+@pytest.mark.parametrize("stage,code", [
+    ("stt", "stt_inference_timeout"), ("inference", "inference_timeout"),
+    ("stt", "stt_capacity_exceeded"),
+])
+def test_model_preparation_failure_reports_stage_and_releases_resources(client, monkeypatch, stage, code):
+    from app.livekit_transport.preparation import VoiceModelPreparationError
+    resources = _install_livekit_resource_ports(client, monkeypatch)
+    async def fail_preparation(_session_id):
+        raise VoiceModelPreparationError(stage=stage, code=code) from RuntimeError("PRIVATE_SENTINEL")
+    monkeypatch.setattr(resources.runtime_manager, "wait_until_ready", fail_preparation)
+    response = client.post("/voice/livekit/token", json=_bootstrap_request())
+    assert response.status_code == 503
+    assert response.json() == {"detail": {"stage": stage, "code": code}}
+    assert "PRIVATE_SENTINEL" not in response.text
+    assert resources.token_signer.token_issues == []
+    assert not resources.session_repository.contains("20000000-0000-4000-8000-000000000001")

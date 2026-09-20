@@ -129,3 +129,5 @@ class BackendAdapter(ComposeManagedServiceOperations):
                         "failed to converge Chroma storage ownership for dogfood: "
                         f"{error}",
                     ) from error
+        if context.environment is not None:
+            self.prepare_image(dependency, context.environment)

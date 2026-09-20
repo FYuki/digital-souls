@@ -1,0 +1,95 @@
+{
+  "revision": "f7f43196ad904b30fdc7d5b6c1d4d357aba5f152",
+  "base_image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "image": "sha256:6c272aa27079cdaf7948bbfb07e66c748b5c8b9d1fd925e562ef95ec63b278cf",
+  "name": "ds-voice-quality-423-graph-service-0919-01",
+  "trials": [
+    {
+      "phase": "normal",
+      "status": 200,
+      "elapsed_ms": 655.6487850029953,
+      "frames": 72960,
+      "sample_rate": 48000,
+      "wav_sha256": "44c193d1f32435f3d7424d51360db7545c482b57227573feb5afe11f7b13c423"
+    },
+    {
+      "phase": "normal",
+      "status": 200,
+      "elapsed_ms": 772.6536129994201,
+      "frames": 301440,
+      "sample_rate": 48000,
+      "wav_sha256": "d9af37d11a0fc650d22bc0d636059d9e630c3018ece7e56c6b1590b1fcb55ee0"
+    },
+    {
+      "phase": "worker_killed",
+      "status": 502,
+      "code": "tts_worker_failed",
+      "elapsed_ms": 428.5649739977089
+    },
+    {
+      "phase": "after_recovery",
+      "status": 200,
+      "elapsed_ms": 698.9535829998204,
+      "frames": 72960,
+      "sample_rate": 48000,
+      "wav_sha256": "0a21cd7b592b1f1d9741bd56f54ce49d5288e992bc13bcdc82afd2ec16d1f969"
+    },
+    {
+      "phase": "after_recovery",
+      "status": 200,
+      "elapsed_ms": 670.0318779985537,
+      "frames": 124800,
+      "sample_rate": 48000,
+      "wav_sha256": "4259db2eb516e08dd1469c54e19cd14a179cbb1975f19db7e7018fa431a60521"
+    }
+  ],
+  "status": "success",
+  "formal_acceptance": false,
+  "startup_wall_seconds": 12.99645226100256,
+  "version_before": {
+    "serviceVersion": "1.0",
+    "model": "Aratako/Irodori-TTS-v4.1-Small",
+    "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+    "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+    "device": "cuda",
+    "precision": "bf16",
+    "quantized": false,
+    "cudaGraphRequested": true,
+    "globalInflight": 1,
+    "maxPending": 8,
+    "maxVoiceChecks": 2,
+    "queueTimeoutSeconds": 10.0,
+    "inferenceTimeoutSeconds": 30.0,
+    "preparationSeconds": 11.963271706998057,
+    "active": 0,
+    "pending": 0
+  },
+  "fault": {
+    "owned_gpu_workers_killed": 1
+  },
+  "recovery_wall_seconds": 11.962227481999435,
+  "version_after": {
+    "serviceVersion": "1.0",
+    "model": "Aratako/Irodori-TTS-v4.1-Small",
+    "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+    "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+    "device": "cuda",
+    "precision": "bf16",
+    "quantized": false,
+    "cudaGraphRequested": true,
+    "globalInflight": 1,
+    "maxPending": 8,
+    "maxVoiceChecks": 2,
+    "queueTimeoutSeconds": 10.0,
+    "inferenceTimeoutSeconds": 30.0,
+    "preparationSeconds": 11.826491020998219,
+    "active": 0,
+    "pending": 0
+  },
+  "owned_container_absent": true,
+  "shared_running": true
+}

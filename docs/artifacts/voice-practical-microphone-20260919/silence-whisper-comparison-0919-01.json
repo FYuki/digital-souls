@@ -1,0 +1,59 @@
+{
+  "cases": "synthetic PCM16 16kHz; sequential one request per endpoint; transcript omitted",
+  "results": [
+    {
+      "case": "digital-silence-2s",
+      "port": 50022,
+      "ok": true,
+      "empty": false,
+      "chars": 14,
+      "reported_phrase": true,
+      "elapsed_ms": 422.1
+    },
+    {
+      "case": "digital-silence-2s",
+      "port": 50025,
+      "ok": true,
+      "empty": true,
+      "chars": 0,
+      "reported_phrase": false,
+      "elapsed_ms": 545.1
+    },
+    {
+      "case": "low-noise-2s",
+      "port": 50022,
+      "ok": true,
+      "empty": false,
+      "chars": 14,
+      "reported_phrase": true,
+      "elapsed_ms": 218.1
+    },
+    {
+      "case": "low-noise-2s",
+      "port": 50025,
+      "ok": true,
+      "empty": true,
+      "chars": 0,
+      "reported_phrase": false,
+      "elapsed_ms": 232.1
+    },
+    {
+      "case": "short-click-2s",
+      "port": 50022,
+      "ok": true,
+      "empty": false,
+      "chars": 14,
+      "reported_phrase": true,
+      "elapsed_ms": 156.4
+    },
+    {
+      "case": "short-click-2s",
+      "port": 50025,
+      "ok": true,
+      "empty": true,
+      "chars": 0,
+      "reported_phrase": false,
+      "elapsed_ms": 163.1
+    }
+  ]
+}

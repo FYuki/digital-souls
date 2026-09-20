@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "formal_acceptance": false,
+  "files": [
+    {
+      "path": "browser-small.json",
+      "sha256": "3738e973ba57216a09fc9beb45a04f34f2bb69d5aa215d4538f0d43e75d63068"
+    },
+    {
+      "path": "irodori-graph-0919-capacity-01.json",
+      "sha256": "e655ec097c27fdba66f03d5cd0ff0f0ecf7255281389fe3529b6b0a54fa85b06"
+    },
+    {
+      "path": "irodori-graph-0919-capacity-02.json",
+      "sha256": "9afc1d10f7491c794e240c6ee70ed3e5103ae855ebcaab260d0275c5c8792e5f"
+    },
+    {
+      "path": "irodori-graph-0919-host-overhead-01.json",
+      "sha256": "6f28bf661c765513c682e278ba79db31bb078179c7eb3645f62c32002e1655dd"
+    }
+  ]
+}

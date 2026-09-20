@@ -941,6 +941,7 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
   const frame = {receivedAtMs: 100, decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)}
   try {
     observer.playback!.packet({...frame, packetIndex: 0, rtpTimestamp: 99})
+    const observationsBeforeFault = observations.length
     if (mode === 'gap_during_resume') room.emit('signalReconnecting')
     if (mode === 'overlap') {observer.playback!.interrupted!(); observer.playback!.interrupted!()}
     else observer.playback!.packet({...frame, packetIndex: 1, rtpTimestamp: mode === 'ragged_gap' ? 2021 : 2019})
@@ -958,6 +959,8 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
       .toMatchObject([{type: 'playback_stopped', session_id: sessionId, response_id: responseId,
         reason: 'disconnect', last_played_audio_sequence: 0},
       {type: 'response_cancel_requested', session_id: sessionId, response_id: responseId, reason: 'disconnect'}])
+    // Session世代を更新する前に、入力所有側へ再認可が必要な状態を通知する。
+    expect(observations.slice(observationsBeforeFault).some(row => row.transport === 'unavailable')).toBe(true)
     expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
     expect(worklet.port.postMessage).toHaveBeenCalledWith({kind: 'stop'})
     if (mode === 'gap' || mode === 'gap_during_resume') {
@@ -979,6 +982,10 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
       response_id: responseId, confirmed_audio_sequence: 0}]))
     await vi.waitFor(() => expect(audioContexts[0].close).toHaveBeenCalled())
     expect(audioContexts.flatMap(context => context.renderWorklets)).toHaveLength(1)
+    // ローカル再同期はSDKのreconnectedを待たず、制御往復で復帰できる。
+    await vi.waitFor(() => expect(messages().some(row => row.type === 'control_probe' && row.generation === 1)).toBe(true))
+    await acknowledgeRecovery(room, 1)
+    expect(client.isAudioProbeReady()).toBe(true)
     const probe = client.probeControl()
     const sent = messages().filter(row => row.type === 'control_probe').at(-1)
     emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...sent, type: 'control_probe_ack'})))

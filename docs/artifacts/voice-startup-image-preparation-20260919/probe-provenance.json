@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "sourceFormat": "JSON Lines",
+  "sourceSha256": "2ff8b50e7b73ddb8ee08bb678391484464a7839cfc62ff5b450ccd53021362a8",
+  "sourceHashReference": "evidence.json#/raw_sha256/probe",
+  "publishedArtifact": "dependency-probe.json",
+  "publishedSha256": "4f5f5c04d03a0a84fe99cb9e0d66eaefcaec950b3abace7c53c1f549e908a770",
+  "transformation": "JSONLの各行を変更せずrows配列へ格納し、UTF-8 JSONとして整形した。行の除外・並べ替えはない。",
+  "sourceRowCount": 138,
+  "publishedRowCount": 138,
+  "rowsUnchangedAndOrderPreserved": true
+}

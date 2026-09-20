@@ -1,0 +1,1015 @@
+{
+  "schema_version": "1.0",
+  "full_acceptance_passed": false,
+  "tts_failure_recovery_passed": true,
+  "scope": "入力再認可修正前後の専用TTS worker停止診断。最新固定版の2ケース成功であり、正式速度cohort・全体受入とは別。",
+  "limitations": [
+    "実マイク・聴感ではない",
+    "起動失敗と監査不成立を成功で上書きしない",
+    "音声不連続後の再同期によるreader交換で旧入力認可を保持したことが入力停止原因",
+    "旧出力停止の境界は失敗通知時点のrender上限+256frames以降で、停止遅延0msではない"
+  ],
+  "runs": [
+    {
+      "run_id": "424-input-recovery-0919-01",
+      "harness_revision": "10b6797417191c95bba742f919e3adf31a04c6c2",
+      "application_revision": "10b6797417191c95bba742f919e3adf31a04c6c2",
+      "application_base_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "running_images": null,
+      "native_sdk": null,
+      "exit_code": 1,
+      "startup_status": "completed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "phase": "generation",
+          "completed": true,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 6016,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 58624,
+              "zeroStart": 58624,
+              "zeroEnd": 770944,
+              "outputClockFrame": 1021952,
+              "finishedFrame": 770944,
+              "disconnected": true,
+              "missing": null
+            },
+            {
+              "sampleRate": 48000,
+              "outputCount": 1872,
+              "nonzeroBefore": 210240,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": null,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 1021952,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 2,
+            "user_input_result": 1,
+            "response_delta": 60,
+            "response_failed": 1,
+            "speech_started": 1,
+            "speech_stopped": 1,
+            "utterance_finalized": 1,
+            "response_audio_segment": 2,
+            "observation": 1,
+            "response_completed": 1
+          },
+          "error_codes": [],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "before": {
+            "rendered": false,
+            "terminal": false
+          },
+          "fault": {
+            "active_observed": 1,
+            "wait_seconds": 0.6907971190084936,
+            "worker_pid": 485,
+            "signal": "SIGTERM"
+          },
+          "stopped_output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 448,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 58624,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 59264,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "recovered_playback": {
+            "expectedSamples": 210240,
+            "renderedSamples": 210240,
+            "packetCount": 219,
+            "gapSamples": 0,
+            "maximumGapSamples": 0,
+            "gapCount": 0
+          },
+          "old_response_terminals": [
+            "response_failed"
+          ],
+          "old_completed": false,
+          "microphone_states": null,
+          "media_timeline_interruptions": [],
+          "media_packet_losses": []
+        },
+        {
+          "phase": "playback",
+          "completed": false,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 1786,
+              "nonzeroBefore": 167040,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 228352,
+              "zeroStart": 228352,
+              "zeroEnd": 229504,
+              "outputClockFrame": 229632,
+              "finishedFrame": 229504,
+              "disconnected": true,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 1,
+            "user_input_result": 1,
+            "response_delta": 141,
+            "response_audio_segment": 1,
+            "observation": 1,
+            "response_failed": 1,
+            "error": 1
+          },
+          "error_codes": [
+            "audio_input_unavailable"
+          ],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "microphone_states": null,
+          "media_timeline_interruptions": [],
+          "media_packet_losses": []
+        }
+      ],
+      "backend_image_observed": "sha256:14633a14708dd2ce9dbf87bcb6ec7323a83f55746ac383a28f0107b685dd2cf0",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "生成中の復旧成功。再生後は入力停止。01は終了理由の通常logが未出力、02でcancelled、03でmicrophone_track_replacedと確定。",
+      "provenance": [
+        {
+          "path": "424-input-recovery-0919-01-host.json",
+          "sha256": "433a570bd3721dc88d511de2702ea2d949cf207cf4b31285d2368fd47dd030f5"
+        },
+        {
+          "path": "424-input-recovery-0919-01.log",
+          "sha256": "e56dc7f71791fe6805e4b1ff1524705db8497e3d0a698670be40451b38bbcb4a"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-01/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "2c89bb5a6852e7962829102ce8de7ab6bda985db4cfec2c0c5c40e6a8bc18208"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-01/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "f8bd6fb54d37200095f501096f191714a07f4dcbb222d1a5d8760d666af8a754"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-01/playwright-results.json",
+          "sha256": "df3e6a7c441edf75cee24ff75a60e34426248b70eca0f9610064ada59612181a"
+        },
+        {
+          "path": "424-input-recovery-0919-01-backend-startup.log",
+          "sha256": "868c14f9b7ea4283c74da3ab4d8232de5b43601761a74a2d8855d6498d6713f0"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-01/runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "0bd34fa155e4416a220ab2a8ae77c0d2006edbfd0f2de4661f3e5f0c0f19dede"
+        }
+      ]
+    },
+    {
+      "run_id": "424-input-recovery-0919-02",
+      "harness_revision": "409769664e9bb4f4f0f6ee4189a0c19b44c86bde",
+      "application_revision": "409769664e9bb4f4f0f6ee4189a0c19b44c86bde",
+      "application_base_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "running_images": null,
+      "native_sdk": null,
+      "exit_code": 1,
+      "startup_status": "completed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "phase": "generation",
+          "completed": true,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 5685,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 63744,
+              "zeroStart": 63744,
+              "zeroEnd": 728448,
+              "outputClockFrame": 1286144,
+              "finishedFrame": 728448,
+              "disconnected": true,
+              "missing": null
+            },
+            {
+              "sampleRate": 48000,
+              "outputCount": 4272,
+              "nonzeroBefore": 509759,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": null,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 1286144,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 2,
+            "user_input_result": 1,
+            "response_delta": 102,
+            "response_failed": 1,
+            "speech_started": 1,
+            "speech_stopped": 1,
+            "utterance_finalized": 1,
+            "response_audio_segment": 3,
+            "observation": 1,
+            "response_completed": 1
+          },
+          "error_codes": [],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "before": {
+            "rendered": false,
+            "terminal": false
+          },
+          "fault": {
+            "active_observed": 1,
+            "wait_seconds": 0.781569219994708,
+            "worker_pid": 718,
+            "signal": "SIGTERM"
+          },
+          "stopped_output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 496,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 63744,
+              "zeroStart": 63744,
+              "zeroEnd": 64256,
+              "outputClockFrame": 64768,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "recovered_playback": {
+            "expectedSamples": 509760,
+            "renderedSamples": 509760,
+            "packetCount": 531,
+            "gapSamples": 0,
+            "maximumGapSamples": 0,
+            "gapCount": 0
+          },
+          "old_response_terminals": [
+            "response_failed"
+          ],
+          "old_completed": false,
+          "microphone_states": null,
+          "media_timeline_interruptions": [],
+          "media_packet_losses": []
+        },
+        {
+          "phase": "playback",
+          "completed": false,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 1540,
+              "nonzeroBefore": 136960,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 196992,
+              "zeroStart": 196992,
+              "zeroEnd": 197888,
+              "outputClockFrame": 198144,
+              "finishedFrame": 197888,
+              "disconnected": true,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 1,
+            "user_input_result": 1,
+            "response_delta": 164,
+            "response_audio_segment": 1,
+            "observation": 1,
+            "response_failed": 1,
+            "error": 1
+          },
+          "error_codes": [
+            "audio_input_unavailable"
+          ],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "microphone_states": null,
+          "media_timeline_interruptions": [],
+          "media_packet_losses": []
+        }
+      ],
+      "backend_image_observed": "sha256:5a57b7d440a1efb1abf171fc634d5f5c58006b09867adace953994fce2189344",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "生成中の復旧成功。再生後は入力停止。01は終了理由の通常logが未出力、02でcancelled、03でmicrophone_track_replacedと確定。",
+      "provenance": [
+        {
+          "path": "424-input-recovery-0919-02-host.json",
+          "sha256": "afd3b9a62c425abb9a821143b3af3b3df0888a6cbed0f1ae4b7010c77ab00311"
+        },
+        {
+          "path": "424-input-recovery-0919-02.log",
+          "sha256": "a96651b175347520399e98a44aef0a089e8fae9b437b8dd1f2e032caf797c658"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-02/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "67d9c93b81e2d46b5bd3fa311e84c0b5c177faae458cc7c39fb2258ced28cb8f"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-02/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "40849a32f428eb9f34d3d27271299b80d85cd3d011b4330a20820d0e7b59558b"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-02/playwright-results.json",
+          "sha256": "4cd8b23f14dc20e636c06367c836bff4a8d40652ae9c640eb6489f5615e29187"
+        },
+        {
+          "path": "424-input-recovery-0919-02-backend-startup.log",
+          "sha256": "273a223d9cb1e6ace9322462d1fa8eae501471b16a0c5f460dff19685d48f52d"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-02/runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "09ce02667cca4264d0ab61ef0126d2ee2b3246a869b6646e38c2c636cc058d7e"
+        }
+      ]
+    },
+    {
+      "run_id": "424-input-recovery-0919-03",
+      "harness_revision": "c38c3c936284b6a266ff758a1a3be58fd56e025a",
+      "application_revision": "c38c3c936284b6a266ff758a1a3be58fd56e025a",
+      "application_base_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "running_images": null,
+      "native_sdk": null,
+      "exit_code": 1,
+      "startup_status": "completed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "phase": "generation",
+          "completed": true,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 6049,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 61312,
+              "zeroStart": 61312,
+              "zeroEnd": 775424,
+              "outputClockFrame": 1190528,
+              "finishedFrame": 775424,
+              "disconnected": true,
+              "missing": null
+            },
+            {
+              "sampleRate": 48000,
+              "outputCount": 3168,
+              "nonzeroBefore": 369600,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": null,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 1190528,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 2,
+            "user_input_result": 1,
+            "response_delta": 94,
+            "response_failed": 1,
+            "speech_started": 1,
+            "speech_stopped": 1,
+            "utterance_finalized": 1,
+            "response_audio_segment": 3,
+            "observation": 1,
+            "response_completed": 1
+          },
+          "error_codes": [],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "before": {
+            "rendered": false,
+            "terminal": false
+          },
+          "fault": {
+            "active_observed": 1,
+            "wait_seconds": 0.7524173470010282,
+            "worker_pid": 953,
+            "signal": "SIGTERM"
+          },
+          "stopped_output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 464,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 61312,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 61696,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "recovered_playback": {
+            "expectedSamples": 369600,
+            "renderedSamples": 369600,
+            "packetCount": 385,
+            "gapSamples": 0,
+            "maximumGapSamples": 0,
+            "gapCount": 0
+          },
+          "old_response_terminals": [
+            "response_failed"
+          ],
+          "old_completed": false,
+          "microphone_states": null,
+          "media_timeline_interruptions": [],
+          "media_packet_losses": []
+        },
+        {
+          "phase": "playback",
+          "completed": false,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 2653,
+              "nonzeroBefore": 261120,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 338304,
+              "zeroStart": 338304,
+              "zeroEnd": 340352,
+              "outputClockFrame": 340480,
+              "finishedFrame": 340352,
+              "disconnected": true,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 1,
+            "user_input_result": 1,
+            "response_delta": 161,
+            "response_audio_segment": 1,
+            "observation": 1,
+            "response_failed": 1,
+            "error": 1
+          },
+          "error_codes": [
+            "audio_input_unavailable"
+          ],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "microphone_states": null,
+          "media_timeline_interruptions": [],
+          "media_packet_losses": []
+        }
+      ],
+      "backend_image_observed": "sha256:1390c406598287320eb9d8d38d64efaeb2e21439c000172882a1824a7179dfee",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "生成中の復旧成功。再生後は入力停止。01は終了理由の通常logが未出力、02でcancelled、03でmicrophone_track_replacedと確定。",
+      "provenance": [
+        {
+          "path": "424-input-recovery-0919-03-host.json",
+          "sha256": "4151f92c9a94f08adde61071948b48aca2609f959c648706a69a682dea5af49c"
+        },
+        {
+          "path": "424-input-recovery-0919-03.log",
+          "sha256": "17021c1bcb07f314cf6537ef75201af3d916ff5e831fa07b3d95820f49bc9bd3"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-03/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "cd7219d6f33e53136930f63a6db6a33358a23adffcd71700c56b56a82152a0ad"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-03/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "8c449eaa2b2695aa4ec73e693a531ce2440864bd620f489ae72008f0550df0b1"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-03/playwright-results.json",
+          "sha256": "34f81f152e867144739f5c34d48c09d4847f5dcb4893ca25db5647dcde537eef"
+        },
+        {
+          "path": "424-input-recovery-0919-03-backend-startup.log",
+          "sha256": "319f0672e37b227ae93e312491af535f71fdc48112adc2c0ef92d69f11ec4c75"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-03/runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "500bd06fac6cb81c50d682bf5d1f4d23497d8c56331629651a0354aa41506e55"
+        }
+      ]
+    },
+    {
+      "run_id": "424-input-recovery-0919-04",
+      "harness_revision": "3f8d53ad08eec430ff724deec06df1ef9a441002",
+      "application_revision": "3f8d53ad08eec430ff724deec06df1ef9a441002",
+      "application_base_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:759679de48c89261c5a085071c296748b07c06c41606611f447101703b6a7b0f",
+          "image_tag": "digital-souls-voice-quality/backend:3f8d53ad08eec430ff724deec06df1ef9a441002"
+        },
+        "frontend": {
+          "image_id": "sha256:a6d62b2d9ebe7e91d518fd75b3ebd15df2a53069e98b168ce1bd71be49c2710b",
+          "image_tag": "digital-souls-voice-quality/frontend:3f8d53ad08eec430ff724deec06df1ef9a441002"
+        }
+      },
+      "native_sdk": null,
+      "exit_code": 1,
+      "startup_status": "failed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [],
+      "backend_image_observed": "sha256:759679de48c89261c5a085071c296748b07c06c41606611f447101703b6a7b0f",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "修正後の準備時に候補Ollamaのstartup probe unavailable。モデル一覧API 500も観測。故障注入未実行。",
+      "provenance": [
+        {
+          "path": "424-input-recovery-0919-04-host.json",
+          "sha256": "7fd6b256b068c0eca5d82d886c9069ab0cefbedddcd820b6d3541c49b3de0b0a"
+        },
+        {
+          "path": "424-input-recovery-0919-04.log",
+          "sha256": "39972a72dff0d728110d581ae471d57c5448aec843a34524fadab46d24a94310"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-04/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "358295003948a6eb1314ed3ea8a34542036d54f0c1f1b75b55ef919d901173f8"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-04/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "f247a6f45e02cd10581d635cc7c846526d6ca3716cc2136e2c2be529e1b34459"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-04/playwright-results.json",
+          "sha256": "f4a00c1c97a65e169f77da490783349593e9f7412898c1bb8ad6054d4f433142"
+        },
+        {
+          "path": "424-input-recovery-0919-04-backend-startup.log",
+          "sha256": "183499740e27a153199bd4089508f0440d7f951b0572977746fde442483add8e"
+        }
+      ]
+    },
+    {
+      "run_id": "424-input-recovery-0919-05",
+      "harness_revision": "3f8d53ad08eec430ff724deec06df1ef9a441002",
+      "application_revision": "3f8d53ad08eec430ff724deec06df1ef9a441002",
+      "application_base_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:2474ae04c39a7fd80987a4b7b089cdda16b0237ca08c112f45a8bcb54351bf44",
+          "image_tag": "digital-souls-voice-quality/backend:3f8d53ad08eec430ff724deec06df1ef9a441002"
+        },
+        "frontend": {
+          "image_id": "sha256:6a5c0b0d8386d6d4330db34f821ff07d052db57154ae6959539c035dd9a28701",
+          "image_tag": "digital-souls-voice-quality/frontend:3f8d53ad08eec430ff724deec06df1ef9a441002"
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "exit_code": 0,
+      "startup_status": "completed",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "phase": "generation",
+          "completed": true,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 6079,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 66816,
+              "zeroStart": 66816,
+              "zeroEnd": 779136,
+              "outputClockFrame": 1097856,
+              "finishedFrame": 779136,
+              "disconnected": true,
+              "missing": null
+            },
+            {
+              "sampleRate": 48000,
+              "outputCount": 2400,
+              "nonzeroBefore": 275520,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": null,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 1097856,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 2,
+            "response_started": 2,
+            "user_input_result": 1,
+            "response_delta": 91,
+            "response_failed": 1,
+            "speech_started": 1,
+            "speech_stopped": 1,
+            "utterance_finalized": 1,
+            "response_audio_segment": 2,
+            "observation": 1,
+            "response_completed": 1
+          },
+          "error_codes": [],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "before": {
+            "rendered": false,
+            "terminal": false
+          },
+          "fault": {
+            "active_observed": 1,
+            "wait_seconds": 0.7886193469894351,
+            "worker_pid": 1187,
+            "signal": "SIGTERM"
+          },
+          "stopped_output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 512,
+              "nonzeroBefore": 0,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 66816,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 67840,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "recovered_playback": {
+            "expectedSamples": 275520,
+            "renderedSamples": 275520,
+            "packetCount": 287,
+            "gapSamples": 0,
+            "maximumGapSamples": 0,
+            "gapCount": 0
+          },
+          "old_response_terminals": [
+            "response_failed"
+          ],
+          "old_completed": false,
+          "microphone_states": [
+            "off",
+            "standby"
+          ],
+          "media_timeline_interruptions": [],
+          "media_packet_losses": []
+        },
+        {
+          "phase": "playback",
+          "completed": true,
+          "output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 1714,
+              "nonzeroBefore": 154624,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 219392,
+              "zeroStart": 219392,
+              "zeroEnd": 220288,
+              "outputClockFrame": 220544,
+              "finishedFrame": 220288,
+              "disconnected": true,
+              "missing": null
+            },
+            {
+              "sampleRate": 48000,
+              "outputCount": 1856,
+              "nonzeroBefore": 204480,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": null,
+              "zeroStart": null,
+              "zeroEnd": null,
+              "outputClockFrame": 239872,
+              "finishedFrame": null,
+              "disconnected": false,
+              "missing": null
+            }
+          ],
+          "core_event_counts": {
+            "audio_input_opened": 3,
+            "response_started": 2,
+            "user_input_result": 1,
+            "response_delta": 143,
+            "response_audio_segment": 3,
+            "observation": 2,
+            "response_failed": 1,
+            "error": 1,
+            "speech_started": 1,
+            "speech_stopped": 1,
+            "utterance_finalized": 1,
+            "response_completed": 1
+          },
+          "error_codes": [
+            "audio_input_unavailable"
+          ],
+          "session_count": 1,
+          "transport_failure_count": 0,
+          "before": {
+            "rendered": true,
+            "terminal": false
+          },
+          "fault": {
+            "active_observed": 1,
+            "wait_seconds": 2.6031751289992826,
+            "worker_pid": 1302,
+            "signal": "SIGTERM"
+          },
+          "stopped_output": [
+            {
+              "sampleRate": 48000,
+              "outputCount": 1714,
+              "nonzeroBefore": 154624,
+              "nonzeroAfter": 0,
+              "failureFrameUpper": 219392,
+              "zeroStart": 219392,
+              "zeroEnd": 220288,
+              "outputClockFrame": 220544,
+              "finishedFrame": 220288,
+              "disconnected": true,
+              "missing": null
+            }
+          ],
+          "recovered_playback": {
+            "expectedSamples": 204480,
+            "renderedSamples": 204480,
+            "packetCount": 213,
+            "gapSamples": 0,
+            "maximumGapSamples": 0,
+            "gapCount": 0
+          },
+          "old_response_terminals": [
+            "response_failed"
+          ],
+          "old_completed": false,
+          "microphone_states": [
+            "off",
+            "standby"
+          ],
+          "media_timeline_interruptions": [
+            {
+              "atMs": 6964.399999991059,
+              "reason": "timestamp_overlap"
+            }
+          ],
+          "media_packet_losses": []
+        }
+      ],
+      "backend_image_observed": "sha256:2474ae04c39a7fd80987a4b7b089cdda16b0237ca08c112f45a8bcb54351bf44",
+      "tts": {
+        "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+        "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+        "version": {
+          "serviceVersion": "1.0",
+          "model": "Aratako/Irodori-TTS-v4.1-Small",
+          "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+          "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+          "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+          "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+          "device": "cuda",
+          "precision": "bf16",
+          "quantized": false,
+          "cudaGraphRequested": true,
+          "referenceCacheRequested": true,
+          "globalInflight": 1,
+          "maxPending": 8,
+          "maxVoiceChecks": 2,
+          "queueTimeoutSeconds": 10.0,
+          "inferenceTimeoutSeconds": 30.0,
+          "preparationSeconds": 11.659687834995566,
+          "active": 0,
+          "pending": 0
+        }
+      },
+      "diagnosis": "入力再認可の修正後、生成中/先頭再生後とも旧音声停止から同一Sessionの次音声応答まで成功。",
+      "provenance": [
+        {
+          "path": "424-input-recovery-0919-05-host.json",
+          "sha256": "ad9b2e51f9f26f35a1d48b53e9a95376fca316e17b066913457bdc8352f8aaff"
+        },
+        {
+          "path": "424-input-recovery-0919-05.log",
+          "sha256": "58a56e9281818acf7c431734223cc2a15642e5c589f1e59e398ad708ff9d4c94"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-05/runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "f15da8811ccb4224283395b3441df93a1819f0aca81b3e8bf122ffce7877ca51"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-05/runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "3eb94940f6df78e01ffaea4b821b6a96269ea9195134b7a7dc72bfa1abc91695"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-05/playwright-results.json",
+          "sha256": "6dc1e7887cfde50e56dc8d8b515b139f1f746562185c69771f9146d9a3cccee2"
+        },
+        {
+          "path": "424-input-recovery-0919-05-backend-startup.log",
+          "sha256": "97a23f5c1e02571c278bb5a6b1bfcf65582769b32f0d14cfcc009b1c3c00d902"
+        },
+        {
+          "path": "livekit-quality/runs/424-input-recovery-0919-05/runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "e73e7f176611020d9d9d9ab51dfc6f1507a21c12fad3cb009442fcf935e1122f"
+        }
+      ]
+    }
+  ]
+}

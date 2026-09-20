@@ -128,7 +128,7 @@ def default_provider_registry() -> ProviderRegistry:
             ProviderDescriptor(
                 provider_id="ollama",
                 kind=ProviderKind.LOCAL,
-                capabilities=multimodal_capabilities,
+                capabilities=multimodal_capabilities | {InferenceCapability.PREPARE_MODEL},
                 validate_options=lambda options: _validate_known_options(
                     options,
                     allowed=frozenset({"temperature", "top_p", "seed", "think"}),
