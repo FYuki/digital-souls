@@ -277,6 +277,8 @@ async def test_schema_gate_01_backup_failure_prevents_schema_initialization(
     tmp_path: Path,
 ) -> None:
     from app import main
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
     from app.runtime_data_root import initialize_runtime_data_root
     from app.runtime_paths import resolve_runtime_paths
 
@@ -292,12 +294,12 @@ async def test_schema_gate_01_backup_failure_prevents_schema_initialization(
     initialize_schema = Mock(side_effect=AssertionError("migration must not start"))
     backup_gate = Mock(side_effect=RuntimeError("pre-migration backup failed"))
     monkeypatch.setattr(
-        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+        application_runtime, "resolve_model_settings", lambda *_args, **_kwargs: object()
     )
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
-    monkeypatch.setattr(main, "ensure_schema_backup_gate", backup_gate)
-    monkeypatch.setattr(main, "initialize_conversation_history_schema", initialize_schema)
+    monkeypatch.setattr(application_runtime, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(application_runtime, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(history_runtime, "ensure_schema_backup_gate", backup_gate)
+    monkeypatch.setattr(history_runtime, "initialize_conversation_history_schema", initialize_schema)
 
     with pytest.raises(RuntimeError, match="pre-migration backup failed"):
         async with main.lifespan(FastAPI()):
@@ -314,6 +316,8 @@ async def test_sqlite_lease_01_stops_startup_before_sqlite_open_during_maintenan
 ) -> None:
     _require_sqlite_lease_contract()
     from app import main
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
     from app.conversation_history.sqlite_lease import (
         SQLiteLeaseUnavailableError,
         acquire_maintenance_lease,
@@ -323,11 +327,11 @@ async def test_sqlite_lease_01_stops_startup_before_sqlite_open_during_maintenan
     paths = initialized_runtime(tmp_path, repository_root, name="runtime")
     inspect_schema = Mock(side_effect=AssertionError("SQLite must not be opened"))
     monkeypatch.setattr(
-        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+        application_runtime, "resolve_model_settings", lambda *_args, **_kwargs: object()
     )
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
-    monkeypatch.setattr(main, "inspect_conversation_history_schema", inspect_schema)
+    monkeypatch.setattr(application_runtime, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(application_runtime, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(history_runtime, "inspect_conversation_history_schema", inspect_schema)
 
     with acquire_maintenance_lease(paths.sqlite_path):
         with pytest.raises(SQLiteLeaseUnavailableError):
@@ -344,6 +348,8 @@ async def test_sqlite_lease_01_lifespan_rejects_restore_without_side_effects(
 ) -> None:
     _require_sqlite_lease_contract()
     from app import main
+    import app.runtime.application as application_runtime
+    import app.runtime.audio as audio_runtime
     from app.backup_restore import RestoreSafetyError, create_backup, restore_backup
     from app.conversation_history.schema import initialize_conversation_history_schema
     from app.conversation_history.sqlite_lease import acquire_maintenance_lease
@@ -361,11 +367,13 @@ async def test_sqlite_lease_01_lifespan_rejects_restore_without_side_effects(
         git_commit="0123456789abcdef0123456789abcdef01234567",
     )
     audio_service = Mock()
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(application_runtime, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(application_runtime, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(main._chat_runtime, "create_chat_service", Mock())
     monkeypatch.setattr(
-        main, "create_audio_pipeline_service", Mock(return_value=audio_service)
+        audio_runtime,
+        "create_audio_pipeline_service",
+        Mock(return_value=audio_service),
     )
 
     async with main.lifespan(FastAPI()):
@@ -397,7 +405,7 @@ def test_should_create_then_verify_backup_for_dogfood_version_two_schema(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from app import main
+    import app.runtime.history as history_runtime
     from app.backup_restore import create_backup, verify_backup
 
     repository_root = Path(__file__).resolve().parents[3]
@@ -416,10 +424,10 @@ def test_should_create_then_verify_backup_for_dogfood_version_two_schema(
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
     monkeypatch.setenv("DS_DEPLOYMENT_COMMIT", "01" * 20)
-    monkeypatch.setattr(main, "create_backup", create_spy)
-    monkeypatch.setattr(main, "verify_backup", verify_spy)
+    monkeypatch.setattr(history_runtime, "create_backup", create_spy)
+    monkeypatch.setattr(history_runtime, "verify_backup", verify_spy)
 
-    rollback = main.ensure_schema_backup_gate(paths, repository_root)
+    rollback = history_runtime.ensure_schema_backup_gate(paths, repository_root)
 
     generations = tuple(backup_root.glob("backup-*"))
     assert [call[0] for call in operations.mock_calls] == ["create", "verify"]
@@ -441,7 +449,7 @@ def test_should_reject_invalid_deployment_commit_before_schema_backup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from app import main
+    import app.runtime.history as history_runtime
 
     repository_root = Path(__file__).resolve().parents[3]
     paths = initialized_runtime(
@@ -453,10 +461,10 @@ def test_should_reject_invalid_deployment_commit_before_schema_backup(
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
     monkeypatch.setenv("DS_DEPLOYMENT_COMMIT", "not-a-commit")
     create = Mock()
-    monkeypatch.setattr(main, "create_backup", create)
+    monkeypatch.setattr(history_runtime, "create_backup", create)
 
     with pytest.raises(RuntimeError, match="deployment commit is invalid"):
-        main.ensure_schema_backup_gate(paths, repository_root)
+        history_runtime.ensure_schema_backup_gate(paths, repository_root)
 
     create.assert_not_called()
 
@@ -476,7 +484,7 @@ def test_should_skip_schema_backup_when_migration_gate_does_not_apply(
     environment_id: str,
     database_state: str,
 ) -> None:
-    from app import main
+    import app.runtime.history as history_runtime
     from app.conversation_history.schema import initialize_conversation_history_schema
 
     repository_root = Path(__file__).resolve().parents[3]
@@ -489,10 +497,10 @@ def test_should_skip_schema_backup_when_migration_gate_does_not_apply(
         create_version_two_database(paths.sqlite_path)
     create = Mock()
     verify = Mock()
-    monkeypatch.setattr(main, "create_backup", create)
-    monkeypatch.setattr(main, "verify_backup", verify)
+    monkeypatch.setattr(history_runtime, "create_backup", create)
+    monkeypatch.setattr(history_runtime, "verify_backup", verify)
 
-    rollback = main.ensure_schema_backup_gate(paths, repository_root)
+    rollback = history_runtime.ensure_schema_backup_gate(paths, repository_root)
 
     assert rollback is None
     create.assert_not_called()
@@ -530,7 +538,7 @@ def test_should_reject_invalid_schema_backup_configuration_before_backup(
     key: str,
     value: str | None,
 ) -> None:
-    from app import main
+    import app.runtime.history as history_runtime
 
     repository_root = Path(__file__).resolve().parents[3]
     paths = initialized_runtime(
@@ -545,10 +553,10 @@ def test_should_reject_invalid_schema_backup_configuration_before_backup(
     else:
         monkeypatch.setenv(key, value)
     create = Mock()
-    monkeypatch.setattr(main, "create_backup", create)
+    monkeypatch.setattr(history_runtime, "create_backup", create)
 
     with pytest.raises((RuntimeError, ValueError)):
-        main.ensure_schema_backup_gate(paths, repository_root)
+        history_runtime.ensure_schema_backup_gate(paths, repository_root)
 
     create.assert_not_called()
 
@@ -559,6 +567,8 @@ async def test_should_initialize_schema_only_after_real_gate_backup_and_verify(
     tmp_path: Path,
 ) -> None:
     from app import main
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
 
     repository_root = Path(__file__).resolve().parents[3]
     paths = initialized_runtime(
@@ -587,17 +597,17 @@ async def test_should_initialize_schema_only_after_real_gate_backup_and_verify(
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
     monkeypatch.setattr(
-        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+        application_runtime, "resolve_model_settings", lambda *_args, **_kwargs: object()
     )
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
-    monkeypatch.setattr(main, "create_backup", create)
-    monkeypatch.setattr(main, "verify_backup", verify)
-    monkeypatch.setattr(main, "restore_backup", restore)
-    monkeypatch.setattr(main, "verify_restored_backup", restore_verify)
-    monkeypatch.setattr(main, "initialize_conversation_history_schema", initializer)
+    monkeypatch.setattr(application_runtime, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(application_runtime, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(history_runtime, "create_backup", create)
+    monkeypatch.setattr(history_runtime, "verify_backup", verify)
+    monkeypatch.setattr(history_runtime, "restore_backup", restore)
+    monkeypatch.setattr(history_runtime, "verify_restored_backup", restore_verify)
+    monkeypatch.setattr(history_runtime, "initialize_conversation_history_schema", initializer)
     monkeypatch.setattr(
-        main,
+        history_runtime,
         "ConversationWalCleanup",
         Mock(side_effect=RuntimeError("post-initialization startup reached")),
     )
@@ -617,6 +627,8 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
     tmp_path: Path,
 ) -> None:
     from app import main
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
     from app.backup_restore import (
         create_backup,
         restore_backup,
@@ -655,16 +667,18 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
     monkeypatch.setattr(
-        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+        application_runtime, "resolve_model_settings", lambda *_args, **_kwargs: object()
     )
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
-    monkeypatch.setattr(main, "create_backup", create_spy)
-    monkeypatch.setattr(main, "verify_backup", verify_spy)
-    monkeypatch.setattr(main, "restore_backup", restore_spy)
-    monkeypatch.setattr(main, "verify_restored_backup", restore_verify_spy)
+    monkeypatch.setattr(application_runtime, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(application_runtime, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(history_runtime, "create_backup", create_spy)
+    monkeypatch.setattr(history_runtime, "verify_backup", verify_spy)
+    monkeypatch.setattr(history_runtime, "restore_backup", restore_spy)
+    monkeypatch.setattr(history_runtime, "verify_restored_backup", restore_verify_spy)
     monkeypatch.setattr(
-        main, "initialize_conversation_history_schema", initialize_then_fail
+        history_runtime,
+        "initialize_conversation_history_schema",
+        initialize_then_fail,
     )
 
     with pytest.raises(RuntimeError, match="schema initialization failed"):
@@ -706,6 +720,8 @@ async def test_should_stop_startup_when_schema_rollback_fails(
 ) -> None:
     _require_restore_uncertainty_contract()
     from app import main
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
     from app.backup_restore import RestoreDurabilityUncertainError, restore_backup
     from app.conversation_history.schema import initialize_conversation_history_schema
 
@@ -736,15 +752,17 @@ async def test_should_stop_startup_when_schema_rollback_fails(
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
     monkeypatch.setattr(
-        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+        application_runtime, "resolve_model_settings", lambda *_args, **_kwargs: object()
     )
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(application_runtime, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(application_runtime, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(
-        main, "initialize_conversation_history_schema", initialize_then_fail
+        history_runtime,
+        "initialize_conversation_history_schema",
+        initialize_then_fail,
     )
-    monkeypatch.setattr(main, "restore_backup", restore)
-    monkeypatch.setattr(main, "verify_restored_backup", restore_verify)
+    monkeypatch.setattr(history_runtime, "restore_backup", restore)
+    monkeypatch.setattr(history_runtime, "verify_restored_backup", restore_verify)
 
     with pytest.raises(RuntimeError) as captured:
         async with main.lifespan(FastAPI()):
@@ -768,6 +786,8 @@ async def test_should_stop_before_schema_initializer_when_real_gate_operation_fa
     failure_stage: str,
 ) -> None:
     from app import main
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
 
     repository_root = Path(__file__).resolve().parents[3]
     paths = initialized_runtime(
@@ -785,13 +805,13 @@ async def test_should_stop_before_schema_initializer_when_real_gate_operation_fa
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
     monkeypatch.setattr(
-        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+        application_runtime, "resolve_model_settings", lambda *_args, **_kwargs: object()
     )
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
-    monkeypatch.setattr(main, "create_backup", create)
-    monkeypatch.setattr(main, "verify_backup", verify)
-    monkeypatch.setattr(main, "initialize_conversation_history_schema", initializer)
+    monkeypatch.setattr(application_runtime, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(application_runtime, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(history_runtime, "create_backup", create)
+    monkeypatch.setattr(history_runtime, "verify_backup", verify)
+    monkeypatch.setattr(history_runtime, "initialize_conversation_history_schema", initializer)
 
     with pytest.raises(RuntimeError, match=f"{failure_stage} failed"):
         async with main.lifespan(FastAPI()):

@@ -31,10 +31,10 @@ def _runtime_config(
 
 
 def _patch_runtime_config(monkeypatch, config: ConversationHistoryConfig) -> None:
-    import app.main as main
+    import app.runtime.history as history_runtime
 
     monkeypatch.setattr(
-        main,
+        history_runtime,
         "resolve_conversation_history_config",
         lambda _runtime_paths: config,
     )

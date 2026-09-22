@@ -14,8 +14,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI
-
 from app.characters.loader import load_character_card
 from app.characters.loader import IrodoriTtsConfig, TtsConfig, load_tts_config
 from app.tts.irodori_client import IrodoriClient, IrodoriRuntimeConfig, IrodoriTtsAdapter
@@ -39,6 +37,7 @@ from app.livekit_transport.bootstrap import (
     BootstrapService,
     preparation_operation,
     CharacterConversationBindingValidator,
+    ConversationRepository,
     InMemorySessionBindingRepository,
 )
 from app.livekit_transport.coordinator import (
@@ -2551,11 +2550,28 @@ class ProductionRuntimeManager:
             task.exception()
 
 
+@dataclass(frozen=True)
+class ProductionResources:
+    """LiveKit本番資源の構築結果。app.stateへの公開は呼出側の責務。"""
+
+    api: livekit_api.LiveKitAPI
+    room_manager: ProductionRoomManager
+    session_repository: InMemorySessionBindingRepository
+    runtime_manager: ProductionRuntimeManager
+    token_signer: ProductionTokenSigner
+    bootstrap_service: BootstrapService
+    core_events: ProductionCoreEventInbox
+    url: str
+
+
 async def configure_production_resources(
-    app: FastAPI,
     *,
     core_session_factory: _CoreSessionFactory | None,
-) -> livekit_api.LiveKitAPI | None:
+    screen_session_revoker: _ScreenSessionRevoker,
+    session_trace_recorder: JsonlTraceRecorder | None,
+    measurement_kind: MeasurementKind,
+    conversations: ConversationRepository,
+) -> ProductionResources | None:
     from app.livekit_transport.audio_probe import audio_probe_enabled
 
     settings = resolve_livekit_settings()
@@ -2578,14 +2594,14 @@ async def configure_production_resources(
         session_repository=sessions,
         core_port=core_events,
         core_session_factory=core_session_factory,
-        screen_session_revoker=app.state.screen_perception_service,
+        screen_session_revoker=screen_session_revoker,
         audio_probe_enabled=audio_probe_enabled(os.environ, livekit_url),
-        session_trace_recorder=getattr(app.state, "voice_trace_recorder", None),
-        measurement_kind=getattr(app.state, "voice_measurement_kind", "automated_test"),
+        session_trace_recorder=session_trace_recorder,
+        measurement_kind=measurement_kind,
     )
     validator = CharacterConversationBindingValidator(
         character_loader=load_character_card,
-        conversations=app.state.conversation_history_repository,
+        conversations=conversations,
     )
     bootstrap = BootstrapService(
         session_repository=sessions,
@@ -2595,11 +2611,13 @@ async def configure_production_resources(
         timeout_seconds=BOOTSTRAP_TIMEOUT_SECONDS,
         binding_validator=validator,
     )
-    app.state.livekit_room_manager = room_manager
-    app.state.livekit_session_repository = sessions
-    app.state.livekit_runtime_manager = runtime
-    app.state.livekit_token_signer = signer
-    app.state.livekit_bootstrap_service = bootstrap
-    app.state.livekit_core_events = core_events
-    app.state.livekit_url = livekit_url
-    return client
+    return ProductionResources(
+        api=client,
+        room_manager=room_manager,
+        session_repository=sessions,
+        runtime_manager=runtime,
+        token_signer=signer,
+        bootstrap_service=bootstrap,
+        core_events=core_events,
+        url=livekit_url,
+    )

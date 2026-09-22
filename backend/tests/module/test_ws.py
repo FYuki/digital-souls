@@ -34,7 +34,7 @@ _COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
-_RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
+_RESOLVED_MEMORY_POLICY = "app.runtime.application.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.remote_whisper_client.RemoteWhisperTranscriber.transcribe"
 _SYNTHESIZE = "app.tts.voicevox_client.VoicevoxClient.synthesize"

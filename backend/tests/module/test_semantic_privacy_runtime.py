@@ -17,13 +17,16 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     import app.main as main
     from app.privacy.semantic.contracts import QUERY_GATE
 
-    actual_policy = main.resolved_memory_policy()
+    import app.runtime.application as application_runtime
+    import app.runtime.privacy as privacy_runtime
+
+    actual_policy = application_runtime.resolved_memory_policy()
     resolve_policy = MagicMock(return_value=actual_policy)
-    create_scanner = MagicMock(wraps=main.create_privacy_scanner)
+    create_scanner = MagicMock(wraps=privacy_runtime.create_privacy_scanner)
     requests: list[str] = []
     requested_models: list[str] = []
     closed_clients: list[object] = []
-    original_close = main.InferenceSemanticClassifierClient.close
+    original_close = privacy_runtime.InferenceSemanticClassifierClient.close
 
     def post(url: str, **kwargs: object) -> MagicMock:
         requests.append(url)
@@ -57,15 +60,22 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     monkeypatch.setenv("RAG_ENABLED", "false")
     monkeypatch.setenv("INFERENCE_TARGET_CHAT", "ollama/chat-only:9b")
     monkeypatch.setenv("INFERENCE_TARGET_PRIVACY", "ollama/classifier-only:4b")
-    monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)
-    monkeypatch.setattr(main, "create_privacy_scanner", create_scanner)
+    import app.runtime.application as application_runtime
+    import app.runtime.privacy as privacy_runtime
+
+    monkeypatch.setattr(
+        application_runtime, "resolved_memory_policy", resolve_policy
+    )
+    monkeypatch.setattr(privacy_runtime, "create_privacy_scanner", create_scanner)
     http_client = MagicMock(spec=httpx.Client)
     http_client.post.side_effect = post
     monkeypatch.setattr(
         "app.inference.adapters.ollama.httpx.Client",
         lambda **_kwargs: http_client,
     )
-    monkeypatch.setattr(main.InferenceSemanticClassifierClient, "close", close)
+    monkeypatch.setattr(
+        privacy_runtime.InferenceSemanticClassifierClient, "close", close
+    )
 
     async def exercise_lifespan() -> None:
         async with main.lifespan(main.app):
@@ -90,11 +100,12 @@ def test_startup_continues_when_semantic_model_digest_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.main as main
+    import app.runtime.privacy as privacy_runtime
     from app.privacy.semantic.contracts import QUERY_GATE
 
     monkeypatch.setenv("RAG_ENABLED", "false")
     monkeypatch.setattr(
-        main.InferenceSemanticClassifierClient,
+        privacy_runtime.InferenceSemanticClassifierClient,
         "resolve_model_digest",
         lambda _client, **_kwargs: (_ for _ in ()).throw(
             TimeoutError("lookup timeout")

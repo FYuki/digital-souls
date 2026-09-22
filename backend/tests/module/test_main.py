@@ -65,7 +65,8 @@ async def test_should_validate_model_settings_before_startup_side_effects(
     from app import main
 
     monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "1024")
-    memory_policy = patch.object(main, "resolved_memory_policy")
+    import app.runtime.application as application_runtime
+    memory_policy = patch.object(application_runtime, "resolved_memory_policy")
 
     with memory_policy as resolve_policy:
         with pytest.raises(ValueError) as exc_info:
@@ -102,8 +103,10 @@ async def test_invalid_memory_policy_preserves_legacy_chroma_index(
     legacy_index.write_bytes(b"legacy")
     cutover_marker = runtime_paths.data_root / ".legacy-chroma-index-removed"
 
+    import app.runtime.application as application_runtime
+
     with patch.object(
-        main,
+        application_runtime,
         "resolved_memory_policy",
         side_effect=ValueError("invalid memory policy"),
     ):
@@ -198,7 +201,8 @@ def test_memory_isolation_guard_runs_before_inference_creation(monkeypatch):
     from app import main
     monkeypatch.setenv("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION", "true")
     monkeypatch.delenv("VOICE_MEASUREMENT_KIND", raising=False)
-    with patch.object(main, "create_inference_runtime") as create:
+    import app.runtime.inference as inference_runtime
+    with patch.object(inference_runtime, "create_inference_runtime") as create:
         with pytest.raises(ValueError, match="controlled test"):
             with TestClient(main.app):
                 pass

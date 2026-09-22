@@ -1,15 +1,10 @@
-from contextlib import ExitStack, asynccontextmanager
-import logging
+from __future__ import annotations
+
 import os
-import re
-from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
-from datetime import UTC, datetime
-import sqlite3
-from pathlib import Path
-from typing import cast
-from uuid import UUID, uuid4
-from zoneinfo import ZoneInfo
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
+from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -17,252 +12,52 @@ from fastapi.responses import JSONResponse
 
 from app import _chat_runtime
 from app.async_worker import run_sync
-from app.audio_pipeline import (
-    create_audio_pipeline_service,
-    resolve_audio_runtime_config,
-)
-from app.chat_prompt import build_chat_prompt
-from app.characters.loader import load_character_card
-from app.characters.catalog import CharacterCatalog
-from app.backup_restore import (
-    BackupAuthenticationKey,
-    create_backup,
-    resolve_backup_authentication_key,
-    restore_backup,
-    verify_backup,
-    verify_restored_backup,
-)
-from app.conversation_history.config import resolve_conversation_history_config
-from app.conversation_history.errors import SchemaRollbackError
-from app.conversation_history.lifecycle_service import ConversationLifecycleService
-from app.conversation_history.models import ConversationTurn, TurnStatus
-from app.conversation_history.repository import ConversationHistoryRepository
-from app.conversation_history.schema import (
-    initialize_conversation_history_schema,
-    inspect_conversation_history_schema,
-)
-from app.conversation_history.service import ConversationHistoryService, HistorySession
-from app.conversation_history.sqlite_lease import SQLiteLease, acquire_maintenance_lease
-from app.conversation_history.wal_cleanup import ConversationWalCleanup
-from app.environment import iana_timezone_environment_value
-from app.llm import router as llm_router
-from app.inference import (
-    InferenceCaller,
-    InferenceTarget,
-    default_provider_registry,
-    resolve_inference_settings,
-)
-from app.inference.config import reject_legacy_inference_environment
-from app.inference.runtime import (
-    create_inference_runtime,
-    target_model_id,
-)
-from app.memory.memory_policy import resolved_memory_policy
-from app.memory.admission.evaluator import create_rag_admission_evaluator
-from app.memory.admission_service import RagAdmissionService
-from app.memory.inference_client import (
-    MemoryInferenceEmbedder,
-    StructuredMemoryInferenceClient,
-)
-from app.memory.index_scheduler import MemoryIndexScheduler
-from app.memory.index_sync import MemoryIndexSync
-from app.memory.consolidation.config import resolve_memory_consolidation_settings
-from app.memory.consolidation.planner import ConsolidationPlanner
-from app.memory.consolidation.privacy import ConsolidationPrivacyReviewer
-from app.memory.consolidation.scheduler import (
-    ConsolidationPriorityProbe,
-    MemoryConsolidationScheduler,
-    is_consolidation_eligible,
-)
-from app.memory.consolidation.service import MemoryConsolidationService
-from app.memory.formation.config import resolve_memory_formation_settings
-from app.memory.formation.contracts import MemoryFormationJob
-from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
-from app.memory.formation.scheduler import MemoryFormationScheduler
-from app.memory.formation.combined_scheduler import CombinedFormationScheduler, FormationScheduler
-from app.voice_measurement_memory import (
-    DisabledFormationScheduler, POLICY_PATH, formation_disabled, record_memory_policy,
-)
-from app.memory.formation.runtime import build_episodic_scheduler
-from app.memory.semantic.privacy import SemanticPrivacyReviewer
-from app.memory.semantic.management import SemanticMemoryManagement
-from app.routers.semantic_memories import router as semantic_memories_router
-from app.memory.semantic.read_repository import SemanticReadRepository, WithSemanticReadRepository
-from app.memory.semantic.repository import SemanticRepository
-from app.memory.semantic.runtime import build_semantic_scheduler
-from app.memory.semantic.service import SemanticStore
-from app.memory.episodic.privacy import EpisodicPrivacyReviewer
-from app.memory.formation.worker import MemoryFormationWorker
-from app.memory.persistence.approved_repository import ApprovedMemoryRepository
-from app.memory.episodic.repository import EpisodicRepository
-from app.memory.episodic.management import EpisodicMemoryManagement
-from app.routers.episodic_memories import router as episodic_memories_router
-from app.memory.episodic.sources import ConversationSourceGuard
-from app.memory.episodic.read_repository import CombinedMemoryReadRepository, EpisodicReadRepository
-from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
-from app.memory.persistence.temporary_repository import (
-    TemporaryProviderRecordRepository,
-)
-from app.memory.providers import AddonRecordProvider, PersonaMemoryProvider
-from app.model_settings import ModelSettings, resolve_model_settings
-from app.prompting import BuiltPrompt, PromptMessage
-from app.privacy.history_sanitizer import create_history_sanitizer
-from app.privacy.scanner import create_privacy_scanner
-from app.privacy.semantic.classifier import InferenceSemanticPrivacyClassifier
-from app.privacy.semantic.inference_client import InferenceSemanticClassifierClient
-from app.routers.chat import router as chat_router
-from app.routers.character_catalog import router as character_catalog_router
-from app.routers.conversations import router as conversations_router
-from app.routers.memory_management import router as memory_management_router
-from app.routers.ui_settings import router as ui_settings_router
-from app.routers.livekit import router as livekit_router
-from app.routers.screen_perception import router as screen_perception_router
-from app.routers.ws import router as ws_router
-from app.routers.tool_use import router as tool_use_router
-from app.routers.addon_actions import router as addon_actions_router
 from app.addon_action.interaction import confirmation_resume_scope
+from app.characters.loader import load_character_card
+from app.chat_prompt import build_chat_prompt
 from app.conversation_core.control_input import current_control_request
+from app.conversation_history.models import ConversationTurn, TurnStatus
+from app.conversation_history.service import HistorySession
+from app.inference import InferenceCaller, InferenceTarget
+from app.llm import router as llm_router
+from app.memory.formation.contracts import MemoryFormationJob
+from app.model_settings import ModelSettings
+from app.prompting import BuiltPrompt
+from app.routers.addon_actions import router as addon_actions_router
 from app.routers.addon_admin import router as addon_admin_router
-from app.screen_perception.http_security import (
-    SCREEN_ALLOWED_ORIGIN_ENV,
-    resolve_screen_http_security,
-)
+from app.routers.character_catalog import router as character_catalog_router
+from app.routers.character_life import router as character_life_router
+from app.routers.chat import router as chat_router
+from app.routers.conversations import router as conversations_router
+from app.routers.episodic_memories import router as episodic_memories_router
+from app.routers.livekit import router as livekit_router
+from app.routers.memory_management import router as memory_management_router
+from app.routers.screen_perception import router as screen_perception_router
+from app.routers.semantic_memories import router as semantic_memories_router
+from app.routers.tool_use import router as tool_use_router
+from app.routers.ui_settings import router as ui_settings_router
+from app.routers.ws import router as ws_router
+from app.runtime.application import ApplicationRuntime, LifespanWiring
+from app.screen_perception.detector import needs_reference_history
+from app.screen_perception.provenance import ScreenLineage
 from app.screen_perception.service import (
     ScreenHistoryAccess,
-    ScreenPerceptionService,
     ScreenPerceptionError,
     ScreenTurnMaterial,
-    resolve_routing_policy,
 )
-from app.screen_perception.provenance import ScreenLineage
-from app.screen_perception.detector import needs_reference_history
-from app.screen_perception.vision import VisionInferenceClient
-from app.runtime_data_root import (
-    initialize_runtime_data_root,
-    remove_legacy_chroma_index_once,
+from app.tool_use.prompt import (
+    require_tool_room,
+    routing_history,
+    with_tool_material,
 )
-from app.runtime_paths import (
-    RuntimePaths,
-    resolve_runtime_paths,
-    runtime_paths_projection,
-)
-from app.ui_settings import UiSettingsRepository
-from app.voice_metrics import (
-    JsonlTraceRecorder,
-    MeasurementKind,
-    cleanup_expired_raw_traces,
-    resolve_raw_trace_root,
-)
-from app.tool_use.runtime import ToolRuntime, ToolSettings
-from app.tool_use.prompt import routing_history, with_tool_material, require_tool_room
 from app.tool_use.service import ToolService
-from app.character_life.runtime import Runtime as LifeRuntime, Settings as LifeSettings
-from app.character_life.service import Service as LifeService
-from app.character_life.store import Store as LifeStore
-from app.character_life.cognition import (
-    Cognition as LifeCognition,
-    Privacy as LifePrivacy,
-)
-from app.character_life.prompt import Context as LifeContext
-from app.character_life.formation import LifeFormation
-from app.character_life.cognition import Formation as StateFormation
-from app.routers.character_life import router as character_life_router
 
-VOICE_MEASUREMENT_KIND_ENV = "VOICE_MEASUREMENT_KIND"
-VOICE_CONTROLLED_TRACE_PATH_ENV = "VOICE_CONTROLLED_TRACE_PATH"
+if TYPE_CHECKING:
+    from app.livekit_transport.production import (
+        ProductionConversationCoreSessionFactory,
+    )
 
 load_dotenv()
-
-MEMORY_OCCURRED_TIMEZONE_ENV = "MEMORY_OCCURRED_TIMEZONE"
-DEFAULT_MEMORY_OCCURRED_TIMEZONE = "Asia/Tokyo"
-DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
-DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
-DS_DEPLOYMENT_COMMIT_ENV = "DS_DEPLOYMENT_COMMIT"
-CONSOLIDATION_PROMPT_VERSION = "consolidation-v1"
-
-
-@dataclass(frozen=True)
-class _SchemaRollbackContext:
-    generation: Path
-    authentication_key: BackupAuthenticationKey
-
-
-def ensure_schema_backup_gate(
-    paths: RuntimePaths, repository_root: Path
-) -> _SchemaRollbackContext | None:
-    inspection = inspect_conversation_history_schema(paths.sqlite_path)
-    if paths.environment_id != "dogfood" or not inspection.migration_required:
-        return None
-    backup_root_value = os.environ.get(DOGFOOD_BACKUP_DIR_ENV)
-    retention_value = os.environ.get(DOGFOOD_BACKUP_RETENTION_COUNT_ENV)
-    if not backup_root_value or retention_value is None:
-        raise RuntimeError("dogfood schema backup configuration is required")
-    try:
-        retention_count = int(retention_value)
-    except ValueError as error:
-        raise RuntimeError("dogfood backup retention count is invalid") from error
-    if retention_count <= 0:
-        raise RuntimeError("dogfood backup retention count is invalid")
-    deployment_commit = os.environ.get(DS_DEPLOYMENT_COMMIT_ENV)
-    if (
-        deployment_commit is not None
-        and re.fullmatch(r"[0-9a-f]{40}", deployment_commit) is None
-    ):
-        raise RuntimeError("deployment commit is invalid")
-    authentication_key = resolve_backup_authentication_key(os.environ)
-    generation = create_backup(
-        runtime_paths=paths,
-        repository_root=repository_root,
-        backup_root=Path(backup_root_value),
-        retention_count=retention_count,
-        authentication_key=authentication_key,
-        git_commit=deployment_commit,
-    )
-    verify_backup(
-        backup_directory=generation,
-        authentication_key=authentication_key,
-    )
-    return _SchemaRollbackContext(generation, authentication_key)
-
-
-def _initialize_schema_with_rollback(
-    *,
-    database_path: Path,
-    runtime_paths: RuntimePaths,
-    repository_root: Path,
-    rollback: _SchemaRollbackContext | None,
-    maintenance_lease: SQLiteLease | None = None,
-) -> None:
-    if rollback is None:
-        initialize_conversation_history_schema(database_path)
-        return
-    try:
-        initialize_conversation_history_schema(database_path)
-    except Exception as primary_error:
-        try:
-            restore_backup(
-                runtime_paths=runtime_paths,
-                repository_root=repository_root,
-                backup_directory=rollback.generation,
-                authentication_key=rollback.authentication_key,
-                maintenance_lease=maintenance_lease,
-            )
-        except Exception as compensation_error:
-            raise SchemaRollbackError(
-                primary_error, compensation_error, "restore"
-            ) from None
-        try:
-            verify_restored_backup(
-                runtime_paths=runtime_paths,
-                repository_root=repository_root,
-                backup_directory=rollback.generation,
-                authentication_key=rollback.authentication_key,
-            )
-        except Exception as compensation_error:
-            raise SchemaRollbackError(
-                primary_error, compensation_error, "verification"
-            ) from None
-        raise
 
 
 def _load_character_definition(
@@ -275,14 +70,218 @@ def _load_character_definition(
     )
 
 
-def _app_chat_service(app: FastAPI) -> _chat_runtime.ChatService:
-    return cast(_chat_runtime.ChatService, app.state.chat_service)
+def _validate_screen_context(
+    runtime: ApplicationRuntime, character_id: str, conversation_id: UUID
+) -> None:
+    load_character_card(character_id)
+    history = runtime.history
+    assert history is not None and history.repository is not None
+    history.repository.resume_conversation(character_id, conversation_id)
 
 
-def log_runtime_configuration(paths: RuntimePaths) -> None:
-    logging.getLogger(__name__).info(
-        "Runtime configuration: %s", runtime_paths_projection(paths)
+def _episodic_entity_labels(character_id: str) -> dict[str, str]:
+    card = load_character_card(character_id)
+    return {
+        "speaker:user": "ユーザー",
+        f"character:{character_id}": card.data.name,
+    }
+
+
+def _create_app_chat_service(
+    runtime: ApplicationRuntime,
+) -> _chat_runtime.ChatService:
+    privacy = runtime.privacy
+    history = runtime.history
+    memory = runtime.memory
+    model_settings = runtime.model_settings
+    runtime_paths = runtime.runtime_paths
+    clock = runtime.clock
+    assert (
+        privacy is not None
+        and privacy.scanner is not None
+        and privacy.classifier is not None
+        and history is not None
+        and history.service is not None
+        and model_settings is not None
+        and runtime_paths is not None
+        and clock is not None
+        and memory.read_repository is not None
+        and memory.embedder is not None
+        and memory.formation_scheduler is not None
+        and memory.provenance_recorder is not None
     )
+    return _chat_runtime.create_chat_service(
+        _chat_runtime.resolve_chat_runtime_config(
+            privacy.policy,
+            model_settings,
+            runtime_paths,
+            runtime.occurred_timezone,
+        ),
+        history.service,
+        _chat_runtime.ChatRuntimeDependencies(
+            character_definition_loader=_load_character_definition,
+            prompt_builder=build_chat_prompt,
+            llm_response_generator=runtime.generate_llm_response,
+            input_token_counter=runtime.count_llm_input_tokens,
+            privacy_scanner=privacy.scanner,
+            semantic_classifier=privacy.classifier,
+            approved_memory_repository=memory.read_repository,
+            memory_embedder=memory.embedder,
+            memory_formation_submitter=memory.formation_scheduler,
+            clock=clock,
+            tools=runtime.tools.routing_service,
+            life_context=runtime.life.context,
+            response_provenance_recorder=memory.provenance_recorder.record,
+            response_history_filter=memory.provenance_recorder.filter_history,
+        ),
+    )
+
+
+def _create_core_session_factory(
+    runtime: ApplicationRuntime,
+) -> ProductionConversationCoreSessionFactory:
+    from app.livekit_transport.production import (
+        ProductionConversationCoreSessionFactory,
+    )
+
+    app = runtime.app
+    app_chat_service = runtime.chat.service
+    model_settings = runtime.model_settings
+    inference = runtime.inference
+    audio = runtime.audio
+    history = runtime.history
+    formation_scheduler = runtime.memory.formation_scheduler
+    history_repository = history.repository if history is not None else None
+    assert (
+        app_chat_service is not None
+        and model_settings is not None
+        and inference is not None
+        and audio is not None
+        and history is not None
+        and history.service is not None
+        and history_repository is not None
+        and formation_scheduler is not None
+        and audio.core_transcriber is not None
+        and audio.core_synthesizer is not None
+    )
+
+    async def generate_screen_core_reply_stream(
+        session_id: str,
+        client_session_id: UUID | None,
+        character: str,
+        conversation_id: UUID,
+        history_session: object,
+        transcript: str,
+        screen_lineage_observer: Callable[
+            [tuple[ScreenLineage, ...]], None
+        ],
+        prompt_observer: Callable[[BuiltPrompt], None] | None,
+    ) -> AsyncIterator[str]:
+        history_access = (
+            await app.state.screen_perception_service.history_access(
+                client_session_id
+            )
+        )
+        reference_history = (
+            await run_sync(
+                app_chat_service.recent_screen_reference_history,
+                character,
+                conversation_id,
+                history_access,
+            )
+            if needs_reference_history(transcript)
+            else ()
+        )
+        screen_material = (
+            await app.state.screen_perception_service.await_voice_material(
+                client_session_id=client_session_id,
+                character_id=character,
+                conversation_id=conversation_id,
+                question=transcript,
+                publish_request=lambda payload: (
+                    app.state.livekit_runtime_manager.send_screen(
+                        session_id, payload
+                    )
+                ),
+                history=reference_history,
+            )
+        )
+        async for text in _stream_core_reply(
+            app_chat_service,
+            model_settings,
+            character,
+            history_session,  # type: ignore[arg-type]
+            transcript,
+            screen_material,
+            history_access,
+            screen_lineage_observer,
+            tools=app.state.tool_service,
+            conversation_id=str(conversation_id),
+            prompt_observer=prompt_observer,
+        ):
+            yield text
+
+    def submit_completed_core_turn(persisted_turn: object) -> None:
+        if not isinstance(persisted_turn, ConversationTurn):
+            raise TypeError(
+                "completed Core turn must be a ConversationTurn"
+            )
+        if persisted_turn.status is not TurnStatus.COMPLETED:
+            return
+        if history_repository.is_screen_derived(
+            persisted_turn.character_id,
+            persisted_turn.conversation_id,
+            persisted_turn.turn_id,
+        ):
+            return
+        formation_scheduler.submit(
+            MemoryFormationJob(
+                character_id=persisted_turn.character_id,
+                conversation_id=persisted_turn.conversation_id,
+                turn_id=persisted_turn.turn_id,
+            )
+        )
+
+    return ProductionConversationCoreSessionFactory(
+        transcriber=audio.core_transcriber,
+        synthesizer=audio.core_synthesizer,
+        history_service=history.service,
+        completed_turn_observer=submit_completed_core_turn,
+        response_provenance_recorder=app_chat_service.record_response_provenance,
+        generate_screen_reply_stream=generate_screen_core_reply_stream,
+        prepare_prompt=lambda character: (
+            app_chat_service.prepare_character_input_tokens(
+                character,
+                timeout_seconds=inference.runtime.settings.target(
+                    InferenceTarget.CHAT
+                ).timeout_seconds,
+            )
+        ),
+        prepare_inference=lambda: inference.runtime.router.prepare_text(
+            caller=InferenceCaller.CHAT,
+            target=InferenceTarget.CHAT,
+            latency_sensitive=True,
+        ),
+        on_conversation_interruption=(
+            runtime.tools.runtime.service.interrupted
+            if runtime.tools.runtime is not None
+            else lambda _character, _conversation, _reason: None
+        ),
+        measurement_kind=audio.measurement_kind,
+        trace_record=(
+            audio.trace_recorder.record
+            if audio.trace_recorder is not None
+            else None
+        ),
+    )
+
+
+_WIRING = LifespanWiring(
+    create_chat_service=_create_app_chat_service,
+    create_core_session_factory=_create_core_session_factory,
+    validate_screen_context=_validate_screen_context,
+    episodic_entity_labels=_episodic_entity_labels,
+)
 
 
 async def _stream_core_reply(
@@ -393,801 +392,14 @@ async def _stream_core_reply(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    from app.livekit_transport.production import (
-        ProductionConversationCoreSessionFactory,
-        configure_production_resources,
-        resolve_livekit_settings,
-    )
-
-    livekit_api = None
-    reject_legacy_inference_environment(os.environ)
-    inference_settings = resolve_inference_settings(
-        os.environ,
-        default_provider_registry(),
-    )
-    tool_settings = ToolSettings.load(os.environ.get("DS_MCP_CONFIG"))
-    chat_target = inference_settings.target(InferenceTarget.CHAT)
-    chat_output_tokens = chat_target.max_output_tokens
-    if chat_output_tokens is None:
-        raise AssertionError("chat target requires an output limit")
-    model_settings = resolve_model_settings(
-        os.environ,
-        chat_context_tokens=chat_target.max_input_tokens + chat_output_tokens,
-        assistant_max_generation_tokens=chat_output_tokens,
-    )
-    occurred_timezone = iana_timezone_environment_value(
-        MEMORY_OCCURRED_TIMEZONE_ENV,
-        DEFAULT_MEMORY_OCCURRED_TIMEZONE,
-    )
-    repository_root = Path(__file__).resolve().parents[2]
-    runtime_paths = resolve_runtime_paths(os.environ, repository_root)
-    disable_memory_formation = formation_disabled(
-        os.environ, environment_id=runtime_paths.environment_id,
-        measurement_kind=os.environ.get(VOICE_MEASUREMENT_KIND_ENV, "automated_test"),
-    )
-    if disable_memory_formation and LifeSettings.load(dict(os.environ)).enabled:
-        raise ValueError("controlled memory isolation requires Character Life disabled")
-    inference_runtime = create_inference_runtime(os.environ)
-    screen_http_security = resolve_screen_http_security(
-        os.environ.get(SCREEN_ALLOWED_ORIGIN_ENV, "http://localhost:5173")
-    )
-    try:
-        inference_runtime.probe_startup()
-    except Exception:
-        inference_runtime.close()
-        raise
-    initialize_runtime_data_root(runtime_paths, repository_root)
-    voice_trace_recorder = None
-    voice_measurement_kind: MeasurementKind = "automated_test"
-    configured_measurement_kind = os.environ.get(VOICE_MEASUREMENT_KIND_ENV)
-    if configured_measurement_kind is not None:
-        if configured_measurement_kind != "controlled_baseline":
-            raise ValueError("VOICE_MEASUREMENT_KIND must be controlled_baseline")
-        controlled_trace_path = os.environ.get(VOICE_CONTROLLED_TRACE_PATH_ENV)
-        if controlled_trace_path is None:
-            raise ValueError("VOICE_CONTROLLED_TRACE_PATH is required")
-        trace_path = Path(controlled_trace_path).resolve()
-        data_root = runtime_paths.data_root.resolve()
-        if data_root != trace_path.parent and data_root not in trace_path.parents:
-            raise ValueError("controlled trace must be inside the controlled data root")
-        voice_trace_recorder = JsonlTraceRecorder(trace_path)
-        voice_measurement_kind = "controlled_baseline"
-    elif runtime_paths.environment_id == "dogfood":
-        raw_trace_root = resolve_raw_trace_root(
-            repository_root=repository_root,
-            data_root=runtime_paths.data_root,
-            measurement_kind="dogfood",
-        )
-        raw_trace_root.mkdir(parents=True, exist_ok=True)
-        cleanup_expired_raw_traces(raw_trace_root, now=datetime.now(UTC))
-        cleanup_expired_raw_traces(raw_trace_root / "sessions", now=datetime.now(UTC))
-        voice_trace_recorder = JsonlTraceRecorder(
-            raw_trace_root / f"{uuid4()}.jsonl"
-        )
-        voice_measurement_kind = "dogfood"
-    from app.restore_intent import require_no_restore_intent
-
-    require_no_restore_intent(runtime_paths.restore_intent_path)
-    if voice_measurement_kind == "controlled_baseline":
-        (runtime_paths.data_root / POLICY_PATH).unlink(missing_ok=True)
-    policy = resolved_memory_policy()
-    remove_legacy_chroma_index_once(runtime_paths, repository_root)
-    log_runtime_configuration(runtime_paths)
-
-    def generate_llm_response(prompt: BuiltPrompt, *, max_output_tokens: int) -> str:
-        return llm_router.generate_response(
-            prompt,
-            max_output_tokens=max_output_tokens,
-            settings=model_settings,
-        )
-
-    def count_llm_input_tokens(messages: tuple[PromptMessage, ...]) -> int:
-        return llm_router.count_input_tokens(messages, settings=model_settings)
-
-    privacy_scanner = create_privacy_scanner(policy.privacy)
-    history_sanitizer = create_history_sanitizer(privacy_scanner, policy.privacy)
-    conversation_history_config = resolve_conversation_history_config(runtime_paths)
-    with acquire_maintenance_lease(conversation_history_config.database_path) as lease:
-        rollback = ensure_schema_backup_gate(runtime_paths, repository_root)
-        _initialize_schema_with_rollback(
-            database_path=conversation_history_config.database_path,
-            runtime_paths=runtime_paths,
-            repository_root=repository_root,
-            rollback=rollback,
-            maintenance_lease=lease,
-        )
-        lease.transition_to_runtime()
-        from app.memory.persistence.schema import initialize_persona_memory_schema
-
-        initialize_persona_memory_schema(runtime_paths, repository_root)
-
-        def clock() -> datetime:
-            return datetime.now(UTC)
-
-        wal_cleanup = ConversationWalCleanup(
-            database_path=conversation_history_config.database_path,
-            clock=clock,
-            connection_factory=sqlite3.connect,
-        )
-        conversation_history_repository = ConversationHistoryRepository(
-            database_path=conversation_history_config.database_path,
-            stale_after=conversation_history_config.stale_after,
-            retention=conversation_history_config.retention,
-            clock=clock,
-            uuid_factory=uuid4,
-            wal_cleanup=wal_cleanup,
-        )
-        conversation_history_repository.recover_stale_processing()
-        wal_cleanup.retry_pending()
-        conversation_lifecycle_service = ConversationLifecycleService(
-            conversation_history_repository
-        )
-        ui_settings_repository = UiSettingsRepository(
-            database_path=conversation_history_config.database_path,
-            clock=clock,
-        )
-        approved_memory_repository = ApprovedMemoryRepository(
-            database_path=runtime_paths.persona_memory_sqlite_path,
-            clock=clock,
-            uuid_factory=uuid4,
-            outbox_uuid_factory=uuid4,
-        )
-        from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
-
-        episodic_repository = EpisodicRepository(runtime_paths.persona_memory_sqlite_path)
-        legacy_read_repository = CombinedMemoryReadRepository(
-            approved_memory_repository,
-            EpisodicReadRepository(
-                episodic_repository,
-                ConversationSourceGuard(
-                    conversation_history_config.database_path,
-                    clock=clock, retention=conversation_history_config.retention,
-                ),
-            ),
-        )
-        memory_read_repository = WithSemanticReadRepository(legacy_read_repository)
-        response_provenance_recorder = ResponseProvenanceRecorder(
-            runtime_paths.persona_memory_sqlite_path, reader=legacy_read_repository.episodic,
-        )
-        outbox_repository = IndexOutboxRepository(
-            database_path=runtime_paths.persona_memory_sqlite_path,
-            clock=clock,
-        )
-        memory_embedder = MemoryInferenceEmbedder(
-            router=inference_runtime.router,
-            settings=inference_runtime.settings,
-        )
-        memory_index_sync = MemoryIndexSync(
-            approved_repository=memory_read_repository,
-            outbox_repository=outbox_repository,
-            chroma_path=runtime_paths.chroma_path,
-            runtime_report_dir=runtime_paths.runtime_report_dir,
-            embedder=memory_embedder,
-            embedding_provider_id=memory_embedder.provider_id,
-            embedding_model_id=memory_embedder.model_id,
-            clock=clock,
-        )
-        temporary_record_repository = TemporaryProviderRecordRepository(
-            database_path=runtime_paths.persona_memory_sqlite_path,
-            clock=clock,
-            uuid_factory=uuid4,
-        )
-        memory_index_scheduler = MemoryIndexScheduler(memory_index_sync)
-        formation_settings = resolve_memory_formation_settings(os.environ)
-        consolidation_settings = resolve_memory_consolidation_settings(os.environ)
-        chat_service_resolver = None
-        repository_state_set = False
-        lifecycle_service_state_set = False
-        ui_settings_repository_state_set = False
-        resolver_registered = False
-        chat_service_state_set = False
-        audio_pipeline_state_set = False
-        semantic_classifier_state_set = False
-        semantic_store_state_set = False
-        inference_router_state_set = False
-        inference_router_registered = False
-        persona_memory_provider_state_set = False
-        episodic_memory_management_state_set = False
-        addon_record_provider_state_set = False
-        rag_admission_service_state_set = False
-        screen_perception_state_set = False
-        voice_trace_recorder_state_set = False
-        voice_measurement_kind_state_set = False
-        semantic_classifier_client = None
-        memory_index_scheduler_started = False
-        memory_formation_scheduler_started = False
-        memory_consolidation_scheduler_started = False
-        memory_extractor_client = None
-        memory_consolidation_client = None
-        memory_consolidation_classifier_client = None
-        core_transcriber = None
-        core_synthesizer = None
-        tool_runtime = None
-        life_runtime = None
-        life_context = None
+    runtime = ApplicationRuntime(app, os.environ)
+    runtime.prepare()
+    with runtime.acquire_persistent_state():
         try:
-            llm_router.register_inference_router(inference_runtime.router)
-            inference_router_registered = True
-            app.state.inference_router = inference_runtime.router
-            app.state.inference_health = inference_runtime.health
-            inference_router_state_set = True
-            app.state.voice_measurement_kind = voice_measurement_kind
-            voice_measurement_kind_state_set = True
-            if voice_trace_recorder is not None:
-                app.state.voice_trace_recorder = voice_trace_recorder
-                voice_trace_recorder_state_set = True
-            app.state.conversation_history_repository = conversation_history_repository
-            repository_state_set = True
-
-            def validate_screen_context(
-                character_id: str, conversation_id: UUID
-            ) -> None:
-                load_character_card(character_id)
-                conversation_history_repository.resume_conversation(
-                    character_id, conversation_id
-                )
-
-            screen_routing_policy = resolve_routing_policy(
-                inference_runtime.settings, inference_runtime.registry
-            )
-            app.state.screen_http_security = screen_http_security
-            app.state.screen_perception_service = ScreenPerceptionService(
-                vision=VisionInferenceClient(router=inference_runtime.router),
-                routing_policy=lambda: screen_routing_policy,
-                validate_context=validate_screen_context,
-                reference_router=inference_runtime.router,
-            )
-            screen_perception_state_set = True
-            app.state.conversation_lifecycle_service = conversation_lifecycle_service
-            lifecycle_service_state_set = True
-            app.state.ui_settings_repository = ui_settings_repository
-            ui_settings_repository_state_set = True
-            semantic_classifier_client = InferenceSemanticClassifierClient(
-                router=inference_runtime.router,
-                settings=inference_runtime.settings,
-                model_digest_resolver=lambda model_id, timeout_seconds: (
-                    inference_runtime.ollama_adapter.resolve_model_digest(
-                        model_id,
-                        timeout_seconds=timeout_seconds,
-                    )
-                ),
-            )
-            semantic_privacy_classifier = InferenceSemanticPrivacyClassifier(
-                client=semantic_classifier_client,
-                privacy_policy=policy.privacy,
-                model_id=target_model_id(
-                    inference_runtime.settings,
-                    InferenceTarget.PRIVACY,
-                ),
-                model_digest_resolver=lambda timeout_seconds: (
-                    semantic_classifier_client.resolve_model_digest(
-                        timeout_seconds=timeout_seconds
-                    )
-                ),
-            )
-            app.state.semantic_privacy_classifier = semantic_privacy_classifier
-            semantic_classifier_state_set = True
-            semantic_store = SemanticStore(
-                repository=SemanticRepository(runtime_paths.persona_memory_sqlite_path),
-                source_guard=legacy_read_repository.episodic.source_guard,
-                episode_reader=legacy_read_repository.episodic,
-                reviewer=SemanticPrivacyReviewer(
-                    scanner=privacy_scanner, classifier=semantic_privacy_classifier, policy=policy.privacy,
-                ), clock=clock,
-            )
-            memory_read_repository.bind(SemanticReadRepository(semantic_store))
-            app.state.semantic_memory_management = SemanticMemoryManagement(semantic_store, memory_index_sync)
-            app.state.semantic_store = semantic_store
-            semantic_store_state_set = True
-            app.state.persona_memory_provider = PersonaMemoryProvider(
-                approved_repository=approved_memory_repository,
-                scanner=privacy_scanner,
-                classifier=semantic_privacy_classifier,
-                admission_evaluator=create_rag_admission_evaluator(policy.privacy),
-                index_sync=memory_index_sync,
-                clock=clock,
-            )
-            persona_memory_provider_state_set = True
-            app.state.episodic_memory_management = EpisodicMemoryManagement(
-                reader=legacy_read_repository.episodic,
-                reviewer=EpisodicPrivacyReviewer(
-                    scanner=privacy_scanner, classifier=semantic_privacy_classifier, policy=policy.privacy,
-                ),
-                clock=clock, index_sync=memory_index_sync,
-            )
-            episodic_memory_management_state_set = True
-            app.state.addon_record_provider = AddonRecordProvider(
-                temporary_record_repository
-            )
-            addon_record_provider_state_set = True
-            app.state.rag_admission_service = RagAdmissionService(
-                conversation_repository=conversation_history_repository,
-                approved_repository=approved_memory_repository,
-                privacy_scanner=privacy_scanner,
-                semantic_classifier=semantic_privacy_classifier,
-                evaluator=create_rag_admission_evaluator(policy.privacy),
-                occurred_timezone=occurred_timezone,
-                extractor_version=EXTRACTOR_VERSION,
-            )
-            rag_admission_service_state_set = True
-            memory_extractor_client = StructuredMemoryInferenceClient(
-                router=inference_runtime.router,
-                settings=inference_runtime.settings,
-                caller=InferenceCaller.MEMORY_EXTRACTION,
-                target=InferenceTarget.MEMORY_EXTRACTION,
-            )
-            memory_consolidation_client = StructuredMemoryInferenceClient(
-                router=inference_runtime.router,
-                settings=inference_runtime.settings,
-                caller=InferenceCaller.MEMORY_CONSOLIDATION,
-                target=InferenceTarget.MEMORY_CONSOLIDATION,
-            )
-            memory_consolidation_classifier_client = InferenceSemanticClassifierClient(
-                router=inference_runtime.router,
-                settings=inference_runtime.settings,
-                model_digest_resolver=lambda model_id, timeout_seconds: (
-                    inference_runtime.ollama_adapter.resolve_model_digest(
-                        model_id,
-                        timeout_seconds=timeout_seconds,
-                    )
-                ),
-            )
-            memory_consolidation_privacy_classifier = (
-                InferenceSemanticPrivacyClassifier(
-                    client=memory_consolidation_classifier_client,
-                    privacy_policy=policy.privacy,
-                    model_id=target_model_id(
-                        inference_runtime.settings,
-                        InferenceTarget.PRIVACY,
-                    ),
-                    model_digest_resolver=lambda timeout_seconds: (
-                        memory_consolidation_classifier_client.resolve_model_digest(
-                            timeout_seconds=timeout_seconds
-                        )
-                    ),
-                )
-            )
-            memory_formation_scheduler: FormationScheduler
-            if disable_memory_formation:
-                memory_formation_scheduler = DisabledFormationScheduler()
-            else:
-                memory_candidate_extractor = MemoryCandidateExtractor(
-                    client=memory_extractor_client,
-                    settings=formation_settings,
-                    preferences_only=True,
-                )
-                preference_formation_scheduler = MemoryFormationScheduler(
-                    worker=MemoryFormationWorker(
-                        conversation_repository=conversation_history_repository,
-                        extractor=memory_candidate_extractor,
-                        admission_service=app.state.rag_admission_service,
-                        domain_router=None,
-                    ),
-                    max_queue_age_seconds=formation_settings.max_queue_age_seconds,
-                    queue_maxsize=formation_settings.queue_maxsize,
-                )
-                def episodic_entity_labels(character_id: str) -> dict[str, str]:
-                    card = load_character_card(character_id)
-                    return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
-
-                # 同じ自己申告の二重形成はUI訂正・削除を迂回するため、新旧の抽出は択一。
-                # 既存保存済みpreferenceの移行は#345で扱う。
-                memory_formation_scheduler = CombinedFormationScheduler(
-                    (build_semantic_scheduler(
-                        store=semantic_store, runtime=inference_runtime, timezone=occurred_timezone,
-                        stale_after=conversation_history_config.stale_after,
-                    ) if InferenceTarget.SEMANTIC_EXTRACTION in inference_runtime.settings.targets
-                     else preference_formation_scheduler),
-                    build_episodic_scheduler(
-                        history_path=conversation_history_config.database_path,
-                        repository=episodic_repository, clock=clock,
-                        retention=conversation_history_config.retention, timezone=occurred_timezone,
-                        reviewer=EpisodicPrivacyReviewer(
-                            scanner=privacy_scanner, classifier=semantic_privacy_classifier,
-                            policy=policy.privacy,
-                        ),
-                        client=memory_extractor_client, settings=formation_settings,
-                        runtime=inference_runtime, entity_labels=episodic_entity_labels,
-                    ),
-                )
-            await memory_formation_scheduler.start()
-            memory_formation_scheduler_started = True
-            consolidation_priority = ConsolidationPriorityProbe(
-                conversation_repository=conversation_history_repository,
-                formation_scheduler=memory_formation_scheduler,
-                outbox_repository=outbox_repository,
-            )
-            memory_consolidation_scheduler = MemoryConsolidationScheduler(
-                service=MemoryConsolidationService(
-                    repository=approved_memory_repository,
-                    planner=ConsolidationPlanner(
-                        client=memory_consolidation_client,
-                        max_output_tokens=consolidation_settings.max_output_tokens,
-                        model_id=target_model_id(
-                            inference_runtime.settings,
-                            InferenceTarget.MEMORY_CONSOLIDATION,
-                        ),
-                        prompt_version=CONSOLIDATION_PROMPT_VERSION,
-                        policy_version=policy.policy_version,
-                    ),
-                    privacy_reviewer=ConsolidationPrivacyReviewer(
-                        scanner=privacy_scanner,
-                        classifier=memory_consolidation_privacy_classifier,
-                        evaluator=create_rag_admission_evaluator(policy.privacy),
-                    ),
-                    batch_size=consolidation_settings.batch_size,
-                    llm_timeout_seconds=consolidation_settings.llm_timeout_seconds,
-                    clock=clock,
-                    model_id=target_model_id(
-                        inference_runtime.settings,
-                        InferenceTarget.MEMORY_CONSOLIDATION,
-                    ),
-                    prompt_version=CONSOLIDATION_PROMPT_VERSION,
-                    policy_version=policy.policy_version,
-                    reprocess_interval_seconds=consolidation_settings.interval_seconds,
-                ),
-                interval_seconds=consolidation_settings.interval_seconds,
-                max_runtime_seconds=consolidation_settings.max_runtime_seconds,
-                priority_probe=lambda: is_consolidation_eligible(
-                    now=clock().astimezone(ZoneInfo(occurred_timezone)),
-                    priority=consolidation_priority.read(),
-                    idle_seconds=consolidation_settings.idle_seconds,
-                    nightly_start_hour=0,
-                    nightly_end_hour=6,
-                ),
-            )
-            conversation_history_service = ConversationHistoryService(
-                conversation_history_repository,
-                history_sanitizer,
-            )
-            life_settings = LifeSettings.load(dict(os.environ))
-            if (
-                life_settings.enabled
-                and InferenceTarget.CHARACTER_LIFE
-                not in inference_runtime.settings.targets
-            ):
-                raise ValueError(
-                    "Character Life requires INFERENCE_TARGET_CHARACTER_LIFE"
-                )
-            tool_runtime = ToolRuntime(
-                tool_settings,
-                inference_runtime.router,
-                privacy_scanner,
-                settings_path=runtime_paths.data_root / "addon-settings.json",
-                classifier=memory_consolidation_privacy_classifier,
-            )
-            app.state.addon_manager = tool_runtime.management
-            app.state.event_source = tool_runtime.events
-            app.state.action_policy = tool_runtime.action_policy
-            await tool_runtime.start()
-            app.state.tool_service = (
-                tool_runtime.service
-                if InferenceTarget.TOOL_ROUTING in inference_runtime.settings.targets
-                else None
-            )
-            if life_settings.enabled:
-                assert tool_runtime is not None
-                life_store = LifeStore(runtime_paths.data_root / "character-life.db")
-                life_service = LifeService(
-                    life_store,
-                    tool_runtime.gate,
-                    LifeCognition(inference_runtime.router),
-                    LifePrivacy(
-                        tool_runtime.service.sanitizer,
-                        memory_consolidation_privacy_classifier,
-                    ),
-                    tool_runtime.service.sanitizer,
-                    foreground_busy=lambda: (
-                        conversation_history_repository.consolidation_activity()[0] > 0
-                    ),
-                    bindings=tool_runtime.service.bindings,
-                )
-                life_service.formation = LifeFormation(
-                    life_store,
-                    life_service.reflections,
-                    StateFormation(inference_runtime.router),
-                    life_service.privacy,
-                )
-                character_catalog = CharacterCatalog(repository_root / "characters")
-                life_runtime = LifeRuntime(
-                    life_service, runtime_paths.data_root, life_settings,
-                    characters=lambda: tuple(
-                        entry.character_id for entry in character_catalog.scan()
-                    ),
-                )
-                await life_runtime.start()
-                app.state.character_life_runtime = life_runtime
-                life_context = LifeContext(
-                    life_store,
-                    count_llm_input_tokens,
-                    model_settings.chat_context_tokens
-                    - model_settings.assistant_max_generation_tokens,
-                    reflections=life_service.reflections,
-                )
-            app_chat_service = _chat_runtime.create_chat_service(
-                _chat_runtime.resolve_chat_runtime_config(
-                    policy, model_settings, runtime_paths, occurred_timezone
-                ),
-                conversation_history_service,
-                _chat_runtime.ChatRuntimeDependencies(
-                    character_definition_loader=_load_character_definition,
-                    prompt_builder=build_chat_prompt,
-                    llm_response_generator=generate_llm_response,
-                    input_token_counter=count_llm_input_tokens,
-                    privacy_scanner=privacy_scanner,
-                    semantic_classifier=semantic_privacy_classifier,
-                    approved_memory_repository=memory_read_repository,
-                    memory_embedder=memory_embedder,
-                    memory_formation_submitter=memory_formation_scheduler,
-                    clock=clock,
-                    tools=app.state.tool_service,
-                    life_context=life_context,
-                    response_provenance_recorder=response_provenance_recorder.record,
-                    response_history_filter=response_provenance_recorder.filter_history,
-                ),
-            )
-            app.state.chat_service = app_chat_service
-            chat_service_state_set = True
-            audio_runtime_config = resolve_audio_runtime_config(
-                model_settings, runtime_paths
-            )
-            app.state.audio_pipeline_service = create_audio_pipeline_service(
-                audio_runtime_config,
-            )
-            audio_pipeline_state_set = True
-            core_session_factory = None
-            if resolve_livekit_settings() is not None:
-                from app.stt.remote_whisper_client import RemoteWhisperTranscriber
-                from app.tts.voicevox_client import create_voicevox_client
-
-                core_transcriber = RemoteWhisperTranscriber(
-                    audio_runtime_config.whisper_base_url
-                )
-                core_synthesizer = create_voicevox_client(
-                    audio_runtime_config.voicevox_base_url
-                )
-
-                async def generate_screen_core_reply_stream(
-                    session_id: str,
-                    client_session_id: UUID | None,
-                    character: str,
-                    conversation_id: UUID,
-                    history_session: object,
-                    transcript: str,
-                    screen_lineage_observer: Callable[
-                        [tuple[ScreenLineage, ...]], None
-                    ],
-                    prompt_observer: Callable[[BuiltPrompt], None] | None,
-                ) -> AsyncIterator[str]:
-                    history_access = (
-                        await app.state.screen_perception_service.history_access(
-                            client_session_id
-                        )
-                    )
-                    reference_history = (
-                        await run_sync(
-                            app_chat_service.recent_screen_reference_history,
-                            character,
-                            conversation_id,
-                            history_access,
-                        )
-                        if needs_reference_history(transcript)
-                        else ()
-                    )
-                    screen_material = (
-                        await app.state.screen_perception_service.await_voice_material(
-                            client_session_id=client_session_id,
-                            character_id=character,
-                            conversation_id=conversation_id,
-                            question=transcript,
-                            publish_request=lambda payload: (
-                                app.state.livekit_runtime_manager.send_screen(
-                                    session_id, payload
-                                )
-                            ),
-                            history=reference_history,
-                        )
-                    )
-                    async for text in _stream_core_reply(
-                        app_chat_service,
-                        model_settings,
-                        character,
-                        history_session,  # type: ignore[arg-type]
-                        transcript,
-                        screen_material,
-                        history_access,
-                        screen_lineage_observer,
-                        tools=app.state.tool_service,
-                        conversation_id=str(conversation_id),
-                        prompt_observer=prompt_observer,
-                    ):
-                        yield text
-
-                def submit_completed_core_turn(persisted_turn: object) -> None:
-                    if not isinstance(persisted_turn, ConversationTurn):
-                        raise TypeError(
-                            "completed Core turn must be a ConversationTurn"
-                        )
-                    if persisted_turn.status is not TurnStatus.COMPLETED:
-                        return
-                    if conversation_history_repository.is_screen_derived(
-                        persisted_turn.character_id,
-                        persisted_turn.conversation_id,
-                        persisted_turn.turn_id,
-                    ):
-                        return
-                    memory_formation_scheduler.submit(
-                        MemoryFormationJob(
-                            character_id=persisted_turn.character_id,
-                            conversation_id=persisted_turn.conversation_id,
-                            turn_id=persisted_turn.turn_id,
-                        )
-                    )
-
-                core_session_factory = ProductionConversationCoreSessionFactory(
-                    transcriber=core_transcriber,
-                    synthesizer=core_synthesizer,
-                    history_service=conversation_history_service,
-                    completed_turn_observer=submit_completed_core_turn,
-                    response_provenance_recorder=app_chat_service.record_response_provenance,
-                    generate_screen_reply_stream=generate_screen_core_reply_stream,
-                    prepare_prompt=lambda character: app_chat_service.prepare_character_input_tokens(
-                        character,
-                        timeout_seconds=inference_runtime.settings.target(
-                            InferenceTarget.CHAT
-                        ).timeout_seconds,
-                    ),
-                    prepare_inference=lambda: inference_runtime.router.prepare_text(
-                        caller=InferenceCaller.CHAT, target=InferenceTarget.CHAT,
-                        latency_sensitive=True,
-                    ),
-                    on_conversation_interruption=(
-                        tool_runtime.service.interrupted
-                        if tool_runtime is not None
-                        else lambda _character, _conversation, _reason: None
-                    ),
-                    measurement_kind=voice_measurement_kind,
-                    trace_record=(
-                        voice_trace_recorder.record
-                        if voice_trace_recorder is not None
-                        else None
-                    ),
-                )
-            livekit_api = await configure_production_resources(
-                app,
-                core_session_factory=core_session_factory,
-            )
-            chat_service_resolver = lambda: _app_chat_service(app)
-            _chat_runtime.register_default_chat_service_resolver(chat_service_resolver)
-            resolver_registered = True
-            memory_index_scheduler.start()
-            memory_index_scheduler_started = True
-            if not disable_memory_formation:
-                await memory_consolidation_scheduler.start()
-                memory_consolidation_scheduler_started = True
-            if voice_measurement_kind == "controlled_baseline":
-                record_memory_policy(runtime_paths.data_root, disabled=disable_memory_formation)
+            await runtime.start(_WIRING)
             yield
         finally:
-            cleanup_errors: list[BaseException] = []
-
-            async def run_cleanup(operation: Awaitable[None]) -> None:
-                try:
-                    await operation
-                except BaseException as error:
-                    cleanup_errors.append(error)
-
-            if livekit_api is not None:
-                await run_cleanup(app.state.livekit_bootstrap_service.cancel_all_preparations())
-                await run_cleanup(app.state.livekit_runtime_manager.stop_all())
-                await run_cleanup(livekit_api.aclose())
-            if life_runtime is not None:
-                await run_cleanup(life_runtime.close())
-            if hasattr(app.state, "character_life_runtime"):
-                del app.state.character_life_runtime
-            if tool_runtime is not None:
-                await run_cleanup(tool_runtime.close())
-            if hasattr(app.state, "tool_service"):
-                del app.state.tool_service
-            if hasattr(app.state, "action_policy"):
-                del app.state.action_policy
-            if memory_consolidation_scheduler_started:
-                await run_cleanup(memory_consolidation_scheduler.stop())
-            if memory_formation_scheduler_started:
-                await run_cleanup(memory_formation_scheduler.stop())
-            if memory_index_scheduler_started:
-                await run_cleanup(memory_index_scheduler.stop())
-            with ExitStack() as cleanup:
-                if livekit_api is not None:
-                    for state_name in (
-                        "livekit_room_manager",
-                        "livekit_session_repository",
-                        "livekit_runtime_manager",
-                        "livekit_token_signer",
-                        "livekit_bootstrap_service",
-                        "livekit_core_events",
-                        "livekit_url",
-                    ):
-                        cleanup.callback(delattr, app.state, state_name)
-                if voice_trace_recorder_state_set:
-                    cleanup.callback(delattr, app.state, "voice_trace_recorder")
-                if voice_measurement_kind_state_set:
-                    cleanup.callback(delattr, app.state, "voice_measurement_kind")
-                if chat_service_state_set:
-                    cleanup.callback(delattr, app.state, "chat_service")
-                if audio_pipeline_state_set:
-                    cleanup.callback(delattr, app.state, "audio_pipeline_service")
-                    cleanup.callback(app.state.audio_pipeline_service.close)
-                if core_synthesizer is not None:
-                    cleanup.callback(core_synthesizer.close)
-                if core_transcriber is not None:
-                    cleanup.callback(core_transcriber.close)
-                if resolver_registered and chat_service_resolver is not None:
-                    cleanup.callback(
-                        _chat_runtime.clear_default_chat_service_resolver,
-                        chat_service_resolver,
-                    )
-                if repository_state_set:
-                    cleanup.callback(
-                        delattr,
-                        app.state,
-                        "conversation_history_repository",
-                    )
-                if lifecycle_service_state_set:
-                    cleanup.callback(
-                        delattr,
-                        app.state,
-                        "conversation_lifecycle_service",
-                    )
-                if ui_settings_repository_state_set:
-                    cleanup.callback(
-                        delattr,
-                        app.state,
-                        "ui_settings_repository",
-                    )
-                if semantic_classifier_state_set:
-                    cleanup.callback(
-                        delattr,
-                        app.state,
-                        "semantic_privacy_classifier",
-                    )
-                if inference_router_state_set:
-                    cleanup.callback(delattr, app.state, "inference_router")
-                if inference_router_registered:
-                    cleanup.callback(
-                        llm_router.clear_inference_router,
-                        inference_runtime.router,
-                    )
-                if semantic_store_state_set:
-                    cleanup.callback(delattr, app.state, "semantic_store")
-                    cleanup.callback(delattr, app.state, "semantic_memory_management")
-                if episodic_memory_management_state_set:
-                    cleanup.callback(delattr, app.state, "episodic_memory_management")
-                if persona_memory_provider_state_set:
-                    cleanup.callback(delattr, app.state, "persona_memory_provider")
-                if addon_record_provider_state_set:
-                    cleanup.callback(delattr, app.state, "addon_record_provider")
-                if rag_admission_service_state_set:
-                    cleanup.callback(
-                        delattr,
-                        app.state,
-                        "rag_admission_service",
-                    )
-                if screen_perception_state_set:
-                    cleanup.callback(delattr, app.state, "screen_perception_service")
-                    cleanup.callback(delattr, app.state, "screen_http_security")
-                if semantic_classifier_client is not None:
-                    cleanup.callback(semantic_classifier_client.close)
-                if memory_extractor_client is not None:
-                    cleanup.callback(memory_extractor_client.close)
-                if memory_consolidation_client is not None:
-                    cleanup.callback(memory_consolidation_client.close)
-                if memory_consolidation_classifier_client is not None:
-                    cleanup.callback(memory_consolidation_classifier_client.close)
-                cleanup.callback(inference_runtime.close)
-                cleanup.callback(delattr, app.state, "inference_health")
-            if cleanup_errors:
-                raise cleanup_errors[0]
+            await runtime.shutdown()
 
 
 app = FastAPI(lifespan=lifespan)

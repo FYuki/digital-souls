@@ -7,10 +7,11 @@ def test_should_retry_pending_wal_cleanup_during_application_startup(
     monkeypatch,
 ) -> None:
     import app.main as main
+    import app.runtime.history as history_runtime
 
     retry_pending = MagicMock()
     monkeypatch.setattr(
-        main.ConversationWalCleanup,
+        history_runtime.ConversationWalCleanup,
         "retry_pending",
         retry_pending,
     )

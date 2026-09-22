@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 
@@ -26,14 +28,20 @@ def test_lifespan_starts_and_collects_the_single_memory_index_scheduler(
         syncs.append(sync)
         return scheduler
 
-    monkeypatch.setattr(main, "MemoryIndexScheduler", build_scheduler)
+    import os
+    import app.runtime.application as application_runtime
+    import app.runtime.memory as memory_runtime
+
+    monkeypatch.setattr(memory_runtime, "MemoryIndexScheduler", build_scheduler)
 
     with TestClient(main.app):
         assert scheduler.started
         assert not scheduler.stopped
         assert len(syncs) == 1
-        repository_root = main.Path(main.__file__).resolve().parents[2]
-        runtime_paths = main.resolve_runtime_paths(main.os.environ, repository_root)
+        repository_root = Path(main.__file__).resolve().parents[2]
+        runtime_paths = application_runtime.resolve_runtime_paths(
+            os.environ, repository_root
+        )
         assert syncs[0]._chroma_path == runtime_paths.chroma_path
         assert syncs[0]._runtime_report_dir == runtime_paths.runtime_report_dir
 
@@ -67,9 +75,11 @@ def test_lifespan_starts_consolidation_after_index_and_stops_it_first(
         async def stop(self) -> None:
             events.append("consolidation:stop")
 
-    monkeypatch.setattr(main, "MemoryIndexScheduler", RecordingIndexScheduler)
+    import app.runtime.memory as memory_runtime
+
+    monkeypatch.setattr(memory_runtime, "MemoryIndexScheduler", RecordingIndexScheduler)
     monkeypatch.setattr(
-        main,
+        memory_runtime,
         "MemoryConsolidationScheduler",
         RecordingConsolidationScheduler,
     )
@@ -103,8 +113,10 @@ def test_lifespan_wires_fixed_inference_callers_for_memory_generation(
         def close(self) -> None:
             closed.append(self.identity)
 
+    import app.runtime.memory as memory_runtime
+
     monkeypatch.setattr(
-        main,
+        memory_runtime,
         "StructuredMemoryInferenceClient",
         RecordingInferenceClient,
     )

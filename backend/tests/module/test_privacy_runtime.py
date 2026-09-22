@@ -9,6 +9,9 @@ from fastapi.testclient import TestClient
 
 def _patch_privacy_startup(monkeypatch: pytest.MonkeyPatch):
     import app.main as main
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
+    import app.runtime.privacy as privacy_runtime
     from app.model_settings import resolve_model_settings
 
     resolved_policy = MagicMock(name="resolved_policy")
@@ -27,12 +30,16 @@ def _patch_privacy_startup(monkeypatch: pytest.MonkeyPatch):
             chroma_path=Path("/test/runtime-data/chroma"),
         )
     )
-    monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)
-    monkeypatch.setattr(main, "create_privacy_scanner", create_scanner)
-    monkeypatch.setattr(main, "create_history_sanitizer", create_sanitizer)
+    monkeypatch.setattr(
+        application_runtime, "resolved_memory_policy", resolve_policy
+    )
+    monkeypatch.setattr(privacy_runtime, "create_privacy_scanner", create_scanner)
+    monkeypatch.setattr(
+        privacy_runtime, "create_history_sanitizer", create_sanitizer
+    )
     create_history_service = MagicMock(return_value=history_service)
     monkeypatch.setattr(
-        main,
+        history_runtime,
         "ConversationHistoryService",
         create_history_service,
     )
@@ -124,13 +131,19 @@ def test_should_fail_before_request_handling_when_policy_is_invalid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.main as main
+    import app.runtime.application as application_runtime
+    import app.runtime.privacy as privacy_runtime
 
     resolve_policy = MagicMock(side_effect=ValueError("invalid privacy policy"))
     create_scanner = MagicMock()
     create_sanitizer = MagicMock()
-    monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)
-    monkeypatch.setattr(main, "create_privacy_scanner", create_scanner)
-    monkeypatch.setattr(main, "create_history_sanitizer", create_sanitizer)
+    monkeypatch.setattr(
+        application_runtime, "resolved_memory_policy", resolve_policy
+    )
+    monkeypatch.setattr(privacy_runtime, "create_privacy_scanner", create_scanner)
+    monkeypatch.setattr(
+        privacy_runtime, "create_history_sanitizer", create_sanitizer
+    )
 
     with pytest.raises(ValueError, match="invalid privacy policy"):
         with TestClient(main.app):
