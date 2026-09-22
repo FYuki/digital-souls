@@ -194,3 +194,94 @@ def test_irodori_fault_profile_cannot_target_normal_livekit(tmp_path: Path) -> N
             _validate_dependency(profile_name, "livekit", {
                 "mode": "real", "source": "external", "baseUrl": url, "readinessPath": "/",
             })
+
+
+def test_measurement_formation_setting_is_preserved_in_report_and_backend_container(tmp_path):
+    from profile_resolution import resolve_profile
+    from adapters.backend import BackendAdapter
+    from tests.environment_test_support import RecordingRunner
+    key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
+    paths = resolved_runtime_paths(tmp_path)
+    report = resolve_profile({"DS_PROFILE": "integration-voice", key: "true"}, None, paths)
+    from profile_report import validate_resolved_report
+    assert validate_resolved_report(report) == report
+    assert report["derivedEnvironment"][key] == "true"
+    adapter = BackendAdapter(tmp_path, paths, RecordingRunner())
+    values = adapter._write_compose_environment(
+        report["dependencies"]["backend"], report["derivedEnvironment"],
+        host="127.0.0.1", port=18500,
+    )
+    # Composeが読むbackend env fileへ明示キーが渡ることを確認する。
+    from dotenv import dotenv_values
+    assert values[key] == "true"
+    assert dotenv_values(values["DS_CONTAINER_ENV_FILE"])[key] == "true"
+
+
+@pytest.mark.parametrize("value", ["invalid", "1", True, None])
+def test_profile_rejects_invalid_measurement_policy_values(tmp_path, value):
+    from profile_resolution import resolve_profile
+    from profile_report import validate_resolved_report
+    from profile_types import ProfileError
+    key = "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"
+    report = _resolve("integration-voice", tmp_path)
+    report["derivedEnvironment"][key] = value
+    with pytest.raises(ProfileError, match="true or false"):
+        validate_resolved_report(report)
+    with pytest.raises(ProfileError, match="true or false"):
+        resolve_profile({"DS_PROFILE": "integration-voice", key: value}, None, resolved_runtime_paths(tmp_path))
+
+
+def test_candidate_ollama_resolves_dedicated_endpoint_and_preserves_shared_profile(tmp_path: Path):
+    from profile_resolution import resolve_profile
+    candidate = resolve_profile(
+        {"DS_PROFILE": "integration-irodori-ollama-candidate",
+         "OLLAMA_BASE_URL": "http://localhost:11434"},
+        None, resolved_runtime_paths(tmp_path),
+    )
+    shared = _resolve("integration-irodori", tmp_path)
+    assert candidate["derivedEnvironment"]["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
+    assert shared["derivedEnvironment"]["OLLAMA_BASE_URL"] == "http://localhost:11434"
+    for name, dependency in shared["dependencies"].items():
+        if name != "ollama":
+            assert candidate["dependencies"][name] == dependency
+    assert candidate["dependencies"]["ollama"]["source"] == "external"
+    assert candidate["dependencies"]["ollama"]["readinessUrl"] == "http://127.0.0.1:11534/api/tags"
+
+
+def test_cuda_graph_candidate_overrides_stale_shared_endpoints(tmp_path: Path):
+    from profile_resolution import resolve_profile
+
+    candidate = resolve_profile(
+        {"DS_PROFILE": "integration-irodori-cuda-graph",
+         "OLLAMA_BASE_URL": "http://localhost:11434",
+         "IRODORI_BASE_URL": "http://127.0.0.1:50024"},
+        None, resolved_runtime_paths(tmp_path),
+    )
+    shared = _resolve("integration-irodori", tmp_path)
+    assert candidate["derivedEnvironment"]["OLLAMA_BASE_URL"] == "http://127.0.0.1:11534"
+    assert candidate["derivedEnvironment"]["IRODORI_BASE_URL"] == "http://127.0.0.1:50026"
+    assert shared["derivedEnvironment"]["IRODORI_BASE_URL"] == "http://127.0.0.1:50024"
+    for name, dependency in shared["dependencies"].items():
+        if name not in {"ollama", "irodori"}:
+            assert candidate["dependencies"][name] == dependency
+    assert candidate["dependencies"]["irodori"]["source"] == "external"
+    assert candidate["dependencies"]["irodori"]["readinessUrl"] == "http://127.0.0.1:50026/health/ready"
+
+def test_cuda_graph_fault_keeps_candidate_services_and_rejects_shared_endpoints(tmp_path):
+    from profile_validation import _validate_dependency
+    from profile_types import ProfileError
+    profile = "integration-irodori-cuda-graph-fault"
+    report = _resolve(profile, tmp_path)
+    expected = {"ollama": "http://127.0.0.1:11534",
+                "irodori": "http://127.0.0.1:50026", "livekit": "http://127.0.0.1:19880"}
+    for name, url in expected.items():
+        assert report["dependencies"][name]["baseUrl"] == url
+        assert report["dependencies"][name]["source"] == "external"
+    for name, urls in {"ollama": ["http://127.0.0.1:11434"],
+                       "irodori": ["http://127.0.0.1:50024"],
+                       "livekit": ["http://127.0.0.1:7880", "http://127.0.0.1:17880"]}.items():
+        dependency = {key: report["dependencies"][name][key]
+                      for key in ("mode", "source", "baseUrl", "readinessPath")}
+        for url in urls:
+            with pytest.raises(ProfileError, match="fixed local service"):
+                _validate_dependency(profile, name, {**dependency, "baseUrl": url})

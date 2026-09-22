@@ -1,0 +1,894 @@
+{
+  "schema_version": 1,
+  "scope": "irodori_graph_capacity_browser_diagnostic",
+  "full_acceptance_passed": false,
+  "implementation_pr": 446,
+  "profile_pr": 444,
+  "tts_candidate": {
+    "revision": "59a7d49157e60867b399b0b2b9e2e4fb46d13a68",
+    "base_image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+    "image": "sha256:1584e3832accdc66e1ad91a96d386a1f14e872a8badf5e844d6837fe4ff136e0",
+    "max_input_bytes": 268435456,
+    "name": "ds-voice-quality-423-graph-capacity-0919-01",
+    "container_id": "cbebdc827a6f26c09d5b264eb247ec1facbe9e4a4e68bcaede3e3be1e13298ab",
+    "status": "ready",
+    "active_max_input_bytes": 268435456,
+    "startup_wall_seconds": 13.356674034002936,
+    "version": {
+      "serviceVersion": "1.0",
+      "model": "Aratako/Irodori-TTS-v4.1-Small",
+      "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+      "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+      "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+      "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+      "device": "cuda",
+      "precision": "bf16",
+      "quantized": false,
+      "cudaGraphRequested": true,
+      "globalInflight": 1,
+      "maxPending": 8,
+      "maxVoiceChecks": 2,
+      "queueTimeoutSeconds": 10.0,
+      "inferenceTimeoutSeconds": 30.0,
+      "preparationSeconds": 11.886516200996994,
+      "active": 0,
+      "pending": 0
+    }
+  },
+  "cohort_id": "350-irodori-graph256-small-0919-01",
+  "summary": {
+    "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+    "expected_warmup": 5,
+    "expected_measured": 3,
+    "recorded_trials": 8,
+    "success": 8,
+    "failure": 0,
+    "all_owned_environments_stopped": true,
+    "shared_services_modified": false,
+    "all_trial_data_roots_independent": true,
+    "full_acceptance_passed": false,
+    "preparation_by_phase": {
+      "warmup": {
+        "denominator": 5,
+        "ready": 5,
+        "not_ready": 0,
+        "missing": 0,
+        "invalid": 0,
+        "coverage": 1.0,
+        "duration_ms_p50": 1902.7999999970198,
+        "duration_ms_p95": 8416.20000000298,
+        "duration_ms_max": 8416.20000000298,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+      },
+      "measured": {
+        "denominator": 3,
+        "ready": 3,
+        "not_ready": 0,
+        "missing": 0,
+        "invalid": 0,
+        "coverage": 1.0,
+        "duration_ms_p50": 1795.3000000044703,
+        "duration_ms_p95": 1885.7999999970198,
+        "duration_ms_max": 1885.7999999970198,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+      }
+    },
+    "preparation_evidence_complete": true,
+    "existing_reporter_exit": 1,
+    "resources_note": "CPU・memory・GPU観測は各runに保持。複数containerを一つの累積CPU系列へ連結しない。"
+  },
+  "trials": [
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-001",
+      "phase": "warmup",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 2127.932333334824,
+      "ttfa_upper_ms": 2129.632333337804,
+      "preparation_ms": 8416.20000000298,
+      "playback": {
+        "renderedSamples": 671040,
+        "packetCount": 699,
+        "gapSamples": 0,
+        "gapCount": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 247.177725,
+        "prompt": 151.474976,
+        "llm_first": 54.764031,
+        "tts_first": 752.621572
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "da1e3204fa4abc83c969269f6bbadff570d94ef354ee668fdeef755525cbf434"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "1ef060cc056f6a082681f68ab6c9200258093308ea6b3b48f646816e4d1f1035"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "8312ebe80e343d11bf87a619ed81a04d840f3017919aabc05fcea87203f97f42"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "7470739a75aac8f7c279604b4894243c477dc1bf1803b377ffa227677aaea293"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "e252dad9f359541b8e60cbcf4ef982d38537763fceb74b1fcb3deb83a63af730"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "02787a1ac352886d28450d7e6bb15be7ed1c22b788e9c98400180764a37e30ad"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-002",
+      "phase": "warmup",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1913.432333334823,
+      "ttfa_upper_ms": 1915.1323333378032,
+      "preparation_ms": 1906.8999999985099,
+      "playback": {
+        "renderedSamples": 279360,
+        "packetCount": 291,
+        "gapSamples": 64,
+        "gapCount": 1,
+        "maximumGapSamples": 64
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 129.141221,
+        "prompt": 166.964196,
+        "llm_first": 39.336771,
+        "tts_first": 564.143374
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "472ba2c4390823ecf65b1ff72b93608e4ef459932dfcbdc275e5bfd1d594186c"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "b48d3d32dda533692acdb8a57dff3629fcd287e7d3cb3bb146f4ccef595dd157"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "f1b8efa25a789aee34503875bb5e236853746a14090517214eeb9a651be61cf3"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "78e44625760778ca696802181a49b4b6fe9c6e3b237a748e33b64ddde992b32b"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "416435f16a18ff553ab9cba465d244112e69baff00502d21f3fb6cdf867a9fa7"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "e62d4e3e946f9939fb4f467d4dbdc32de903c0d6c624773e8133b7604808df2a"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-003",
+      "phase": "warmup",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1851.2323333318427,
+      "ttfa_upper_ms": 1852.8323333333328,
+      "preparation_ms": 1390.2000000029802,
+      "playback": {
+        "renderedSamples": 239040,
+        "packetCount": 249,
+        "gapSamples": 0,
+        "gapCount": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 118.894619,
+        "prompt": 155.558969,
+        "llm_first": 36.964489,
+        "tts_first": 531.699556
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "5d150e149f920f40a8d434e5fa6c17dc18ec84454dead2890855c1ef8a95d834"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "428eb3e1afbdfd8ab2dae911702e189ca84f867c769eb4af6cdf51133f89d982"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "1d71e49d5209603551d566ceb960ff0f76568b9d7b48409f7368e8097b782546"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "5f40e100642c85c93db39612b25d8ef746d0d5d4f6d446c6636b3e9b6a9875ea"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "0cc853c71c84903371a96982aa10a1baa6a694e3963a6b01f5c8b504798d89a5"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "4027251c862f3cbe4885d37eff7b5e0198ecad158ab826030d854baa4aff1ea3"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-004",
+      "phase": "warmup",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1927.0323333288625,
+      "ttfa_upper_ms": 1928.7323333318427,
+      "preparation_ms": 1902.7999999970198,
+      "playback": {
+        "renderedSamples": 408000,
+        "packetCount": 425,
+        "gapSamples": 0,
+        "gapCount": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 181.750462,
+        "prompt": 129.72737,
+        "llm_first": 41.025605,
+        "tts_first": 649.711075
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "a6de16eb8edc5ba4adaf1d06bc4fd4b355e5a2a57fc7f35c09554d0807e66fce"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "8d35e707942dd3802d4cee6d7719ac4531a51fded93b7acce5515021200fe5e6"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "774c9b87181fb4138715440e1270967c1edb5bdce784d4cd22ae9c511c95b52c"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "5da02e3d913b71630cd227979f0df1b79a6114b14ad8bcfae1db45e30eae292c"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "1fbab58163662ecde054cb1ee0427b84593ab1e367718a2165fb74cdfe2676bc"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "5a263e515143a1908cd51d31487f627618b0e042c14170845fb5ee78e2ac2341"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-005",
+      "phase": "warmup",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1943.4323333348239,
+      "ttfa_upper_ms": 1945.1323333303535,
+      "preparation_ms": 1879.3999999985099,
+      "playback": {
+        "renderedSamples": 423360,
+        "packetCount": 441,
+        "gapSamples": 0,
+        "gapCount": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 120.473562,
+        "prompt": 142.94852,
+        "llm_first": 41.310201,
+        "tts_first": 657.86889
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "2fdf724329a0fc60fce334f085d4925304e08b46519aadb95aeb75b918b27eba"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "f16e196a84d5bd067444b0703670f95b281912f38b6baeb7e7d426a83c67336e"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "304b110926329ad73bde55535242cab7335f2907a196c0555451a01700b634bd"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "100f28757188354dbf98f6331c243f1716aa366e2a6e704aee26b91d9d90caa3"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "03377caf2c3cc8302acff4913b6f317e9d6e43270afac059f9ad8900317093af"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "9848b5667ee14ee235ca07d44a37d9d83839ec91f07a3d1be2eb05904ea20c2f"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-006",
+      "phase": "measured",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1858.5656666651766,
+      "ttfa_upper_ms": 1860.2656666681569,
+      "preparation_ms": 1795.1999999955297,
+      "playback": {
+        "renderedSamples": 285120,
+        "packetCount": 297,
+        "gapSamples": 0,
+        "gapCount": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 140.97153,
+        "prompt": 137.499616,
+        "llm_first": 44.251102,
+        "tts_first": 576.637896
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "a887cda6ec398579e0a9170ef9dacda9d85367827c6f38e4bfca4011879d3945"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "b507a0614ccb148354c456757ea5c7fbf31d2a727dd71a2b8070f5b7e58c6f4d"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "5a4a70d8e3f39c0ac38898bb31a62ee1943671568d0a09ad66e7375a81fb171e"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "c88904950d269fe8324c27d26b7dca4a9edc2d0caacf362e9c09bd0d9ee09ff9"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "668a59bc8a324e206ccfb6632dda25113b3498ff4691efd9dec3d38df0c006d3"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "c0c01bfd63dda75cb59d5b16d9dec35e68a4aedef448604473b27037f89f1b15"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-007",
+      "phase": "measured",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1832.2656666681569,
+      "ttfa_upper_ms": 1834.0656666651766,
+      "preparation_ms": 1885.7999999970198,
+      "playback": {
+        "renderedSamples": 250560,
+        "packetCount": 261,
+        "gapSamples": 0,
+        "gapCount": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 128.096856,
+        "prompt": 135.713913,
+        "llm_first": 40.757941,
+        "tts_first": 538.256349
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "5d54b4bb4f1b46ae47a2b55aae5d7af2031ecc050a7f41e6477c2e6a32140871"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "6e8a0964b62de0e03b8c30a354d03564c91a5ecea5b81fb3218410a2b67c84f9"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "6c56012cd88ae3e6d9f04e51514f290d0d4239076c3468aaace615446dcc61a5"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "fb1da0cb566d948e23ce2098b2cf0fec2506fd85ce54a3bc22d584a4d41d427d"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "af1e41d71fb942374bd5d177006c0a0f9992a2300b824ede6f4b99309e509127"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "b6ceca289d436694a28a46cb166c65f5dcec92f135ba3f40e68191403a40f74e"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-graph256-small-0919-01-008",
+      "phase": "measured",
+      "outcome": "success",
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1918.932333334823,
+      "ttfa_upper_ms": 1920.6323333378032,
+      "preparation_ms": 1795.3000000044703,
+      "playback": {
+        "renderedSamples": 246720,
+        "packetCount": 257,
+        "gapSamples": 0,
+        "gapCount": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "owned_backend_frontend_teardown_completed": true,
+      "stages_ms": {
+        "stt": 171.214266,
+        "prompt": 148.835862,
+        "llm_first": 48.106682,
+        "tts_first": 580.298474
+      },
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "900c53654f2e79fa1181fa53c41ba81cfaaf6d7ce83a13aff493adc0c35bc840"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "a7a35de22fe8a9542c5d875f13609bc0602f015f8f6578c2cd8341ec5e1a0c50"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "9f36234684346465b8c0c132c6d1fc6e33c68288e23661c47b0606879456e6e6"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "8904d9cad5da6b42de1d574d0e9631bd75f886ca30de5f5c4fa4da1f7d2b89ec"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "6c73c9929d2421b2d60c63d2ab95871355f41de0cebed50ea8bc0837e5e38e0a"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "73bfc9a3a9ab5a680377780fefadb45aad9531a78dfe8cbf6c1d1450bf482f72"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    }
+  ],
+  "formal_cohort": {
+    "id": "350-irodori-graph256-full-0919-01",
+    "status": "IN_PROGRESS",
+    "expected_warmup": 5,
+    "expected_measured": 100,
+    "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+    "tts_revision": "59a7d49157e60867b399b0b2b9e2e4fb46d13a68"
+  },
+  "memory_retrieval_stage_2": "NOT_RUN",
+  "human_listening": "NOT_RUN"
+}

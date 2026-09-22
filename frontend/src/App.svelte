@@ -323,7 +323,7 @@
     || voiceSnapshot.phase === 'ended'
   $: sessionStatus = ({
     idle: '停止',
-    connecting: '接続中',
+    connecting: '準備中',
     listening: '接続済み',
     muted: '接続済み',
     reconnecting: '再接続中',
@@ -519,6 +519,12 @@
     ? ($sidebarController.settings?.compact_history_height_percent ?? 75)
     : ($sidebarController.settings?.desktop_history_height_percent ?? 75)
 
+  const reportVoicePreparationError = (error: unknown) => {
+    // 準備中の明示終了はエラー表示にしない。実際の開始失敗はerror phaseで表示する。
+    if (error instanceof DOMException && error.name === 'AbortError' && voiceSnapshot.phase === 'idle') return
+    appendApplicationError()
+  }
+
   const ensureVoiceSession = async () => {
     const context = conversationController.selectedContext()
     if (context === null) throw new Error('Conversation is not selected')
@@ -539,7 +545,7 @@
         conversationId: context.conversationId,
       })
     } catch (error) {
-      appendApplicationError()
+      reportVoicePreparationError(error)
       throw error
     }
   }
@@ -680,8 +686,8 @@
         />
       </div>
     </div>
-    {#if applicationError !== null || $conversationController.error !== null || visibleVoiceError}
-      <p class="application-error" role="alert">{applicationError ?? $conversationController.error ?? visibleVoiceError}</p>
+    {#if voiceSnapshot.preparationError || applicationError !== null || $conversationController.error !== null || visibleVoiceError}
+      <p class="application-error" role="alert">{voiceSnapshot.preparationError ?? applicationError ?? $conversationController.error ?? visibleVoiceError}</p>
     {/if}
     {#if voiceSnapshot.phase !== 'idle'}
       <section class="voice-status" aria-label="音声会話の状態" aria-live="polite">
@@ -733,9 +739,9 @@
         onMicrophoneEnabled={resumeVoiceMicrophone}
         onMicrophoneDisabled={muteVoiceMicrophone}
         onAudioCaptured={() => undefined}
-        onError={appendApplicationError}
+        onError={reportVoicePreparationError}
       />
-      {#if voiceSnapshot.sessionId !== null}
+      {#if voiceSnapshot.sessionId !== null || voiceSnapshot.phase === 'connecting'}
         <button
           type="button"
           class="end-voice-session"

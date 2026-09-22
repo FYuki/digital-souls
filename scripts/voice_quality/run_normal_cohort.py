@@ -1,10 +1,11 @@
-"""記憶形成を維持し、新規data rootごとの通常音声を既存runner・reporterで測る。"""
+"""記憶形成・統合を除外し、新規data rootごとの通常音声を既存runner・reporterで測る。"""
 from __future__ import annotations
 
 import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import signal
@@ -25,12 +26,14 @@ def plan(cohort_id: str, measured: int) -> list[tuple[str, str]]:
             for i in range(5 + measured)]
 
 
-def verify_stopped(base: Path, revision: str) -> dict:
+def verify_stopped(base: Path, revision: str, profile: str = "integration-voice") -> dict:
+    if profile not in ("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"):
+        raise ValueError("unsupported independent normal profile")
     report = json.loads((base / "runtime-data/runtime/standalone/environment-run.json").read_text())
     if (report.get("runtime", {}).get("environmentId") != "test"
             or report["runtime"].get("dataRoot") != str((base / "runtime-data").resolve())
             or report.get("teardown", {}).get("status") != "completed"
-            or report.get("effectiveProfile", {}).get("effectiveProfile") != "integration-voice"):
+            or report.get("effectiveProfile", {}).get("effectiveProfile") != profile):
         raise ValueError("owned test environment teardown not verified")
     native = json.loads((base / "native-sdk.json").read_text())
     if native.get("status") != "verified":
@@ -44,27 +47,44 @@ def verify_stopped(base: Path, revision: str) -> dict:
         if probe.returncode == 0 or not any(s in probe.stderr.lower() for s in ("no such object", "no such container")):
             raise ValueError("owned container deletion not verified")
     manifest = json.loads((base / "trial-manifest.json").read_text())
-    if manifest.get("measurement_revision") != revision or manifest.get("measurement_scope") != "isolated_normal_trial":
+    scope = "isolated_memory_reference_trial" if profile == "integration-irodori-memory-reference" else "isolated_normal_trial"
+    if manifest.get("measurement_revision") != revision or manifest.get("measurement_scope") != scope:
         raise ValueError("isolated trial revision not verified")
+    profile_report = json.loads((base / "runtime-data/runtime/standalone/resolved-profile.json").read_text())
+    if profile_report.get("derivedEnvironment", {}).get("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION") != "true":
+        raise ValueError("memory formation isolation was not requested")
+    require_memory_isolation(manifest)
     return manifest
+
+
+def require_memory_isolation(manifest: dict) -> None:
+    trials = manifest.get("trials", [])
+    if not trials:
+        raise ValueError("memory formation isolation evidence unavailable")
+    for trial in trials:
+        evidence = trial.get("initial_state_evidence") or {}
+        policy = evidence.get("memory_scheduler_policy") if isinstance(evidence, dict) else None
+        if (not isinstance(policy, dict) or policy.get("method") != "controlled_memory_schedulers_v1"
+                or policy.get("formation_disabled") is not True
+                or policy.get("consolidation_disabled") is not True):
+            raise ValueError("memory formation isolation evidence unavailable")
 
 
 def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tuple[int, dict]:
     command = [sys.executable, str(ROOT / "scripts/voice_quality/run_pilot.py"),
                "--run-id", run_id, "--inference-env", str(args.inference_env),
                "--livekit-env", str(args.livekit_env), "--trials", "1",
-               "--scheduled-fixture", "--isolated-normal-phase", phase]
+               "--scheduled-fixture", "--disable-memory-formation", "--isolated-normal-phase", phase, "--profile", args.profile]
+    if getattr(args, "memory_reference", False):
+        command.append("--memory-reference")
     if args.disable_thinking:
         command.append("--disable-thinking")
     images = {}
     base = run_root(run_id)
     with (directory / f"{run_id}.log").open("x") as log:
         child = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        deadline = time.monotonic() + 300
         try:
             while child.poll() is None:
-                if time.monotonic() > deadline:
-                    raise TimeoutError("isolated trial deadline")
                 path = base / "runtime-data/runtime/standalone/environment-run.json"
                 if path.exists():
                     try:
@@ -99,7 +119,7 @@ def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tupl
                 except subprocess.TimeoutExpired:
                     continue
             raise
-    manifest = verify_stopped(base, revision)
+    manifest = verify_stopped(base, revision, args.profile)
     rows = manifest.get("trials", [])
     if len(rows) != 1 or rows[0].get("phase") != phase:
         raise ValueError("one isolated trial required")
@@ -107,10 +127,51 @@ def trial(run_id: str, phase: str, args, revision: str, directory: Path) -> tupl
                   "running_images": images, "manifest_sha256": hashlib.sha256((base / "trial-manifest.json").read_bytes()).hexdigest()}
 
 
-def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measured: int) -> int:
+def preparation_summary(trials: list[dict]) -> dict:
+    """準備欠測・失敗・複数操作を残す。準備時間をTTFAへ混ぜない。"""
+    durations: list[float] = []
+    counts = {"ready": 0, "not_ready": 0, "missing": 0, "invalid": 0}
+    for trial in trials:
+        row = trial.get("preparation_observation")
+        if not isinstance(row, dict):
+            counts["missing"] += 1
+            continue
+        started, ready, duration = (row.get(key) for key in
+                                    ("started_client_ms", "ready_client_ms", "duration_ms"))
+        def valid_number(value):
+            return type(value) in (int, float) and math.isfinite(value) and value >= 0
+        if (row.get("method") != "browser_click_to_microphone_standby_dom_v1"
+                or row.get("clock_domain") != "browser_performance"
+                or type(row.get("attempt_count")) is not int or row["attempt_count"] != 1
+                or not valid_number(started)):
+            counts["invalid"] += 1
+        elif ready is None and duration is None:
+            counts["not_ready"] += 1
+        elif (not valid_number(ready) or not valid_number(duration) or ready < started
+                or not math.isclose(ready - started, duration, abs_tol=0.001)):
+            counts["invalid"] += 1
+        else:
+            counts["ready"] += 1
+            durations.append(duration)
+    durations.sort()
+    def percentile(fraction):
+        return durations[max(0, math.ceil(len(durations) * fraction) - 1)] if durations else None
+    return {
+        "denominator": len(trials), **counts,
+        "coverage": len(durations) / len(trials) if trials else 0,
+        "duration_ms_p50": percentile(0.5), "duration_ms_p95": percentile(0.95),
+        "duration_ms_max": max(durations) if durations else None,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。",
+    }
+
+
+def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measured: int, baseline_report: Path | None = None) -> int:
     manifests = [json.loads((run_root(r) / "trial-manifest.json").read_text()) for r, _ in runs]
+    for manifest in manifests:
+        require_memory_isolation(manifest)
     combined = dict(manifests[0])
-    combined.update(measurement_scope="controlled", expected_warmup=5, expected_measured=measured,
+    combined.update(measurement_scope="fixed_memory_reference_measurement" if baseline_report else "controlled", expected_warmup=5, expected_measured=measured,
                     trials=[m["trials"][0] for m in manifests])
     # 片側の初期状態を都合よく補完しない。各試行の証拠は既存reporterで再検証する。
     hashes = {m.get("initial_state_hash") for m in manifests if m.get("initial_state_hash")}
@@ -132,27 +193,47 @@ def aggregate(runs: list[tuple[str, str]], directory: Path, revision: str, measu
                "all_owned_environments_stopped": True, "shared_services_modified": False,
                "all_trial_data_roots_independent": True, "full_acceptance_passed": False}
     code = 1
-    if measured == 100:
+    if baseline_report is not None:
         with (directory / "reporter.log").open("x") as log:
+            code = subprocess.run([sys.executable, str(ROOT / "scripts/voice_quality/report_memory_reference.py"),
+                "--cohort-root", str(directory), "--baseline-report", str(baseline_report),
+                "--output", str(directory / "report.json")], cwd=ROOT, stdout=log,
+                stderr=subprocess.STDOUT, check=False).returncode
+    elif measured == 100:
+        with (directory / "reporter.log").open("x") as log:
+            # app packageのあるcwdから起動し、親のPYTHONPATHへ依存しない。
             code = subprocess.run([sys.executable, "-m", "app.livekit_pilot_report", "--scope", "controlled",
                 "--manifest", str(target), "--trace", str(trace), "--output", str(directory / "report.json"),
                 "--schema", str(ROOT / "docs/schemas/voice-quality-artifact-v1.schema.json"),
                 "--profile-report", str(run_root(runs[0][0]) / "runtime-data/runtime/standalone/resolved-profile.json"),
-                "--run-id", directory.name], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=False).returncode
+                "--run-id", directory.name], cwd=ROOT / "backend", stdout=log, stderr=subprocess.STDOUT, check=False).returncode
+    summary["preparation_by_phase"] = {phase: preparation_summary(
+        [trial for trial in combined["trials"] if trial.get("phase") == phase]
+    ) for phase in ("warmup", "measured")}
+    summary["preparation_evidence_complete"] = all(
+        row["ready"] == row["denominator"] and row["denominator"] > 0
+        for row in summary["preparation_by_phase"].values()
+    )
     summary["existing_reporter_exit"] = code
     summary["resources_note"] = "CPU・memory・GPU観測は各runに保持。複数containerを一つの累積CPU系列へ連結しない。"
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
-    return code
+    return code if summary["preparation_evidence_complete"] else 1
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"), default="integration-voice")
     parser.add_argument("--cohort-id", required=True)
     parser.add_argument("--measured", type=int, default=100)
     parser.add_argument("--inference-env", type=Path, required=True)
     parser.add_argument("--livekit-env", type=Path, required=True)
     parser.add_argument("--disable-thinking", action="store_true")
+    parser.add_argument("--memory-reference", action="store_true")
+    parser.add_argument("--baseline-report", type=Path)
     args = parser.parse_args()
+    if ((args.profile == "integration-irodori-memory-reference") != args.memory_reference
+            or (args.baseline_report is not None) != args.memory_reference):
+        parser.error("reference measurement requires its profile and empty-state baseline report")
     runs = plan(args.cohort_id, args.measured)
     revision = measurement_revision(ROOT)
     parent = ROOT / "frontend/test-results/livekit-quality/cohorts"
@@ -163,8 +244,18 @@ def main() -> int:
             raise ValueError("planned run already exists")
         directory = parent / args.cohort_id
         directory.mkdir(exist_ok=False)
-        (directory / "plan.json").write_text(json.dumps({"measurement_revision": revision, "runs": runs,
-            "expected_warmup": 5, "expected_measured": args.measured, "data_root_per_trial": True}, indent=2) + "\n")
+        baseline_snapshot = None
+        baseline_sha256 = None
+        if args.baseline_report is not None:
+            # 外部ファイルは一度だけ読み、比較とplanのhashを同じ固定入力にそろえる。
+            baseline_bytes = args.baseline_report.read_bytes()
+            baseline_sha256 = hashlib.sha256(baseline_bytes).hexdigest()
+            baseline_snapshot = directory / "baseline-report.json"
+            baseline_snapshot.write_bytes(baseline_bytes)
+        (directory / "plan.json").write_text(json.dumps({"measurement_revision": revision, "profile": args.profile, "runs": runs,
+            "expected_warmup": 5, "expected_measured": args.measured, "data_root_per_trial": True, "memory_formation_disabled": True, "memory_consolidation_disabled": True,
+            "memory_reference": args.memory_reference,
+            "baseline_report_sha256": baseline_sha256}, indent=2) + "\n")
         with (directory / "execution.jsonl").open("x") as journal:
             for index, (run_id, phase) in enumerate(runs, 1):
                 if (directory / "stop-requested").exists() or measurement_revision(ROOT) != revision:
@@ -174,7 +265,7 @@ def main() -> int:
                 journal.write(json.dumps(row) + "\n")
                 journal.flush()
                 print(json.dumps(row), flush=True)
-        return aggregate(runs, directory, revision, args.measured)
+        return aggregate(runs, directory, revision, args.measured, baseline_snapshot)
 
 
 if __name__ == "__main__":

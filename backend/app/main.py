@@ -81,7 +81,10 @@ from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.contracts import MemoryFormationJob
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
 from app.memory.formation.scheduler import MemoryFormationScheduler
-from app.memory.formation.combined_scheduler import CombinedFormationScheduler
+from app.memory.formation.combined_scheduler import CombinedFormationScheduler, FormationScheduler
+from app.voice_measurement_memory import (
+    DisabledFormationScheduler, POLICY_PATH, formation_disabled, record_memory_policy,
+)
 from app.memory.formation.runtime import build_episodic_scheduler
 from app.memory.semantic.privacy import SemanticPrivacyReviewer
 from app.memory.semantic.management import SemanticMemoryManagement
@@ -441,6 +444,14 @@ async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
         MEMORY_OCCURRED_TIMEZONE_ENV,
         DEFAULT_MEMORY_OCCURRED_TIMEZONE,
     )
+    repository_root = Path(__file__).resolve().parents[2]
+    runtime_paths = resolve_runtime_paths(os.environ, repository_root)
+    disable_memory_formation = formation_disabled(
+        os.environ, environment_id=runtime_paths.environment_id,
+        measurement_kind=os.environ.get(VOICE_MEASUREMENT_KIND_ENV, "automated_test"),
+    )
+    if disable_memory_formation and LifeSettings.load(dict(os.environ)).enabled:
+        raise ValueError("controlled memory isolation requires Character Life disabled")
     inference_runtime = create_inference_runtime(os.environ)
     screen_http_security = resolve_screen_http_security(
         os.environ.get(SCREEN_ALLOWED_ORIGIN_ENV, "http://localhost:5173")
@@ -456,8 +467,6 @@ async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
         ):
             raise _NotificationStartupFallback() from None
         raise
-    repository_root = Path(__file__).resolve().parents[2]
-    runtime_paths = resolve_runtime_paths(os.environ, repository_root)
     initialize_runtime_data_root(runtime_paths, repository_root)
     voice_trace_recorder = None
     voice_measurement_kind: MeasurementKind = "automated_test"
@@ -490,6 +499,8 @@ async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.restore_intent import require_no_restore_intent
 
     require_no_restore_intent(runtime_paths.restore_intent_path)
+    if voice_measurement_kind == "controlled_baseline":
+        (runtime_paths.data_root / POLICY_PATH).unlink(missing_ok=True)
     policy = resolved_memory_policy()
     remove_legacy_chroma_index_once(runtime_paths, repository_root)
     log_runtime_configuration(runtime_paths)
@@ -767,45 +778,49 @@ async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     ),
                 )
             )
-            memory_candidate_extractor = MemoryCandidateExtractor(
-                client=memory_extractor_client,
-                settings=formation_settings,
-                preferences_only=True,
-            )
-            preference_formation_scheduler = MemoryFormationScheduler(
-                worker=MemoryFormationWorker(
-                    conversation_repository=conversation_history_repository,
-                    extractor=memory_candidate_extractor,
-                    admission_service=app.state.rag_admission_service,
-                    domain_router=None,
-                ),
-                max_queue_age_seconds=formation_settings.max_queue_age_seconds,
-                queue_maxsize=formation_settings.queue_maxsize,
-            )
-            def episodic_entity_labels(character_id: str) -> dict[str, str]:
-                card = load_character_card(character_id)
-                return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
-
-            # 同じ自己申告の二重形成はUI訂正・削除を迂回するため、新旧の抽出は択一。
-            # 既存保存済みpreferenceの移行は#345で扱う。
-            memory_formation_scheduler = CombinedFormationScheduler(
-                (build_semantic_scheduler(
-                    store=semantic_store, runtime=inference_runtime, timezone=occurred_timezone,
-                    stale_after=conversation_history_config.stale_after,
-                ) if InferenceTarget.SEMANTIC_EXTRACTION in inference_runtime.settings.targets
-                 else preference_formation_scheduler),
-                build_episodic_scheduler(
-                    history_path=conversation_history_config.database_path,
-                    repository=episodic_repository, clock=clock,
-                    retention=conversation_history_config.retention, timezone=occurred_timezone,
-                    reviewer=EpisodicPrivacyReviewer(
-                        scanner=privacy_scanner, classifier=semantic_privacy_classifier,
-                        policy=policy.privacy,
+            memory_formation_scheduler: FormationScheduler
+            if disable_memory_formation:
+                memory_formation_scheduler = DisabledFormationScheduler()
+            else:
+                memory_candidate_extractor = MemoryCandidateExtractor(
+                    client=memory_extractor_client,
+                    settings=formation_settings,
+                    preferences_only=True,
+                )
+                preference_formation_scheduler = MemoryFormationScheduler(
+                    worker=MemoryFormationWorker(
+                        conversation_repository=conversation_history_repository,
+                        extractor=memory_candidate_extractor,
+                        admission_service=app.state.rag_admission_service,
+                        domain_router=None,
                     ),
-                    client=memory_extractor_client, settings=formation_settings,
-                    runtime=inference_runtime, entity_labels=episodic_entity_labels,
-                ),
-            )
+                    max_queue_age_seconds=formation_settings.max_queue_age_seconds,
+                    queue_maxsize=formation_settings.queue_maxsize,
+                )
+                def episodic_entity_labels(character_id: str) -> dict[str, str]:
+                    card = load_character_card(character_id)
+                    return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
+
+                # 同じ自己申告の二重形成はUI訂正・削除を迂回するため、新旧の抽出は択一。
+                # 既存保存済みpreferenceの移行は#345で扱う。
+                memory_formation_scheduler = CombinedFormationScheduler(
+                    (build_semantic_scheduler(
+                        store=semantic_store, runtime=inference_runtime, timezone=occurred_timezone,
+                        stale_after=conversation_history_config.stale_after,
+                    ) if InferenceTarget.SEMANTIC_EXTRACTION in inference_runtime.settings.targets
+                     else preference_formation_scheduler),
+                    build_episodic_scheduler(
+                        history_path=conversation_history_config.database_path,
+                        repository=episodic_repository, clock=clock,
+                        retention=conversation_history_config.retention, timezone=occurred_timezone,
+                        reviewer=EpisodicPrivacyReviewer(
+                            scanner=privacy_scanner, classifier=semantic_privacy_classifier,
+                            policy=policy.privacy,
+                        ),
+                        client=memory_extractor_client, settings=formation_settings,
+                        runtime=inference_runtime, entity_labels=episodic_entity_labels,
+                    ),
+                )
             await memory_formation_scheduler.start()
             memory_formation_scheduler_started = True
             consolidation_priority = ConsolidationPriorityProbe(
@@ -1050,6 +1065,16 @@ async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     completed_turn_observer=submit_completed_core_turn,
                     response_provenance_recorder=app_chat_service.record_response_provenance,
                     generate_screen_reply_stream=generate_screen_core_reply_stream,
+                    prepare_prompt=lambda character: app_chat_service.prepare_character_input_tokens(
+                        character,
+                        timeout_seconds=inference_runtime.settings.target(
+                            InferenceTarget.CHAT
+                        ).timeout_seconds,
+                    ),
+                    prepare_inference=lambda: inference_runtime.router.prepare_text(
+                        caller=InferenceCaller.CHAT, target=InferenceTarget.CHAT,
+                        latency_sensitive=True,
+                    ),
                     on_conversation_interruption=(
                         tool_runtime.service.interrupted
                         if tool_runtime is not None
@@ -1071,8 +1096,11 @@ async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
             resolver_registered = True
             memory_index_scheduler.start()
             memory_index_scheduler_started = True
-            await memory_consolidation_scheduler.start()
-            memory_consolidation_scheduler_started = True
+            if not disable_memory_formation:
+                await memory_consolidation_scheduler.start()
+                memory_consolidation_scheduler_started = True
+            if voice_measurement_kind == "controlled_baseline":
+                record_memory_policy(runtime_paths.data_root, disabled=disable_memory_formation)
             yield
         finally:
             cleanup_errors: list[BaseException] = []
@@ -1084,6 +1112,7 @@ async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
                     cleanup_errors.append(error)
 
             if livekit_api is not None:
+                await run_cleanup(app.state.livekit_bootstrap_service.cancel_all_preparations())
                 await run_cleanup(app.state.livekit_runtime_manager.stop_all())
                 await run_cleanup(livekit_api.aclose())
             if life_runtime is not None:

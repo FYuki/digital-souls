@@ -1,0 +1,487 @@
+{
+  "cohort_id": "350-ollama-0342-small-0919-01",
+  "plan": {
+    "measurement_revision": "880f61f2b933ee5b93cc3a62009466c957e40f55",
+    "profile": "integration-irodori-ollama-candidate",
+    "runs": [
+      [
+        "350-ollama-0342-small-0919-01-001",
+        "warmup"
+      ],
+      [
+        "350-ollama-0342-small-0919-01-002",
+        "warmup"
+      ],
+      [
+        "350-ollama-0342-small-0919-01-003",
+        "warmup"
+      ],
+      [
+        "350-ollama-0342-small-0919-01-004",
+        "warmup"
+      ],
+      [
+        "350-ollama-0342-small-0919-01-005",
+        "warmup"
+      ],
+      [
+        "350-ollama-0342-small-0919-01-006",
+        "measured"
+      ],
+      [
+        "350-ollama-0342-small-0919-01-007",
+        "measured"
+      ],
+      [
+        "350-ollama-0342-small-0919-01-008",
+        "measured"
+      ]
+    ],
+    "expected_warmup": 5,
+    "expected_measured": 3,
+    "data_root_per_trial": true,
+    "memory_formation_disabled": true,
+    "memory_consolidation_disabled": true
+  },
+  "summary": {
+    "measurement_revision": "880f61f2b933ee5b93cc3a62009466c957e40f55",
+    "expected_warmup": 5,
+    "expected_measured": 3,
+    "recorded_trials": 8,
+    "success": 8,
+    "failure": 0,
+    "all_owned_environments_stopped": true,
+    "shared_services_modified": false,
+    "all_trial_data_roots_independent": true,
+    "full_acceptance_passed": false,
+    "preparation_by_phase": {
+      "warmup": {
+        "denominator": 5,
+        "ready": 5,
+        "not_ready": 0,
+        "missing": 0,
+        "invalid": 0,
+        "coverage": 1.0,
+        "duration_ms_p50": 1371.5,
+        "duration_ms_p95": 1901.2999999970198,
+        "duration_ms_max": 1901.2999999970198,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+      },
+      "measured": {
+        "denominator": 3,
+        "ready": 3,
+        "not_ready": 0,
+        "missing": 0,
+        "invalid": 0,
+        "coverage": 1.0,
+        "duration_ms_p50": 1890,
+        "duration_ms_p95": 2407.3000000044703,
+        "duration_ms_max": 2407.3000000044703,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+      }
+    },
+    "preparation_evidence_complete": true,
+    "existing_reporter_exit": 1,
+    "resources_note": "CPU・memory・GPU観測は各runに保持。複数containerを一つの累積CPU系列へ連結しない。"
+  },
+  "trials": [
+    {
+      "run_id": "350-ollama-0342-small-0919-01-001",
+      "phase": "warmup",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2226.0323333288625,
+        "upper": 2227.832333333333
+      },
+      "preparation_ms": 1375.7000000029802,
+      "playback_completion": {
+        "expectedSamples": 231360,
+        "inputSamples": 230400,
+        "paddingSamples": 960,
+        "renderedSamples": 231360,
+        "packetCount": 241,
+        "firstOutputFrame": 58880,
+        "lastOutputEndFrame": 290240,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 555239775,
+        "lastRtpTimestamp": 555470175,
+        "outputClockContextTime": 6.0506676666666666,
+        "outputClockPerformanceTime": 10951.70000000298,
+        "confirmationObservedAtMs": 10951.89999999851,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 122.921998,
+        "prompt_preparation": 128.170509,
+        "llm_request_to_first_token": 136.078983,
+        "tts": 913.331891
+      },
+      "source_hashes": {
+        "trial-manifest.json": "0a8c15726cc2514fa78ba3b30f9d3a9b43de90d4ddc4bb1915426cbe8d01ae69",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "68a1cb7be93b259e86c4f55edcdcc0d6c0f1fb00bcdc16b6ce9f1188582b898f",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "9134de8fbeaed47b4f9f708885a1854bd93f279712ae1fffb4605ff6a1aae2fd"
+      }
+    },
+    {
+      "run_id": "350-ollama-0342-small-0919-01-002",
+      "phase": "warmup",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2478.1656666666668,
+        "upper": 2479.9656666636865
+      },
+      "preparation_ms": 1901.2999999970198,
+      "playback_completion": {
+        "expectedSamples": 555840,
+        "inputSamples": 554880,
+        "paddingSamples": 960,
+        "renderedSamples": 555840,
+        "packetCount": 579,
+        "firstOutputFrame": 64640,
+        "lastOutputEndFrame": 620480,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 303215473,
+        "lastRtpTimestamp": 303770353,
+        "outputClockContextTime": 12.928001,
+        "outputClockPerformanceTime": 18491.69999999553,
+        "confirmationObservedAtMs": 18492.19999999553,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 162.919042,
+        "prompt_preparation": 163.40448,
+        "llm_request_to_first_token": 89.884274,
+        "tts": 1052.711257
+      },
+      "source_hashes": {
+        "trial-manifest.json": "37dc3118c05e9e2a6d291c1e4da82e72cf4d23630a2c18f77feb2971e88c4651",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "37705d2f660bbc29e46d1890de375a09cb0dab62343ff48e81024f288ca5cd86",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "838ff471f92ecf06b93cd82e5bf2c005e08816759e374805ae231016205427e1"
+      }
+    },
+    {
+      "run_id": "350-ollama-0342-small-0919-01-003",
+      "phase": "warmup",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2279.7323333318436,
+        "upper": 2281.3323333333337
+      },
+      "preparation_ms": 1361.7000000029802,
+      "playback_completion": {
+        "expectedSamples": 240960,
+        "inputSamples": 240000,
+        "paddingSamples": 960,
+        "renderedSamples": 240960,
+        "packetCount": 251,
+        "firstOutputFrame": 57344,
+        "lastOutputEndFrame": 298304,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 2992318228,
+        "lastRtpTimestamp": 2992558228,
+        "outputClockContextTime": 6.218667666666667,
+        "outputClockPerformanceTime": 11205.19999999553,
+        "confirmationObservedAtMs": 11206.19999999553,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 131.562756,
+        "prompt_preparation": 140.227652,
+        "llm_request_to_first_token": 102.269075,
+        "tts": 903.814362
+      },
+      "source_hashes": {
+        "trial-manifest.json": "1b8e6d4ffd5339bdca083b3b964db51eccecdcbc088f8365e45b80d1880d5ee9",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "d9777dff44bc79ed141f8ceda7a3872464f686f9e9428fc7a3ae8c93250a8465",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "a79e18953983793f8d10bd3a73a2e585df0d09a8778aaf86c7d157f70bc093ef"
+      }
+    },
+    {
+      "run_id": "350-ollama-0342-small-0919-01-004",
+      "phase": "warmup",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2161.5656666651766,
+        "upper": 2163.3656666621964
+      },
+      "preparation_ms": 1371.5,
+      "playback_completion": {
+        "expectedSamples": 300480,
+        "inputSamples": 299520,
+        "paddingSamples": 960,
+        "renderedSamples": 300480,
+        "packetCount": 313,
+        "firstOutputFrame": 57088,
+        "lastOutputEndFrame": 357568,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 2690986248,
+        "lastRtpTimestamp": 2691285768,
+        "outputClockContextTime": 7.450667666666667,
+        "outputClockPerformanceTime": 12315.29999999702,
+        "confirmationObservedAtMs": 12316.29999999702,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 129.306249,
+        "prompt_preparation": 109.042067,
+        "llm_request_to_first_token": 80.976991,
+        "tts": 952.971557
+      },
+      "source_hashes": {
+        "trial-manifest.json": "ad4ccbf587d779791a3f4e799745a0e2a960f2ec70e14b11f93d8c270f269375",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "4f960046f777083e58c525ba0e523722274213b71f1aff007107dbe01f94d6d5",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "bc5373e7022ebbc00ef89edcaf4b0d4e1b9ee3b4dcd643a9c217369942530fd3"
+      }
+    },
+    {
+      "run_id": "350-ollama-0342-small-0919-01-005",
+      "phase": "warmup",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2165.532333336314,
+        "upper": 2167.2323333318436
+      },
+      "preparation_ms": 1355.7999999970198,
+      "playback_completion": {
+        "expectedSamples": 194880,
+        "inputSamples": 193920,
+        "paddingSamples": 960,
+        "renderedSamples": 194880,
+        "packetCount": 203,
+        "firstOutputFrame": 53760,
+        "lastOutputEndFrame": 248640,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 1712668413,
+        "lastRtpTimestamp": 1712862333,
+        "outputClockContextTime": 5.184001,
+        "outputClockPerformanceTime": 10108.5,
+        "confirmationObservedAtMs": 10108.60000000149,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 157.231262,
+        "prompt_preparation": 120.540756,
+        "llm_request_to_first_token": 83.051103,
+        "tts": 874.832314
+      },
+      "source_hashes": {
+        "trial-manifest.json": "98f734f98dd2e4ad8ed95a1ad919294e4d97596f63a416b8b005a4ea63922f35",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "ec8164c9da7508f0e723282b5ed45c44ffd094d09f80943958f9b47745c73a51",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "fbca70513541fdd4f99bda02c6c003a955ebf76f693220093eac7be2aa7a3ae9"
+      }
+    },
+    {
+      "run_id": "350-ollama-0342-small-0919-01-006",
+      "phase": "measured",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2166.832333333333,
+        "upper": 2168.6323333303526
+      },
+      "preparation_ms": 1380.3999999985099,
+      "playback_completion": {
+        "expectedSamples": 246720,
+        "inputSamples": 245760,
+        "paddingSamples": 960,
+        "renderedSamples": 246720,
+        "packetCount": 257,
+        "firstOutputFrame": 56064,
+        "lastOutputEndFrame": 302784,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 3900800753,
+        "lastRtpTimestamp": 3901046513,
+        "outputClockContextTime": 6.312001,
+        "outputClockPerformanceTime": 11231.30000000447,
+        "confirmationObservedAtMs": 11232.10000000149,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 146.488832,
+        "prompt_preparation": 119.750601,
+        "llm_request_to_first_token": 88.2753,
+        "tts": 907.46714
+      },
+      "source_hashes": {
+        "trial-manifest.json": "59830ae1a8139a60c5ab2e5bdbbfe3fc1379e83812ed4cc9c80b5b1a7c20c094",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "bc8a82a3f01a175e80c8bbc122988fccb283aea131eee0adb4bf42817af25d69",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "432688ba1f100a0e9dcd1c11d158224b42a28ab8befe4883787d4413ddffd36e"
+      }
+    },
+    {
+      "run_id": "350-ollama-0342-small-0919-01-007",
+      "phase": "measured",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2249.032333336314,
+        "upper": 2250.8323333333337
+      },
+      "preparation_ms": 1890,
+      "playback_completion": {
+        "expectedSamples": 281280,
+        "inputSamples": 280320,
+        "paddingSamples": 960,
+        "renderedSamples": 281280,
+        "packetCount": 293,
+        "firstOutputFrame": 58368,
+        "lastOutputEndFrame": 339648,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 1312893861,
+        "lastRtpTimestamp": 1313174181,
+        "outputClockContextTime": 7.077334333333334,
+        "outputClockPerformanceTime": 12513.60000000149,
+        "confirmationObservedAtMs": 12515.10000000149,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 140.644895,
+        "prompt_preparation": 131.140777,
+        "llm_request_to_first_token": 84.807743,
+        "tts": 955.044888
+      },
+      "source_hashes": {
+        "trial-manifest.json": "fc21943775d7c3ed5a7feb1ea292ea156509448fa1bf32ddebad605e5918ffcb",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "e06e9471c1dc3a13eac3a82e43f8fce0576a8562dfcc8ce6f4b3de65507cc465",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "3182cd023cb9262ae315d9eb14de4361c9f9c0e9ebf1aac1817bc0de7fdf8644"
+      }
+    },
+    {
+      "run_id": "350-ollama-0342-small-0919-01-008",
+      "phase": "measured",
+      "outcome": "success",
+      "ttfa_ms": {
+        "lower": 2320.265666668157,
+        "upper": 2321.965666671137
+      },
+      "preparation_ms": 2407.3000000044703,
+      "playback_completion": {
+        "expectedSamples": 269760,
+        "inputSamples": 268800,
+        "paddingSamples": 960,
+        "renderedSamples": 269760,
+        "packetCount": 281,
+        "firstOutputFrame": 60800,
+        "lastOutputEndFrame": 330560,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0,
+        "firstRtpTimestamp": 2325044542,
+        "lastRtpTimestamp": 2325313342,
+        "outputClockContextTime": 6.888001,
+        "outputClockPerformanceTime": 12882.10000000149,
+        "confirmationObservedAtMs": 12882.89999999851,
+        "sampleRate": 48000
+      },
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "transcript_matches": true,
+      "session_end_confirmed": true,
+      "resolved_ollama_url": "http://127.0.0.1:11534",
+      "stages_ms": {
+        "stt": 161.607022,
+        "prompt_preparation": 142.696353,
+        "llm_request_to_first_token": 90.152878,
+        "tts": 983.365717
+      },
+      "source_hashes": {
+        "trial-manifest.json": "948c05ada08fff6da40836da5d833b2e2fca98c593dd99ffc8a9282d99f9632c",
+        "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+        "runtime-data/runtime/standalone/resolved-profile.json": "b58303479e2c3635e2626b7a3144b59df49e51ee6d205ca1d560f815cc15e10b",
+        "runtime-data/voice-metrics/controlled-trace.jsonl": "9880e3439eb0ebd9b7011e757a1ff7a90b1e3dd4bca08258213dd02cc99c9f34"
+      }
+    }
+  ],
+  "shared_model_empty_before_and_after": true,
+  "formal_stage1_status": "NOT_RUN",
+  "stage2_status": "NOT_RUN",
+  "exit_code_note": "runnerの終了値1は小規模診断では正式100件reporterを実行せずfull_acceptance_passed=falseを維持するため。8件の実行は全成功。"
+}

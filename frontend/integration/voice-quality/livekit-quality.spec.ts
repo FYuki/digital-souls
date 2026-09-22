@@ -1,3 +1,4 @@
+import {waitForVoicePreparation} from '../../playwright/wait-for-preparation'
 import { readVoiceMeasurementBaseUrl } from '../../playwright/resolved-profile'
 import { measureZeroResponseSessions } from '../../playwright/zero-response-session-diagnostic'
 import { installPlaybackSupplyDiagnostic, readPlaybackSupplyDiagnostic } from '../../playwright/playback-supply-diagnostic'
@@ -46,7 +47,7 @@ const pilot = process.env.VOICE_QUALITY_PILOT_TRIALS
 if (pilot !== undefined && !(/^[1-9][0-9]?$/.test(pilot) || (pilot === '100' && (interruptionCohort !== undefined || vadCohort !== undefined)))) {
   throw new Error('VOICE_QUALITY_PILOT_TRIALS must be between 1 and 99')
 }
-// 記憶形成を止めず、cohort runnerが試行ごとに新規data rootを所有する。
+// cohort runnerが試行ごとに新規data rootを所有する。形成停止は実receiptで照合する。
 const isolatedNormalPhase = process.env.VOICE_QUALITY_ISOLATED_NORMAL_PHASE
 if (isolatedNormalPhase !== undefined && (
   !['warmup', 'measured'].includes(isolatedNormalPhase) || pilot !== '1'
@@ -54,6 +55,13 @@ if (isolatedNormalPhase !== undefined && (
   || vadCohort !== undefined || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
   || process.env.VOICE_QUALITY_FAULT_BRIDGE === '1' || process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
 )) throw new Error('isolated normal trial requires one scheduled independent session')
+const memoryReference = process.env.VOICE_QUALITY_MEMORY_REFERENCE === '1'
+if ((process.env.VOICE_QUALITY_MEMORY_REFERENCE !== undefined && !memoryReference)
+  || (process.env.VOICE_QUALITY_PROFILE === 'integration-irodori-memory-reference') !== memoryReference
+  || (memoryReference && (isolatedNormalPhase === undefined
+    || process.env.VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION !== 'true'))) {
+  throw new Error('reference measurement requires its isolated profile and disabled formation')
+}
 const WARMUP_RUNS = isolatedNormalPhase === undefined ? (pilot === undefined ? 5 : 1) : Number(isolatedNormalPhase === 'warmup')
 const MEASURED_RUNS = isolatedNormalPhase === undefined ? (pilot === undefined ? 100 : Number(pilot)) : Number(isolatedNormalPhase === 'measured')
 const fixtureMetadataUrl = new URL(
@@ -90,7 +98,7 @@ test.setTimeout(voiceTestTimeout * (WARMUP_RUNS + MEASURED_RUNS))
 test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnative記録で確認する' : vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割を測定する' : controlProbe ? '実音声再生中の制御往復を診断する' : interruptionCohort ? '実応答の再生中に固定ラベル音声で割り込みを測定する'
   : Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
   ? '同一LiveKit sessionで応答trackの切替を診断する'
-  : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }) => {
+  : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }, testInfo) => {
   const runStartedAt = performance.now()
   const manifestPath = process.env.VOICE_QUALITY_MANIFEST_PATH
   if (manifestPath === undefined) throw new Error('VOICE_QUALITY_MANIFEST_PATH is required')
@@ -107,31 +115,31 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       || process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1' || process.env.VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY === '1') {
       throw new Error('zero-response sessions require the separate two-case diagnostic')
     }
-    await measureZeroResponseSessions(browser, sourceFixture, manifestPath)
+    await measureZeroResponseSessions(browser, sourceFixture, manifestPath, testInfo)
     return
   }
   if (controlProbe) {
     if (!sourceFixture || pilot === undefined || interruptionCohort !== undefined
       || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
       || Number(pilot) > 10) throw new Error('control probe requires a separate scheduled diagnostic')
-    await measureControlProbeSession(browser, sourceFixture, Number(pilot), manifestPath)
+    await measureControlProbeSession(browser, sourceFixture, Number(pilot), manifestPath, testInfo)
     return
   }
   if (vadCohort !== undefined) {
     if (!sourceFixture || pilot === undefined) throw new Error('VAD pause requires explicit scheduled trial count')
-    await measureLabeledInterruptions(browser, sourceFixture, 'pause', Number(pilot), manifestPath)
+    await measureLabeledInterruptions(browser, sourceFixture, 'pause', Number(pilot), manifestPath, testInfo)
     return
   }
   if (interruptionCohort !== undefined) {
     if (!sourceFixture || pilot === undefined || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)) throw new Error('interruption requires independent scheduled pilot')
-    await measureLabeledInterruptions(browser, sourceFixture, interruptionCohort as 'take_turn' | 'backchannel', Number(pilot), manifestPath)
+    await measureLabeledInterruptions(browser, sourceFixture, interruptionCohort as 'take_turn' | 'backchannel', Number(pilot), manifestPath, testInfo)
     return
   }
   const continuousTurns = Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
   if (!Number.isInteger(continuousTurns) || continuousTurns < 0 || continuousTurns > 10) throw new Error('invalid continuous diagnostic count')
   if (continuousTurns > 0) {
     if (!sourceFixture || pilot === undefined) throw new Error('continuous diagnostic requires scheduled pilot')
-    await measureResponseTrackSession(browser, sourceFixture, expectedTranscript, continuousTurns, manifestPath)
+    await measureResponseTrackSession(browser, sourceFixture, expectedTranscript, continuousTurns, manifestPath, testInfo)
     return
   }
   let initialStateHash: string | undefined
@@ -143,7 +151,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
   const persistManifest = async (diagnostics?: Record<string, number>) => {
     await mkdir(dirname(manifestPath), { recursive: true })
     await writeFile(manifestPath, JSON.stringify({
-      measurement_scope: isolatedNormalPhase === undefined ? (pilot === undefined ? "controlled" : "pilot") : "isolated_normal_trial",
+      measurement_scope: memoryReference ? 'isolated_memory_reference_trial' : isolatedNormalPhase === undefined ? (pilot === undefined ? "controlled" : "pilot") : "isolated_normal_trial",
       measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
       playback_supply_observation_enabled: observePlaybackSupply,
       stt_pcm_observation_enabled: process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1',
@@ -178,14 +186,15 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       if (!conversationId || !dataRoot || !profilePath) throw new Error('initial state evidence is unavailable')
       const repositoryRoot = resolve('..')
       const stateResult = await runFile(resolve(repositoryRoot, 'backend/.venv/bin/python'), [
-        '-m', 'app.voice_quality_state', '--data-root', dataRoot, '--profile', profilePath,
+        '-m', memoryReference ? 'app.voice_quality_reference_state' : 'app.voice_quality_state',
+        ...(memoryReference ? ['initial'] : []), '--data-root', dataRoot, '--profile', profilePath,
         '--repository-root', repositoryRoot, '--conversation-id', conversationId,
       ], { cwd: repositoryRoot, env: { ...process.env, PYTHONPATH: resolve(repositoryRoot, 'backend') } })
       const state: { initial_state_hash: string; evidence: Record<string, unknown> } = JSON.parse(stateResult.stdout)
       initialStateHash ??= state.initial_state_hash
       if (state.initial_state_hash !== initialStateHash) throw new Error('controlled initial state changed between trials')
       await microphone.click()
-      await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      await waitForVoicePreparation(page, testInfo)
       await page.evaluate(() => window.__voiceUserControlProbe!.begin())
       if (sourceFixture) await page.evaluate(() => window.__voiceFixtureClock!.start())
       await driver.waitForSpeechCompletion(page)
@@ -215,7 +224,17 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
       expect(endResponse.ok()).toBe(true)
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
+      let referenceObservation: Record<string, unknown> | undefined
+      if (memoryReference) {
+        const referenceResult = await runFile(resolve(repositoryRoot, 'backend/.venv/bin/python'), [
+          '-m', 'app.voice_quality_reference_state', 'references', '--data-root', dataRoot,
+          '--repository-root', repositoryRoot, '--conversation-id', conversationId,
+        ], { cwd: repositoryRoot, env: { ...process.env, PYTHONPATH: resolve(repositoryRoot, 'backend') } })
+        referenceObservation = JSON.parse(referenceResult.stdout)
+      }
       trials.push({
+        ...(referenceObservation ? {memory_reference_observation: referenceObservation} : {}),
+        preparation_observation: await page.evaluate(() => window.__voicePreparationProbe?.snapshot()),
         pcm_input_observation: await snapshotPcmInputs(index + 1),
         ...(observePlaybackSupply ? {
           playback_supply_observation: await page.evaluate(readPlaybackSupplyDiagnostic, cycle.responseId!),
@@ -257,6 +276,7 @@ test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnativ
         ...trials[index],
         phase: index < WARMUP_RUNS ? 'warmup' : 'measured',
         outcome: 'failure', failure_reason: 'voice_cycle_incomplete', diagnostics,
+        preparation_observation: await page.evaluate(() => window.__voicePreparationProbe?.snapshot()).catch(() => null),
         pcm_input_observation: await snapshotPcmInputs(index + 1).catch(() => ({unavailable: true})),
       }
       throw error

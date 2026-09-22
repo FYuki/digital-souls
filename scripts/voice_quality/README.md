@@ -330,6 +330,9 @@ backend/.venv/bin/python scripts/voice_quality/run_reconnect_cohort.py \
 これは10件以下の原因調査用であり、100試行の受け入れには使用できない。重複や範囲外は拒否し、
 省略時は通常どおり先頭から全件を使用する。選択した番号列は生記録の`fixture_indices`へ保存する。
 診断用番号を環境変数から次の正式測定へ引き継がない。
+相槌・take-turnの既存reporterも、この番号列と原catalogのhashを用いて実際の試行順を照合する。
+選択診断のためにcatalogを並べ替えたり、元のtrial記録を付け替えたりしない。
+10件を超える選択はreporterでも拒否し、小規模診断を100件の合格へ昇格させない。
 
 VAD診断は各frameの確率・RMS・補助VADの有声割合・スペクトル集中度／平坦度と、モデルのリセット時刻を記録する。
 PCMや本文を診断portへ渡さない。frame・イベント・リセット記録には個別の上限とoverflowフラグを設け、
@@ -645,7 +648,7 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
   --inference-env /home/asa/dev/digital-souls/backend/.env --observe-stt-pcm
 ```
 
-明示指定時だけ`integration-voice-pcm`を選び、runnerがlocalhost:50023の中継を所有する。
+明示指定時だけ選択元Profileの`-pcm`構成を選び、runnerがlocalhost:50023の中継を所有する。
 Whisperの実POSTを既存localhost:50022へバイト列を変えずに転送し、HTTP statusと応答本文を返す。
 入力はメモリ内でfixtureへ照合し、数値だけを`whisper-input-pcm.jsonl`へ保存する。
 fixtureはrepositoryの固定hashから選び、trial ordinalとinitial／labeledの別をNode側で登録する。
@@ -799,7 +802,7 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/run_normal_coh
 準備5回と測定100回の各回に新規data root・FE／BEを割り当てる。
 共有推論サービス、モデル、生成options、固定音声は維持する。
 既存の通常応答reporterに対応するintegration-voiceを使用し、Whisperへ直接接続する。
-STT入力PCMの中継観測はintegration-voice-pcmの相槌・割り込み・pause cohortで行い、
+STT入力PCMの中継観測はintegration-voice-pcm、またはintegration-irodori-cuda-graph-pcmの相槌・割り込み・pause cohortで行い、
 中継の有無を含む測定条件を記録する。
 アプリプロセス内のcacheも各回で新しくなるため、同じ方式の移設前後を比較し、
 以前の同一プロセス100試行と同じ条件だったとは扱わない。
@@ -826,3 +829,139 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_normal_
 固定音声、独立した試行、初期状態、時計、packetと全再生の証拠を既存validatorで確認する。
 失敗試行の時間は欠測、処理失敗は失敗として保持する。p50／p95は確認できた試行だけの参考分布であり、
 失敗・欠測を含む前後比較を受入合格へ変換しない。測定リビジョン、入力・reporter・schemaのhashを保持する。
+
+## Irodoriの工程診断
+
+probe_irodori_stages.pyは専用の一時コンテナ内で実行する補助診断。
+標準入力へcharacters/miori/miori.card.jsonのdata.extensions.digital_souls.tts_configをJSONとして渡す。
+製品と同じimageのPythonを使い、既存モデルcacheを/models/huggingface、
+登録音声を/voicesへ読取専用でmountする。ネットワークは無効、/tmpだけ一時書込みを許可する。
+HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1を設定し、共有サービスの実行process内では起動しない。
+
+warmup 1件とスクリプト内の固定短文3件を上流の通常API関数で合成する。
+生成本文は出力せず、既存工程時間・sample数・hash・設定hash・GPUメモリ数値だけを返す。
+初回準備失敗も新しいrun IDへ保存し、成功で置き換えない。
+HTTP queueや音声会話全体のTTFAは測らない。
+実行後は所有コンテナだけを回収し、共有サービスの稼働を確認する。
+[実行条件と限定診断結果](../../docs/validation/voice-quality-runtime-stages-20260919.md)を参照。
+
+
+## 専用Ollama候補版との比較
+
+共有Ollamaを更新せず比較する場合は、所有する候補版を127.0.0.1:11534で起動し、
+run_pilot.py / run_normal_cohort.pyへ --profile integration-irodori-ollama-candidate を明示する。
+モデル・生成設定・CCV・共有Irodoriは比較元と揃える。候補版のimage digestとAPI versionは別途証跡へ残す。
+このProfileは候補版をexternalとして扱い、起動・停止しない。障害bridge／PCM観測との組合せは未対応である。
+
+OLLAMA_BASE_URLだけを.envで変えても、接続先はProfileのderivedEnvironmentで確定する。
+起動後のresolved-profile.jsonでdependencies.ollama.baseUrlとderivedEnvironment.OLLAMA_BASE_URLが
+ともにhttp://127.0.0.1:11534であることを確認する。共有のintegration-irodoriは11434を維持する。
+接続先を確認できない試行は候補版の性能証跡にせず、設定不一致として元の記録を残す。
+
+
+### CUDA Graph TTS候補とOllama候補を組み合わせる
+
+--profile integration-irodori-cuda-graph はOllama 11534とIrodori 50026に固定する。
+Frontend/Backend/ready gateは18573/18500/18574で、他の音声測定Profileと同時起動しない。
+両候補はexternalであり、runnerが共有サービスを起動・更新・停止することはない。
+所有者が先に専用TTS候補を DS_IRODORI_CUDA_GRAPH=true で準備し、固定image IDと
+/versionの要求フラグを確認する。声・step・speed・CCVと入力音声は比較元と揃える。
+
+runnerへ共有接続先の古い環境値を渡しても、解決済みProfileでは候補先を使用する。
+固定Profileを変えて共有TTSへ誤接続した計測を候補の証跡へ混ぜない。
+PCM観測用/障害bridge Profileとの同時選択を拒否し、形成停止・空状態・独立試行・
+初期状態hash・匿名reportの契約をそのまま適用する。
+実GPU readinessと合成成功は、正式100試行や聴感受入の代替ではない。
+
+## 専用Irodori workerの失敗・次会話診断
+
+tts_worker_fault.pyとfrontend/integration/voice-quality/tts-worker-recovery.spec.tsは
+専用TTSの実workerにSIGTERMを送り、実UIの失敗表示と同じSessionの後続音声を確認する。
+通常の性能cohortと同時実行しない。共有サービスへ故障を注入しない。
+この手順の追加は実試験成功を意味せず、対象版・各phaseの結果を別の測定証跡へ保存する。
+
+使用前に、所有者が専用port 50026へ検証済みimmutable imageで復旧試験用TTSを起動する。
+container名はds-<owner>、digital-souls.ownerラベルのownerは
+voice-quality-423-recovery-で始める。通常速度測定用のownerは故障対象として拒否する。
+対象ファイルはリポジトリへcommitせず、以下の情報を現在のdocker inspectと照合して保存する。
+
+- container_id: 完全な64桁ID
+- image: sha256:に続く64桁image ID
+- owner: 上記の専用owner
+- base_url: http://127.0.0.1:50026
+- docker_distro: UbuntuからUbuntu-dogfoodのDockerを使う場合だけUbuntu-dogfood
+
+VOICE_TTS_FAULT_TARGET_FILEへ対象ファイルを指定し、既存の
+playwright.livekit-quality.config.tsでtts-worker-recovery.spec.tsだけを実行する。
+VOICE_QUALITY_PROFILE=integration-irodori-cuda-graph、新規VOICE_QUALITY_RUN_ID、
+専用FE/BE imageとtest data rootを使用する。解決済みProfileのIrodori接続先も照合する。
+
+生成中と先頭再生開始後の2ケースを区別し、active=1観測後にID・image・所有を再確認する。
+PID 1のuvicornを親とする単一spawn worker以外は停止しない。
+応答失敗とSession存続を確認し、再準備後は固定音声を実STTへ送り、
+新応答のsample数・gap・旧応答の終端一意性を検査する。
+
+先頭再生開始後のケースでは、既存post-gain workletの数値観測を傍受し、失敗通知時の
+render中quantumを含む上限より後の無音interval、一致するfinished終端frame、
+その終端の実出力時計通過、監査node全出力の切断を要求する。
+監査nodeは失敗後に破棄されるため、破棄後の欠測時間を1秒の無音へ補完しない。
+この上限を失敗直後の完全な無音・停止遅延0msと読み替えない。
+時計・interval欠落を0音声へ補完せず、生成中の試験で旧出力停止を代用しない。
+本試験は固定音声の実接続であり、人の実マイク・試聴の代替ではない。
+
+## 高速化TTS候補の独立再接続cohort
+
+run_reconnect_cohort.py の --profile integration-irodori-cuda-graph は、
+integration-irodori-cuda-graph-fault を選び、LiveKit 19880、Ollama 11534、Irodori 50026へ固定する。
+通常dev・dogfoodのLiveKitや共有推論の配備には変更を加えない。
+--disable-memory-formation を指定して形成・整理のschedulerを止め、各試行で空の専用data rootを使う。
+
+--cohort-id、--inference-env、専用bridgeの --livekit-env を指定する。
+--sessions 100 が正式cohortで、少数件は診断に限る。各sessionは実network障害1回と、
+復旧後の同一sessionでの次の通常音声を含む。復旧境界、10秒以内99%以上、成功p95 3000ms以下、
+重複0、分母・時計・native SDKのcoverage要件は既存reporterを維持する。
+各試行のProfile、所有container削除、fault時計process終了を検証してから次へ進む。
+準備全体の固定上限は設けず、各処理のtimeout・error検出を使う。
+
+
+### マイク許可結果の遅着と会話終了
+
+playwright.microphone-cancel.config.tsは、高速化候補Profile専用の局所診断を収集する。
+run_pilot.pyのpilot_environmentでintegration-irodori-cuda-graph、独立run ID、形成停止を設定し、
+取得した環境変数を使ってFrontend側で次のconfigを実行する。
+
+    node node_modules/@playwright/test/cli.js test --config playwright.microphone-cancel.config.ts
+
+通常のrun_pilot.pyの品質cohort起動とは別に実行する。ブラウザが実際に作った合成入力deviceの
+getUserMedia結果だけを保留し、実Sessionの終了API成功後に返す。遅着trackのended、
+マイクOFF、入力停止、応答開始0件、終了API1回を確認する。
+HTTPの成功応答やSFUはモックへ置換しない。人の実マイク・native許可ダイアログ、
+正式100件の性能や音質の受入ではない。失敗runを上書きせず、所有アプリだけを終了する。
+
+### 高速化候補のPCM観測（#424）
+
+run_pilot.pyに --profile integration-irodori-cuda-graph --observe-stt-pcm を明示すると、
+integration-irodori-cuda-graph-pcmを使う。Whisperへの同一PCMの透過中継・匿名数値観測は
+既存方式を再利用し、専用Ollama 11534・Irodori 50026・通常LiveKit 7880を維持する。
+FE 18573、BE 18500、ready gate 18574も候補構成と同じであり、他の候補コホートと同時実行しない。
+runnerが所有する中継50023だけを起動・終了し、共有Whisper 50022は再起動・変更しない。
+
+--scheduled-fixture --vad-cohort pause、または --interruption-cohort backchannel / take_turnを指定する。
+記憶形成負荷を混ぜない試験では --disable-memory-formation を明示する。
+fault bridge・通信断注入・連続track診断との同時指定、および未定義の他Irodori PCM構成は拒否する。
+report_stt_pcm.pyは候補Profileの実接続先も照合し、既存の全試行・終端入力・端点照合・欠測判定を維持する。
+この追加自体を休止・相槌・割り込みの実接続受入や聴感受入とはしない。
+
+
+### 診断自体による誤判定・動作変更の防止
+
+CUDA Graph対比較のprobeは、各cuda_graph試行にcapture数を記録する。
+captureを1回も観測できない要求はfallbackとし、全体もsuccessにしない。
+これは診断の成立条件であり、製品のRequestGraphが容量・空きVRAMに応じてeager実行へ戻る挙動は維持する。
+
+TTS故障後の出力probeは、監視node数が8を超えても音声nodeの構築を中断しない。
+probe_capacity_exceededを観測全体の欠測として保持し、停止確認を成功にしない。
+故障注入のcontainer IDはDocker呼出し前に64桁の小文字16進表記を要求し、
+その後も既存の所有・image・port・worker同一性検査を行う。
+故障復帰テストの外枠は600秒とし、個々の生成・故障検出・worker回復・再生のtimeoutは維持する。
+過去の測定artifactは変更せず、変更後の診断と以前の実測を区別する。

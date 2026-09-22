@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 import time
@@ -14,14 +16,35 @@ from app.conversation_history.errors import (
 from app.livekit_transport.token import IssuedToken
 
 
+# Session全体ではなく、DB・Room作成・token発行等の個別操作の上限。
 BOOTSTRAP_TIMEOUT_SECONDS = 10
+PREPARATION_POLL_LEASE_SECONDS = 30.0
 CLEANUP_TIMEOUT_SECONDS = 1.0
 JOIN_TOKEN_TTL_SECONDS = 90
 MAX_RECONNECT_GRACE_MS = 60_000
 
 
 class BootstrapTimeoutError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, stage: str | None = None) -> None:
+        super().__init__(message)
+        self.stage = stage
+
+
+@asynccontextmanager
+async def preparation_operation(stage: str, timeout_seconds: float) -> AsyncIterator[None]:
+    """全体の準備時間とは別に、個別の外部操作の期限と失敗段階を保持する。"""
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            yield
+    except TimeoutError as error:
+        raise BootstrapTimeoutError("LiveKit bootstrap timed out", stage=stage) from error
+
+
+@dataclass
+class PendingPreparation:
+    request: dict[str, object]
+    task: asyncio.Task[BootstrapResult]
+    lease: asyncio.TimerHandle
 
 
 class BootstrapConflictError(RuntimeError):
@@ -212,6 +235,80 @@ class BootstrapService:
             str, tuple[dict[str, object], asyncio.Task[BootstrapResult]]
         ] = {}
         self._end_tasks: dict[str, asyncio.Task[None]] = {}
+        self._preparations: dict[str, PendingPreparation] = {}
+        self._preparation_cleanups: set[asyncio.Task[None]] = set()
+
+    async def poll_preparation(
+        self, raw_request: Mapping[str, object],
+    ) -> BootstrapResult | None:
+        """同じ要求の準備を継続し、HTTP要求自体は短時間で返す。"""
+        request = dict(raw_request)
+        request_id = str(request["request_id"])
+        pending = self._preparations.get(request_id)
+        if pending is not None and pending.request != request:
+            raise BootstrapConflictError("request_id payload conflict")
+        if pending is None:
+            task = asyncio.create_task(self.bootstrap(request))
+            task.add_done_callback(self._consume_preparation_result)
+            pending = PendingPreparation(
+                request, task, self._preparation_lease(request_id),
+            )
+            self._preparations[request_id] = pending
+        else:
+            pending.lease.cancel()
+            pending.lease = self._preparation_lease(request_id)
+        if not pending.task.done():
+            return None
+        # 失敗も同じtaskに保持する。pollを再試行・再生成へ変換しない。
+        result = pending.task.result()
+        pending.lease.cancel()
+        self._preparations.pop(request_id, None)
+        return result
+
+    def _preparation_lease(self, request_id: str) -> asyncio.TimerHandle:
+        # 準備時間の上限ではなく、切断したclientの所有資源を回収する猶予。
+        return asyncio.get_running_loop().call_later(
+            PREPARATION_POLL_LEASE_SECONDS, self._expire_preparation, request_id,
+        )
+
+    def _expire_preparation(self, request_id: str) -> None:
+        pending = self._preparations.get(request_id)
+        if pending is None:
+            return
+        task = asyncio.create_task(self.cancel_preparation(pending.request))
+        self._preparation_cleanups.add(task)
+        task.add_done_callback(self._preparation_cleanups.discard)
+        task.add_done_callback(self._consume_cleanup_result)
+
+    async def cancel_preparation(self, raw_request: Mapping[str, object]) -> None:
+        request = dict(raw_request)
+        request_id = str(request["request_id"])
+        pending = self._preparations.get(request_id)
+        if pending is not None:
+            if pending.request != request:
+                raise BootstrapConflictError("request_id payload conflict")
+            self._preparations.pop(request_id, None)
+            pending.lease.cancel()
+            if not pending.task.done():
+                pending.task.cancel()
+            await asyncio.gather(pending.task, return_exceptions=True)
+        completed = self._completed.get(request_id)
+        if completed is not None:
+            if completed[0] != request:
+                raise BootstrapConflictError("request_id payload conflict")
+            await self.end(completed[1].session_id)
+
+    async def cancel_all_preparations(self) -> None:
+        await asyncio.gather(*(
+            self.cancel_preparation(pending.request)
+            for pending in tuple(self._preparations.values())
+        ))
+        await asyncio.gather(*tuple(self._preparation_cleanups))
+
+    @staticmethod
+    def _consume_preparation_result(task: asyncio.Task[BootstrapResult]) -> None:
+        if not task.cancelled():
+            task.exception()
 
     async def bootstrap(self, raw_request: Mapping[str, object]) -> BootstrapResult:
         request = dict(raw_request)
@@ -329,39 +426,34 @@ class BootstrapService:
             self._completed.pop(request_id, None)
 
     async def _bootstrap_once(self, request: dict[str, object]) -> BootstrapResult:
-        deadline = asyncio.get_running_loop().time() + self._timeout_seconds
         session_id: str | None = None
         participant_id = str(uuid4())
         room_created = False
         runtime_started = False
         try:
-            async with asyncio.timeout_at(deadline):
+            async with preparation_operation("session", self._timeout_seconds):
                 session_id = await self._sessions.reserve(
                     {**request, "participant_id": participant_id}
                 )
-                room = f"voice-{session_id}"
-                room_created = True
+            room = f"voice-{session_id}"
+            room_created = True
+            async with preparation_operation("room", self._timeout_seconds):
                 await self._rooms.create(room)
-                runtime_started = True
-                await self._runtimes.connect(session_id)
-                await self._runtimes.wait_until_ready(session_id)
-                issued_token = await self._issue_user_token(session_id)
-                requested_reconnect_grace_ms = request[
-                    "requested_reconnect_grace_ms"
-                ]
-                if not isinstance(requested_reconnect_grace_ms, int):
-                    raise TypeError("requested_reconnect_grace_ms must be an integer")
-                reconnect_grace_ms = min(
-                    requested_reconnect_grace_ms, MAX_RECONNECT_GRACE_MS
-                )
-                return BootstrapResult(
-                    session_id=session_id,
-                    participant_id=participant_id,
-                    room=room,
-                    token=issued_token.token,
-                    expires_at=issued_token.expires_at,
-                    reconnect_grace_ms=reconnect_grace_ms,
-                )
+            runtime_started = True
+            # モデル準備は各serviceのtimeout/errorで判断し、合計時間で切らない。
+            # transport接続等の個別期限はruntime側が所有する。
+            await self._runtimes.connect(session_id)
+            await self._runtimes.wait_until_ready(session_id)
+            issued_token = await self._issue_user_token(session_id)
+            requested_reconnect_grace_ms = request["requested_reconnect_grace_ms"]
+            if not isinstance(requested_reconnect_grace_ms, int):
+                raise TypeError("requested_reconnect_grace_ms must be an integer")
+            reconnect_grace_ms = min(requested_reconnect_grace_ms, MAX_RECONNECT_GRACE_MS)
+            return BootstrapResult(
+                session_id=session_id, participant_id=participant_id, room=room,
+                token=issued_token.token, expires_at=issued_token.expires_at,
+                reconnect_grace_ms=reconnect_grace_ms,
+            )
         except TimeoutError as error:
             if session_id is not None:
                 await self._compensate(
@@ -427,15 +519,16 @@ class BootstrapService:
             task.exception()
 
     async def _issue_user_token(self, session_id: str) -> IssuedToken:
-        return await self._signer.issue_with_expiration(
-            identity=f"user-{session_id}",
-            room=f"voice-{session_id}",
-            ttl_seconds=JOIN_TOKEN_TTL_SECONDS,
-            grant={
-                "room_join": True,
-                "can_subscribe": True,
-                "can_publish": True,
-                "can_publish_data": True,
-                "can_publish_sources": ["microphone"],
-            },
-        )
+        async with preparation_operation("token", self._timeout_seconds):
+            return await self._signer.issue_with_expiration(
+                identity=f"user-{session_id}",
+                room=f"voice-{session_id}",
+                ttl_seconds=JOIN_TOKEN_TTL_SECONDS,
+                grant={
+                    "room_join": True,
+                    "can_subscribe": True,
+                    "can_publish": True,
+                    "can_publish_data": True,
+                    "can_publish_sources": ["microphone"],
+                },
+            )

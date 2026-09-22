@@ -2,7 +2,11 @@
 
 `digital-souls`の自作フロントエンド（Vite + Svelte + TypeScript）。概念と実装名は[用語集](../docs/glossary.md)、FE/BEの責務境界は[アーキテクチャ](../docs/system-architecture.md)を参照する。
 
-## 音声入力の責務（#358作業ブランチ）
+## 音声入力の責務（#358導入済み）
+
+責務移設はPR #408でmainへ反映済み。品質・実接続・移行・人の受入の残件は
+[#424](https://github.com/FYuki/digital-souls/issues/424)と
+[残受入対応表](../docs/validation/voice-quality-350-423-424-status.md)を参照する。
 
 LiveKit経路ではFE VAD assetのロードと正式speech通知を使用しない。
 マイクの取得・mute・focus抑止・再生・停止・実再生観測をFEが実行し、BEから発話と割り込み判断を受け取る。
@@ -19,6 +23,10 @@ FE／BEを一組でprotocol 2.0へ更新する[移行契約](../docs/voice-backe
 - Chrome／Edgeの標準pickerによる単一モニター／ウィンドウ／ブラウザタブの選択と、会話に応じた画面参照。
 
 現在のアバター表示は静止画であり、Live2D／VRMのruntime統合やDesktop版を実装済みとして扱わない。
+
+## 通知
+
+`NotificationCenter`は会話と独立した一覧・未読件数・フィルタ・既読／未読変更・通知元／種類別ON・OFFを提供する。内容取得は明示操作で行い、詳細を開くだけでは既読にしない。通知専用起動時は会話が利用できない状態を表示する。通知からの会話・要約連携は後続範囲。設定と検証入口は[通知runtime](../docs/notification-runtime.md)を参照する。
 
 ## 会話とSession
 

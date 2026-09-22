@@ -94,6 +94,20 @@ describe('Playwright suite boundaries', () => {
   }, 20_000)
 
 
+  test('候補Profile専用のマイク取消診断は開始診断からも分離する', async () => {
+    const executable = join(process.cwd(), 'node_modules', '.bin', 'playwright')
+    const candidate = await execFileAsync(executable, [
+      'test', '--list', '--config', 'playwright.microphone-cancel.config.ts',
+    ], { cwd: process.cwd() })
+    const lines = candidate.stdout.split('\n').filter(line => line.includes('.spec.ts:'))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('microphone-cancel.spec.ts')
+    const startup = await execFileAsync(executable, [
+      'test', '--list', '--config', 'playwright.voice-startup-diagnostic.config.ts',
+    ], { cwd: process.cwd() })
+    expect(startup.stdout).not.toContain('microphone-cancel.spec.ts')
+  }, 20_000)
+
   test('controlled baseline config collects only the dedicated real-service spec', async () => {
     const executable = join(process.cwd(), 'node_modules', '.bin', 'playwright')
     const { stdout } = await execFileAsync(

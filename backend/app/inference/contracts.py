@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Event
-from typing import Protocol, TypeAlias
+from typing import Protocol, TypeAlias, runtime_checkable
 
 
 JsonScalar: TypeAlias = str | int | float | bool | None
@@ -31,6 +31,7 @@ class InferenceCapability(str, Enum):
     IMAGE_INPUT = "image_input"
     EMBED = "embed"
     ESTIMATE_INPUT_TOKENS = "estimate_input_tokens"
+    PREPARE_MODEL = "prepare_model"
 
 
 class ProviderKind(str, Enum):
@@ -289,6 +290,22 @@ class StructuredGenerationResult:
 class EmbeddingResult:
     vectors: tuple[tuple[float, ...], ...]
     usage: InferenceUsage | None = None
+
+
+@dataclass(frozen=True)
+class ModelPreparationRequest:
+    """本文を持たず、実際の生成と同じモデル・context設定を準備する。"""
+    model_id: str
+    options: Mapping[str, JsonValue]
+    max_input_tokens: int
+    max_output_tokens: int
+    timeout_seconds: float
+    latency_sensitive: bool = False
+
+
+@runtime_checkable
+class ModelPreparationAdapter(Protocol):
+    async def prepare_model(self, request: ModelPreparationRequest) -> None: ...
 
 
 class InferenceAdapter(Protocol):

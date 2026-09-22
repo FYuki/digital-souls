@@ -39,9 +39,8 @@ jobs:
   backend:
     name: backend
     runs-on: ubuntu-latest
-    # 依存導入と全unit/module検証を含める。2026-09-16は15分でmodule 88%時点に到達。
-    # 全試験を省略せず完走させるため、実測に合わせて余裕を持たせる。
-    timeout-minutes: 20
+    # 全unit/module検証を維持する。2026-09-19のrun 35375693008は15分でmodule 93%時点に時間切れ。
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
         with:

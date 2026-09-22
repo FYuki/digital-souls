@@ -333,3 +333,63 @@ def test_legacy_explicit_overflow_is_missing_without_changing_old_absent_flags()
     result = report.summarize(*args)
     assert result["metrics"][0]["missing_count"] == 1
     assert result["metrics"][0]["success_count"] == 99
+
+
+def test_small_diagnostic_honors_registered_fixture_order_without_rewriting_catalog():
+    manifest, events, fixtures = case(3)
+    manifest["expected_measured"] = 2
+    manifest["fixture_indices"] = [3, 1]
+    manifest["trials"] = [manifest["trials"][2], manifest["trials"][0]]
+    result = report.summarize(manifest, events, fixtures)
+    assert result["counts"]["recorded"] == result["counts"]["backchannel_decision"] == 2
+    assert result["evaluation"]["false_cancel_rate_passed"] is False
+    assert len(fixtures["trials"]) == 3
+
+
+@pytest.mark.parametrize("indices", [[1, 1], [0, 2], [1, 4], [True, 2], [1.0, 2], "1,2", [1], [1, 2, 3]])
+def test_invalid_diagnostic_fixture_selection_is_rejected(indices):
+    manifest, events, fixtures = case(3)
+    manifest.update(expected_measured=2, fixture_indices=indices, trials=manifest["trials"][:2])
+    with pytest.raises(ValueError, match="diagnostic fixture selection"):
+        report.summarize(manifest, events, fixtures)
+
+
+@pytest.mark.parametrize("count", [11, 100])
+def test_selected_diagnostic_cannot_become_a_formal_cohort(count):
+    manifest, events, fixtures = case(count)
+    manifest["fixture_indices"] = list(range(1, count + 1))
+    with pytest.raises(ValueError, match="diagnostic fixture selection"):
+        report.summarize(manifest, events, fixtures)
+
+
+def test_fixture_selection_cannot_relabel_a_recorded_trial():
+    manifest, events, fixtures = case(3)
+    manifest.update(expected_measured=2, fixture_indices=[3, 1], trials=manifest["trials"][:2])
+    with pytest.raises(ValueError, match="fixture coverage"):
+        report.summarize(manifest, events, fixtures)
+
+
+def test_selected_diagnostic_cli_keeps_original_catalog_hash(tmp_path, monkeypatch):
+    import hashlib
+    import sys
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root / "scripts/voice_quality"))
+    manifest, events, fixtures = case(3)
+    manifest.update(expected_measured=2, fixture_indices=[3, 1],
+                    trials=[manifest["trials"][2], manifest["trials"][0]])
+    raw = json.dumps(fixtures).encode()
+    manifest["labeled_manifest_sha256"] = hashlib.sha256(raw).hexdigest()
+    paths = {key: tmp_path / (key + ".json") for key in ("manifest", "trace", "fixtures", "output")}
+    paths["fixtures"].write_bytes(raw)
+    paths["manifest"].write_text(json.dumps(manifest))
+    paths["trace"].write_text("".join(event.model_dump_json() + "\n" for event in events))
+    arguments = [str(root / "scripts/voice_quality/report_backchannel.py")]
+    for key, path in paths.items():
+        arguments.extend(["--" + key, str(path)])
+    arguments.extend(["--schema", str(root / "docs/schemas/voice-quality-artifact-v1.schema.json")])
+    monkeypatch.setattr(sys, "argv", arguments)
+    report.main()
+    actual = json.loads(paths["output"].read_text())
+    assert actual["labeled_manifest_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert actual["counts"]["expected"] == 2
+    assert actual["evaluation"]["false_cancel_rate_passed"] is False

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """実通知UI・HTTP・共有Gate・独立MCP fixtureの適合検証。実外部サービス受入とは分ける。"""
+import argparse
 import asyncio
 import json
 import os
@@ -56,8 +57,10 @@ def source_hash():
 def main():
     if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
         raise RuntimeError("dogfood is not an acceptance environment")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=ROOT / "docs/artifacts/notification-183")
+    output = parser.parse_args().output.resolve()
     source_digest = source_hash()
-    output = ROOT / "docs/artifacts/notification-183"
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ds-notification-183-") as temporary, ExitStack() as stack:
         work = Path(temporary)

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "runId": "350-practical-preparation-failure-0919-01",
+  "revision": "f5e8228b318d6e716b04e04f5f028cb6da9bd618",
+  "status": "PASS",
+  "profile": "integration-voice",
+  "environmentId": "dev",
+  "fixture": "speech-v2",
+  "method": "専用アプリのTTS readiness要求のみローカルproxyで503。解除後に同じ画面で手動再試行。",
+  "browser": {
+    "status": "passed",
+    "step": "actual-voice",
+    "reasonDisplayed": true,
+    "microphoneOffAfterFailure": true,
+    "retryEnabled": true,
+    "noAutomaticRestart": true,
+    "completedVoiceCycles": 1,
+    "historyRows": 1,
+    "failedTokenResponses": [
+      {
+        "status": 503,
+        "code": "tts_not_ready",
+        "stage": "tts"
+      }
+    ],
+    "distinctRequestCount": 2,
+    "endResponses": [
+      200
+    ],
+    "transportFailures": []
+  },
+  "verification": {
+    "databaseCountsByStatus": {
+      "completed": 1
+    },
+    "nativeSdkStatus": "verified",
+    "proxyInjected503Count": 1,
+    "successfulSpeechRequests": 2
+  },
+  "readyAt": "2026-09-19T13:22:20.835241+00:00",
+  "endedAt": "2026-09-19T13:24:56.805106+00:00",
+  "teardown": {
+    "status": "completed",
+    "results": [
+      {
+        "service": "frontend",
+        "result": "stopped"
+      },
+      {
+        "service": "backend",
+        "result": "stopped"
+      }
+    ]
+  },
+  "sharedServicesModified": false,
+  "dedicatedProxyStopped": true,
+  "newConversationDataOnly": true,
+  "publication": {
+    "conversationIdsIncluded": false,
+    "containerIdsIncluded": false,
+    "databaseDigestsIncluded": false,
+    "rawConversationIncluded": false
+  }
+}

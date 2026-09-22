@@ -1,0 +1,327 @@
+{
+  "scope": "candidate_tts_reconnect_pilot",
+  "acceptance_applicable": false,
+  "measurement_revision": "c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+  "cohorts": [
+    {
+      "cohort_id": "424-candidate-reconnect-pilot-0919-01",
+      "revision": "c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+      "host_exit": 2,
+      "planned_sessions": 3,
+      "started_sessions": 1,
+      "raw_sha256": {
+        "host": "cebbff5e5d053164bad4eefb4261bbf39b4b8a13f3bb92b075987fe1d176112a",
+        "plan": "3ab4e1f9cb76862a896d5596c2c420891eb435aa4b22be77f986b20a8c59892a"
+      },
+      "trials": [
+        {
+          "index": 1,
+          "profile": "integration-irodori-cuda-graph-fault",
+          "teardown_completed": true,
+          "raw_sha256": {
+            "environment_run": "7a53c48618097e19347025ada95f6f96ccb8d4d224f32f094733560e963c09f1",
+            "backend_log": "f395aec6915401bdbc03c38558cc24a89cecb358c9cd369b71b861c9f11b586c",
+            "trial_log": "1d5a5ec379661f5fde5df6d93b4e6f0c496cc65c1de1978dffa7057125bf508d"
+          },
+          "owned_containers_deleted": true,
+          "running_images": {
+            "backend": {
+              "image_id": "sha256:c37dd06f908c85e07a58f90db19602bbcd2172b42792b316e10ad0a1f1afae4c",
+              "image_tag": "digital-souls-voice-quality/backend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde"
+            },
+            "frontend": {
+              "image_id": "sha256:ff85704a9044e39ff188bf266fc15cabba2ad9b3c9b3174f3d759b53509c4af8",
+              "image_tag": "digital-souls-voice-quality/frontend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde"
+            }
+          },
+          "outcome": "setup_failed",
+          "voice_outcome": "NOT_RUN",
+          "native_sdk_verified": false,
+          "failure_reason": "backend_readiness_timeout_after_inference_probe_unavailable",
+          "root_cause": "unconfirmed"
+        }
+      ]
+    },
+    {
+      "cohort_id": "424-candidate-reconnect-pilot-0919-02",
+      "revision": "c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+      "host_exit": 1,
+      "planned_sessions": 3,
+      "started_sessions": 3,
+      "raw_sha256": {
+        "host": "b9bc684c2bb190b79d2f7fd3c8b43ca06002105e8414921ca42a17a0cb0d3807",
+        "plan": "58dcaa21152174ecd4beb302c54e54cf66d2ce811e71bcf01e077fb39f46cd01"
+      },
+      "trials": [
+        {
+          "index": 1,
+          "profile": "integration-irodori-cuda-graph-fault",
+          "teardown_completed": true,
+          "raw_sha256": {
+            "environment_run": "b08efd897b8957a2fce43e5774443fc35b2a96aea7fd1717ddb78e13d64220e7",
+            "manifest": "1a1d73c7a13d18c30b5ab201f8e9a94afb470922be0e6e17e302907a6b2c9fff",
+            "native_sdk": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+            "memory_policy": "75af45c4dc148ff58598a542dd9a6bbcdd46474d14167d894afe92f70f6e2a1e",
+            "backend_log": "22bff21b453acf57571401c419d1edf98f533609ede7f4307677b8bc7d0d7223",
+            "trial_log": "ca574179d20aa45b76f2320804617b6e95b69ed72b95670eb03ef1c30fb00b3b"
+          },
+          "owned_containers_deleted": true,
+          "running_images": {
+            "backend": {
+              "image_id": "sha256:1091e5452e326995052b1946f1505e18c5379eac253cbcf90a70372aa6cb5304",
+              "image_tag": "digital-souls-voice-quality/backend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+              "ollama_url": "http://127.0.0.1:11534"
+            },
+            "frontend": {
+              "image_id": "sha256:e7164ab622256e404874e8bde9547a14baad2ad103c1409d8ea213df172c46bd",
+              "image_tag": "digital-souls-voice-quality/frontend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+              "ollama_url": null
+            }
+          },
+          "outcome": "success",
+          "recovery": {
+            "control_recovery_upper_ms": 2323.568452000618,
+            "audio_recovery_upper_ms": 2441.3411186583435,
+            "recovery_upper_ms": 2441.3411186583435,
+            "duplicate_packet_output_intervals": 0,
+            "packet_evidence_missing": 0,
+            "output_path_failures": 0,
+            "output_evidence_complete": true,
+            "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+            "audio_missing_reason": null
+          },
+          "fault_operation_succeeded": true,
+          "fault_duration_ms": 2000,
+          "session_end_confirmed": true,
+          "fault_clock_process_closed": true,
+          "preparation": {
+            "method": "browser_click_to_microphone_standby_dom_v1",
+            "clock_domain": "browser_performance",
+            "attempt_count": 1,
+            "started_client_ms": 1567.7999999970198,
+            "ready_client_ms": 9729.39999999106,
+            "duration_ms": 8161.5999999940395
+          },
+          "following_voice": {
+            "outcome": "success",
+            "same_session": true,
+            "new_response": true,
+            "track_response_matches": true,
+            "playback": {
+              "expectedSamples": 381120,
+              "inputSamples": 380160,
+              "paddingSamples": 960,
+              "renderedSamples": 381120,
+              "packetCount": 397,
+              "gapSamples": 0,
+              "maximumGapSamples": 0,
+              "gapCount": 0,
+              "sampleRate": 48000
+            }
+          },
+          "native_sdk": {
+            "schema_version": 1,
+            "python_sdk_version": "1.1.16",
+            "ffi_version": "0.12.73",
+            "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+            "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+            "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+            "reconnect_policy": "short-outage-v1",
+            "target": "x86_64-unknown-linux-gnu",
+            "cuda_video_codecs_enabled": false
+          },
+          "native_sdk_verified": true,
+          "memory_policy": {
+            "consolidation_disabled": true,
+            "formation_disabled": true,
+            "method": "controlled_memory_schedulers_v1"
+          }
+        },
+        {
+          "index": 2,
+          "profile": "integration-irodori-cuda-graph-fault",
+          "teardown_completed": true,
+          "raw_sha256": {
+            "environment_run": "8087683850e86e684d38e97655ea801a1ed3fc33b3af24ecf257d0010832287d",
+            "manifest": "9b2f74453834dbc7990b0a9c6f938da19ecc20dd64e9877f7249fbc5bd3841dd",
+            "native_sdk": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+            "memory_policy": "75af45c4dc148ff58598a542dd9a6bbcdd46474d14167d894afe92f70f6e2a1e",
+            "backend_log": "a5601cf2080847601997b2d07fc5209e948cbca651107b2ce5d9dd76d77f49aa",
+            "trial_log": "a0db1b4b6b594491e52fd6d59d60d6dae08699b002b3fe4539bab8a0fd4673dc"
+          },
+          "owned_containers_deleted": true,
+          "running_images": {
+            "backend": {
+              "image_id": "sha256:a9334e8240c95704a7dd1f393c188db43f0d279248c39cfb708f33f7dc6d5916",
+              "image_tag": "digital-souls-voice-quality/backend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+              "ollama_url": "http://127.0.0.1:11534"
+            },
+            "frontend": {
+              "image_id": "sha256:68172844948049251d063c38b8946923a3e3f90291611b9bb30b0742a4dce59c",
+              "image_tag": "digital-souls-voice-quality/frontend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+              "ollama_url": null
+            }
+          },
+          "outcome": "success",
+          "recovery": {
+            "control_recovery_upper_ms": 2322.5729039907455,
+            "audio_recovery_upper_ms": 2441.5465706663526,
+            "recovery_upper_ms": 2441.5465706663526,
+            "duplicate_packet_output_intervals": 0,
+            "packet_evidence_missing": 0,
+            "output_path_failures": 0,
+            "output_evidence_complete": true,
+            "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+            "audio_missing_reason": null
+          },
+          "fault_operation_succeeded": true,
+          "fault_duration_ms": 2000,
+          "session_end_confirmed": true,
+          "fault_clock_process_closed": true,
+          "preparation": {
+            "method": "browser_click_to_microphone_standby_dom_v1",
+            "clock_domain": "browser_performance",
+            "attempt_count": 1,
+            "started_client_ms": 1543.4000000059605,
+            "ready_client_ms": 3079.2000000029802,
+            "duration_ms": 1535.7999999970198
+          },
+          "following_voice": {
+            "outcome": "success",
+            "same_session": true,
+            "new_response": true,
+            "track_response_matches": true,
+            "playback": {
+              "expectedSamples": 240960,
+              "inputSamples": 240000,
+              "paddingSamples": 960,
+              "renderedSamples": 240960,
+              "packetCount": 251,
+              "gapSamples": 0,
+              "maximumGapSamples": 0,
+              "gapCount": 0,
+              "sampleRate": 48000
+            }
+          },
+          "native_sdk": {
+            "schema_version": 1,
+            "python_sdk_version": "1.1.16",
+            "ffi_version": "0.12.73",
+            "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+            "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+            "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+            "reconnect_policy": "short-outage-v1",
+            "target": "x86_64-unknown-linux-gnu",
+            "cuda_video_codecs_enabled": false
+          },
+          "native_sdk_verified": true,
+          "memory_policy": {
+            "consolidation_disabled": true,
+            "formation_disabled": true,
+            "method": "controlled_memory_schedulers_v1"
+          }
+        },
+        {
+          "index": 3,
+          "profile": "integration-irodori-cuda-graph-fault",
+          "teardown_completed": true,
+          "raw_sha256": {
+            "environment_run": "41ca4d7bf07ff46e1bfc02244820b057bd1e0b56c85d8183d855e07f9e490309",
+            "manifest": "de955cab3ee2a8d9cdead997da8be378954edd9e0b732873d2b670c99ef9228f",
+            "native_sdk": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+            "memory_policy": "75af45c4dc148ff58598a542dd9a6bbcdd46474d14167d894afe92f70f6e2a1e",
+            "backend_log": "16c408d853c77827f6df1d3472536be7860faaa4c051355bfe67add15b033431",
+            "trial_log": "9cb335619bf288dfcede1dd358906a42c32b638af65fa72982d4183b69256d23"
+          },
+          "owned_containers_deleted": true,
+          "running_images": {
+            "backend": {
+              "image_id": "sha256:32d50f18b3f3dfcbdee24da5a28997414b04c05ed1d83a010bef655264a8f631",
+              "image_tag": "digital-souls-voice-quality/backend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+              "ollama_url": "http://127.0.0.1:11534"
+            },
+            "frontend": {
+              "image_id": "sha256:afa4a0454eafd1dceedf1286b459b5edb5150f560f9fa169e21590f8d30b2f6f",
+              "image_tag": "digital-souls-voice-quality/frontend:c0f8a5a0955ea021c84ffcbef0e4be82fe576cde",
+              "ollama_url": null
+            }
+          },
+          "outcome": "success",
+          "recovery": {
+            "control_recovery_upper_ms": 2274.2101989984512,
+            "audio_recovery_upper_ms": 2398.453865656178,
+            "recovery_upper_ms": 2398.453865656178,
+            "duplicate_packet_output_intervals": 0,
+            "packet_evidence_missing": 0,
+            "output_path_failures": 0,
+            "output_evidence_complete": true,
+            "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+            "audio_missing_reason": null
+          },
+          "fault_operation_succeeded": true,
+          "fault_duration_ms": 2000,
+          "session_end_confirmed": true,
+          "fault_clock_process_closed": true,
+          "preparation": {
+            "method": "browser_click_to_microphone_standby_dom_v1",
+            "clock_domain": "browser_performance",
+            "attempt_count": 1,
+            "started_client_ms": 1535,
+            "ready_client_ms": 2848.1000000089407,
+            "duration_ms": 1313.1000000089407
+          },
+          "following_voice": {
+            "outcome": "success",
+            "same_session": true,
+            "new_response": true,
+            "track_response_matches": true,
+            "playback": {
+              "expectedSamples": 279360,
+              "inputSamples": 278400,
+              "paddingSamples": 960,
+              "renderedSamples": 279360,
+              "packetCount": 291,
+              "gapSamples": 0,
+              "maximumGapSamples": 0,
+              "gapCount": 0,
+              "sampleRate": 48000
+            }
+          },
+          "native_sdk": {
+            "schema_version": 1,
+            "python_sdk_version": "1.1.16",
+            "ffi_version": "0.12.73",
+            "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+            "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+            "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+            "reconnect_policy": "short-outage-v1",
+            "target": "x86_64-unknown-linux-gnu",
+            "cuda_video_codecs_enabled": false
+          },
+          "native_sdk_verified": true,
+          "memory_policy": {
+            "consolidation_disabled": true,
+            "formation_disabled": true,
+            "method": "controlled_memory_schedulers_v1"
+          }
+        }
+      ]
+    }
+  ],
+  "fixed_conditions": {
+    "profile": "integration-irodori-cuda-graph-fault",
+    "tts_revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+    "tts_image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+    "voice_id": "miori-b3-4221",
+    "seed": 4221,
+    "steps": 40,
+    "speed": 1.02,
+    "precision": "BF16",
+    "compile": false,
+    "cuda_graph": true,
+    "graph_input_limit_bytes": 268435456,
+    "reference_cache": true,
+    "ollama_version": "0.34.2"
+  },
+  "interpretation": "初回は準備失敗で音声未実施。別IDの診断3件は全件復旧・後続会話成功。正式100件の合否ではない。"
+}

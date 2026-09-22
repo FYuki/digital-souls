@@ -200,6 +200,7 @@ def test_service_uses_selected_reference_and_rejects_arbitrary_reference_paths(t
     app = create_app(settings, worker)
     with TestClient(app) as client:
         assert client.get("/health/ready").status_code == 200
+        assert client.get("/version").json()["referenceCacheRequested"] is False
         assert client.get("/v1/audio/voices").json()["data"][0]["id"] == "miori-b3-4221"
         body = payload().model_dump()
         headers = {"X-DS-Environment": "dogfood"}
