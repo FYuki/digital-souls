@@ -4,18 +4,18 @@ from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
+from app.config_values import parse_positive_integer
+
 
 def positive_integer_environment_value(key: str, default: int) -> int:
     raw_value = os.getenv(key)
     if raw_value is None:
         return default
+    # int() の桁数制限例外も含め、拒否はこの設定キーの文言で統一する
     try:
-        value = int(raw_value)
+        return parse_positive_integer(raw_value, key)
     except ValueError as exc:
         raise ValueError(f"{key} must be a positive integer") from exc
-    if value < 1 or str(value) != raw_value:
-        raise ValueError(f"{key} must be a positive integer")
-    return value
 
 
 def iana_timezone_environment_value(key: str, default: str) -> str:

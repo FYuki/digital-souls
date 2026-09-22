@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from app.config_values import parse_positive_integer
+
 
 INTERVAL_ENV = "MEMORY_CONSOLIDATION_INTERVAL_SECONDS"
 IDLE_ENV = "MEMORY_CONSOLIDATION_IDLE_SECONDS"
@@ -39,6 +41,4 @@ def _positive_integer(
     raw = environment.get(key)
     if raw is None:
         return default
-    if not raw.isascii() or not raw.isdecimal() or str(int(raw)) != raw or int(raw) < 1:
-        raise ValueError(f"{key} must be a positive integer")
-    return int(raw)
+    return parse_positive_integer(raw, key)
