@@ -13,7 +13,10 @@ from app.inference import (
     InferenceSettings,
     InferenceTarget,
 )
-from app.inference.contracts import JsonValue
+from app.inference.structured import (
+    structured_result_json,
+    to_inference_messages,
+)
 
 
 class StructuredMemoryInferenceClient:
@@ -44,7 +47,7 @@ class StructuredMemoryInferenceClient:
         max_output_tokens: int,
     ) -> str:
         del max_output_tokens
-        converted = tuple(_message(message) for message in messages)
+        converted = to_inference_messages(messages)
         if _conservative_token_count(converted, json_schema) > self._max_input_tokens:
             raise InferenceError(
                 InferenceErrorCategory.INVALID_REQUEST,
@@ -57,7 +60,7 @@ class StructuredMemoryInferenceClient:
             response_schema=json_schema,
             timeout_seconds=timeout_seconds,
         )
-        return json.dumps(result.value, ensure_ascii=False, separators=(",", ":"))
+        return structured_result_json(result)
 
 
 class MemoryInferenceEmbedder:
@@ -83,16 +86,6 @@ class MemoryInferenceEmbedder:
         if len(result.vectors) != 1:
             raise RuntimeError("memory embedding must return exactly one vector")
         return list(result.vectors[0])
-
-
-def _message(value: Mapping[str, JsonValue]) -> InferenceMessage:
-    if set(value) != {"role", "content"}:
-        raise ValueError("memory inference message fields are invalid")
-    role = value["role"]
-    content = value["content"]
-    if not isinstance(role, str) or not isinstance(content, str):
-        raise ValueError("memory inference message values must be strings")
-    return InferenceMessage(role, content)
 
 
 def _conservative_token_count(

@@ -1,3 +1,5 @@
+import { characterApiPath } from '../lib/api/paths'
+
 export type TokenResponse = Readonly<{
   session_id: string
   participant_id: string
@@ -95,7 +97,7 @@ export type ConversationBinding = Readonly<{
 }>
 
 export const createConversation = async (): Promise<ConversationBinding> => {
-  const response = await fetch(`${API_PREFIX}/characters/${CHARACTER_ID}/conversations`, {
+  const response = await fetch(`${characterApiPath(CHARACTER_ID)}/conversations`, {
     method: 'POST',
   })
   if (!response.ok) throw new Error(`Conversation creation failed: ${response.status}`)

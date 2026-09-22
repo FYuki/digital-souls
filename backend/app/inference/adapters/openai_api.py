@@ -27,7 +27,12 @@ from app.inference.contracts import (
     TokenEstimateAccuracy,
     TokenEstimateRequest,
 )
-from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.errors import (
+    InferenceError,
+    InferenceErrorCategory,
+    raise_for_http_status,
+    raise_inference_error,
+)
 from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 
 
@@ -88,9 +93,9 @@ class OpenAIAPIAdapter:
                 timeout=httpx.Timeout(timeout_seconds),
             )
         except Exception as error:
-            self._raise_transport(error)
+            raise_inference_error(error)
         if response.is_error:
-            self._raise_http_status(response.status_code, None)
+            raise_for_http_status(response.status_code)
         return ModelProbeResult()
 
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
@@ -147,7 +152,7 @@ class OpenAIAPIAdapter:
                     headers=self._headers,
                 ) as response:
                     if response.is_error:
-                        self._raise_http_status(response.status_code, None)
+                        raise_for_http_status(response.status_code)
                     async for line in response.aiter_lines():
                         if not line.startswith("data:"):
                             continue
@@ -189,7 +194,7 @@ class OpenAIAPIAdapter:
         except InferenceError:
             raise
         except Exception as error:
-            self._raise_transport(error)
+            raise_inference_error(error)
         if not completed or not emitted:
             raise InferenceError(
                 InferenceErrorCategory.INVALID_RESPONSE,
@@ -355,7 +360,7 @@ class OpenAIAPIAdapter:
                 timeout=httpx.Timeout(timeout_seconds),
             )
         except Exception as error:
-            self._raise_transport(error)
+            raise_inference_error(error)
         if response.is_error:
             error_code: str | None = None
             try:
@@ -368,7 +373,7 @@ class OpenAIAPIAdapter:
                             error_code = candidate
             except ValueError:
                 pass
-            self._raise_http_status(response.status_code, error_code)
+            raise_for_http_status(response.status_code, error_code)
         try:
             body: object = response.json()
         except ValueError:
@@ -439,47 +444,6 @@ class OpenAIAPIAdapter:
             timeout=httpx.Timeout(timeout_seconds),
             trust_env=False,
         )
-
-    @staticmethod
-    def _raise_http_status(status_code: int, error_code: str | None) -> NoReturn:
-        if status_code == 401:
-            category = InferenceErrorCategory.AUTHENTICATION_FAILED
-            retryable = False
-        elif status_code == 403:
-            category = InferenceErrorCategory.PERMISSION_DENIED
-            retryable = False
-        elif status_code == 404 or error_code == "model_not_found":
-            category = InferenceErrorCategory.MODEL_NOT_FOUND
-            retryable = False
-        elif status_code == 429:
-            category = InferenceErrorCategory.RATE_LIMITED
-            retryable = True
-        elif status_code in {408, 504}:
-            category = InferenceErrorCategory.TIMEOUT
-            retryable = True
-        elif status_code == 400:
-            category = InferenceErrorCategory.INVALID_REQUEST
-            retryable = False
-        elif status_code >= 500:
-            category = InferenceErrorCategory.UNAVAILABLE
-            retryable = True
-        else:
-            category = InferenceErrorCategory.PROVIDER_ERROR
-            retryable = False
-        raise InferenceError(category, retryable=retryable)
-
-    @staticmethod
-    def _raise_transport(error: Exception) -> NoReturn:
-        if isinstance(error, httpx.TimeoutException):
-            category = InferenceErrorCategory.TIMEOUT
-        elif isinstance(error, (httpx.ConnectError, httpx.NetworkError)):
-            category = InferenceErrorCategory.UNAVAILABLE
-        else:
-            category = InferenceErrorCategory.PROVIDER_ERROR
-        raise InferenceError(
-            category,
-            retryable=category is not InferenceErrorCategory.PROVIDER_ERROR,
-        ) from None
 
     @staticmethod
     def _invalid_response() -> NoReturn:

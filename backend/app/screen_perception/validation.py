@@ -1,11 +1,8 @@
-import json
 from datetime import datetime
-from functools import lru_cache
-from pathlib import Path
 
-from jsonschema import Draft202012Validator
 from pydantic import TypeAdapter, ValidationError
 
+from app.contract_validation import contract_errors, contract_validator
 from app.screen_perception.generated import (
     ScreenPerceptionEvent,
     SnapshotUploadMetadata,
@@ -26,29 +23,10 @@ _SCREEN_PERCEPTION_EVENT_ADAPTER: TypeAdapter[ScreenPerceptionEvent] = TypeAdapt
 )
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
-    repository_root = Path(__file__).resolve().parents[3]
-    schema_path = (
-        repository_root
-        / "contracts"
-        / "perception"
-        / "screen"
-        / "screen-perception.schema.json"
-    )
-    with schema_path.open(encoding="utf-8") as source:
-        schema = json.load(source)
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(
-        schema,
-        format_checker=Draft202012Validator.FORMAT_CHECKER,
-    )
-
-
 def parse_screen_perception_event(value: object) -> ScreenPerceptionEvent:
-    errors = sorted(
-        _validator().iter_errors(value),
-        key=lambda error: tuple(str(segment) for segment in error.path),
+    errors = contract_errors(
+        contract_validator("perception/screen/screen-perception.schema.json"),
+        value,
     )
     if errors:
         raise ValueError("screen perception event does not match protocol 1.0") from errors[0]

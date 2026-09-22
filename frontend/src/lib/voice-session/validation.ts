@@ -1,11 +1,8 @@
-import Ajv2020 from 'ajv/dist/2020.js'
-import addFormats from 'ajv-formats'
 import voiceSessionSchema from '../../../../contracts/voice-session/voice-session.schema.json'
+import { compileContractSchema } from '../validation/ajv'
 import type { VoiceSessionEvent } from './generated'
 
-const ajv = new Ajv2020({ allErrors: true, strict: true })
-addFormats(ajv)
-const validateVoiceSessionEvent = ajv.compile(voiceSessionSchema)
+const validateVoiceSessionEvent = compileContractSchema(voiceSessionSchema)
 
 export function parseVoiceSessionEvent(value: unknown): VoiceSessionEvent {
   if (!validateVoiceSessionEvent(value)) {

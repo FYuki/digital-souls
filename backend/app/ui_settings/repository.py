@@ -1,11 +1,13 @@
 import sqlite3
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
 from app.characters.catalog import is_valid_character_id
-from app.conversation_history._sqlite import SqliteSession, format_datetime
+from app.conversation_history._sqlite import SqliteSession
+from app.sqlite_session import format_datetime
+from app.validation import utc_now
 from app.ui_settings.errors import (
     UiCharacterNotAddedError,
     UiThreadNotFoundError,
@@ -278,10 +280,7 @@ class UiSettingsRepository:
         )
 
     def _now(self) -> datetime:
-        now = self._clock()
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise ValueError("clock must return an aware datetime")
-        return now.astimezone(UTC)
+        return utc_now(self._clock)
 
 
 def _require_user_id(user_id: str) -> None:

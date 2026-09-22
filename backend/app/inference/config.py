@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
 import json
-import re
 from types import MappingProxyType
 from typing import cast
 
+from app.environment import (
+    positive_decimal_setting,
+    positive_integer_setting,
+    positive_integer_value,
+)
 from app.inference.contracts import (
     InferenceCapability,
     InferenceTarget,
@@ -44,7 +47,6 @@ _SUFFIXES = (
     "_TIMEOUT_SECONDS",
     "_MAX_CONCURRENCY",
 )
-_DECIMAL_PATTERN = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\Z")
 
 
 TARGET_DEFINITIONS: Mapping[InferenceTarget, TargetDefinition] = {
@@ -242,18 +244,16 @@ def resolve_inference_settings(
                 environment, target_environment_key(target, "_MAX_OUTPUT_TOKENS")
             )
         )
-        timeout_seconds = _optional_positive_decimal(
+        timeout_seconds = positive_decimal_setting(
             environment,
             target_environment_key(target, "_TIMEOUT_SECONDS"),
             DEFAULT_TIMEOUT_SECONDS,
         )
-        max_concurrency = _optional_positive_integer(
+        max_concurrency = positive_integer_setting(
             environment,
             target_environment_key(target, "_MAX_CONCURRENCY"),
             DEFAULT_MAX_CONCURRENCY,
         )
-        if max_concurrency is None:
-            raise AssertionError("default max concurrency must be configured")
         targets[target] = ResolvedTarget(
             definition=definition,
             reference=reference,
@@ -285,37 +285,11 @@ def _options(
 def _required_positive_integer(environment: Mapping[str, str], key: str) -> int:
     if key not in environment:
         raise ValueError(f"missing inference target setting: {key}")
-    return _positive_integer(environment[key], key)
+    return positive_integer_value(environment[key], key)
 
 
 def _optional_positive_integer(
     environment: Mapping[str, str], key: str, default: int | None = None
 ) -> int | None:
     raw_value = environment.get(key)
-    return default if raw_value is None else _positive_integer(raw_value, key)
-
-
-def _positive_integer(raw_value: str, key: str) -> int:
-    if not raw_value.isascii() or not raw_value.isdecimal():
-        raise ValueError(f"{key} must be a positive integer")
-    value = int(raw_value)
-    if value < 1 or str(value) != raw_value:
-        raise ValueError(f"{key} must be a positive integer")
-    return value
-
-
-def _optional_positive_decimal(
-    environment: Mapping[str, str], key: str, default: float
-) -> float:
-    raw_value = environment.get(key)
-    if raw_value is None:
-        return default
-    if _DECIMAL_PATTERN.fullmatch(raw_value) is None:
-        raise ValueError(f"{key} must be a positive decimal")
-    try:
-        value = Decimal(raw_value)
-    except InvalidOperation:
-        raise ValueError(f"{key} must be a positive decimal") from None
-    if not value.is_finite() or value <= 0:
-        raise ValueError(f"{key} must be a positive decimal")
-    return float(value)
+    return default if raw_value is None else positive_integer_value(raw_value, key)

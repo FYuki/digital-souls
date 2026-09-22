@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.lifecycle import ManagedTask
 from app.memory.formation.contracts import MemoryFormationJob
 
 logger = logging.getLogger(__name__)
@@ -40,17 +41,17 @@ class MemoryFormationScheduler:
         self._clock = monotonic_clock
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue[_QueuedJob | None] | None = None
-        self._task: asyncio.Task[None] | None = None
+        self._lifecycle = ManagedTask("memory formation scheduler")
         self._accepting_submissions = False
         self._active_lock = threading.Lock()
         self._pending_jobs = 0
 
     async def start(self) -> None:
-        if self._task is not None:
+        if self._lifecycle.task is not None:
             raise RuntimeError("memory formation scheduler is already running")
         self._loop = asyncio.get_running_loop()
         self._queue = asyncio.Queue(maxsize=self._queue_maxsize)
-        self._task = asyncio.create_task(self._run())
+        self._lifecycle.spawn(self._run())
         self._accepting_submissions = True
 
     def submit(self, job: MemoryFormationJob) -> None:
@@ -58,7 +59,7 @@ class MemoryFormationScheduler:
             not self._accepting_submissions
             or self._loop is None
             or self._queue is None
-            or self._task is None
+            or self._lifecycle.task is None
         ):
             raise RuntimeError("memory formation scheduler is not running")
         queued = _QueuedJob(job, self._clock())
@@ -89,7 +90,7 @@ class MemoryFormationScheduler:
             )
 
     async def stop(self) -> None:
-        if self._task is None or self._queue is None:
+        if self._lifecycle.task is None or self._queue is None:
             return
         self._accepting_submissions = False
         discarded = 0
@@ -109,10 +110,9 @@ class MemoryFormationScheduler:
             )
         self._queue.put_nowait(None)
         try:
-            await self._task
+            await self._lifecycle.stop()
         finally:
             self._accepting_submissions = False
-            self._task = None
             self._queue = None
             self._loop = None
 

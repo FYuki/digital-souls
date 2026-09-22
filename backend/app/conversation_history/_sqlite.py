@@ -1,7 +1,4 @@
 import sqlite3
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -17,9 +14,9 @@ from app.conversation_history.models import (
 )
 from app.conversation_history.sqlite_lease import normal_sqlite_access
 from app.privacy.contracts import HistoryDecisionReasonCode
+from app.sqlite_session import ConnectionFactory, parse_datetime
+from app.sqlite_session import SqliteSession as _SqliteSession
 
-ConnectionFactory = Callable[[Path], sqlite3.Connection]
-DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 TURN_COLUMNS = (
     "turn_id, character_id, conversation_id, user_content, "
     "assistant_content, status, privacy_reason_code, sanitizer_version, "
@@ -27,7 +24,9 @@ TURN_COLUMNS = (
 )
 
 
-class SqliteSession:
+class SqliteSession(_SqliteSession):
+    """会話履歴DB向けsession。ambient leaseを再利用し構築時に利用可能性を確認する。"""
+
     def __init__(
         self,
         database_path: Path,
@@ -36,31 +35,11 @@ class SqliteSession:
         from app.restore_intent import require_sqlite_available
 
         require_sqlite_available(database_path)
-        self._database_path = database_path
-        self._connection_factory = connection_factory
-
-    @contextmanager
-    def connection(self) -> Iterator[sqlite3.Connection]:
-        with normal_sqlite_access(self._database_path):
-            connection = self._connection_factory(self._database_path)
-            try:
-                connection.row_factory = sqlite3.Row
-                connection.execute("PRAGMA foreign_keys = ON")
-                connection.execute("PRAGMA secure_delete = ON")
-                yield connection
-            finally:
-                connection.close()
-
-    @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
-        with self.connection() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            try:
-                yield connection
-                connection.commit()
-            except BaseException:
-                connection.rollback()
-                raise
+        super().__init__(
+            database_path,
+            connection_factory,
+            access=normal_sqlite_access,
+        )
 
 
 def select_conversation(
@@ -162,11 +141,3 @@ def turn_from_row(row: sqlite3.Row) -> ConversationTurn:
         created_at=parse_datetime(str(row[9])),
         updated_at=parse_datetime(str(row[10])),
     )
-
-
-def format_datetime(value: datetime) -> str:
-    return value.astimezone(UTC).strftime(DATETIME_FORMAT)
-
-
-def parse_datetime(value: str) -> datetime:
-    return datetime.strptime(value, DATETIME_FORMAT).replace(tzinfo=UTC)

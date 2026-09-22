@@ -5,6 +5,7 @@ import logging
 import threading
 from collections.abc import Callable
 
+from app.lifecycle import ManagedTask
 from app.memory.index_sync import MemoryIndexSync
 
 
@@ -16,28 +17,28 @@ logger = logging.getLogger(__name__)
 class MemoryIndexScheduler:
     def __init__(self, sync: MemoryIndexSync) -> None:
         self._sync = sync
-        self.task: asyncio.Task[None] | None = None
+        self._lifecycle = ManagedTask("memory index scheduler")
         self._stop_requested = threading.Event()
         self._wake_event = asyncio.Event()
         self._tick_start_lock = threading.Lock()
 
+    @property
+    def task(self) -> asyncio.Task[None] | None:
+        return self._lifecycle.task
+
     def start(self) -> None:
-        if self.task is not None:
+        if self._lifecycle.task is not None:
             raise RuntimeError("memory index scheduler is already running")
         self._stop_requested.clear()
         self._wake_event.clear()
-        self.task = asyncio.create_task(self._run())
+        self._lifecycle.spawn(self._run())
 
     async def stop(self) -> None:
-        task = self.task
-        if task is None:
+        if self._lifecycle.task is None:
             return
         await asyncio.to_thread(self._request_stop)
         self._wake_event.set()
-        try:
-            await task
-        finally:
-            self.task = None
+        await self._lifecycle.stop()
 
     async def _run(self) -> None:
         if not await self._run_tick(self._sync.run_worker_once):

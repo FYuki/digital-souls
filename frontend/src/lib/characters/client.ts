@@ -1,11 +1,9 @@
+import { requestJson } from '../api/http'
+import { CHARACTERS_API_PREFIX } from '../api/paths'
+import { CHARACTER_ID_PATTERN, isRecord } from '../validation/primitives'
 import type { CharacterCatalogEntry } from './types'
 
-const CATALOG_PATH = '/api/characters'
-const CHARACTER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null
-)
+const CATALOG_PATH = CHARACTERS_API_PREFIX
 
 const parseEntry = (value: unknown): CharacterCatalogEntry => {
   if (
@@ -30,14 +28,11 @@ const parseEntry = (value: unknown): CharacterCatalogEntry => {
 }
 
 const requestCatalog = async (init?: RequestInit): Promise<CharacterCatalogEntry[]> => {
-  const response = await fetch(
+  const value = await requestJson(
     init === undefined ? CATALOG_PATH : `${CATALOG_PATH}/rescan`,
+    'Character catalog request',
     init,
   )
-  if (!response.ok) {
-    throw new Error(`Character catalog request failed with status ${response.status}`)
-  }
-  const value: unknown = await response.json()
   if (!Array.isArray(value)) {
     throw new Error('Character catalog response shape is invalid')
   }

@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from app.environment import positive_integer_setting
+
 WHISPER_MODEL_ENV = "WHISPER_MODEL"
 MAX_COMPLETED_TURNS_ENV = "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS"
 HISTORY_TOKEN_LIMIT_ENV = "CONVERSATION_HISTORY_TOKEN_LIMIT"
@@ -53,16 +55,16 @@ def resolve_model_settings(
         whisper_model=_string_value(environment, WHISPER_MODEL_ENV, WHISPER_MODEL_NAME),
         chat_context_tokens=chat_context_tokens,
         assistant_max_generation_tokens=assistant_max_generation_tokens,
-        max_completed_turns=_positive_integer(
+        max_completed_turns=positive_integer_setting(
             environment, MAX_COMPLETED_TURNS_ENV, DEFAULT_MAX_COMPLETED_TURNS
         ),
-        history_token_limit=_positive_integer(
+        history_token_limit=positive_integer_setting(
             environment, HISTORY_TOKEN_LIMIT_ENV, DEFAULT_HISTORY_TOKEN_LIMIT
         ),
-        user_input_token_limit=_positive_integer(
+        user_input_token_limit=positive_integer_setting(
             environment, USER_INPUT_TOKEN_LIMIT_ENV, DEFAULT_USER_INPUT_TOKEN_LIMIT
         ),
-        model_context_token_limit=_positive_integer(
+        model_context_token_limit=positive_integer_setting(
             environment,
             MODEL_CONTEXT_TOKEN_LIMIT_ENV,
             DEFAULT_MODEL_CONTEXT_TOKEN_LIMIT,
@@ -88,20 +90,6 @@ def _string_value(
     value = environment.get(key, default)
     if not value or value.strip() != value:
         raise ValueError(f"{key} must be a non-empty canonical string")
-    return value
-
-
-def _positive_integer(
-    environment: Mapping[str, str], key: str, default: int
-) -> int:
-    raw_value = environment.get(key)
-    if raw_value is None:
-        return default
-    if not raw_value.isascii() or not raw_value.isdecimal():
-        raise ValueError(f"{key} must be a positive integer")
-    value = int(raw_value)
-    if value < 1 or str(value) != raw_value:
-        raise ValueError(f"{key} must be a positive integer")
     return value
 
 

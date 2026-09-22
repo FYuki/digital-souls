@@ -1,4 +1,6 @@
-const API_PREFIX = '/api/characters'
+import { requestJson, requestVoid } from '../api/http'
+import { characterApiPath } from '../api/paths'
+import { isRecord } from '../validation/primitives'
 
 export type PersonaMemory = {
   id: string
@@ -31,38 +33,32 @@ export class MemoryCorrectionRejected extends Error {
   }
 }
 
-const basePath = (character: string): string => (
-  `${API_PREFIX}/${encodeURIComponent(character)}`
+const REQUEST_LABEL = 'Memory request'
+
+const basePath = (character: string): string => characterApiPath(character)
+
+// 422の訂正拒否だけdomain例外へ変換し、他は共有のstatusエラーを使う。
+const mapError = async (response: Response): Promise<Error | null> => {
+  if (response.status !== 422) return null
+  const body: unknown = await response.json()
+  if (isRecord(body) && typeof body.reason_code === 'string') {
+    return new MemoryCorrectionRejected(body.reason_code)
+  }
+  return null
+}
+
+const requestMemoryJson = (url: string, init?: RequestInit): Promise<unknown> => (
+  requestJson(url, REQUEST_LABEL, init, mapError)
 )
 
-const requestJson = async (url: string, init?: RequestInit): Promise<unknown> => {
-  const response = await fetch(url, init)
-  if (!response.ok) {
-    if (response.status === 422) {
-      const body: unknown = await response.json()
-      if (typeof body === 'object' && body !== null && 'reason_code' in body
-        && typeof body.reason_code === 'string') {
-        throw new MemoryCorrectionRejected(body.reason_code)
-      }
-    }
-    throw new Error(`Memory request failed with status ${response.status}`)
-  }
-  return response.json()
-}
-
-const requestWithoutBody = async (url: string, init: RequestInit): Promise<void> => {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`Memory request failed with status ${response.status}`)
-}
-
 export const listPersonaMemories = async (character: string): Promise<PersonaMemory[]> => (
-  requestJson(`${basePath(character)}/persona-memories?status=ACTIVE`) as Promise<PersonaMemory[]>
+  requestMemoryJson(`${basePath(character)}/persona-memories?status=ACTIVE`) as Promise<PersonaMemory[]>
 )
 
 export const listTemporaryRecords = async (
   character: string,
   provider: string,
-): Promise<TemporaryRecord[]> => await requestJson(
+): Promise<TemporaryRecord[]> => await requestMemoryJson(
   `${basePath(character)}/temporary-records/${provider}`,
 ) as TemporaryRecord[]
 
@@ -72,7 +68,7 @@ export const correctPersonaMemory = async (
   structuredValue: Record<string, unknown>,
   idempotencyKey: string,
 ): Promise<PersonaMemory> => (
-  requestJson(`${basePath(character)}/persona-memories/${memory.id}`, {
+  requestMemoryJson(`${basePath(character)}/persona-memories/${memory.id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -87,7 +83,7 @@ export const correctTemporaryRecord = async (
   character: string,
   record: TemporaryRecord,
   correction: Pick<TemporaryRecord, 'record_type' | 'structured_value' | 'effective_at'>,
-): Promise<TemporaryRecord> => requestJson(
+): Promise<TemporaryRecord> => requestMemoryJson(
   `${basePath(character)}/temporary-records/${record.provider_id}/${record.id}`,
   {
     method: 'PATCH',
@@ -103,15 +99,17 @@ export const correctTemporaryRecord = async (
 export const hardDeleteTemporaryRecord = async (
   character: string,
   record: TemporaryRecord,
-): Promise<void> => requestWithoutBody(
+): Promise<void> => requestVoid(
   `${basePath(character)}/temporary-records/${record.provider_id}/${record.id}`,
   { method: 'DELETE' },
+  REQUEST_LABEL,
 )
 
 export const hardDeletePersonaMemory = async (
   character: string,
   memoryId: string,
-): Promise<void> => requestWithoutBody(
+): Promise<void> => requestVoid(
   `${basePath(character)}/persona-memories/${memoryId}`,
   { method: 'DELETE' },
+  REQUEST_LABEL,
 )

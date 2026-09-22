@@ -1,3 +1,9 @@
+import { requestJson } from '../api/http'
+import {
+  CHARACTER_ID_PATTERN,
+  isRecord,
+  UUID_V4_PATTERN,
+} from '../validation/primitives'
 import type {
   CharacterUiState,
   HistoryHeightPercent,
@@ -7,13 +13,7 @@ import type {
 } from './types'
 
 const SETTINGS_PATH = '/api/ui-settings'
-const CHARACTER_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
-const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const HISTORY_HEIGHTS: ReadonlySet<number> = new Set([50, 75, 100])
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null
-)
 
 const parseCharacter = (value: unknown): CharacterUiState => {
   if (
@@ -78,13 +78,9 @@ const parseSettings = (value: unknown): UiSettings => {
 const requestSettings = async (
   path: string,
   init?: RequestInit,
-): Promise<UiSettings> => {
-  const response = await fetch(path, init)
-  if (!response.ok) {
-    throw new Error(`UI settings request failed with status ${response.status}`)
-  }
-  return parseSettings(await response.json())
-}
+): Promise<UiSettings> => parseSettings(
+  await requestJson(path, 'UI settings request', init),
+)
 
 export const getUiSettings = async (): Promise<UiSettings> => (
   requestSettings(SETTINGS_PATH)

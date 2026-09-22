@@ -8,6 +8,7 @@ from typing import Protocol
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.inference import InferenceError
+from app.inference.structured import StructuredChatClient
 from app.memory.admission.contracts import (
     ConversationSource,
     EpisodicEventType,
@@ -57,15 +58,8 @@ as JSON matching the supplied schema.
 """
 
 
-class MemoryExtractorClient(Protocol):
-    def chat(
-        self,
-        messages: tuple[dict[str, str], ...],
-        *,
-        json_schema: dict[str, object],
-        timeout_seconds: float,
-        max_output_tokens: int,
-    ) -> str: ...
+class MemoryExtractorClient(StructuredChatClient, Protocol):
+    """Memory抽出向けの構造化chat port。"""
 
 
 class MemoryCandidateExtractor:

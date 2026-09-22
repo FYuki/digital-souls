@@ -10,8 +10,6 @@ from app.conversation_history._sqlite import (
     SqliteSession,
     conversation_not_found_error,
     conversation_from_row,
-    format_datetime,
-    parse_datetime,
     select_conversation,
     select_turn,
     turn_from_row,
@@ -37,6 +35,8 @@ from app.conversation_history.titles import (
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.privacy.contracts import HistoryDecisionReasonCode
 from app.screen_perception.provenance import ScreenLineage
+from app.sqlite_session import format_datetime, parse_datetime
+from app.validation import is_aware_datetime, is_uuid4, require_non_empty
 
 ConnectionFactory = Callable[[Path], sqlite3.Connection]
 Clock = Callable[[], datetime]
@@ -87,7 +87,7 @@ class ConversationHistoryRepository:
         self._database = SqliteSession(database_path, connection_factory)
 
     def create_conversation(self, character_id: str) -> Conversation:
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         conversation_id = self._new_uuid4()
         now = self._now()
         with self._database.transaction() as connection:
@@ -118,14 +118,14 @@ class ConversationHistoryRepository:
             return select_conversation(connection, character_id, conversation_id)
 
     def list_active_conversations(self, character_id: str) -> list[Conversation]:
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         return self._select_conversations(
             character_id,
             archived_clause="IS NULL",
         )
 
     def list_archived_conversations(self, character_id: str) -> list[Conversation]:
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         return self._select_conversations(
             character_id,
             archived_clause="IS NOT NULL",
@@ -236,7 +236,7 @@ class ConversationHistoryRepository:
         conversation_id: UUID,
         turn_input: ProcessingTurnInput,
     ) -> ConversationTurn:
-        _require_non_empty(turn_input.sanitized_user_content, "sanitized_user_content")
+        require_non_empty(turn_input.sanitized_user_content, "sanitized_user_content")
         return self._create_turn(
             character_id,
             conversation_id,
@@ -265,7 +265,7 @@ class ConversationHistoryRepository:
         conversation_id: UUID,
         turn_id: UUID,
     ) -> ConversationTurn | None:
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         _require_uuid4(conversation_id)
         _require_uuid4(turn_id)
         with self._database.connection() as connection:
@@ -284,7 +284,7 @@ class ConversationHistoryRepository:
         lineages: tuple[ScreenLineage, ...],
     ) -> None:
         """画面本文を含めず、長期記憶除外用の由来だけを保存する。"""
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         _require_uuid4(conversation_id)
         _require_uuid4(turn_id)
         if not lineages:
@@ -322,7 +322,7 @@ class ConversationHistoryRepository:
     def list_screen_lineages(
         self, character_id: str, conversation_id: UUID, turn_id: UUID
     ) -> tuple[ScreenLineage, ...]:
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         _require_uuid4(conversation_id)
         _require_uuid4(turn_id)
         with self._database.connection() as connection:
@@ -351,7 +351,7 @@ class ConversationHistoryRepository:
     def is_screen_derived(
         self, character_id: str, conversation_id: UUID, turn_id: UUID
     ) -> bool:
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         _require_uuid4(conversation_id)
         _require_uuid4(turn_id)
         with self._database.connection() as connection:
@@ -370,7 +370,7 @@ class ConversationHistoryRepository:
         conversation_id: UUID,
         turn_id: UUID,
     ) -> ConversationTurn | None:
-        _require_non_empty(character_id, "character_id")
+        require_non_empty(character_id, "character_id")
         _require_uuid4(conversation_id)
         _require_uuid4(turn_id)
         cutoff = format_datetime(self._now() - self._retention)
@@ -422,7 +422,7 @@ class ConversationHistoryRepository:
         *,
         sanitized_assistant_content: str,
     ) -> ConversationTurn:
-        _require_non_empty(
+        require_non_empty(
             sanitized_assistant_content,
             "sanitized_assistant_content",
         )
@@ -870,16 +870,11 @@ class ConversationHistoryRepository:
 
     def _now(self) -> datetime:
         value = self._clock()
-        if value.tzinfo is None or value.utcoffset() is None:
+        if not is_aware_datetime(value):
             raise InvalidUtcDatetimeError()
         return value.astimezone(UTC)
 
 
 def _require_uuid4(value: UUID) -> None:
-    if value.version != 4:
+    if not is_uuid4(value):
         raise InvalidConversationIdError(value)
-
-
-def _require_non_empty(value: str, field_name: str) -> None:
-    if not value.strip():
-        raise ValueError(f"{field_name} must not be empty")

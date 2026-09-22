@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import json
 
 from app.inference import (
     InferenceCaller,
-    InferenceMessage,
     InferenceRouter,
     InferenceSettings,
     InferenceTarget,
+)
+from app.inference.structured import (
+    structured_result_json,
+    to_inference_messages,
 )
 from app.privacy.semantic.schema import SEMANTIC_RESPONSE_SCHEMA
 
@@ -44,18 +46,11 @@ class InferenceSemanticClassifierClient:
         result = self._router.generate_structured(
             caller=self._caller,
             target=InferenceTarget.PRIVACY,
-            messages=tuple(
-                InferenceMessage(message["role"], message["content"])
-                for message in messages
-            ),
+            messages=to_inference_messages(messages),
             response_schema=SEMANTIC_RESPONSE_SCHEMA,
             timeout_seconds=timeout_seconds,
         )
-        return json.dumps(
-            result.value,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
+        return structured_result_json(result)
 
     def resolve_model_digest(self, *, timeout_seconds: float) -> str:
         return self._model_digest_resolver(self._model_id, timeout_seconds)

@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import Protocol
 from uuid import UUID
 
+from app.inference.structured import StructuredChatClient
 from app.memory.admission.contracts import (
     EpisodicEventType,
     EpisodicEventValue,
@@ -40,15 +41,8 @@ class ConsolidationPlanParseError(ValueError):
     pass
 
 
-class ConsolidationClient(Protocol):
-    def chat(
-        self,
-        messages: tuple[dict[str, str], ...],
-        *,
-        json_schema: dict[str, object],
-        timeout_seconds: float,
-        max_output_tokens: int,
-    ) -> str: ...
+class ConsolidationClient(StructuredChatClient, Protocol):
+    """Consolidation計画向けの構造化chat port。"""
 
 
 class ConsolidationPlanner:

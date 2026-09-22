@@ -7,6 +7,7 @@ from typing import cast
 
 import httpx
 
+from app.environment import positive_decimal_value
 from app.tts.speech_synthesizer import SpeechSynthesisError
 
 VOICEVOX_BASE_URL_ENV = "VOICEVOX_BASE_URL"
@@ -187,6 +188,8 @@ def create_voicevox_client(base_url: str) -> VoicevoxClient:
     drain_seconds = (
         DEFAULT_VOICEVOX_SHUTDOWN_DRAIN_SECONDS
         if configured is None or configured.strip() == ""
-        else float(configured)
+        else positive_decimal_value(
+            configured, VOICEVOX_SHUTDOWN_DRAIN_SECONDS_ENV
+        )
     )
     return VoicevoxClient(base_url, shutdown_drain_seconds=drain_seconds)

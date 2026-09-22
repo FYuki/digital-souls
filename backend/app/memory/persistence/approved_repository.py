@@ -4,7 +4,7 @@ import json
 import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 from uuid import UUID
@@ -36,11 +36,13 @@ from app.memory.persistence.contracts import (
     MemoryWriteContext,
     TemporalPrecision,
 )
-from app.memory.persistence.sqlite import (
-    ConnectionFactory,
-    PersonaMemorySqlite,
-    format_datetime,
-    parse_datetime,
+from app.memory.persistence.sqlite import PersonaMemorySqlite
+from app.sqlite_session import ConnectionFactory, format_datetime, parse_datetime
+from app.validation import (
+    require_aware_datetime,
+    require_non_empty,
+    require_uuid4,
+    utc_now,
 )
 
 
@@ -97,7 +99,7 @@ class ApprovedMemoryRepository:
         candidate: ApprovedMemoryCandidate,
         context: MemoryWriteContext,
     ) -> ApprovedMemory:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_approved_candidate(candidate)
         memory_id = self._new_uuid(self._uuid_factory)
         now = self._now()
@@ -155,8 +157,8 @@ class ApprovedMemoryRepository:
         candidate: ApprovedMemoryCandidate,
         context: MemoryWriteContext,
     ) -> ApprovedMemory:
-        _require_character_id(character_id)
-        _require_uuid4(memory_id)
+        require_non_empty(character_id, "character_id")
+        require_uuid4(memory_id, "identifier")
         _require_approved_candidate(candidate)
         now = self._now()
         memory_type, memory_kind, episodic_event_type = _candidate_classification(
@@ -247,7 +249,7 @@ class ApprovedMemoryRepository:
         canonical_memory_id: UUID | None,
         consolidated_at: datetime,
     ) -> ApprovedMemory:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         if not isinstance(operation, ConsolidationOperation):
             raise TypeError("operation must be a ConsolidationOperation")
         _require_consolidation_inputs(inputs)
@@ -398,8 +400,8 @@ class ApprovedMemoryRepository:
         candidate: ApprovedMemoryCandidate,
         mentioned_at: datetime,
     ) -> ApprovedMemory:
-        _require_character_id(character_id)
-        _require_uuid4(memory_id)
+        require_non_empty(character_id, "character_id")
+        require_uuid4(memory_id, "identifier")
         _require_approved_candidate(candidate)
         mentioned_at_text = format_datetime(mentioned_at)
         with self._database.transaction() as connection:
@@ -417,8 +419,8 @@ class ApprovedMemoryRepository:
             return _select_memory(connection, character_id, memory_id)
 
     def deactivate(self, *, character_id: str, memory_id: UUID) -> ApprovedMemory:
-        _require_character_id(character_id)
-        _require_uuid4(memory_id)
+        require_non_empty(character_id, "character_id")
+        require_uuid4(memory_id, "identifier")
         with self._database.transaction() as connection:
             _select_memory(connection, character_id, memory_id)
             connection.execute(
@@ -434,8 +436,8 @@ class ApprovedMemoryRepository:
         character_id: str,
         memory_id: UUID,
     ) -> ApprovedMemory | None:
-        _require_character_id(character_id)
-        _require_uuid4(memory_id)
+        require_non_empty(character_id, "character_id")
+        require_uuid4(memory_id, "identifier")
         with self._database.connection() as connection:
             row = connection.execute(
                 f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
@@ -445,7 +447,7 @@ class ApprovedMemoryRepository:
         return None if row is None else _memory_from_row(row)
 
     def list_active(self, *, character_id: str) -> list[ApprovedMemory]:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         now = format_datetime(self._now())
         with self._database.connection() as connection:
             rows = connection.execute(
@@ -464,7 +466,7 @@ class ApprovedMemoryRepository:
         provider_id: str,
         status: MemoryStatus,
     ) -> list[ApprovedMemory]:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_core_provider(provider_id)
         if not isinstance(status, MemoryStatus):
             raise TypeError("status must be a MemoryStatus")
@@ -484,9 +486,9 @@ class ApprovedMemoryRepository:
         provider_id: str,
         memory_id: UUID,
     ) -> ApprovedMemoryDetail | None:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_core_provider(provider_id)
-        _require_uuid4(memory_id)
+        require_uuid4(memory_id, "identifier")
         with self._database.connection() as connection:
             row = connection.execute(
                 f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
@@ -533,10 +535,10 @@ class ApprovedMemoryRepository:
         provider_id: str,
         memory_ids: tuple[UUID, ...],
     ) -> dict[UUID, ApprovedMemoryDetail]:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_core_provider(provider_id)
         for memory_id in memory_ids:
-            _require_uuid4(memory_id)
+            require_uuid4(memory_id, "identifier")
         if not memory_ids:
             return {}
         placeholders = ", ".join("?" for _ in memory_ids)
@@ -595,9 +597,9 @@ class ApprovedMemoryRepository:
     def pending_index_memory_ids(
         self, *, character_id: str, memory_ids: tuple[UUID, ...]
     ) -> frozenset[UUID]:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         for memory_id in memory_ids:
-            _require_uuid4(memory_id)
+            require_uuid4(memory_id, "identifier")
         if not memory_ids:
             return frozenset()
         placeholders = ", ".join("?" for _ in memory_ids)
@@ -611,8 +613,8 @@ class ApprovedMemoryRepository:
         return frozenset(UUID(str(row["memory_id"])) for row in rows)
 
     def is_index_pending(self, *, character_id: str, memory_id: UUID) -> bool:
-        _require_character_id(character_id)
-        _require_uuid4(memory_id)
+        require_non_empty(character_id, "character_id")
+        require_uuid4(memory_id, "identifier")
         with self._database.connection() as connection:
             row = connection.execute(
                 "SELECT 1 FROM memory_index_outbox WHERE character_id = ? "
@@ -629,10 +631,9 @@ class ApprovedMemoryRepository:
         end: datetime,
         compatible_policy_versions: frozenset[str],
     ) -> list[ApprovedMemory]:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         for value, field_name in ((start, "start"), (end, "end")):
-            if value.tzinfo is None or value.utcoffset() is None:
-                raise ValueError(f"{field_name} must be timezone-aware")
+            require_aware_datetime(value, field_name)
         if start >= end:
             raise ValueError("start must be before end")
         if not compatible_policy_versions:
@@ -666,8 +667,8 @@ class ApprovedMemoryRepository:
         return {str(row["character_id"]) for row in rows}
 
     def hard_delete(self, *, character_id: str, memory_id: UUID) -> None:
-        _require_character_id(character_id)
-        _require_uuid4(memory_id)
+        require_non_empty(character_id, "character_id")
+        require_uuid4(memory_id, "identifier")
         now = self._now()
         with self._database.transaction() as connection:
             row = connection.execute(
@@ -831,14 +832,11 @@ class ApprovedMemoryRepository:
 
     def _new_uuid(self, factory: UuidFactory) -> UUID:
         value = factory()
-        _require_uuid4(value)
+        require_uuid4(value, "identifier")
         return value
 
     def _now(self) -> datetime:
-        value = self._clock()
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("clock must return a timezone-aware datetime")
-        return value.astimezone(UTC)
+        return utc_now(self._clock)
 
 
 def _select_memory(
@@ -1031,7 +1029,7 @@ def _require_canonical_input(
     canonical_memory_id: UUID,
     inputs: tuple[ConsolidationInputSnapshot, ...],
 ) -> None:
-    _require_uuid4(canonical_memory_id)
+    require_uuid4(canonical_memory_id, "identifier")
     if canonical_memory_id not in {item.memory_id for item in inputs}:
         raise ValueError("canonical_memory_id must identify an input memory")
 
@@ -1053,16 +1051,7 @@ def _require_approved_candidate(candidate: object) -> None:
         raise TypeError("candidate must be an ApprovedMemoryCandidate")
 
 
-def _require_character_id(character_id: str) -> None:
-    if not isinstance(character_id, str) or not character_id.strip():
-        raise ValueError("character_id must not be empty")
-
-
 def _require_core_provider(provider_id: str) -> None:
     if provider_id != "core":
         raise ValueError("provider_id must be core")
 
-
-def _require_uuid4(value: UUID) -> None:
-    if not isinstance(value, UUID) or value.version != 4:
-        raise ValueError("identifier must be a UUID4")

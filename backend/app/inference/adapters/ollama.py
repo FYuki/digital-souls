@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Mapping
 import json
 import math
 import re
-from typing import NoReturn, cast
+from typing import cast
 
 import httpx
 
@@ -27,7 +27,11 @@ from app.inference.contracts import (
     TokenEstimateAccuracy,
     TokenEstimateRequest,
 )
-from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.errors import (
+    InferenceError,
+    InferenceErrorCategory,
+    raise_inference_error,
+)
 from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 
 
@@ -128,7 +132,7 @@ class OllamaAdapter:
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            self._raise_normalized(error)
+            raise_inference_error(error)
         if not completed or not emitted:
             raise InferenceError(
                 InferenceErrorCategory.INVALID_RESPONSE,
@@ -154,7 +158,7 @@ class OllamaAdapter:
             )
             response.raise_for_status()
         except Exception as error:
-            self._raise_normalized(error)
+            raise_inference_error(error)
         body = self._response_object(response)
         raw_vectors = body.get("embeddings")
         if not isinstance(raw_vectors, list) or len(raw_vectors) != len(request.inputs):
@@ -277,7 +281,7 @@ class OllamaAdapter:
             )
             response.raise_for_status()
         except Exception as error:
-            self._raise_normalized(error)
+            raise_inference_error(error)
         body = self._response_object(response)
         self._model_details[model_id] = body
         return body
@@ -322,7 +326,7 @@ class OllamaAdapter:
             response.raise_for_status()
             return response
         except Exception as error:
-            self._raise_normalized(error)
+            raise_inference_error(error)
 
     @staticmethod
     def _chat_payload(
@@ -495,30 +499,3 @@ class OllamaAdapter:
 
     def _endpoint(self, path: str) -> str:
         return f"{self._base_url}{path}"
-
-    @staticmethod
-    def _raise_normalized(error: Exception) -> NoReturn:
-        if isinstance(error, InferenceError):
-            raise error
-        if isinstance(error, httpx.TimeoutException):
-            category = InferenceErrorCategory.TIMEOUT
-            retryable = True
-        elif isinstance(error, httpx.HTTPStatusError):
-            status = error.response.status_code
-            if status == 401:
-                category, retryable = InferenceErrorCategory.AUTHENTICATION_FAILED, False
-            elif status == 403:
-                category, retryable = InferenceErrorCategory.PERMISSION_DENIED, False
-            elif status == 404:
-                category, retryable = InferenceErrorCategory.MODEL_NOT_FOUND, False
-            elif status == 429:
-                category, retryable = InferenceErrorCategory.RATE_LIMITED, True
-            elif status >= 500:
-                category, retryable = InferenceErrorCategory.UNAVAILABLE, True
-            else:
-                category, retryable = InferenceErrorCategory.PROVIDER_ERROR, False
-        elif isinstance(error, httpx.HTTPError):
-            category, retryable = InferenceErrorCategory.UNAVAILABLE, True
-        else:
-            category, retryable = InferenceErrorCategory.PROVIDER_ERROR, False
-        raise InferenceError(category, retryable=retryable) from None

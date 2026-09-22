@@ -1,8 +1,10 @@
+import { ensureOk } from '../api/http'
 import { CONVERSATION_ID_FIELD } from '../conversation-contract'
 import type { ConversationTurn } from '../conversations/types'
 import { parsePersistedTurn } from '../conversations/turn-parser'
 import type { SnapshotRequested } from '../screen-perception/generated'
 import { parseScreenPerceptionEvent } from '../screen-perception/validation'
+import { isRecord } from '../validation/primitives'
 
 const CHAT_ENDPOINT = '/api/chat'
 
@@ -23,10 +25,6 @@ export type ChatRequestResult =
   | { kind: 'completed'; chat: ChatResponse }
   | { kind: 'snapshot_requested'; request: SnapshotRequested }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null
-}
-
 export const parseChatResponseBody = (
   body: unknown,
   expectedCharacter: string,
@@ -41,10 +39,7 @@ export const parseChatResponseBody = (
 }
 
 const parseChatResponse = async (response: Response, expectedCharacter: string): Promise<ChatResponse> => {
-  if (!response.ok) {
-    throw new Error(`Chat request failed with status ${response.status}`)
-  }
-
+  ensureOk(response, 'Chat request')
   const body: unknown = await response.json()
   return parseChatResponseBody(body, expectedCharacter)
 }

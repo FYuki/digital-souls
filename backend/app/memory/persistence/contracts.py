@@ -8,6 +8,11 @@ from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.memory.admission.contracts import MemoryType, StructuredValue
+from app.validation import (
+    is_uuid4,
+    require_aware_datetime as _require_aware_datetime,
+    require_non_empty as _require_non_empty,
+)
 
 
 class FormationMethod(str, Enum):
@@ -83,10 +88,7 @@ class MemoryLineageInput:
     relation: MemoryLineageRelation
 
     def __post_init__(self) -> None:
-        if (
-            not isinstance(self.related_memory_id, UUID)
-            or self.related_memory_id.version != 4
-        ):
+        if not is_uuid4(self.related_memory_id):
             raise ValueError("related_memory_id must be a UUID4")
         if not isinstance(self.relation, MemoryLineageRelation):
             raise TypeError("relation must be a MemoryLineageRelation")
@@ -303,7 +305,7 @@ def build_consolidation_idempotency_key(
     normalized: list[tuple[str, int]] = []
     seen: set[UUID] = set()
     for memory_id, content_version in memories:
-        if not isinstance(memory_id, UUID) or memory_id.version != 4:
+        if not is_uuid4(memory_id):
             raise ValueError("memory_id must be a UUID4")
         if memory_id in seen:
             raise ValueError("memories must not contain duplicate ids")
@@ -324,12 +326,3 @@ def build_consolidation_idempotency_key(
         ("consolidation", character_id, operation.value, prompt_version, digest)
     )
 
-
-def _require_aware_datetime(value: datetime, field_name: str) -> None:
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(f"{field_name} must be timezone-aware")
-
-
-def _require_non_empty(value: object, field_name: str) -> None:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must not be empty")

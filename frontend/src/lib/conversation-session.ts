@@ -1,5 +1,6 @@
+import { UUID_V4_PATTERN } from './validation/primitives'
+
 const STORAGE_KEY_PREFIX = 'digital-souls:conversation:'
-const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export type ConversationSessionManager = {
   getSelectedConversationId: (character: string) => string | null

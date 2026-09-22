@@ -1,13 +1,9 @@
-import Ajv2020 from 'ajv/dist/2020.js'
-import addFormats from 'ajv-formats'
-
 import screenPerceptionSchema from '../../../../contracts/perception/screen/screen-perception.schema.json'
+import { compileContractSchema } from '../validation/ajv'
 import type { ScreenPerceptionEvent } from './generated'
 
 const MAX_IMAGE_PIXELS = 4_194_304
-const ajv = new Ajv2020({ allErrors: true, strict: true })
-addFormats(ajv)
-const validateScreenPerceptionEvent = ajv.compile(screenPerceptionSchema)
+const validateScreenPerceptionEvent = compileContractSchema(screenPerceptionSchema)
 
 export function parseScreenPerceptionEvent(value: unknown): ScreenPerceptionEvent {
   if (!validateScreenPerceptionEvent(value)) {

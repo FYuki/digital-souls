@@ -3,14 +3,12 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
-from app.memory.persistence.sqlite import (
-    ConnectionFactory,
-    PersonaMemorySqlite,
-    format_datetime,
-)
+from app.memory.persistence.sqlite import PersonaMemorySqlite
+from app.sqlite_session import ConnectionFactory, format_datetime
+from app.validation import utc_now
 
 
 Clock = Callable[[], datetime]
@@ -120,7 +118,4 @@ class IndexOutboxRepository:
         return counts.get("PENDING", 0), counts.get("FAILED", 0)
 
     def _now(self) -> datetime:
-        value = self._clock()
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("clock must return a timezone-aware datetime")
-        return value.astimezone(UTC)
+        return utc_now(self._clock)

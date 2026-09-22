@@ -1,3 +1,4 @@
+import { isRecord } from '../validation/primitives'
 import { TARGET_SAMPLE_RATE } from './pcm-format'
 
 const PCM_WORKLET_PROCESSOR_NAME = 'pcm16-recorder'
@@ -83,10 +84,6 @@ type RecorderStoppedMessage = {
 }
 
 type RecorderMessage = PcmChunkMessage | RecorderStoppedMessage
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null
-}
 
 const isRecorderMessage = (value: unknown): value is RecorderMessage => {
   if (!isRecord(value)) {

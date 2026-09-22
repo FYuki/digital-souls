@@ -29,7 +29,7 @@ from app.runtime_paths import RuntimePaths
 from app.memory import rag_service as _rag_service
 from app.memory.chroma_store import MemorySearchResult
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
-from app.memory.persistence.sqlite import format_datetime
+from app.sqlite_session import format_datetime
 from app.memory.formation.contracts import MemoryFormationJob
 from app.prompting import (
     BuiltPrompt,
@@ -51,13 +51,13 @@ from app.screen_perception.detector import (
 from app.screen_perception.provenance import ScreenLineage
 from app.privacy.contracts import PrivacyScanner
 from app.privacy.semantic.classifier import SemanticPrivacyClassifier
+from app.registry import RegistrationStack
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
 logger = logging.getLogger(__name__)
 
-_default_service_lock = threading.Lock()
-_default_service_resolvers: list[Callable[[], "ChatService"]] = []
+_default_service_resolvers = RegistrationStack[Callable[[], "ChatService"]]()
 
 
 @dataclass(frozen=True, repr=False)
@@ -442,15 +442,13 @@ def create_chat_service(
 def register_default_chat_service_resolver(
     resolver: Callable[[], ChatService],
 ) -> None:
-    with _default_service_lock:
-        _default_service_resolvers.append(resolver)
+    _default_service_resolvers.push(resolver)
 
 
 def clear_default_chat_service_resolver(
     resolver: Callable[[], ChatService],
 ) -> None:
-    with _default_service_lock:
-        _default_service_resolvers.remove(resolver)
+    _default_service_resolvers.remove(resolver)
 
 
 def default_chat_service() -> ChatService:
@@ -463,10 +461,7 @@ def default_chat_service() -> ChatService:
 
 
 def _current_default_service_resolver() -> Callable[[], ChatService] | None:
-    with _default_service_lock:
-        if not _default_service_resolvers:
-            return None
-        return _default_service_resolvers[-1]
+    return _default_service_resolvers.current()
 
 
 def _load_character_definition(

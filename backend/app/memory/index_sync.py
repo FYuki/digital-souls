@@ -6,7 +6,7 @@ import math
 import os
 import tempfile
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -26,7 +26,8 @@ from app.memory.persistence.index_outbox_repository import (
     IndexOutboxEntry,
     IndexOutboxRepository,
 )
-from app.memory.persistence.sqlite import format_datetime
+from app.sqlite_session import format_datetime
+from app.validation import utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -490,10 +491,7 @@ class MemoryIndexSync:
                     )
 
     def _now(self) -> datetime:
-        value = self._clock()
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("clock must return a timezone-aware datetime")
-        return value.astimezone(UTC)
+        return utc_now(self._clock)
 
 
 def _memory_metadata(

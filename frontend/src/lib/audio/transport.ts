@@ -1,6 +1,7 @@
 import { CONVERSATION_ID_FIELD } from '../conversation-contract'
 import type { ConversationTurn } from '../conversations/types'
 import { parsePersistedTurn } from '../conversations/turn-parser'
+import { isRecord } from '../validation/primitives'
 
 const TEXT_MESSAGE_TYPE = 'text'
 const ERROR_MESSAGE_TYPE = 'error'
@@ -59,10 +60,6 @@ export interface AudioTransport {
   disconnect: () => void
   sendAudio: (pcmData: ArrayBuffer, metadata?: AudioRequestMetadata) => void
   sendMeasurementEvent: (event: ClientMeasurementEvent) => void
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null
 }
 
 const isBackendErrorEnvelope = (value: unknown): value is BackendErrorEnvelope => {

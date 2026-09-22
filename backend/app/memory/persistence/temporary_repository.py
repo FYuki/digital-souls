@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 from uuid import UUID
@@ -12,12 +12,9 @@ from app.memory.persistence.contracts import (
     TemporaryProviderRecordCorrection,
     TemporaryProviderRecordInput,
 )
-from app.memory.persistence.sqlite import (
-    ConnectionFactory,
-    PersonaMemorySqlite,
-    format_datetime,
-    parse_datetime,
-)
+from app.memory.persistence.sqlite import PersonaMemorySqlite
+from app.sqlite_session import ConnectionFactory, format_datetime, parse_datetime
+from app.validation import require_non_empty, require_uuid4, utc_now
 
 
 Clock = Callable[[], datetime]
@@ -50,7 +47,7 @@ class TemporaryProviderRecordRepository:
         character_id: str,
         record: TemporaryProviderRecordInput,
     ) -> TemporaryProviderRecord:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_provider_id(record.provider_id)
         record_id = self._new_uuid()
         now = self._now()
@@ -83,7 +80,7 @@ class TemporaryProviderRecordRepository:
     def list_by_provider(
         self, *, character_id: str, provider_id: str
     ) -> list[TemporaryProviderRecord]:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_provider_id(provider_id)
         with self._database.connection() as connection:
             rows = connection.execute(
@@ -96,9 +93,9 @@ class TemporaryProviderRecordRepository:
     def get(
         self, *, character_id: str, provider_id: str, record_id: UUID
     ) -> TemporaryProviderRecord | None:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_provider_id(provider_id)
-        _require_uuid4(record_id)
+        require_uuid4(record_id, "record_id")
         with self._database.connection() as connection:
             row = _find_record(connection, character_id, provider_id, record_id)
         return None if row is None else _record_from_row(row)
@@ -111,9 +108,9 @@ class TemporaryProviderRecordRepository:
         record_id: UUID,
         correction: TemporaryProviderRecordCorrection,
     ) -> TemporaryProviderRecord:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_provider_id(provider_id)
-        _require_uuid4(record_id)
+        require_uuid4(record_id, "record_id")
         if not isinstance(correction, TemporaryProviderRecordCorrection):
             raise TypeError("correction must be a TemporaryProviderRecordCorrection")
         with self._database.transaction() as connection:
@@ -147,9 +144,9 @@ class TemporaryProviderRecordRepository:
         provider_id: str,
         record_id: UUID,
     ) -> None:
-        _require_character_id(character_id)
+        require_non_empty(character_id, "character_id")
         _require_provider_id(provider_id)
-        _require_uuid4(record_id)
+        require_uuid4(record_id, "record_id")
         with self._database.transaction() as connection:
             connection.execute(
                 "DELETE FROM temporary_provider_records "
@@ -160,14 +157,11 @@ class TemporaryProviderRecordRepository:
 
     def _new_uuid(self) -> UUID:
         value = self._uuid_factory()
-        _require_uuid4(value)
+        require_uuid4(value, "record_id")
         return value
 
     def _now(self) -> datetime:
-        value = self._clock()
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("clock must return a timezone-aware datetime")
-        return value.astimezone(UTC)
+        return utc_now(self._clock)
 
 
 def _select_record(
@@ -210,16 +204,7 @@ def _record_from_row(row: sqlite3.Row) -> TemporaryProviderRecord:
     )
 
 
-def _require_character_id(character_id: str) -> None:
-    if not isinstance(character_id, str) or not character_id.strip():
-        raise ValueError("character_id must not be empty")
-
-
 def _require_provider_id(provider_id: str) -> None:
     if provider_id not in TEMPORARY_PROVIDERS:
         raise ValueError("provider_id must be a temporary provider")
 
-
-def _require_uuid4(value: UUID) -> None:
-    if not isinstance(value, UUID) or value.version != 4:
-        raise ValueError("record_id must be a UUID4")

@@ -1,32 +1,13 @@
-import json
-from functools import lru_cache
-from pathlib import Path
-
-from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
+from app.contract_validation import contract_errors, contract_validator
 from app.voice_session.generated import VoiceSessionEvent
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
-    repository_root = Path(__file__).resolve().parents[3]
-    schema_path = (
-        repository_root / "contracts" / "voice-session" / "voice-session.schema.json"
-    )
-    with schema_path.open(encoding="utf-8") as source:
-        schema = json.load(source)
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(
-        schema,
-        format_checker=Draft202012Validator.FORMAT_CHECKER,
-    )
-
-
 def parse_voice_session_event(value: object) -> VoiceSessionEvent:
-    errors = sorted(
-        _validator().iter_errors(value),
-        key=lambda error: tuple(str(segment) for segment in error.path),
+    errors = contract_errors(
+        contract_validator("voice-session/voice-session.schema.json"),
+        value,
     )
     if errors:
         raise ValueError("voice session event does not match protocol 1.0") from errors[0]

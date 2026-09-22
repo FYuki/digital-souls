@@ -9,6 +9,7 @@ from pathlib import Path
 from time import monotonic
 from typing import Any, cast
 
+from app.environment import positive_decimal_setting
 from app.stt.whisper_client import WhisperTranscriber
 
 logger = logging.getLogger(__name__)
@@ -219,26 +220,14 @@ def create_isolated_whisper_transcriber(
     return IsolatedWhisperTranscriber(
         model_name=model_name,
         download_root=download_root,
-        lock_timeout_seconds=_positive_timeout(
-            os.environ.get(WHISPER_LOCK_TIMEOUT_SECONDS_ENV),
-            DEFAULT_WHISPER_LOCK_TIMEOUT_SECONDS,
+        lock_timeout_seconds=positive_decimal_setting(
+            os.environ,
             WHISPER_LOCK_TIMEOUT_SECONDS_ENV,
+            DEFAULT_WHISPER_LOCK_TIMEOUT_SECONDS,
         ),
-        inference_timeout_seconds=_positive_timeout(
-            os.environ.get(WHISPER_INFERENCE_TIMEOUT_SECONDS_ENV),
-            DEFAULT_WHISPER_INFERENCE_TIMEOUT_SECONDS,
+        inference_timeout_seconds=positive_decimal_setting(
+            os.environ,
             WHISPER_INFERENCE_TIMEOUT_SECONDS_ENV,
+            DEFAULT_WHISPER_INFERENCE_TIMEOUT_SECONDS,
         ),
     )
-
-
-def _positive_timeout(value: str | None, default: float, field: str) -> float:
-    if value is None:
-        return default
-    try:
-        timeout = float(value)
-    except ValueError as error:
-        raise ValueError(f"{field} must be a positive number") from error
-    if timeout <= 0:
-        raise ValueError(f"{field} must be a positive number")
-    return timeout

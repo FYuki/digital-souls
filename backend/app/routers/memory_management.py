@@ -29,7 +29,7 @@ from app.memory.providers import (
     MemoryCorrectionRejected,
     PersonaMemoryProvider,
 )
-from app.memory.persistence.sqlite import format_datetime
+from app.sqlite_session import format_datetime
 from app.routers.validation import CanonicalUuid4, SafeValidationRoute
 
 

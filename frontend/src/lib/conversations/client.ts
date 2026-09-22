@@ -1,26 +1,13 @@
+import { requestJson, requestVoid } from '../api/http'
+import { characterApiPath } from '../api/paths'
+import { isRecord, UUID_V4_PATTERN } from '../validation/primitives'
 import type { Conversation, ConversationTurn } from './types'
 import { parsePersistedTurn } from './turn-parser'
 
-const API_PREFIX = '/api/characters'
-const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null
-)
-
-const requestJson = async (url: string, init?: RequestInit): Promise<unknown> => {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`Conversation request failed with status ${response.status}`)
-  return response.status === 204 ? null : response.json()
-}
-
-const requestWithoutBody = async (url: string, init: RequestInit): Promise<void> => {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`Conversation request failed with status ${response.status}`)
-}
+const REQUEST_LABEL = 'Conversation request'
 
 const basePath = (character: string): string => (
-  `${API_PREFIX}/${encodeURIComponent(character)}/conversations`
+  `${characterApiPath(character)}/conversations`
 )
 
 const parseConversation = (value: unknown): Conversation => {
@@ -53,12 +40,12 @@ const parseConversationList = (
 }
 
 export const listActiveConversations = async (character: string): Promise<Conversation[]> => (
-  parseConversationList(await requestJson(basePath(character)), character, false)
+  parseConversationList(await requestJson(basePath(character), REQUEST_LABEL), character, false)
 )
 
 export const listArchivedConversations = async (character: string): Promise<Conversation[]> => (
   parseConversationList(
-    await requestJson(`${basePath(character)}/archived`),
+    await requestJson(`${basePath(character)}/archived`, REQUEST_LABEL),
     character,
     true,
   )
@@ -66,7 +53,7 @@ export const listArchivedConversations = async (character: string): Promise<Conv
 
 export const createConversation = async (character: string): Promise<Conversation> => {
   const conversation = parseConversation(
-    await requestJson(basePath(character), { method: 'POST' }),
+    await requestJson(basePath(character), REQUEST_LABEL, { method: 'POST' }),
   )
   if (conversation.character_id !== character || conversation.archived_at !== null) {
     throw new Error('Created conversation response boundary is invalid')
@@ -78,7 +65,7 @@ export const listConversationTurns = async (
   character: string,
   conversationId: string,
 ): Promise<ConversationTurn[]> => {
-  const value = await requestJson(`${basePath(character)}/${conversationId}/turns`)
+  const value = await requestJson(`${basePath(character)}/${conversationId}/turns`, REQUEST_LABEL)
   if (!Array.isArray(value)) throw new Error('Conversation history response shape is invalid')
   return value.map(parsePersistedTurn)
 }
@@ -90,6 +77,7 @@ const transition = async (
 ): Promise<Conversation> => {
   const conversation = parseConversation(await requestJson(
     `${basePath(character)}/${conversationId}/${operation}`,
+    REQUEST_LABEL,
     { method: 'POST' },
   ))
   const shouldBeArchived = operation === 'archive'
@@ -116,6 +104,7 @@ export const renameConversation = async (
 ): Promise<Conversation> => {
   const conversation = parseConversation(await requestJson(
     `${basePath(character)}/${conversationId}`,
+    REQUEST_LABEL,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -133,5 +122,5 @@ export const hardDeleteConversation = async (
   character: string,
   conversationId: string,
 ): Promise<void> => {
-  await requestWithoutBody(`${basePath(character)}/${conversationId}`, { method: 'DELETE' })
+  await requestVoid(`${basePath(character)}/${conversationId}`, { method: 'DELETE' }, REQUEST_LABEL)
 }

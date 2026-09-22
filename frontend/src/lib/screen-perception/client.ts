@@ -1,4 +1,6 @@
+import { ensureOk } from '../api/http'
 import { parseChatResponseBody, type ChatResponse } from '../chat/client'
+import { isRecord } from '../validation/primitives'
 import type {
   ActualSurface,
   RoutingDisclosure,
@@ -10,12 +12,8 @@ import { parseScreenPerceptionEvent } from './validation'
 
 const ROOT = '/api/perception/screen'
 
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null
-)
-
 const parseEventResponse = async (response: Response) => {
-  if (!response.ok) throw new Error(`Screen perception request failed with status ${response.status}`)
+  ensureOk(response, 'Screen perception request')
   return parseScreenPerceptionEvent(await response.json())
 }
 
@@ -144,7 +142,7 @@ export const uploadScreenSnapshot = async (
       body: snapshot.blob,
     },
   )
-  if (!response.ok) throw new Error(`Screen upload failed with status ${response.status}`)
+  ensureOk(response, 'Screen upload')
   const body: unknown = await response.json()
   if (isRecord(body) && 'upload' in body) {
     const accepted = parseScreenPerceptionEvent(body.upload)
@@ -190,7 +188,7 @@ export const reportScreenCaptureFailure = async (
       body: JSON.stringify(event),
     },
   )
-  if (!response.ok) throw new Error(`Screen failure report failed with status ${response.status}`)
+  ensureOk(response, 'Screen failure report')
   const body: unknown = await response.json()
   if (isRecord(body) && 'error' in body) {
     const returned = parseScreenPerceptionEvent(body.error)

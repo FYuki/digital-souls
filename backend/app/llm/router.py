@@ -1,5 +1,4 @@
 from collections.abc import AsyncIterator
-import threading
 
 from app.inference import (
     InferenceCaller,
@@ -9,25 +8,22 @@ from app.inference import (
 )
 from app.model_settings import ModelSettings
 from app.prompting import BuiltPrompt, PromptMessage
+from app.registry import RegistrationStack
 
-_router_lock = threading.Lock()
-_configured_routers: list[InferenceRouter] = []
+_configured_routers = RegistrationStack[InferenceRouter]()
 _CHAT_CALLER = InferenceCaller.CHAT
 
 
 def register_inference_router(router: InferenceRouter) -> None:
-    with _router_lock:
-        _configured_routers.append(router)
+    _configured_routers.push(router)
 
 
 def clear_inference_router(router: InferenceRouter) -> None:
-    with _router_lock:
-        _configured_routers.remove(router)
+    _configured_routers.remove(router)
 
 
 def current_inference_router() -> InferenceRouter | None:
-    with _router_lock:
-        return _configured_routers[-1] if _configured_routers else None
+    return _configured_routers.current()
 
 
 def _inference_messages(

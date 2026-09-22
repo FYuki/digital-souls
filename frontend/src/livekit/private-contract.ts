@@ -1,7 +1,5 @@
-import Ajv2020 from 'ajv/dist/2020.js'
-import addFormats from 'ajv-formats'
-
 import privateSchema from '../../../contracts/livekit-transport/livekit-transport.schema.json'
+import { compileContractSchema } from '../lib/validation/ajv'
 
 type TerminalOutcome = Readonly<{
   type: 'response_interrupted'
@@ -67,9 +65,7 @@ type PrivateFrameWire =
     missing_frames: number
   }>
 
-const ajv = new Ajv2020({ allErrors: true, strict: true })
-addFormats(ajv)
-const validatePrivateFrame = ajv.compile(privateSchema)
+const validatePrivateFrame = compileContractSchema(privateSchema)
 
 export function parsePrivateFrame(value: unknown): PrivateFrame {
   if (!validatePrivateFrame(value)) {

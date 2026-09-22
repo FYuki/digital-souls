@@ -4,11 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
-from app.conversation_history._sqlite import (
-    ConnectionFactory,
-    SqliteSession,
-    format_datetime,
-)
+from app.conversation_history._sqlite import SqliteSession
+from app.sqlite_session import ConnectionFactory, format_datetime
 
 WAL_CLEANUP_FAILURE_REASON = "WAL_CHECKPOINT_FAILED"
 

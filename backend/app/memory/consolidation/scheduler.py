@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from app.lifecycle import ManagedTask
+
 
 logger = logging.getLogger(__name__)
 
@@ -102,15 +104,23 @@ class MemoryConsolidationScheduler:
         self._max_runtime_seconds = max_runtime_seconds
         self._priority_probe = priority_probe
         self._monotonic_clock = monotonic_clock
-        self._periodic_task: asyncio.Task[None] | None = None
-        self._worker_task: asyncio.Task[None] | None = None
+        self._periodic = ManagedTask("memory consolidation scheduler")
+        self._worker = ManagedTask("memory consolidation worker")
         self._stopping = False
 
+    @property
+    def _periodic_task(self) -> asyncio.Task[None] | None:
+        return self._periodic.task
+
+    @property
+    def _worker_task(self) -> asyncio.Task[None] | None:
+        return self._worker.task
+
     async def start(self) -> None:
-        if self._periodic_task is not None:
+        if self._periodic.task is not None:
             raise RuntimeError("memory consolidation scheduler is already running")
         self._stopping = False
-        self._periodic_task = asyncio.create_task(self._run_periodically())
+        self._periodic.spawn(self._run_periodically())
         try:
             await self.start_if_eligible()
         except BaseException:
@@ -118,30 +128,28 @@ class MemoryConsolidationScheduler:
             raise
 
     async def start_if_eligible(self) -> None:
-        if self._periodic_task is None or self._stopping:
+        if self._periodic.task is None or self._stopping:
             raise RuntimeError("memory consolidation scheduler is not running")
-        if self._worker_task is not None and not self._worker_task.done():
-            await asyncio.wait((self._worker_task,), timeout=0.01)
-            if not self._worker_task.done():
+        worker_task = self._worker.task
+        if worker_task is not None and not worker_task.done():
+            await asyncio.wait((worker_task,), timeout=0.01)
+            if not worker_task.done():
                 return
         if not self._priority_probe():
             return
         deadline = self._monotonic_clock() + self._max_runtime_seconds
-        self._worker_task = asyncio.create_task(self._execute_once(deadline))
+        self._worker.spawn(self._execute_once(deadline), restart_done=True)
 
     async def stop(self) -> None:
-        if self._periodic_task is None:
+        if self._periodic.task is None:
             return
         self._stopping = True
-        self._periodic_task.cancel()
+        self._periodic.cancel()
         try:
-            await self._periodic_task
+            await self._periodic.stop()
         except asyncio.CancelledError:
             pass
-        if self._worker_task is not None:
-            await self._worker_task
-        self._periodic_task = None
-        self._worker_task = None
+        await self._worker.stop()
 
     async def _run_periodically(self) -> None:
         while True:

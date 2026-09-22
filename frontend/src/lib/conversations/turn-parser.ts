@@ -1,8 +1,5 @@
+import { isRecord } from '../validation/primitives'
 import type { ContentTurn, ConversationTurn, PrivacySkippedTurn } from './types'
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-  typeof value === 'object' && value !== null
-)
 
 export const parsePersistedTurn = (value: unknown): ConversationTurn => {
   if (!isRecord(value) || typeof value.turn_id !== 'string') {
