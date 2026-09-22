@@ -123,12 +123,12 @@ ChatService生成・Conversation Core session factory生成・画面context検�
 
 | owner | 所有資源 | 依存owner | 公開する`app.state` | 開始・公開成功状態 | 停止・解放方法 |
 |---|---|---|---|---|---|
-| `InferenceResources` | `InferenceRuntime`（用途別router・health・Provider adapter）、起動probe、`llm_router`へのprocess-wide router登録 | なし | `inference_router`、`inference_health` | `router_registered`（router登録済み）、`state_published`（2属性公開済み） | 冪等な`close()`。正常停止では`inference_health`削除→`close()`→router登録解除・`inference_router`削除 |
+| `InferenceResources` | `InferenceRuntime`（用途別router・health・Provider adapter）、起動probe、`llm_router`へのprocess-wide router登録 | なし | `inference_router`、`inference_health` | `router_registered`（router登録済み）、`state_published`（2属性公開済み） | 冪等な`close()`。正常停止では`inference_health`削除→`close()`→router登録解除・`inference_router`削除。`abort()`では`close()`のみ |
 | `HistoryResources` | `ConversationHistoryConfig`、maintenance lease参照、WAL cleanup、`ConversationHistoryRepository`、`ConversationLifecycleService`、`UiSettingsRepository`、`ConversationHistoryService` | Privacy（履歴Service構築時に`history_sanitizer`を注入） | `conversation_history_repository`、`conversation_lifecycle_service`、`ui_settings_repository` | `repository_published`、`lifecycle_published`、`ui_settings_published` | 公開済みフラグに応じて3属性を削除。leaseは`ApplicationRuntime`が全資源回収後に解放し、owner自身は解放しない |
 | `PrivacyResources` | `MemoryPolicy`、決定論的`PrivacyScanner`、`HistorySanitizer`、semantic classifierとその推論client | Inference（classifier clientがrouter・settings・model digest解決を利用） | `semantic_privacy_classifier` | `classifier_published` | `classifier_client.close()`、`classifier_published`時に`semantic_privacy_classifier`削除 |
 | `MemoryResources` | 記憶repository群（approved・episodic・読み取り・outbox・temporary record）、`ResponseProvenanceRecorder`、`MemoryInferenceEmbedder`、`MemoryIndexSync`、`SemanticStore`、各管理Service、推論client3種（extractor・consolidation・consolidation classifier）、`MemoryCandidateExtractor`、preference・formation・index・consolidation各scheduler | History（repository・設定）、Inference（router・settings）、Privacy（scanner・classifier・policy） | `semantic_store`、`semantic_memory_management`、`persona_memory_provider`、`episodic_memory_management`、`addon_record_provider`、`rag_admission_service` | `semantic_published`、`persona_published`、`episodic_published`、`addon_published`、`rag_published`、`formation_started`、`index_started`、`consolidation_started` | `consolidation_started`→`formation_started`→`index_started`の順に、開始済みのschedulerだけを停止。公開済みフラグに応じて6属性を削除し、3 clientをclose |
 | `ToolResources` | `ToolRuntime`（management・events・action_policy・service）、routing service | Inference（routerと`TOOL_ROUTING` targetの有無）、Privacy（scanner）、Memory（consolidation用classifier） | `addon_manager`、`event_source`、`action_policy`、`tool_service`（`TOOL_ROUTING`未設定時は`None`） | 専用フラグは持たず、`runtime`構築済みが回収判定 | `runtime.close()`、`tool_service`・`action_policy`を削除。`addon_manager`・`event_source`は現行では`app.state`に残る |
-| `LifeResources` | `LifeSettings`、`LifeStore`（character-life.db）、`LifeService`（Cognition・Privacy・Formation含む）、`LifeRuntime`（DBOS）、`LifeContext` | Inference（`CHARACTER_LIFE` target必須）、Tool（gate・sanitizer・bindings）、History（履歴repositoryによるforeground確認）、Memory（privacy classifier） | `character_life_runtime`（有効かつstart成功時のみ） | `started`（`runtime.start()`成功後のみTrue） | `runtime`存在時に`runtime.close()`し`character_life_runtime`を削除。無効時は構築・公開しない |
+| `LifeResources` | `LifeSettings`、`LifeStore`（character-life.db）、`LifeService`（Cognition・Privacy・Formation含む）、`LifeRuntime`（DBOS）、`LifeContext` | Inference（`CHARACTER_LIFE` target必須）、Tool（gate・sanitizer・bindings）、History（履歴repositoryによるforeground確認）、Memory（privacy classifier） | `character_life_runtime`（有効かつstart成功時のみ） | `started`（`runtime.start()`成功後のみTrue） | `started`かつ`runtime`存在時だけ`runtime.close()`し`character_life_runtime`を削除。無効時は構築・公開しない |
 | `ScreenResources` | `ScreenHttpSecurity`、`ScreenPerceptionService`（Vision client・routing policy・context検証） | Inference（router・settings・registry）。context検証は`main.py` wiring経由で履歴repositoryを参照する | `screen_http_security`、`screen_perception_service` | `published` | `published`時に2属性を削除 |
 | `ChatResources` | `ChatService`、既定chat service resolver | `main.py` wiring経由でPrivacy・History・Memory・Tool・Life | `chat_service` | `published`、`resolver_registered` | `published`時に`chat_service`削除、`resolver_registered`時に既定resolverを解除 |
 | `AudioResources` | 測定種別、任意`JsonlTraceRecorder`（controlled_baseline・dogfoodのみ）、`AudioRuntimeConfig`、旧`AudioPipelineService`、Core STT/TTS client（LiveKit有効時のみ構築）、任意`ProductionResources`（LiveKit API client・room manager・session repository・runtime manager・token signer・bootstrap service・core events・url） | History（会話repository）、Screen（session revoker）。Core session factoryは`main.py` wiring経由 | `voice_measurement_kind`（常時）、`voice_trace_recorder`（recorder存在時のみ）、`audio_pipeline_service`、LiveKit有効時は`livekit_room_manager`・`livekit_session_repository`・`livekit_runtime_manager`・`livekit_token_signer`・`livekit_bootstrap_service`・`livekit_core_events`・`livekit_url` | `kind_published`、`recorder_published`、`pipeline_published`、`livekit_resources`の有無 | LiveKit構築済みなら`cancel_all_preparations`→`stop_all`→`api.aclose`を非同期で実行し、同期cleanupでpipeline closeと属性削除、STT/TTS client close、measurement・trace・LiveKit属性削除 |
@@ -178,7 +178,7 @@ ChatService生成・Conversation Core session factory生成・画面context検�
 1. 非同期cleanup。各操作の失敗は`cleanup_errors`へ集約し、残りの回収を継続する。
    1. `livekit_resources`構築済みなら`bootstrap_service.cancel_all_preparations`→
       `runtime_manager.stop_all`→`api.aclose`
-   2. `life.runtime`構築済みなら`runtime.close`し、`character_life_runtime`を削除
+   2. `life.started`なら`runtime.close`し、`character_life_runtime`を削除
    3. `tools.runtime`構築済みなら`runtime.close`し、`tool_service`・`action_policy`を削除
       （`addon_manager`・`event_source`は現行では`app.state`に残る）
    4. `consolidation_started`ならconsolidation schedulerを停止
@@ -194,11 +194,13 @@ ChatService生成・Conversation Core session factory生成・画面context検�
 3. 非同期cleanupに失敗があれば最初の例外を再送出する。
 4. `acquire_persistent_state`ブロックの離脱でmaintenance leaseを最後に解放する。
 
-失敗時の回収経路は到達位置で分かれる。`start()`内の失敗では`finally`が`shutdown()`を
-実行し、各ownerの成功フラグと構築済み判定に従って資源を回収する。maintenance leaseは
-contextmanagerのブロック離脱時に解放する。`prepare()`と永続資源構築中の推論資源回収、
-Life起動失敗時の二重close、画面Service構築失敗時のsecurity属性残留は現行挙動を保持し、
-構造変更と分離した不具合修正で扱う。
+失敗時の回収経路は到達位置で分かれる。`prepare()`または`acquire_persistent_state()`内の失敗では
+`shutdown()`へ到達しないため、`main.lifespan`の`except`が`abort()`を呼び、構築済みの
+`InferenceResources`だけを冪等な`close()`で解放する。maintenance leaseはcontextmanagerが
+ブロック離脱時に必ず解放する。`start()`内の失敗では内側の`finally`が`shutdown()`を実行し、
+各ownerの成功フラグと構築済み判定に従って確保済み資源だけを回収する。その後`abort()`が
+`inference.close()`を再実行するが、冪等のため一度だけ解放される。`shutdown()`の失敗も同様に
+`abort()`へ進む。
 
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import importlib
 from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
@@ -562,6 +563,121 @@ class TestProbeFailure:
         repository.assert_not_called()
 
 
+_PRE_TRY_BOUNDARIES = [
+    "initialize_runtime_data_root",
+    "require_no_restore_intent",
+    "resolved_memory_policy",
+    "create_privacy_scanner",
+    "create_history_sanitizer",
+    "resolve_conversation_history_config",
+    "acquire_maintenance_lease",
+    "ensure_schema_backup_gate",
+    "initialize_conversation_history_schema",
+    "initialize_persona_memory_schema",
+    "ConversationWalCleanup",
+    "ConversationHistoryRepository",
+    "ConversationLifecycleService",
+    "UiSettingsRepository",
+    "ApprovedMemoryRepository",
+    "EpisodicRepository",
+    "ConversationSourceGuard",
+    "CombinedMemoryReadRepository",
+    "EpisodicReadRepository",
+    "WithSemanticReadRepository",
+    "ResponseProvenanceRecorder",
+    "IndexOutboxRepository",
+    "MemoryInferenceEmbedder",
+    "MemoryIndexSync",
+    "TemporaryProviderRecordRepository",
+    "MemoryIndexScheduler",
+    "resolve_memory_formation_settings",
+    "resolve_memory_consolidation_settings",
+]
+
+
+# pre-try境界名と、その呼出位置を持つ資源owner moduleの対応。
+_PRE_TRY_MODULES: dict[str, str] = {
+    "initialize_runtime_data_root": "app.runtime.application",
+    "resolved_memory_policy": "app.runtime.application",
+    "create_privacy_scanner": "app.runtime.privacy",
+    "create_history_sanitizer": "app.runtime.privacy",
+    "resolve_conversation_history_config": "app.runtime.history",
+    "acquire_maintenance_lease": "app.runtime.application",
+    "ensure_schema_backup_gate": "app.runtime.history",
+    "initialize_conversation_history_schema": "app.runtime.history",
+    "ConversationWalCleanup": "app.runtime.history",
+    "ConversationHistoryRepository": "app.runtime.history",
+    "ConversationLifecycleService": "app.runtime.history",
+    "UiSettingsRepository": "app.runtime.history",
+    "ApprovedMemoryRepository": "app.runtime.memory",
+    "EpisodicRepository": "app.runtime.memory",
+    "ConversationSourceGuard": "app.runtime.memory",
+    "CombinedMemoryReadRepository": "app.runtime.memory",
+    "EpisodicReadRepository": "app.runtime.memory",
+    "WithSemanticReadRepository": "app.runtime.memory",
+    "IndexOutboxRepository": "app.runtime.memory",
+    "MemoryInferenceEmbedder": "app.runtime.memory",
+    "MemoryIndexSync": "app.runtime.memory",
+    "TemporaryProviderRecordRepository": "app.runtime.memory",
+    "MemoryIndexScheduler": "app.runtime.memory",
+    "resolve_memory_formation_settings": "app.runtime.memory",
+    "resolve_memory_consolidation_settings": "app.runtime.memory",
+}
+
+
+def _inject_pre_try_failure(
+    monkeypatch: pytest.MonkeyPatch, boundary: str
+) -> None:
+    failure = Mock(side_effect=_injected(boundary))
+    if boundary == "require_no_restore_intent":
+        import app.restore_intent as restore_intent
+
+        monkeypatch.setattr(
+            restore_intent, "require_no_restore_intent", failure
+        )
+    elif boundary == "initialize_persona_memory_schema":
+        from app.memory.persistence import schema as persona_schema
+
+        monkeypatch.setattr(
+            persona_schema, "initialize_persona_memory_schema", failure
+        )
+    elif boundary == "ResponseProvenanceRecorder":
+        from app.memory import response_provenance_recorder
+
+        monkeypatch.setattr(
+            response_provenance_recorder, "ResponseProvenanceRecorder", failure
+        )
+    else:
+        module = importlib.import_module(_PRE_TRY_MODULES[boundary])
+        monkeypatch.setattr(module, boundary, failure)
+
+
+class TestStartupFailureBeforeProtectedRegion:
+    """推論生成後から主要try/finally以前の失敗でも確保済み資源を回収する。
+
+    inference runtimeは主要tryより前に生成されるため、この区間の失敗でも
+    確保済みのadapterが一度だけ解放される必要がある。
+    """
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("boundary", _PRE_TRY_BOUNDARIES)
+    async def test_failure_releases_acquired_resources_once(
+        self, monkeypatch: pytest.MonkeyPatch, boundary: str
+    ) -> None:
+        from app import main
+
+        events: list[str] = []
+        _record_inference_close(monkeypatch, events)
+        _inject_pre_try_failure(monkeypatch, boundary)
+
+        app = FastAPI()
+        with pytest.raises(ValueError, match="injected"):
+            async with main.lifespan(app):
+                pytest.fail("injected failure must prevent startup")
+
+        assert events.count("inference:close") == 1
+
+
 # 各失敗点で「それ以前に確保・起動した資源だけが一度だけ回収される」ことを検証する。
 # present: その失敗点で実行されるべき回収イベント。後続資源は回収されない。
 _INSIDE_TRY_EXPECTED: dict[str, list[str]] = {
@@ -851,6 +967,53 @@ class TestStartupFailureInsideProtectedRegion:
 class TestStartupFailureResourceGaps:
     """失敗点で公開・確保した資源が回収されない経路の再現検証。"""
 
+    @pytest.mark.anyio
+    async def test_life_start_failure_collects_runtime_once(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import app.runtime.life as life_runtime
+        from app import main
+
+        events: list[str] = []
+        _install_owner_stubs(monkeypatch, events)
+        _record_inference_close(monkeypatch, events)
+        monkeypatch.setattr(
+            life_runtime, "LifeRuntime", _life_runtime(events, fail_start=True)
+        )
+        _enable_character_life(monkeypatch)
+
+        with pytest.raises(ValueError, match="injected life start"):
+            async with main.lifespan(FastAPI()):
+                pytest.fail("life start failure must prevent startup")
+
+        # start()内の自己回収と上位cleanupが同じruntimeを二度回収しない。
+        assert events.count("life:close") == 1
+        assert events.count("tool:close") == 1
+        assert events.count("formation:stop") == 1
+        assert events.count("inference:close") == 1
+
+    @pytest.mark.anyio
+    async def test_screen_perception_failure_removes_published_security_state(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app import main
+
+        import app.runtime.screen as screen_runtime
+
+        _install_owner_stubs(monkeypatch, [])
+        monkeypatch.setattr(
+            screen_runtime,
+            "ScreenPerceptionService",
+            Mock(side_effect=_injected("screen perception")),
+        )
+
+        app = FastAPI()
+        with pytest.raises(ValueError, match="injected screen perception"):
+            async with main.lifespan(app):
+                pytest.fail("screen perception failure must prevent startup")
+
+        assert not hasattr(app.state, "screen_http_security")
+        assert not hasattr(app.state, "screen_perception_service")
 
     @pytest.mark.anyio
     async def test_enabled_life_requires_target_and_collects_prior_owners(

@@ -393,13 +393,19 @@ async def _stream_core_reply(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     runtime = ApplicationRuntime(app, os.environ)
-    runtime.prepare()
-    with runtime.acquire_persistent_state():
-        try:
-            await runtime.start(_WIRING)
-            yield
-        finally:
-            await runtime.shutdown()
+    try:
+        runtime.prepare()
+        with runtime.acquire_persistent_state():
+            try:
+                await runtime.start(_WIRING)
+                yield
+            finally:
+                await runtime.shutdown()
+    except BaseException:
+        # prepare/acquireの失敗ではshutdownに到達しないため、
+        # 構築済みの資源だけをここで回収する（冪等）。
+        runtime.abort()
+        raise
 
 
 app = FastAPI(lifespan=lifespan)
