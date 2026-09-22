@@ -161,6 +161,7 @@ class NotificationStore:
             now = self.clock()
             last: Json = {}
             last_decision: Decision = "ignore"
+            revision_limited = False
             for event in events:
                 if event["position"] <= floor:
                     continue
@@ -188,7 +189,8 @@ class NotificationStore:
                         if db.execute("SELECT 1 FROM notification_result_revisions WHERE registration=? AND user_id=? AND revision=?", (registration.id, user, revision_key)).fetchone():
                             continue
                         if db.execute("SELECT count(*) FROM notification_result_revisions WHERE registration=? AND user_id=?", (registration.id, user)).fetchone()[0] >= 1024:
-                            raise failure("notification_revision_limit")
+                            revision_limited = True
+                            continue
                         db.execute("INSERT INTO notification_result_revisions VALUES (?,?,?)", (registration.id, user, revision_key))
                     notification_id = digest([registration.id, user, event["key"]])
                     db.execute("""INSERT OR IGNORE INTO notifications
@@ -197,11 +199,16 @@ class NotificationStore:
                         registration.source_id, registration.character_id, registration.event_type,
                         event["key"], encode(value), now, now + self.limits.retention_seconds))
             db.execute("DELETE FROM notification_resume_fences WHERE registration=? AND stream=? AND position<=?", (registration.id, stream, end_position))
+            # EventRuntimeが世代変更を確認したbaselineでは、旧世代の抑止位置を失効させる。
+            # 単なる別世代の履歴再読では解除せず、OFF中の履歴を通知しない。
+            if any(gap.get("epoch_changed") is True for gap in gaps):
+                db.execute("DELETE FROM notification_resume_fences WHERE registration=? AND stream!=?", (registration.id, stream))
             # 再配送の同じbatchで欠落件数・観測を二重加算しない。
             moved = current["stream"] != stream or end_position > floor
-            gap_count = len(gaps) if moved else 0
-            reason = gaps[-1].get("reason", "event_unavailable") if gap_count else current["last_gap"]
-            allowed_reasons = {"history_unavailable", "invalid_event", "privacy_changed", "event_unavailable"}
+            gap_count = len(gaps) + int(revision_limited) if moved else 0
+            reason = ("notification_revision_limit" if revision_limited else
+                      gaps[-1].get("reason", "event_unavailable") if gaps and moved else current["last_gap"])
+            allowed_reasons = {"history_unavailable", "invalid_event", "privacy_changed", "event_unavailable", "notification_revision_limit"}
             reason = reason if reason in allowed_reasons else "event_unavailable" if reason else None
             observed = encode(last) if last_decision == "state-only" else current["observed"]
             db.execute("""UPDATE notification_registrations SET stream=?,position=?,gap_count=gap_count+?,
@@ -210,19 +217,19 @@ class NotificationStore:
             self._prune(db)
 
     def get(self, notification_id: str, user_id: str) -> Json:
-        self.prune()
-        row = self.db.execute("SELECT * FROM notifications WHERE id=? AND user_id=?", (notification_id, user_id)).fetchone()
+        row = self.db.execute("SELECT * FROM notifications WHERE id=? AND user_id=? AND expires>?",
+                              (notification_id, user_id, self.clock())).fetchone()
         if row is None:
             raise failure("notification_not_found")
         return dict(row)
 
     def listing(self, user_id: str, allowed: set[str], *, source_id: str | None = None, character_id: str | None = None,
                 unread: bool = False, hidden: bool = False, offset: int = 0, limit: int = 50) -> Json:
-        self.prune()
         if not 1 <= limit <= 100 or not 0 <= offset <= self.limits.max_per_user:
             raise failure("invalid_notification_page")
-        predicates = ["user_id=?"]
-        parameters: list[object] = [user_id]
+        now = self.clock()
+        predicates = ["user_id=?", "expires>?"]
+        parameters: list[object] = [user_id, now]
         predicates.append("state='hidden'" if hidden else "state!='hidden'")
         for key, value in (("source_id", source_id), ("character_id", character_id)):
             if value is not None:
@@ -242,8 +249,8 @@ class NotificationStore:
         badge = 0
         if allowed:
             slots = ",".join("?" for _ in allowed)
-            badge = self.db.execute(f"SELECT count(*) FROM notifications WHERE user_id=? AND state='unread' AND registration IN ({slots})", (user_id, *sorted(allowed))).fetchone()[0]
-        gap = self.db.execute("SELECT evicted,last_eviction FROM notification_retention_gaps WHERE user_id=?", (user_id,)).fetchone()
+            badge = self.db.execute(f"SELECT count(*) FROM notifications WHERE user_id=? AND state='unread' AND expires>? AND registration IN ({slots})", (user_id, now, *sorted(allowed))).fetchone()[0]
+        gap = self.db.execute("SELECT evicted,last_eviction FROM notification_retention_gaps WHERE user_id=? AND until_time>?", (user_id, now)).fetchone()
         return {"items": [dict(r) for r in rows], "total": total, "unread_count": badge,
                 "next_offset": offset + len(rows) if offset + len(rows) < total else None,
                 "retention": {"days": self.limits.retention_seconds / 86400, "max_per_user": self.limits.max_per_user,
@@ -253,14 +260,15 @@ class NotificationStore:
         if state not in {"read", "unread", "hidden"}:
             raise failure("invalid_notification_state")
         with self.transaction() as db:
-            self._prune(db)
-            row = db.execute("SELECT * FROM notifications WHERE id=? AND user_id=?", (notification_id, user_id)).fetchone()
+            row = db.execute("SELECT * FROM notifications WHERE id=? AND user_id=? AND expires>?",
+                             (notification_id, user_id, self.clock())).fetchone()
             if row is None:
                 raise failure("notification_not_found")
             if row["version"] != expected_version:
                 raise failure("notification_state_conflict")
             db.execute("UPDATE notifications SET state=?,version=version+1 WHERE id=? AND user_id=?", (state, notification_id, user_id))
-        return self.get(notification_id, user_id)
+            return dict(db.execute("SELECT * FROM notifications WHERE id=? AND user_id=?",
+                                   (notification_id, user_id)).fetchone())
 
     def charge_read(self, registration: Registration) -> None:
         # 再試行・複数端末・Backend再起動でも登録済みの安定単位で同じ窓へ計上する。

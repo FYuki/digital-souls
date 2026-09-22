@@ -345,3 +345,106 @@ async def test_registered_resource_detail_and_current_revision(tmp_path):
         finally:
             await service.close()
             await events.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("decision", ["notify", "ignore"])
+async def test_repeated_on_does_not_discard_received_notifications(tmp_path, decision):
+    clock = Clock()
+    async with connected(tmp_path / "provider") as (control, gate, _):
+        source = profile(gate)
+        events = runtime(gate, source, tmp_path, clock)
+        reg = registration(gate, decision=decision)
+        service = notifications(gate, events, (reg,), tmp_path, clock)
+        try:
+            await service.consume_once(reg.id)
+            if decision == "ignore":
+                await service.set_preference("local", source.id, reg.event_type, True)
+            control.update(position=11)
+            clock.advance()
+            await events.poll_once(source.id)
+            # 再起動後の未処理Eventにも、別端末の同じON操作を適用する。
+            await service.close()
+            service = notifications(gate, events, (reg,), tmp_path, clock)
+            await service.set_preference("local", source.id, reg.event_type, True)
+            await service.set_preference("local", source.id, reg.event_type, True)
+            await service.consume_once(reg.id)
+            assert (await service.listing("local"))["total"] == 1
+        finally:
+            await service.close()
+            await events.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("consume_initial", [True, False])
+async def test_resume_after_provider_epoch_change_does_not_suppress_new_events(tmp_path, consume_initial):
+    clock = Clock()
+    async with connected(tmp_path / "provider") as (control, gate, _):
+        source = profile(gate)
+        events = runtime(gate, source, tmp_path, clock)
+        reg = registration(gate, decision="ignore")
+        service = notifications(gate, events, (reg,), tmp_path, clock)
+        try:
+            if consume_initial:
+                await service.consume_once(reg.id)
+            await service.set_preference("local", source.id, reg.event_type, True)
+            control.update(epoch="era2", position=3)
+            clock.advance()
+            await events.poll_once(source.id)
+            await service.consume_once(reg.id)
+            assert (await service.listing("local"))["total"] == 0
+            assert service.store.registration(reg.id)["gap_count"] == 1
+            await service.close()
+            service = notifications(gate, events, (reg,), tmp_path, clock)
+            control.update(position=4)
+            clock.advance()
+            await events.poll_once(source.id)
+            await service.consume_once(reg.id)
+            assert (await service.listing("local"))["total"] == 1
+        finally:
+            await service.close()
+            await events.close()
+
+
+@pytest.mark.anyio
+async def test_revision_limit_records_gap_and_advances_ack_without_forgetting_dedupe(tmp_path):
+    clock = Clock()
+    async with connected(tmp_path / "provider") as (control, gate, _):
+        source = profile(gate)
+        events = runtime(gate, source, tmp_path, clock)
+        reg = registration(gate, kind="result",
+                           match_json=encode({"task_ref": "task-fixed", "execution_ref": "run-1"}))
+        service = notifications(gate, events, (reg,), tmp_path, clock)
+        revisions = {digest(["task-fixed", "run-1", str(n)]) for n in range(1024)}
+        try:
+            await service.consume_once(reg.id)
+            with service.store.transaction() as db:
+                db.executemany("INSERT INTO notification_result_revisions VALUES (?,?,?)",
+                               ((reg.id, "local", value) for value in revisions))
+            refs = {"task_ref": "task-fixed", "execution_ref": "run-1", "revision": "1024"}
+            control.update(position=12, event_metadata=refs)
+            clock.advance()
+            await events.poll_once(source.id)
+            await service.consume_once(reg.id)
+            assert events.store.consumer(source.id, "notification:" + reg.id)["position"] == 12
+            assert service.store.registration(reg.id)["position"] == 12
+            assert service.store.registration(reg.id)["last_gap"] == "notification_revision_limit"
+            assert service.store.registration(reg.id)["gap_count"] == 1
+            result = await service.listing("local")
+            assert result["total"] == 0
+            assert result["sources"][0]["history_incomplete"]
+            assert result["sources"][0]["status"] == "unavailable"
+            await service.close()
+            service = notifications(gate, events, (reg,), tmp_path, clock)
+            control.update(position=13, event_metadata=refs | {"revision": "0"})
+            clock.advance()
+            await events.poll_once(source.id)
+            await service.consume_once(reg.id)
+            assert events.store.consumer(source.id, "notification:" + reg.id)["position"] == 13
+            assert (await service.listing("local"))["total"] == 0
+            saved = {row[0] for row in service.store.db.execute("SELECT revision FROM notification_result_revisions")}
+            assert saved == revisions
+            assert service.store.registration(reg.id)["gap_count"] == 1
+        finally:
+            await service.close()
+            await events.close()
