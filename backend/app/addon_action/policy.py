@@ -32,6 +32,7 @@ class ActionPolicy:
         sanitizer: Sanitizer,
         *,
         egress: Callable[[Json], Awaitable[bool]],
+        reference_egress: Callable[[Json], bool] | None = None,
         protected_roots: tuple[Path, ...] = (),
         autonomous_wait_seconds: float = 60,
         conversation_wait_seconds: float = 600,
@@ -43,6 +44,7 @@ class ActionPolicy:
         ):
             raise ValueError("invalid action confirmation wait")
         self.store, self.sanitizer, self.egress = store, sanitizer, egress
+        self.reference_egress = reference_egress
         self.protected_roots = tuple(p.resolve() for p in protected_roots)
         self.autonomous_wait_seconds = autonomous_wait_seconds
         self.conversation_wait_seconds = conversation_wait_seconds
@@ -52,6 +54,14 @@ class ActionPolicy:
         if not self.sanitizer.arguments_allowed(arguments) or not await self.egress(
             arguments
         ):
+            raise MCPFailure("policy", "egress_privacy_blocked")
+
+    async def validate_reference_egress(self, arguments: Json) -> None:
+        """本文を受け付けないCore登録済みread。通常の会話送信判定とは別に検証する。"""
+        if self.reference_egress is None:
+            # 独自Policyには既存の拒否・送信判定をそのまま適用する。
+            await self.validate_egress(arguments)
+        elif not self.sanitizer.arguments_allowed(arguments) or not self.reference_egress(arguments):
             raise MCPFailure("policy", "egress_privacy_blocked")
 
     def validate_background_read(self, connection_id: str, identity: str) -> None:

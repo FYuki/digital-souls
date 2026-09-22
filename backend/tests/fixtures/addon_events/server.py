@@ -59,6 +59,8 @@ def history(data, arguments):
                       "resource_ref": data.get("secret", "safe-ref")}}
         for n in range(pos + 1, end + 1)
     ]
+    for event in events:
+        event["metadata"].update(data.get("event_metadata", {}))
     mode = data.get("mode")
     if mode == "duplicate" and events:
         events = list(reversed(events)) + [events[0]]
@@ -84,11 +86,11 @@ async def list_tools(ctx, params):
         types.Tool(name=name, description=f"cursor profile {version}",
                    input_schema={"type": "object", "properties": {
                        "cursor": {"type": "string"}, "limit": {"type": "integer"},
-                       "target": {"type": "string"}},
+                       "target": {"type": "string"}, "task_ref": {"type": "string"}, "execution_ref": {"type": "string"}, "revision": {"type": "string"}},
                        "required": ["cursor", "limit"] if name == "history" else [],
                        "additionalProperties": False},
                    annotations=types.ToolAnnotations(read_only_hint=True))
-        for name in ("snapshot", "history")
+        for name in ("snapshot", "history", "detail")
     ])
 
 
@@ -99,7 +101,13 @@ async def call_tool(ctx, params):
         await asyncio.sleep(data["delay"])
     if data.get("mode") == "error":
         return types.CallToolResult(is_error=True, content=[types.TextContent(type="text", text="synthetic-private-body")])
-    if data.get("mode") == "broken_snapshot" and params.name == "snapshot":
+    if params.name == "detail" and data.get("expected_target") and params.arguments.get("target") != data["expected_target"]:
+        result = {"state": "permission_denied"}
+    elif params.name == "detail":
+        result = {"state": data.get("detail_state", "available"),
+                  "references": data.get("detail_references", {"resource_ref": "safe-ref", "task_ref": params.arguments.get("task_ref")}),
+                  "text": data.get("detail_text", "合成通知の詳細 synthetic-secret https://private.invalid/mcp")}
+    elif data.get("mode") == "broken_snapshot" and params.name == "snapshot":
         result = {"state": {}}
     else:
         result = snapshot(data) if params.name == "snapshot" else history(data, params.arguments)
@@ -109,7 +117,7 @@ async def call_tool(ctx, params):
 async def list_resources(ctx, params):
     return types.ListResourcesResult(resources=[
         types.Resource(uri=f"events://fixture/{name}", name=name)
-        for name in ("snapshot", "history", "wake")
+        for name in ("snapshot", "history", "wake", "detail")
     ])
 
 
@@ -121,7 +129,9 @@ async def read_resource(ctx, params):
     if "limit" in args:
         args["limit"] = int(args["limit"])
     data = state()
-    result = snapshot(data) if name != "history" else history(data, args)
+    result = ({"state": data.get("detail_state", "available"), "references": data.get("detail_references", {}),
+               "text": data.get("detail_text", "Resourceの合成詳細")} if name == "detail"
+              else snapshot(data) if name != "history" else history(data, args))
     return types.ReadResourceResult(contents=[
         types.TextResourceContents(uri=params.uri, text=json.dumps(result))
     ])

@@ -422,10 +422,10 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 [#185受入](addon-action-185-acceptance.md)、[承認管理UI受入](addon-approval-admin-305-acceptance.md)を参照する。
 この基盤が存在することと、Character Lifeへ高影響操作・副作用回復が接続済みであることは別である。
 
-## 通知とキャラクター会話の分離（後続設計）
+## 通知とキャラクター会話の分離
 
-以下は#183で整理し#187のEpicへ引き継いだ後続設計であり、上記の現行構成に通知タブ・通知用caller・
-新しい応答起点が実装済みであることを意味しない。詳細は
+通知の個別保存・通知用caller・独立した通知タブは#183で実装している。
+会話への関連付け・キャラクターによる報告生成は#364配下の後続設計である。詳細は
 [通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md)を正本とする。
 
 ```text
@@ -445,8 +445,8 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 | 保存・処理対象 | 責務 |
 |---|---|
 | Event本文・Task状態・結果／成果物 | 提供元のdomain正本。Coreへ無条件複製しない |
-| 通知metadata・出典・未読状態 | #183。固定文言と許可metadataを用い、LLMを直接呼ばない |
-| 会話への関連通知・依頼相関・報告状態 | #364。元の依頼と同じ担当の届け先を使い、表示中の別会話へ混ぜない |
+| 通知metadata・出典・未読状態 | #183。集約せず個別保存し、固定文言と許可metadataを用いる。LLMを直接呼ばない |
+| 会話への関連通知・依頼相関・報告状態 | #364。元の依頼と同じ担当の届け先を使い、表示中の別会話へ混ぜない。取得に必要な依頼参照を通知削除へ連動させない |
 | キャラクターの報告文 | 既存の会話privacy・記憶policyを通した会話メッセージ |
 
 非同期処理を追加した時点の担当キャラクター・接続・対象を保持し、取得時には現在権限・binding・
@@ -461,14 +461,17 @@ snapshotを再検証する。#363はLLMを介さなくても共有Gateを通り�
 
 通知の閲覧だけでは別キャラクターへ内容を渡さない。ユーザーがコピー・会話引用で明示共有した範囲は
 通常会話の話題として扱い、その会話・回答・記憶を元の非同期処理の担当・対象・監視・実行・報告状態へ
-伝播させない。通知からの会話導線は登録時担当へ戻す。用語の対応は[用語集](glossary.md)を参照する。
+伝播させない。#366で設計する通知からの会話導線は登録時担当へ戻す。用語の対応は[用語集](glossary.md)を参照する。
 
 Event取得・復旧の詳細は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)と
 [要件指示書](epic-187-addon-event-requirements.md)を参照する。取得位置と有限sanitized bufferの永続化、
 consumerごとの欠落復旧、画面オフラインと購読解除の区別は、Epic #187のEventRuntime / EventStoreに実装した。
+Epic #183は共有Eventを独立購読するNotificationRuntime / NotificationStoreと、
+共有Gateで有限取得するNotificationReader、会話と独立したNotificationCenterへ接続する。
+個別保存・ユーザーごとの通知設定・初回保存から30日と件数上限・独立参照は[通知runtime](notification-runtime.md)を参照する。
 既存ToolRuntimeの共有Gateとライフサイクルへ接続し、MCP標準Tool/Resourceを使う。
 設定・consumer API・公開結果契約・検証入口は[Event runtime](addon-event-runtime.md)を参照する。
-通知履歴の保持とTeamsを参考にするUI方針は通知／会話分離ADRの2026-09-16追記で定め、後続consumerで実装する。
+通知の個別保存・保持・設定・削除後の再取得は通知／会話分離ADRの2026-09-16追記と[通知要件](epic-183-notification-requirements.md)で定め、NotificationRuntime / NotificationStore / NotificationReaderに実装している。会話側で独立した依頼参照を保存・利用する接続は#365の後続範囲である。
 
 ## Character Life Runtime
 

@@ -52,7 +52,9 @@ from app.inference import (
     default_provider_registry,
     resolve_inference_settings,
 )
-from app.inference.config import reject_legacy_inference_environment
+from app.inference.config import INFERENCE_TARGET_PREFIX, reject_legacy_inference_environment
+from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.notifications.startup import NotificationAvailabilityMiddleware, notification_lifespan
 from app.inference.runtime import (
     create_inference_runtime,
     target_model_id,
@@ -123,6 +125,7 @@ from app.routers.addon_actions import router as addon_actions_router
 from app.addon_action.interaction import confirmation_resume_scope
 from app.conversation_core.control_input import current_control_request
 from app.routers.addon_admin import router as addon_admin_router
+from app.routers.notifications import router as notifications_router
 from app.screen_perception.http_security import (
     SCREEN_ALLOWED_ORIGIN_ENV,
     resolve_screen_http_security,
@@ -391,8 +394,30 @@ async def _stream_core_reply(
     chat_service.record_successful_prompt_references(prompt)
 
 
+class _NotificationStartupFallback(Exception):
+    """必須推論先の接続失敗だけを通知限定起動へ伝える。"""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    reject_legacy_inference_environment(os.environ)
+    app.state.notification_only = False
+    configured = bool(os.environ.get("DS_NOTIFICATION_CONFIG"))
+    if configured and not any(key.startswith(INFERENCE_TARGET_PREFIX) for key in os.environ):
+        async with notification_lifespan(app):
+            yield
+        return
+    # yield後の例外で二度起動しないよう、fallbackは起動probe専用の例外に限定する。
+    try:
+        async with _conversation_lifespan(app):
+            yield
+    except _NotificationStartupFallback:
+        async with notification_lifespan(app):
+            yield
+
+
+@asynccontextmanager
+async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.livekit_transport.production import (
         ProductionConversationCoreSessionFactory,
         configure_production_resources,
@@ -433,8 +458,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     try:
         inference_runtime.probe_startup()
-    except Exception:
+    except Exception as error:
         inference_runtime.close()
+        if (
+            os.environ.get("DS_NOTIFICATION_CONFIG")
+            and isinstance(error, InferenceError)
+            and error.category in {InferenceErrorCategory.UNAVAILABLE, InferenceErrorCategory.TIMEOUT}
+        ):
+            raise _NotificationStartupFallback() from None
         raise
     initialize_runtime_data_root(runtime_paths, repository_root)
     voice_trace_recorder = None
@@ -849,15 +880,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 raise ValueError(
                     "Character Life requires INFERENCE_TARGET_CHARACTER_LIFE"
                 )
+            notification_catalog = CharacterCatalog(repository_root / "characters")
             tool_runtime = ToolRuntime(
                 tool_settings,
                 inference_runtime.router,
                 privacy_scanner,
                 settings_path=runtime_paths.data_root / "addon-settings.json",
+                character_exists=lambda character: any(entry.character_id == character for entry in notification_catalog.scan()),
                 classifier=memory_consolidation_privacy_classifier,
             )
             app.state.addon_manager = tool_runtime.management
             app.state.event_source = tool_runtime.events
+            app.state.notifications = tool_runtime.notifications
             app.state.action_policy = tool_runtime.action_policy
             await tool_runtime.start()
             app.state.tool_service = (
@@ -1087,6 +1121,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 del app.state.character_life_runtime
             if tool_runtime is not None:
                 await run_cleanup(tool_runtime.close())
+            for state_name in ("addon_manager", "event_source", "notifications"):
+                if hasattr(app.state, state_name):
+                    delattr(app.state, state_name)
             if hasattr(app.state, "tool_service"):
                 del app.state.tool_service
             if hasattr(app.state, "action_policy"):
@@ -1191,10 +1228,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(NotificationAvailabilityMiddleware)
 app.include_router(tool_use_router)
 app.include_router(addon_actions_router)
 app.include_router(character_life_router)
 app.include_router(addon_admin_router)
+app.include_router(notifications_router)
 
 app.include_router(chat_router)
 app.include_router(character_catalog_router)
@@ -1215,6 +1254,8 @@ def health_check() -> dict[str, str]:
 
 @app.get("/health/ready")
 def inference_readiness() -> JSONResponse:
+    if getattr(app.state, "notification_only", False):
+        return JSONResponse({"status": "ready", "mode": "notifications_only"})
     health = getattr(app.state, "inference_health", None)
     ready = health is not None and health.is_ready()
     return JSONResponse(

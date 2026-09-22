@@ -24,6 +24,8 @@
   export let onRenamed: (characterId: string, conversation: Conversation) => void
   export let onOpenMemory: () => void
   export let onOpenAddons: (trigger: HTMLButtonElement) => void = () => undefined
+  export let onOpenNotifications: (trigger: HTMLButtonElement) => void = () => undefined
+  export let notificationCount = 0
   export let addonBadge: 'error' | 'warning' | null = null
   export let open = true
 
@@ -320,6 +322,10 @@
   <nav class="sidebar-bottom" aria-label="サイドバーメニュー">
     <button class:active={state.showingArchived} class="side-action" type="button" disabled={sidebarDisabled} on:click={() => state.showingArchived ? controller.showActive() : void controller.showArchived()}><span aria-hidden="true">▣</span>{state.showingArchived ? '会話履歴に戻る' : 'アーカイブ済み'}</button>
     <button class="side-action" type="button" on:click={() => { showingSettings = !showingSettings }}><span aria-hidden="true">⚙</span>設定</button>
+    <button class="side-action" type="button" on:click={(event) => onOpenNotifications(event.currentTarget)}>
+      <span aria-hidden="true">◇</span>通知
+      {#if notificationCount > 0}<span class="addon-badge" aria-label={notificationCount + '件の未読通知'}>{notificationCount > 99 ? '99+' : notificationCount}</span>{/if}
+    </button>
     <button class="side-action" type="button" data-addon-trigger on:click={(event) => onOpenAddons(event.currentTarget)}>
       <span aria-hidden="true">＋</span>Addon / 連携
       {#if addonBadge}

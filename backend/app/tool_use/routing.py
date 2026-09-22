@@ -126,12 +126,14 @@ class DecisionPort(Protocol):
 
 
 class InferenceDecisionRouter:
-    def __init__(self, router: InferenceRouter) -> None:
+    def __init__(self, router: InferenceRouter | None) -> None:
         self.router = router
 
     async def decide(
         self, context: Json, cancellation: InferenceCancellationToken
     ) -> ToolDecision:
+        if self.router is None:
+            raise MCPFailure("configuration", "tool_routing_unavailable")
         context = deepcopy(context)
         is_pending = bool(
             context.get("pending") and context["pending"].get("answer_schema")

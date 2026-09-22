@@ -30,6 +30,7 @@ STTの無音入力とLLMの空messagesを会話履歴へ保存せず、失敗・
 | privacy・prompt・用途別推論 | `app/privacy/`、`app/prompting/`、`app/inference/` |
 | 必要なturnだけの画面参照 | `app/screen_perception/`、`app/routers/screen_perception.py` |
 | 外部MCP・会話利用・承認・管理 | `app/external_mcp/`、`app/tool_use/`、`app/addon_action/`、`app/addon_admin/` |
+| Event取得・通知 | `app/addon_events/`、`app/notifications/`、`app/routers/notifications.py`。設定・保持・認可・LLM未設定／停止時の通知専用起動は[通知runtime](../docs/notification-runtime.md)を参照 |
 | 会話外活動・Life State | `app/character_life/`。DBOS基盤は既定無効、dev/test対象 |
 
 `POST /chat`のHTTP会話に加え、実行中Conversation Sessionでは音声とテキストを同じCoreへ渡す。正式な音声経路はLiveKitであり、`app/routers/ws.py`の旧WebSocketはbaseline／互換用である。

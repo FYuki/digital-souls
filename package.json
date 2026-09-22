@@ -35,6 +35,7 @@
     "test:acceptance:mcp-admin": "backend/.venv/bin/python scripts/acceptance_mcp_admin.py",
     "test:acceptance:addon-admin": "backend/.venv/bin/python scripts/acceptance_addon_admin.py",
     "eval:episodic-actor": "python3 scripts/eval_episodic_actor.py",
-    "eval:episodic-quality": "python scripts/eval_episodic_quality.py"
+    "eval:episodic-quality": "python scripts/eval_episodic_quality.py",
+    "test:conformance:notifications": "backend/.venv/bin/python scripts/acceptance_notifications.py"
   }
 }

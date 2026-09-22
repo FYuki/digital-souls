@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "checks": [
+    "individual-notifications-without-conversation-or-llm",
+    "background-save-and-cap-with-browser-closed",
+    "sanitized-detail-and-explicit-read",
+    "off-does-not-stop-ingestion-and-on-does-not-backfill",
+    "source-character-unread-filters",
+    "expired-result-is-not-success"
+  ],
+  "source_sha256": "341785853841f12877803e3aede44a01ff0be5e4a346327fd2d7fe5bf2d7124f",
+  "working_tree": true,
+  "scope": "production-app-browser-http-gate-independent-mcp-fixture",
+  "llm_configured": false,
+  "production_external_service": false,
+  "commit": "ca91d287c57ddf04834a3dcddd47a8e877a821d6"
+}

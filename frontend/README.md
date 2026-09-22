@@ -24,6 +24,10 @@ FE／BEを一組でprotocol 2.0へ更新する[移行契約](../docs/voice-backe
 
 現在のアバター表示は静止画であり、Live2D／VRMのruntime統合やDesktop版を実装済みとして扱わない。
 
+## 通知
+
+`NotificationCenter`は会話と独立した一覧・未読件数・フィルタ・既読／未読変更・通知元／種類別ON・OFFを提供する。内容取得は明示操作で行い、詳細を開くだけでは既読にしない。通知専用起動時は会話が利用できない状態を表示する。通知からの会話・要約連携は後続範囲。設定と検証入口は[通知runtime](../docs/notification-runtime.md)を参照する。
+
 ## 会話とSession
 
 永続スレッドの`conversation_id`と、音声・テキスト入力を扱う実行Sessionの`session_id`は別である。
