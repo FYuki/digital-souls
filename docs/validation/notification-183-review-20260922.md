@@ -17,7 +17,7 @@ CodeRabbitの2026-09-22 14:13 UTCのレビュー4件を実装・契約と照合�
 - 通知・通知専用起動・共有Eventの関連試験は54件成功。その後、初回consumer未処理とbatch途中の上限到達を追加し、通知単体・モジュール26件成功を確認した。
 - Backend全体の型検査は375ファイル成功。
 - 世代変更後の新着再開、旧世代の遡及防止、同じONの再送、上限到達後のACK・再起動・重複防止、期限切れの未読件数・状態変更、読み取りで書き込まないことを検証した。
-- 実ブラウザ適合検証の今回の記録は[レビュー修正後の証跡](../artifacts/notification-183/review-2026-09-22/browser-conformance.json)に保存する。
+- 本番app・独立MCP fixtureによる実ブラウザ適合検証6項目も成功。今回の記録は[レビュー修正後の証跡](../artifacts/notification-183/review-2026-09-22/browser-conformance.json)に保存した。
 - 実外部サービス・dogfood受入は未実施。過去の検証記録は変更しない。
 - 初回CodeRabbitレビューは完了したが、修正後のCodeRabbit再レビュー承認を示す記録ではない。mainへの最終マージはユーザーが実施する。
 
