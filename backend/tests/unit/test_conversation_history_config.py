@@ -1,3 +1,4 @@
+import sys
 from datetime import timedelta
 
 import pytest
@@ -35,15 +36,23 @@ class TestConversationHistoryConfig:
     @pytest.mark.parametrize(
         ("key", "value"),
         [
+            ("CONVERSATION_TURN_STALE_AFTER_SECONDS", ""),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "0"),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "-1"),
+            ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "01"),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "1.5"),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", " 1"),
+            ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "1 "),
+            ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "１２"),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "invalid"),
+            ("CONVERSATION_HISTORY_RETENTION_DAYS", ""),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "0"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "-1"),
+            ("CONVERSATION_HISTORY_RETENTION_DAYS", "01"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "1.5"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", " 1"),
+            ("CONVERSATION_HISTORY_RETENTION_DAYS", "1 "),
+            ("CONVERSATION_HISTORY_RETENTION_DAYS", "１２"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "invalid"),
         ],
     )
@@ -60,3 +69,22 @@ class TestConversationHistoryConfig:
 
         with pytest.raises(ValueError, match=key):
             resolve_conversation_history_config(runtime_paths)
+
+    def test_should_convert_integer_digit_limit_error_to_setting_message(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        runtime_paths,
+    ) -> None:
+        monkeypatch.delenv("CONVERSATION_HISTORY_RETENTION_DAYS", raising=False)
+        monkeypatch.setenv(
+            "CONVERSATION_TURN_STALE_AFTER_SECONDS",
+            "9" * (sys.get_int_max_str_digits() + 1),
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            resolve_conversation_history_config(runtime_paths)
+
+        assert (
+            str(exc_info.value)
+            == "CONVERSATION_TURN_STALE_AFTER_SECONDS must be a positive integer"
+        )

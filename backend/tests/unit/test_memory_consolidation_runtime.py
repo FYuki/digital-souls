@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -165,9 +166,24 @@ def test_runtime_settings_resolve_all_consolidation_limits_at_the_boundary() -> 
 def test_runtime_settings_reject_non_positive_or_ambiguous_values(key: str) -> None:
     from app.memory.consolidation.config import resolve_memory_consolidation_settings
 
-    for value in ("0", "-1", " 2", "2.5", ""):
+    for value in ("0", "-1", " 2", "2 ", "2.5", "", "02", "１２", "+2"):
         with pytest.raises(ValueError):
             resolve_memory_consolidation_settings({key: value})
+
+
+def test_runtime_settings_propagate_standard_int_error_for_oversized_digits() -> None:
+    from app.memory.consolidation.config import resolve_memory_consolidation_settings
+
+    raw = "9" * (sys.get_int_max_str_digits() + 1)
+
+    with pytest.raises(ValueError) as direct_error:
+        int(raw)
+    with pytest.raises(ValueError) as settings_error:
+        resolve_memory_consolidation_settings(
+            {"MEMORY_CONSOLIDATION_BATCH_SIZE": raw}
+        )
+
+    assert str(settings_error.value) == str(direct_error.value)
 
 
 def test_eligibility_requires_night_or_idle_and_yields_to_foreground_work() -> None:

@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -58,10 +59,24 @@ def test_should_resolve_environment_and_resolved_target_values() -> None:
         "LLM_CONTEXT_TOKEN_LIMIT",
     ],
 )
-@pytest.mark.parametrize("value", ["", "0", "-1", "1.5", " 1", "+1", "invalid"])
+@pytest.mark.parametrize(
+    "value",
+    ["", "0", "-1", "01", "1.5", " 1", "1 ", "１２", "+1", "invalid"],
+)
 def test_should_reject_invalid_positive_integer(key: str, value: str) -> None:
     with pytest.raises(ValueError, match=key):
         resolve_model_settings({key: value})
+
+
+def test_should_propagate_standard_int_error_for_oversized_digit_string() -> None:
+    raw = "9" * (sys.get_int_max_str_digits() + 1)
+
+    with pytest.raises(ValueError) as direct_error:
+        int(raw)
+    with pytest.raises(ValueError) as settings_error:
+        resolve_model_settings({"CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": raw})
+
+    assert str(settings_error.value) == str(direct_error.value)
 
 
 def test_should_reject_output_at_or_above_target_context() -> None:

@@ -1,6 +1,8 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from app.config_values import parse_positive_integer
+
 LLM_TIMEOUT_ENV = "MEMORY_FORMATION_LLM_TIMEOUT_SECONDS"
 MAX_ATTEMPTS_ENV = "MEMORY_FORMATION_MAX_ATTEMPTS"
 TOTAL_TIMEOUT_ENV = "MEMORY_FORMATION_TOTAL_TIMEOUT_SECONDS"
@@ -38,9 +40,7 @@ def _positive_integer(
     raw = environment.get(key)
     if raw is None:
         return default
-    if not raw.isascii() or not raw.isdecimal() or raw.startswith("0"):
+    # 先頭ゼロ入力は int() の桁数制限例外より先に契約文言で拒否する
+    if raw.startswith("0"):
         raise ValueError(f"{key} must be a positive integer")
-    value = int(raw)
-    if value < 1:
-        raise ValueError(f"{key} must be a positive integer")
-    return value
+    return parse_positive_integer(raw, key)
