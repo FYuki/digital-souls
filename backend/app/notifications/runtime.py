@@ -137,6 +137,8 @@ class NotificationRuntime:
         }
 
     def source_status(self, registration: Registration) -> str:
+        if self.store.registration(registration.id)["last_gap"] == "notification_revision_limit":
+            return "unavailable"
         if self.events is None or registration.source_id not in self.events.sources:
             return "unavailable"
         status = self.events.store.state(registration.source_id)["status"]
@@ -203,7 +205,12 @@ class NotificationRuntime:
                     await self.reader.authorize(registration, viewer=viewer)
                     await self._subscribe(registration)
             if enabled:
-                assert self.events is not None
-                stream, position = await self.events.received_checkpoint(source_id)
-                fences = [(registration.id, stream, position) for registration in registrations]
+                # 再送・別端末からの同じON操作で受信済みの新着を捨てない。
+                # OFFからONへ変わる登録だけに再開位置を設ける。
+                resuming = tuple(r for r in registrations if self.store.decision(r, viewer) != "notify")
+                if resuming:
+                    assert self.events is not None
+                    # consumerの遅れを含めてOFF中の受信分を抑止するため、共有sourceの位置を使う。
+                    stream, position = await self.events.received_checkpoint(source_id)
+                    fences = [(registration.id, stream, position) for registration in resuming]
             self.store.set_preference(viewer, source_id, event_type, enabled, fences=tuple(fences))

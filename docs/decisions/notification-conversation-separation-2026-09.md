@@ -2,9 +2,11 @@
 
 ## 状態・適用範囲
 
-**ACTIVE（設計確定・実装は後続）**。2026-09-13の#183／#364と関連Issueの合意、および2026-09-16の通知保存・設定の追加判断を記録する。
-本ADRは#183のEpic開始時の文書変更であり、通知タブ、通知用read-only caller、通知起点の応答、
-新しいAPI／schemaが実装済み・利用可能になったことを意味しない。進捗・依存・受入はIssuesを正本とする。
+**ACTIVE**。2026-09-13の#183／#364と関連Issueの合意、および2026-09-16の通知保存・設定の追加判断を記録する。
+#183のNotificationRuntime・NotificationStore・NotificationReader・通知API／UIは実装済みである。
+会話への関連付け・通知起点の応答・キャラクター報告は#364／#365／#366の後続範囲であり、
+[Conversation Session ADR](conversation-session-text-input-2026-09.md)の接続点と区別する。
+実装済みは既定有効・実外部サービス受入済みを意味しない。進捗・依存・受入はIssuesを正本とする。
 用語と現行実装名の対応は[用語集](../glossary.md)を参照する。
 
 本ADRは[Addon接続ADR](addon-connection-foundation-2026-09.md)の旧「#183＝Event会話通知・自発発話」を
