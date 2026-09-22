@@ -11,7 +11,7 @@ from app.memory.persistence.schema import PERSONA_MEMORY_TABLES
 from app.voice_quality_state import inspect_controlled_initial_state
 
 
-@pytest.fixture(params=['integration-voice', 'integration-irodori'])
+@pytest.fixture(params=['integration-voice', 'integration-irodori', 'integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph', 'integration-irodori-cuda-graph-pcm'])
 def state_inputs(tmp_path, request):
     data = tmp_path / 'data'
     data.mkdir()
@@ -82,3 +82,36 @@ def test_mismatched_runtime_state_is_rejected(state_inputs, change):
         inspect_controlled_initial_state(**state_inputs)
     if change == 'missing_database':
         assert not (state_inputs['data_root'] / 'persona-memory.db').exists()
+
+
+@pytest.mark.parametrize("receipt", ["missing", "enabled", "disabled"])
+def test_memory_isolation_requires_matching_backend_receipt(state_inputs, receipt):
+    from app.voice_measurement_memory import DISABLE_FORMATION_ENV, record_memory_policy
+    original = inspect_controlled_initial_state(**state_inputs)
+    profile = json.loads(state_inputs["profile_path"].read_text())
+    profile["derivedEnvironment"][DISABLE_FORMATION_ENV] = "true"
+    state_inputs["profile_path"].write_text(json.dumps(profile))
+    if receipt != "missing":
+        record_memory_policy(state_inputs["data_root"], disabled=receipt == "disabled")
+    if receipt != "disabled":
+        with pytest.raises(ValueError, match="memory scheduler policy"):
+            inspect_controlled_initial_state(**state_inputs)
+    else:
+        actual = inspect_controlled_initial_state(**state_inputs)
+        assert actual["evidence"]["memory_scheduler_policy"]["formation_disabled"] is True
+        assert original["initial_state_hash"] != actual["initial_state_hash"]
+
+
+def test_existing_reporter_binds_scheduler_policy_to_initial_state_hash(state_inputs):
+    from app.livekit_pilot_report import _validate_initial_state_evidence
+    from app.voice_measurement_memory import DISABLE_FORMATION_ENV, record_memory_policy
+    profile = json.loads(state_inputs["profile_path"].read_text())
+    profile["derivedEnvironment"][DISABLE_FORMATION_ENV] = "true"
+    state_inputs["profile_path"].write_text(json.dumps(profile))
+    record_memory_policy(state_inputs["data_root"], disabled=True)
+    state = inspect_controlled_initial_state(**state_inputs)
+    trial = {"initial_state_hash": state["initial_state_hash"], "initial_state_evidence": state["evidence"]}
+    _validate_initial_state_evidence(trial)
+    state["evidence"]["memory_scheduler_policy"]["formation_disabled"] = False
+    with pytest.raises(ValueError, match="hash"):
+        _validate_initial_state_evidence(trial)

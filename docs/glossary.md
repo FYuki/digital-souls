@@ -4,7 +4,7 @@
 
 ## 読み方と正本
 
-「実装」はmainにある処理・型、「一部実装」は基盤や境界のみが接続済み、「設計」は採用済みでも当該処理がmainへ未実装の概念を表します。実装済みでも既定有効・dogfood受入済みとは限りません。今回の照合基準は2026-09-13のmain（`2c03565`）です。
+「実装」はmainにある処理・型、「一部実装」は基盤や境界のみが接続済み、「設計」は採用済みでも当該処理がmainへ未実装の概念を表します。実装済みでも既定有効・dogfood受入済みとは限りません。既存項目の実装状態の照合基準は2026-09-13のmain（`2c03565`）です。音声移設の旧版比較基準は2026-09-15のmain（`07b8b1ee638ca222afe61983ebaf17c6edaaf1f7`）であり、用途が異なります。後続の追記は各項目の状態と参照先に従います。
 
 用語の正式な判断は[記憶・人格の用語契約](decisions/memory-personality-terminology-2026-09.md)等のADR、現在の挙動はコード・[アーキテクチャ](system-architecture.md)、進捗はIssuesが正本です。本書で仕様を新設・上書きしません。ADRの`ACTIVE`は「有効な設計判断」であり「実装完了」ではありません。優先関係は[ADR案内](decisions/README.md)を参照してください。
 
@@ -26,7 +26,7 @@
 
 ## 会話・入力・音声
 
-#358の作業ブランチではBEの所有へ接続した。以下の「接続済み」は実サービス・性能・実マイク受入の完了を意味しない。検証範囲は[移設検証記録](validation/voice-backend-vad-358.md)を参照する。
+Issue #358のBE所有への接続はPR #408でmainへ反映済み。以下の「接続済み」は実サービス・性能・実マイク受入の完了を意味しない。検証範囲は[移設検証記録](validation/voice-backend-vad-358.md)を参照する。
 
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
 |---|---|---|
@@ -48,10 +48,13 @@
 | Input suppression / 入力抑止 | 入力欄focus等により音声入力の採用を一時的に抑えること。利用者のmute、応答中断、Session終了とは区別する | 実装：[混在入力契約](decisions/conversation-session-text-input-2026-09.md) |
 | AudioTransport / LiveKit | 音声・control eventの送受信境界と現行の通信実装。Room／Participant／Trackはtransport側の概念で、会話スレッドの正本ではない | 実装：[transport契約](decisions/livekit-transport-2026-08.md)、[実装](../backend/app/livekit_transport/) |
 | STT / TTS | STTは共有Whisper HTTP serviceによる認識、TTSはCCVで選ぶVOICEVOX／Irodoriによる合成。現行BackendはWhisperのGPUモデルを所有しない | 実装：[remote client](../backend/app/stt/remote_whisper_client.py)、[TTS](../backend/app/tts/) |
-| Irodori-TTS / Irodori-TTS-Server | 追加のTTSモデル／共通GPU推論サービス。VOICEVOXとCCV設定で選択する。モデルの最終採用と本採用する声の選定は別 | epic実装、実受入・本採用未完了：[サービス](../infra/irodori/README.md)、[要件](irodori-tts-requirements.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
+| Irodori-TTS / Irodori-TTS-Server | 追加のTTSモデル／共通GPU推論サービス。VOICEVOXとCCV設定で選択する。モデルの最終採用と本採用する声の選定は別 | mainに導入済み・光織の採用済み、残る品質受入は#423：[サービス](../infra/irodori/README.md)、[要件](irodori-tts-requirements.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
 | Voice Design / 声の設計 | Caption（声質・話し方の説明文）から音声候補を合成し、ユーザーが声を選ぶ工程。モデル最終採用やTTS接続とは別 | 選定済み：[光織の音声](../characters/miori/voice.md)、[選定記録](miori-voice-selection-2026-09-13.md) |
-| Reference voice / 参照音声、voice ID | Irodoriで声の参照に使う固定音声と、その登録先の安定した識別子。VOICEVOXの整数speaker IDやキャラクターIDとは別。登録後のIDと音声の対応は固定する | 光織の資産統合済み、CCV・登録契約はepic実装、実接続受入は#329：[光織の音声](../characters/miori/voice.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
-| Irodoriの準備完了 | 起動時のモデル読み込みとウォームアップ合成が成功した状態。health応答だけやモデルの本採用を意味しない | epic実装、実GPU検証は別：[利用開始条件](irodori-tts-requirements.md) |
+| Reference voice / 参照音声、voice ID | Irodoriで声の参照に使う固定音声と、その登録先の安定した識別子。VOICEVOXの整数speaker IDやキャラクターIDとは別。登録後のIDと音声の対応は固定する | 光織の資産・CCV・登録契約はmain反映済み、残る品質受入は#423：[光織の音声](../characters/miori/voice.md)、[TTS選択ADR](decisions/tts-engine-reference-voice-2026-09.md) |
+| Irodoriの準備完了 | 起動時のモデル読み込みとウォームアップ合成が成功した状態。health応答だけやモデルの本採用を意味しない | mainに導入済み、過去の実GPU検証と今回の残受入を区別：[過去検証](irodori-tts-validation-2026-09.md)、[利用開始条件](irodori-tts-requirements.md) |
+| 音声Sessionの開始準備 | 開始操作から、必要な処理を準備して発話受付可能にするまで。単一サービスのhealth/readinessや、入力受付後の応答待ちとは別 | Epicに実装：非同期準備・取消・失敗表示、TTS/VAD/STTと対応Providerの会話用LLM準備。入口は[ProductionConversationCoreSessionFactory.create_ready / _ConversationCoreBridge.prepare_audio](../backend/app/livekit_transport/production.py)、[InferenceRouter.prepare_text](../backend/app/inference/router.py)。全体の性能・品質受入は未完了。[開始準備ADR](decisions/voice-session-preparation-2026-09.md)・[現在の動作](system-architecture.md) |
+| 準備時間 / 初回応答 / 継続応答 | 準備時間は開始操作から発話受付可能まで。初回応答は準備後の最初の入力への応答、継続応答は同一Sessionの後続入力への応答 | 測定入口は[installPreparationProbe](../frontend/playwright/preparation-probe.ts)、応答の観測は[LiveKitMeasurementSession](../backend/app/livekit_transport/measurement.py)。Epicに実装、性能・品質の全体受入は未完了。[共通指示書](voice-quality-350-423-424-requirements.md)。準備時間をTTFAと混ぜない |
+| 空状態 / 記憶参照のみの比較 | 空状態は会話履歴が空で記憶参照なし。参照のみの比較は履歴を空に保ち、固定記憶の検索・参照だけを追加する。モデル未ロードや記憶形成の負荷条件とは別 | 測定時の形成抑止は[formation_disabled / record_memory_policy](../backend/app/voice_measurement_memory.py)。Epicの測定用に実装、通常利用の既定設定とは別。[共通指示書](voice-quality-350-423-424-requirements.md)。記憶形成・長履歴を含む通常利用全体の保証ではない |
 
 Sessionの再送・重複検知履歴は有限です。スレッドを永続化できることは、接続を無期限維持できる保証ではありません。[連続操作試験](conversation-session-dev-operations.md)を参照してください。
 
@@ -101,6 +104,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 |---|---|---|
 | Inference Target | Coreが指定する推論用途。現在は`chat / privacy / memory-extraction / semantic-extraction / memory-consolidation / embedding / vision / heavy-reasoning / tool-routing / character-life` | 実装：[Target型](../backend/app/inference/contracts.py) |
 | Provider / Model / Adapter | 推論の接続先・使用モデル・接続先固有の実装境界。用途Targetへ`provider/model`を割り当てる。環境Profileや人格とは別 | 実装：[Inference運用](inference-operations.md)、[inference](../backend/app/inference/) |
+| モデル開始準備 | 会話本文を使わず、実際の推論設定でモデルを準備する操作。endpoint疎通やモデル存在確認とは別。常駐継続や速度受入を保証しない | 実装：Inference Capability `prepare_model` / `prepare_text`。[運用](inference-operations.md#音声sessionのモデル開始準備) |
 | Inference Caller | 同じTargetを呼ぶ処理の識別。`screen-reference`はChat Targetのcallerであり、独立したTargetではない | 実装：[画面契約](decisions/browser-screen-perception-2026-09.md)、[アーキテクチャ](system-architecture.md) |
 | Capability | Inferenceでは画像・構造化出力等の推論能力、MCPでは公開されるTool・Resource等。権限と能力は同義ではない | 実装：[Inference型](../backend/app/inference/contracts.py)、[MCP基盤](external-mcp-foundation.md) |
 | Screen Session / lease / generation | 利用者が選択した共有対象と会話・同意・有効期限を結び付ける状態。永続スレッドや音声Sessionとは別 | 実装：[screen_perception](../backend/app/screen_perception/)、[capture](../frontend/src/lib/screen-perception/capture.ts) |
@@ -120,9 +124,9 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
 |---|---|---|
 | Event / イベント、Event ingestion | 提供元の出来事とCoreへの取得・復旧。提供元が本文の正本を持ち、Coreの有限bufferや通知を正本の代わりにしない | 実装・EventRuntime：[Event runtime](addon-event-runtime.md) |
-| Notification / 通知 | ユーザーが出来事を確認するために個別保存するmetadataと出典参照。会話メッセージ・発話命令・Task状態ではない。複数の通知レコードを集約しない。同一イベントの再配送の重複防止、表示のグループ化、会話での要約とは別 | 設計・#183／#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| Notification / 通知 | ユーザーが出来事を確認するために個別保存するmetadataと出典参照。会話メッセージ・発話命令・Task状態ではない。複数の通知レコードを集約しない。同一イベントの再配送の重複防止、表示のグループ化、会話での要約とは別 | 実装・NotificationStore：[通知runtime](notification-runtime.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 | Ingestion cursor / 取得位置 | sourceからCoreが取り込んだ位置。バッファと整合して保存し、個々のconsumer処理済み・ユーザー既読とは区別する | 実装・EventStore / EventRuntime：[Event runtime](addon-event-runtime.md) |
-| Consumer / consumer cursor | Eventを受け取って処理する通知・会話等の機能と、その独立した処理進捗。ブラウザ接続そのものではない | 共通進捗はEventStoreに実装、下流保存は#158/#365：[Event runtime](addon-event-runtime.md) |
+| Consumer / consumer cursor | Eventを受け取って処理する通知・会話等の機能と、その独立した処理進捗。ブラウザ接続そのものではない | 共通進捗はEventStore、通知の保存・進捗はNotificationStoreに実装。会話側は#365の後続範囲：[Event runtime](addon-event-runtime.md) |
 | Sanitized Event buffer / 復旧用バッファ | 許可情報に限定したEventの有限な永続保管。処理位置と整合して未処理分を復旧する。提供元のdomain正本・通知履歴とは別 | 実装・EventStore / EventRuntime：[Event runtime](addon-event-runtime.md) |
 | Event gap / 欠落、snapshot / 最新状態 | 欠落は正常処理を確認できない過去のEvent範囲。最新状態の取得だけではその過去を復元したことにならない | 実装・EventStore / EventRuntime：[Event runtime](addon-event-runtime.md) |
 | Wake-up / 新着確認の契機 | 提供元の通知等を受けて履歴取得を促すこと。Event本文の唯一の配送路や正本ではない | 実装・EventStore / EventRuntime：[Event runtime](addon-event-runtime.md) |

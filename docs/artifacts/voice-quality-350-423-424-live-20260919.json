@@ -1,0 +1,310 @@
+{
+  "description": "共有環境起動後の限定実接続検証。正式100試行・品質受入を代替しない。",
+  "recorded_date_jst": "2026-09-19",
+  "measurement_revision": "d14c39403f5fc198407c69f6e9d06953056f2e55",
+  "profile": "integration-irodori",
+  "source_root": "frontend/test-results/livekit-quality/runs",
+  "formal_acceptance": false,
+  "stage1_formal_100": "NOT_RUN",
+  "stage2_memory_retrieval": "NOT_RUN",
+  "fixture": {
+    "fixture_version": "speech-v2",
+    "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+    "sample_rate_hz": 48000,
+    "speech_start_sample": 15840,
+    "speech_end_sample": 45120
+  },
+  "functional": {
+    "run_id": "424-functional-0919-02",
+    "expected": 10,
+    "unexpected": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "duration": 322394.267
+  },
+  "native": {
+    "unique_passed": 12,
+    "runs": [
+      {
+        "run_id": "424-native-0919-01",
+        "passed": 6,
+        "failed": 6,
+        "reason": "外部HTTP接続6件はLIVEKIT_TEST_BACKEND_URL未設定で失敗。実SFU併用の残り6件は成功。"
+      },
+      {
+        "run_id": "424-native-0919-02",
+        "passed": 6,
+        "failed": 0,
+        "cases": [
+          "test_real_livekit_bootstrap_joins_user_and_character_to_one_room",
+          "test_real_livekit_rejects_expired_token_and_accepts_reissued_token",
+          "test_real_livekit_user_grant_excludes_camera_publication",
+          "test_real_livekit_application_event_receives_private_ack",
+          "test_real_livekit_duplicate_identity_keeps_new_connection_and_session",
+          "test_real_livekit_grace_timeout_cleans_up_and_requires_a_new_session"
+        ],
+        "reason": "専用Backendを起動して失敗した6件のみ再実行。"
+      }
+    ]
+  },
+  "continuous_turns": {
+    "run_id": "424-track-0919-01",
+    "expected": 1,
+    "unexpected": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "duration": 62959.455,
+    "session_end_confirmed": true,
+    "trials": [
+      {
+        "ordinal": 1,
+        "outcome": "success",
+        "transcript_matches": true,
+        "track_response_matches": true,
+        "speech_end_to_playback": {
+          "lower_ms": 3223.7323333318427,
+          "upper_ms": 3225.0323333288625
+        },
+        "playback": {
+          "expectedSamples": 505920,
+          "inputSamples": 504960,
+          "paddingSamples": 960,
+          "renderedSamples": 505920,
+          "packetCount": 527,
+          "gapSamples": 0,
+          "maximumGapSamples": 0,
+          "gapCount": 0,
+          "sampleRate": 48000
+        }
+      },
+      {
+        "ordinal": 2,
+        "outcome": "success",
+        "transcript_matches": true,
+        "track_response_matches": true,
+        "speech_end_to_playback": {
+          "lower_ms": 3298.332333333332,
+          "upper_ms": 3298.7323333392924
+        },
+        "playback": {
+          "expectedSamples": 507840,
+          "inputSamples": 506880,
+          "paddingSamples": 960,
+          "renderedSamples": 507840,
+          "packetCount": 529,
+          "gapSamples": 2240,
+          "maximumGapSamples": 2048,
+          "gapCount": 4,
+          "sampleRate": 48000
+        }
+      },
+      {
+        "ordinal": 3,
+        "outcome": "success",
+        "transcript_matches": true,
+        "track_response_matches": true,
+        "speech_end_to_playback": {
+          "lower_ms": 3364.732333331849,
+          "upper_ms": 3365.4323333348293
+        },
+        "playback": {
+          "expectedSamples": 776640,
+          "inputSamples": 775680,
+          "paddingSamples": 960,
+          "renderedSamples": 776640,
+          "packetCount": 809,
+          "gapSamples": 11008,
+          "maximumGapSamples": 10688,
+          "gapCount": 5,
+          "sampleRate": 48000
+        }
+      }
+    ]
+  },
+  "memory_isolation_failed_pilot": {
+    "run_id": "350-memory-off-0919-01",
+    "expected_warmup": 1,
+    "expected_measured": 3,
+    "warmup_success": 1,
+    "measured_failure": 1,
+    "measured_not_reached": 2,
+    "reason": "warmup後にmemory_response_originsが1行残り、空状態検査で停止。失敗を保持し、検査を緩和せず独立data rootへ変更。",
+    "inference_log_observations": 0,
+    "inference_log_zero_is_request_zero_proof": false
+  },
+  "memory_isolation_single_trial": {
+    "run_id": "350-memory-off-0919-02",
+    "expected": 1,
+    "unexpected": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "duration": 21367.491,
+    "outcome": "success",
+    "expected_warmup": 0,
+    "expected_measured": 1,
+    "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+    "initial_state_evidence": {
+      "configuration_sha256": {
+        "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+        "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+      },
+      "memory_scheduler_policy": {
+        "consolidation_disabled": true,
+        "formation_disabled": true,
+        "method": "controlled_memory_schedulers_v1"
+      },
+      "method": "sqlite_empty_state_and_configuration_v1",
+      "rag_enabled": false,
+      "row_counts": {
+        "approved_memories": 0,
+        "conversation_turns": 0,
+        "episodic_invalid_sources": 0,
+        "episodic_links": 0,
+        "episodic_merges": 0,
+        "episodic_processed_spans": 0,
+        "episodic_receipts": 0,
+        "episodic_records": 0,
+        "episodic_versions": 0,
+        "memory_index_outbox": 0,
+        "memory_lineage": 0,
+        "memory_response_dependencies": 0,
+        "memory_response_origins": 0,
+        "memory_sources": 0,
+        "memory_write_receipts": 0,
+        "screen_turn_provenance": 0,
+        "semantic_deletion_masks": 0,
+        "semantic_processed_sources": 0,
+        "semantic_reassessment": 0,
+        "semantic_receipts": 0,
+        "semantic_records": 0,
+        "semantic_relations": 0,
+        "semantic_versions": 0,
+        "temporary_provider_records": 0
+      },
+      "schema_versions": {
+        "history": 9,
+        "memory": 6
+      }
+    },
+    "preparation": {
+      "method": "browser_click_to_microphone_standby_dom_v1",
+      "clock_domain": "browser_performance",
+      "attempt_count": 1,
+      "started_client_ms": 1552.2000000029802,
+      "ready_client_ms": 3922,
+      "duration_ms": 2369.7999999970198
+    },
+    "session_end_confirmed": true,
+    "speech_end_to_playback": {
+      "lower_ms": 2975.8323333333337,
+      "upper_ms": 2977.432333334824
+    },
+    "playback": {
+      "expectedSamples": 340800,
+      "inputSamples": 339840,
+      "paddingSamples": 960,
+      "renderedSamples": 340800,
+      "packetCount": 355,
+      "gapSamples": 0,
+      "maximumGapSamples": 0,
+      "gapCount": 0,
+      "sampleRate": 48000
+    },
+    "health_observation": {
+      "matched_data_mount": true,
+      "successful_samples": 166,
+      "distinct_snapshots": 7,
+      "targets": {
+        "chat": {
+          "distinct_last_checked_at": [
+            "2026-09-19T01:52:33.778959Z",
+            "2026-09-19T01:52:38.163378Z",
+            "2026-09-19T01:52:38.530497Z",
+            "2026-09-19T01:52:41.330504Z",
+            "2026-09-19T01:52:41.626018Z",
+            "2026-09-19T01:52:41.934602Z",
+            "2026-09-19T01:52:42.502227Z"
+          ],
+          "unchanged": false
+        },
+        "memory-extraction": {
+          "distinct_last_checked_at": [
+            "2026-09-19T01:52:33.778993Z"
+          ],
+          "unchanged": true
+        },
+        "semantic-extraction": {
+          "distinct_last_checked_at": [
+            null
+          ],
+          "unchanged": true
+        },
+        "memory-consolidation": {
+          "distinct_last_checked_at": [
+            "2026-09-19T01:52:33.778997Z"
+          ],
+          "unchanged": true
+        },
+        "embedding": {
+          "distinct_last_checked_at": [
+            "2026-09-19T01:52:33.780264Z"
+          ],
+          "unchanged": true
+        }
+      },
+      "limitation": "public healthの更新観測であり、全HTTP requestのwire captureではない。"
+    },
+    "post_run_memory_job": {
+      "revision": 3,
+      "completed_revision": 0,
+      "attempts": 0,
+      "last_outcome": "PENDING",
+      "lease_until": null
+    },
+    "same_server_durations_ms": {
+      "stt": 156.927291,
+      "prompt_preparation": 606.269284,
+      "token_estimate_total": 603.636085994367,
+      "llm_request_to_first_token": 331.478358,
+      "first_tts": 960.702626
+    },
+    "token_estimate_requests": 3,
+    "latency_scope": "利用者発話終了の因果時計区間からAudioWorklet実出力開始まで。旧latencyMs（送信基準）は採用しない。"
+  },
+  "raw_sha256": {
+    "424-functional-0919-02": {
+      "functional-run.json": "522c0f7fee6021d2fac55f08339bbbd13147c2a70517fdc3d5377ec472612c41",
+      "playwright-results.json": "a4ea8954cbbff283c5669a2dc8e91a3069eef01038c3682b9142b014daad9633"
+    },
+    "424-native-0919-01": {
+      "native-run.json": "6c8fc7977c8f5d6bbef3a080b1bb99fbfda8241ec8630a5dc7932fd7ab44cb80"
+    },
+    "424-native-0919-02": {
+      "native-run.json": "821560e4fde95b6294657db9e39e448d6fa370fc3b5915086aa4b1a83a817a7b"
+    },
+    "424-track-0919-01": {
+      "trial-manifest.json": "1386db985b333ed004251648360d147814e6bfe3deba3f0e1c84e586daadda9f",
+      "playwright-results.json": "71730d9242caa4e3ebae9f4da21ae5bb85dd56141ef49a09e08d057ca2cbbea8"
+    },
+    "350-memory-off-0919-01": {
+      "trial-manifest.json": "5b15b2e74f8d22048df9927b829e355105853e7faf953015590ded1a9b334956",
+      "playwright-results.json": "4251d01fac59e67e760e130cc6198dd788997aadc47fb1a69e3456329e28d6be",
+      "inference-observation.json": "dd46c23fdef13cfc7c63c9aaf9ac10c3e160d4eb468b4a7ece0861ed25a5543c"
+    },
+    "350-memory-off-0919-02": {
+      "trial-manifest.json": "d7b8398cbb09b3a8c9e24497ded8d9bb2956c6d1156d6af6c48173426159e87a",
+      "playwright-results.json": "795284264b66de2e091da4863284297511bb6c4cdff10f0aea4a46e5bc4470d7",
+      "inference-health-observation.json": "26cb55959f67c1554a1a20744e8b151e82e48da8684cabb3a0f8e2a6c16f1b44",
+      "runtime-data/voice-metrics/memory-policy.json": "75af45c4dc148ff58598a542dd9a6bbcdd46474d14167d894afe92f70f6e2a1e",
+      "runtime-data/voice-metrics/controlled-trace.jsonl": "6235085142164d885c1044646c55cecf123253b654aac8d9ff704975ed520b5d"
+    }
+  },
+  "local_log_sha256": {
+    "ds-424-functional-02.log": "6c2328df4471537a2181f85b1e84baec8ff304a78703851ee5521cd5c8c06a26",
+    "ds-424-native-01.log": "73e885fd01bec12e5db0148e01c3b3918851f423e600dd518a358fe1f909e66d",
+    "ds-424-native-02.log": "d63ec2f90d9311b0a46c6dd8d461a203461de9ad592d5c07d01ec49950e9ff1b",
+    "ds-424-track-01.log": "27e3904d94fb593c9234b8acf6553233ee9d0c99790e305b0f03d39cc24fcf9a",
+    "ds-350-memory-off-01.log": "e3e4ca78c8213a9c0cefe17022ca7342a43b37688047cc6d3e896a8018c5cc4c",
+    "ds-350-memory-off-02.log": "ec2bb1e17f75de57a90c8672decf37f8527090d9a63ecf28ec669f59db417c13"
+  }
+}

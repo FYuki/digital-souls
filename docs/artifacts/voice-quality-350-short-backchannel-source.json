@@ -1,0 +1,131 @@
+{
+  "scope": "fixed_source_fixture_isolated_real_whisper_diagnostic_not_browser_acceptance",
+  "date_jst": "2026-09-19",
+  "image_id": "sha256:b4f2c3b7bd410b5d39b8bf8e25973356d2e27ac418ea56f98011dcf8ec9f6342",
+  "model_path": "/opt/models/whisper-medium",
+  "device": "cuda",
+  "compute_type": "int8_float16",
+  "language": "ja",
+  "service_no_speech_max": 0.6,
+  "shared_service_modified": false,
+  "owned_container_removed": true,
+  "source_result_path": "frontend/test-results/vad-quality/350-short-backchannel-segment-diagnostic.jsonl",
+  "source_result_sha256": "4bdcd805e6ce34f0d49dd47206781c0ad9abdef2c35993f58c4d885163e161ac",
+  "limitations": [
+    "source WAV resampling; not browser capture",
+    "not formal cohort or human label validation",
+    "raw_segment_diagnostic disables only inference no_speech_threshold; service filter still applied"
+  ],
+  "trials": [
+    {
+      "fixture": 3,
+      "mode": "default",
+      "service_text_empty": false,
+      "segments": [
+        {
+          "no_speech_prob": 0.373046875,
+          "avg_logprob": -0.6567382961511612,
+          "compression_ratio": 0.42857142857142855,
+          "transcript_character_count": 2
+        }
+      ],
+      "fixture_sha256": "654c109ba02c5efe62b1540a6e95031003353260a6d4607adbb2f36f61d92d74"
+    },
+    {
+      "fixture": 3,
+      "mode": "raw_segment_diagnostic",
+      "service_text_empty": false,
+      "segments": [
+        {
+          "no_speech_prob": 0.373046875,
+          "avg_logprob": -0.6567382961511612,
+          "compression_ratio": 0.42857142857142855,
+          "transcript_character_count": 2
+        }
+      ],
+      "fixture_sha256": "654c109ba02c5efe62b1540a6e95031003353260a6d4607adbb2f36f61d92d74"
+    },
+    {
+      "fixture": 23,
+      "mode": "default",
+      "service_text_empty": true,
+      "segments": [
+        {
+          "no_speech_prob": 0.7880859375,
+          "avg_logprob": -0.998046894868215,
+          "compression_ratio": 0.5294117647058824,
+          "transcript_character_count": 3
+        }
+      ],
+      "fixture_sha256": "d7520f838ce98732914691b40ed5d03d1ea94e7d58b1b689a479ef77dab912e4"
+    },
+    {
+      "fixture": 23,
+      "mode": "raw_segment_diagnostic",
+      "service_text_empty": true,
+      "segments": [
+        {
+          "no_speech_prob": 0.7880859375,
+          "avg_logprob": -0.998046894868215,
+          "compression_ratio": 0.5294117647058824,
+          "transcript_character_count": 3
+        }
+      ],
+      "fixture_sha256": "d7520f838ce98732914691b40ed5d03d1ea94e7d58b1b689a479ef77dab912e4"
+    },
+    {
+      "fixture": 33,
+      "mode": "default",
+      "service_text_empty": true,
+      "segments": [
+        {
+          "no_speech_prob": 0.6103515625,
+          "avg_logprob": -0.8815103769302368,
+          "compression_ratio": 0.42857142857142855,
+          "transcript_character_count": 2
+        }
+      ],
+      "fixture_sha256": "6541e2e1e621fa1e5f7d28f8ee779872bb21f06156065cbe0aba6c5ee5b3c7a2"
+    },
+    {
+      "fixture": 33,
+      "mode": "raw_segment_diagnostic",
+      "service_text_empty": true,
+      "segments": [
+        {
+          "no_speech_prob": 0.6103515625,
+          "avg_logprob": -0.8815103769302368,
+          "compression_ratio": 0.42857142857142855,
+          "transcript_character_count": 2
+        }
+      ],
+      "fixture_sha256": "6541e2e1e621fa1e5f7d28f8ee779872bb21f06156065cbe0aba6c5ee5b3c7a2"
+    },
+    {
+      "fixture": "silence_control",
+      "mode": "default",
+      "service_text_empty": true,
+      "segments": [
+        {
+          "no_speech_prob": 0.87353515625,
+          "avg_logprob": -0.87158203125,
+          "compression_ratio": 0.8571428571428571,
+          "transcript_character_count": 14
+        }
+      ]
+    },
+    {
+      "fixture": "silence_control",
+      "mode": "raw_segment_diagnostic",
+      "service_text_empty": true,
+      "segments": [
+        {
+          "no_speech_prob": 0.87353515625,
+          "avg_logprob": -0.87158203125,
+          "compression_ratio": 0.8571428571428571,
+          "transcript_character_count": 14
+        }
+      ]
+    }
+  ]
+}

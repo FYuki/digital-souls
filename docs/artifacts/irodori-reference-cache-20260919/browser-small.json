@@ -1,0 +1,1383 @@
+{
+  "schema_version": "1.0",
+  "scope": "reference_cache_browser_diagnostic",
+  "formal_acceptance": false,
+  "cohort_id": "350-irodori-reference-small-0919-01",
+  "summary": {
+    "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+    "expected_warmup": 5,
+    "expected_measured": 3,
+    "recorded_trials": 8,
+    "success": 8,
+    "failure": 0,
+    "all_owned_environments_stopped": true,
+    "shared_services_modified": false,
+    "all_trial_data_roots_independent": true,
+    "full_acceptance_passed": false,
+    "preparation_by_phase": {
+      "warmup": {
+        "denominator": 5,
+        "ready": 5,
+        "not_ready": 0,
+        "missing": 0,
+        "invalid": 0,
+        "coverage": 1.0,
+        "duration_ms_p50": 1883.8999999985099,
+        "duration_ms_p95": 7949.70000000298,
+        "duration_ms_max": 7949.70000000298,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+      },
+      "measured": {
+        "denominator": 3,
+        "ready": 3,
+        "not_ready": 0,
+        "missing": 0,
+        "invalid": 0,
+        "coverage": 1.0,
+        "duration_ms_p50": 1817.0999999940395,
+        "duration_ms_p95": 1891.7000000029802,
+        "duration_ms_max": 1891.7000000029802,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "note": "DOM反映時刻による準備完了観測。OS権限待ちと接続・入力認可を含む。TTFAとは別。"
+      }
+    },
+    "preparation_evidence_complete": true,
+    "existing_reporter_exit": 1,
+    "resources_note": "CPU・memory・GPU観測は各runに保持。複数containerを一つの累積CPU系列へ連結しない。"
+  },
+  "reporter_note": "measured=3なので正式集計は未実行。existing_reporter_exit=1は初期値でありreporter失敗ではない。",
+  "tts_candidate": {
+    "revision": "0b97ed943aa660877dccc24b8df25cae6eec1549",
+    "base_image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+    "image": "sha256:d8279a7a43adc105ebe14b4bd3620fe2839c44966ff756c8c93e5dde9fba916c",
+    "active_max_input_bytes": 268435456,
+    "startup_wall_seconds": 13.092226994995144,
+    "version": {
+      "serviceVersion": "1.0",
+      "model": "Aratako/Irodori-TTS-v4.1-Small",
+      "modelRevision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+      "codecRevision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+      "serverRevision": "841fb7c6ec57729c56b9b75c0ef2562249b13a10",
+      "irodoriRevision": "8ca3acb58ab4e19ad6d594aaed6bafe3e88f7f71",
+      "device": "cuda",
+      "precision": "bf16",
+      "quantized": false,
+      "cudaGraphRequested": true,
+      "referenceCacheRequested": true,
+      "globalInflight": 1,
+      "maxPending": 8,
+      "maxVoiceChecks": 2,
+      "queueTimeoutSeconds": 10.0,
+      "inferenceTimeoutSeconds": 30.0,
+      "preparationSeconds": 11.819797889002075,
+      "active": 0,
+      "pending": 0
+    }
+  },
+  "trials": [
+    {
+      "run_id": "350-irodori-reference-small-0919-01-001",
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1828.2323333318436,
+      "ttfa_upper_ms": 1830.0323333288634,
+      "preparation_ms": 7949.70000000298,
+      "playback": {
+        "expectedSamples": 471360,
+        "renderedSamples": 471360,
+        "packetCount": 491,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 137.633994,
+        "prompt_preparation": 148.702892,
+        "llm_first": 58.463904,
+        "tts_first": 628.455749
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 40.94345323960324,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 387866624,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 4.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14229176320,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 52,
+          "cpu_intervals": 51,
+          "cpu_observed_ms": 27589.419324,
+          "maximum_interval_ms": 814.195113,
+          "gpu_samples": 6,
+          "missing_samples": {
+            "owned_backend_not_running": 6,
+            "container_stats_unavailable": 1
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:b1b9e5d5222d8df932e2f0c76bd2fb2c6c8ab937dce7e53e51415516b82114d3",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:3807fae025cbb24418ed9aa831f5b9b5097fdd4013bd4995721f544858bdc7f6",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "f751b94d608e25492146b34c5617f1e32dfdd3196da5de86f856a2d9a7d944b4"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "aefd8b7448cbc7e2515175912c52271b2340173277a7882a1f472d26d1329619"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "0b356f694efcf098fc05fba341de909d5ed991072e286985bd421124dcc27862"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "8f9cb291d1312f9260392b40584c306c21c84d4380e62b16976f0519ad5ff3c7"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "237ae42640c7ab5c359c2b02d91ba8627668b6f600e1189a3514a4543f037242"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "79910c868e6799431869663aa52fbff29411b3ff452e889d095b75495422aeba"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-reference-small-0919-01-002",
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1812.8323333333328,
+      "ttfa_upper_ms": 1814.432333334823,
+      "preparation_ms": 2405.5,
+      "playback": {
+        "expectedSamples": 392640,
+        "renderedSamples": 392640,
+        "packetCount": 409,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 172.850436,
+        "prompt_preparation": 139.839242,
+        "llm_first": 39.207692,
+        "tts_first": 534.080464
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 117.08025593098375,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 339107840,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 85.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14229176320,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 35,
+          "cpu_intervals": 34,
+          "cpu_observed_ms": 18373.821298,
+          "maximum_interval_ms": 795.50889,
+          "gpu_samples": 4,
+          "missing_samples": {
+            "owned_backend_not_running": 3,
+            "container_observation_failed": 1
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:a332c30bd8bf53ee1f487565a1980ef468d3fd922950cb947dee8237d564a418",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:87e80d67a15e574267e3cdff00b7e96797305c8bd8a37f617e0677f77449cc86",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "4d3d866c39d1789e68f2532e5c70b6cf5b8bd7916fd5e90d8376dbde712a8c59"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "67f2035bb077d6d9b2b1c85e23bc9ca4db7eeed7f1eff64a615c81e5d4a5b0ec"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "70d947d41059108269cdd88a754b2f6dba5f2fa7838408cf5f596e80144e8865"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "9abf087c23609d3012a75aa3eb149aa2ce9592a104731d431e54c7235359975c"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "0c6bac7aef8df025eeba31afea5a736256ddd5abed00340bca77f0137f41c06b"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "0885f563028fa523303b5dc44f87bb418d28e1fdc5618c6b9752d93ff43b858a"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-reference-small-0919-01-003",
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1828.2656666607063,
+      "ttfa_upper_ms": 1829.9656666636865,
+      "preparation_ms": 1883.8999999985099,
+      "playback": {
+        "expectedSamples": 246720,
+        "renderedSamples": 246720,
+        "packetCount": 257,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 148.42494,
+        "prompt_preparation": 153.396097,
+        "llm_first": 43.073791,
+        "tts_first": 550.605476
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 116.8476318710148,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 343429120,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 2.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14317256704,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 28,
+          "cpu_intervals": 27,
+          "cpu_observed_ms": 14736.580215,
+          "maximum_interval_ms": 790.993331,
+          "gpu_samples": 4,
+          "missing_samples": {
+            "owned_backend_not_running": 3,
+            "container_observation_failed": 1
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:6d915b23abac1023f8a077ce958a80a0983500c7589c250585c0cbf48a9431a9",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:3ba68d1c6b6fcda3b97506519304880f6e3d9b2a29a7f180b070c2289dcfbffa",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "0dc71b0818145e38b7a77289f516a5bb2065cddab8183d260c2c0865af4e7dbe"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "6d4afc4a6790c7eb1e6e130bb1423c31a95da800e6fe9dec4529071608fd82fb"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "53de51afb7b91e92a2b137d5f63e860bf53f55fa7a68044bbddda78c6a6e860b"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "d1f03942f3821b97716221bb355b4bc3c7d3c09c5aa9c022a0b50e4880d792ff"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "0334c5e659911efbb4279da85a3c1cd790af5f55cbf13f0cde5dfa342701a300"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "eb65acdacd0db3048e877de4dc7cb6b12f91cb5381f1da8f3e010d357f724f11"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-reference-small-0919-01-004",
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1818.4323333273724,
+      "ttfa_upper_ms": 1820.2323333318427,
+      "preparation_ms": 1380.6000000014901,
+      "playback": {
+        "expectedSamples": 361920,
+        "renderedSamples": 361920,
+        "packetCount": 377,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 182.258049,
+        "prompt_preparation": 116.508513,
+        "llm_first": 44.318988,
+        "tts_first": 544.910271
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 63.44876975664881,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 231407616,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 37.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14317256704,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 31,
+          "cpu_intervals": 30,
+          "cpu_observed_ms": 16387.241297,
+          "maximum_interval_ms": 795.432959,
+          "gpu_samples": 4,
+          "missing_samples": {
+            "owned_backend_not_running": 3,
+            "container_stats_unavailable": 1
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:b9edc2fb775b8ec82a4e158051fcc672c692845f6260f1db02ecb6dd7762454e",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:185a840ce2d13c92e735e07a8a0f4769e811e4d9e92be1d952ec8420c763f2e2",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "d62f3fea8f40d5b708f9f61f951584d78fe29c6d24db86314bb1febcdf3b1c19"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "0047bca89a31938af01ce3baa2072e65d30676ac5329f065b6d333b6a63e521f"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "dcb51f063bb50193ab2c2a9e1ca1585d99d958fa938e356a195c809b57e387cc"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "a395470ec586ab343f3d51f9d6a154ad6844a957b7b7bb5c694959e41b8e2b43"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "5fd303e5d33d9bf9052d7b0196381f4d6a1e642dd76888379fcb83040d30fa78"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "d10f7e355373dd494eade6da630c83b718e6b8f1ba5752f08e56635c814cd6dd"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-reference-small-0919-01-005",
+      "phase": "warmup",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1883.0656666651766,
+      "ttfa_upper_ms": 1884.865666669647,
+      "preparation_ms": 1375.6000000014901,
+      "playback": {
+        "expectedSamples": 300480,
+        "renderedSamples": 300480,
+        "packetCount": 313,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 160.840861,
+        "prompt_preparation": 163.896622,
+        "llm_first": 44.216434,
+        "tts_first": 560.499375
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 67.15912998577403,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 233328640,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 26.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14396948480,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 29,
+          "cpu_intervals": 28,
+          "cpu_observed_ms": 15307.157794,
+          "maximum_interval_ms": 800.834769,
+          "gpu_samples": 4,
+          "missing_samples": {
+            "owned_backend_not_running": 3,
+            "container_observation_failed": 1
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:9ecc8cb28495b52c813239a58bc90afc06ad48a90affca9ccbde6609445c6b48",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:eef4e97dacdeaea65142ef988c7ac4d90e83da50672ddf677c4d3f04cc85a301",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "811403afe3d4471f86ddac997e250b262b4bf553f00b1a33730ce36462caab91"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "6a57efc552290779a59dcf4685007feb26ca9166f28de786717c9e5dadfa66c9"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "a441a578d49e48958f4da3f1a66c24f537166bbcdc8862fc7164e4726b8b65c6"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "c48c12ecc6b06dc20e98e0d6fa603a670557ec738729d8c806ff4a77c11333a0"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "4c15b5883bf2e3baf57ef1f12ef465a5a51bffddfe37d222cfe1b4075230c928"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "8c56e148ac9016fda5db083cadd419db3a1c7b45a22a0436303c7ff6d17af70c"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-reference-small-0919-01-006",
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1777.1323333303526,
+      "ttfa_upper_ms": 1778.8323333333328,
+      "preparation_ms": 1817.0999999940395,
+      "playback": {
+        "expectedSamples": 298560,
+        "renderedSamples": 298560,
+        "packetCount": 311,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 123.938825,
+        "prompt_preparation": 140.737193,
+        "llm_first": 45.870459,
+        "tts_first": 516.756995
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 116.95299092700252,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 331415552,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 0.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14468251648,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 30,
+          "cpu_intervals": 29,
+          "cpu_observed_ms": 15839.27256,
+          "maximum_interval_ms": 810.912983,
+          "gpu_samples": 4,
+          "missing_samples": {
+            "owned_backend_not_running": 3,
+            "container_observation_failed": 1
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:c6a81dfbbf1c513a479fc65108fbffa2e16244d9fa14b05ba1fddefa89a589ef",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:9a4a4ef5d8282fdcb0f9df005f53abc5986cdbc87bd7d6959bc4f9f1b2cc274c",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "0775602ba006861b15f49b0d150c7a2d6eee50dc67590c9505dfb3b2b16a6432"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "e0c3a67d88eb99387f11934d1ae32ea1a685f10f3fa39899ca10a56ae74714ed"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "78a0c7517cee5bcbb386fffd18068a6359cde7d6c4a2891c87e47c0ae7bd5100"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "fa22b43809c47d59a55cfd15f646aa46fb98b244851eee569812637f027660ba"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "2711438c2b4cde0a0866ab42f36af3c599c9f4cf7801eb19e665ad89d94c863d"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "fab6f47a37b1fb487108b19fd21d80af18e02ab80141aba7617d5466949b441a"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-reference-small-0919-01-007",
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1764.7323333318427,
+      "ttfa_upper_ms": 1766.432333334823,
+      "preparation_ms": 1891.7000000029802,
+      "playback": {
+        "expectedSamples": 235200,
+        "renderedSamples": 235200,
+        "packetCount": 245,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 118.356746,
+        "prompt_preparation": 155.28203,
+        "llm_first": 41.938852,
+        "tts_first": 518.49422
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 114.90466018111887,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 323391488,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 2.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14468251648,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 28,
+          "cpu_intervals": 27,
+          "cpu_observed_ms": 14759.25082,
+          "maximum_interval_ms": 781.448783,
+          "gpu_samples": 4,
+          "missing_samples": {
+            "owned_backend_not_running": 3
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:ea6efa5578437fb95a84789a63a4f8cc1904be977ffd288723badc1d6f715eff",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:4865f4b517e537c7f2b23eae1be3d232bd1d2bf3862be924d94033d7f337690c",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "358b03ee44d934c39ea4dac929209d711b70bac2e421ecc41454bb0b015d7c3f"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "8a59bdce5d628cc508dc37e730e6cd83afbbc5890bfcdc2eb312821ffd03b141"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "405988addfc8e66d4f0ac91e4598e5a47ddca334a7810e3c322bfef0556b3f66"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "ceb575a474a4e7e69072e88697bd5e8db7cad17dc955bc79d6734c79808dd86f"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "c222a517e8e877b6f29710782ef9f83b0a555e90d530d14c7ea40f19db9510ae"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "5b378b0c1b47880c5b586fc6ea54e349ace2fdc2d67a80e6882c5532a4229b0a"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    },
+    {
+      "run_id": "350-irodori-reference-small-0919-01-008",
+      "phase": "measured",
+      "outcome": "success",
+      "exit_code": 0,
+      "measurement_revision": "93c8aa7dd569f991e872de5ac75502e8e2111ccb",
+      "ttfa_lower_ms": 1727.1323333303535,
+      "ttfa_upper_ms": 1728.8323333333337,
+      "preparation_ms": 1370.2999999970198,
+      "playback": {
+        "expectedSamples": 271680,
+        "renderedSamples": 271680,
+        "packetCount": 283,
+        "gapSamples": 0,
+        "maximumGapSamples": 0,
+        "gapCount": 0
+      },
+      "session_end_confirmed": true,
+      "initial_state_hash": "62d55bf7b16253914146f5ea466ee6a65b129056426129c2e8421b9cc87353e9",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": true,
+          "formation_disabled": true,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "stages_ms": {
+        "stt": 165.300136,
+        "prompt_preparation": 125.341727,
+        "llm_first": 49.459604,
+        "tts_first": 478.483902
+      },
+      "resources": {
+        "cpu_percent": {
+          "status": "measured",
+          "value": 70.38913769040069,
+          "reason": null
+        },
+        "memory_bytes": {
+          "status": "measured",
+          "value": 230572032,
+          "reason": null
+        },
+        "gpu_utilization_percent": {
+          "status": "measured",
+          "value": 76.0,
+          "reason": null
+        },
+        "gpu_memory_bytes": {
+          "status": "measured",
+          "value": 14464057344,
+          "reason": null
+        },
+        "collection": {
+          "cpu_scope": "owned_backend_container",
+          "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+          "memory_method": "maximum_sampled_container_charged_bytes",
+          "gpu_scope": "shared_host_gpu",
+          "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+          "backend_samples": 27,
+          "cpu_intervals": 26,
+          "cpu_observed_ms": 14310.54184,
+          "maximum_interval_ms": 810.378446,
+          "gpu_samples": 4,
+          "missing_samples": {
+            "owned_backend_not_running": 3,
+            "container_observation_failed": 1
+          }
+        }
+      },
+      "native_sdk": {
+        "status": "verified",
+        "build": {
+          "schema_version": 1,
+          "python_sdk_version": "1.1.16",
+          "ffi_version": "0.12.73",
+          "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+          "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+          "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+          "reconnect_policy": "short-outage-v1",
+          "target": "x86_64-unknown-linux-gnu",
+          "cuda_video_codecs_enabled": false
+        }
+      },
+      "running_images": {
+        "backend": {
+          "image_id": "sha256:8f164415bb9bcf568e211a06073014f3812c954945fb4937f5400bb83bd546d9",
+          "image_tag": "digital-souls-voice-quality/backend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        },
+        "frontend": {
+          "image_id": "sha256:62c816547d88ea3e16e497615c471afac6dae194ff06fb7710fdb8c70cd89db6",
+          "image_tag": "digital-souls-voice-quality/frontend:93c8aa7dd569f991e872de5ac75502e8e2111ccb"
+        }
+      },
+      "ollama_base_url": "http://127.0.0.1:11534",
+      "irodori_base_url": "http://127.0.0.1:50026",
+      "provenance": [
+        {
+          "path": "trial-manifest.json",
+          "sha256": "ffad301fa33a4fdfa27470cedb7ab5dc99578003e7d36bf0c334cf604d17fb97"
+        },
+        {
+          "path": "runtime-data/voice-metrics/controlled-trace.jsonl",
+          "sha256": "40b34081e132affbba18b6ba5c78c744724c3d228a91a171eb285c49a994b6eb"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/resolved-profile.json",
+          "sha256": "2b98faee7d5f09df08b4ad86e48c7d683d7b3d19fdfffeb25c09df297a6d2ec6"
+        },
+        {
+          "path": "runtime-data/runtime/standalone/environment-run.json",
+          "sha256": "235f04938a10f4fb9fc3ea386ef62c2abafaedc46cc22644fa14b0d21961dd6c"
+        },
+        {
+          "path": "playwright-results.json",
+          "sha256": "03b4cace1e8c71a409c6b2eaa68b5d23f2eb24bc292577d32ac8189938ec9568"
+        },
+        {
+          "path": "inference-runtime.jsonl",
+          "sha256": "8e004f34a37b187a6f012d778abc7bb974e496a99aa182b26268ac33d98e7310"
+        },
+        {
+          "path": "native-sdk.json",
+          "sha256": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+        }
+      ]
+    }
+  ]
+}

@@ -38,6 +38,7 @@ test('実bootstrap後の接続失敗で作成したSessionとSFU Roomを解放�
   let roomName: string | null = null
   let conversationId: string | null = null
   let bootstrapCount = 0
+  const preparationIds = new Set<string>()
   let bootstrapStatus: number | null = null
   let deliverBinding!: () => void
   const allowFault = new Promise<void>(resolve => { deliverBinding = resolve })
@@ -62,10 +63,12 @@ test('実bootstrap後の接続失敗で作成したSessionとSFU Roomを解放�
   })
   await page.route('**/api/voice/livekit/token', async route => {
     bootstrapCount += 1
-    const request = route.request().postDataJSON() as { conversation_id: string }
+    const request = route.request().postDataJSON() as { conversation_id: string; request_id: string }
     conversationId = request.conversation_id
+    preparationIds.add(request.request_id)
     // Session・Room・BE参加者は実BEが作る。障害はFEの接続先だけへ限定する。
     const response = await route.fetch()
+    if (response.status() === 202) { await route.fulfill({response}); return }
     bootstrapStatus = response.status()
     if (bootstrapStatus !== 200) { await route.fulfill({ response }); return }
     const binding = await response.json() as {
@@ -129,7 +132,7 @@ test('実bootstrap後の接続失敗で作成したSessionとSFU Roomを解放�
     const evidence = {
       source: 'real_bootstrap_browser_signaling_reset',
       rejected_connections: rejectedConnections,
-      bootstrap_count: bootstrapCount, client_delete_count: clientDeleteCount,
+      bootstrap_count: bootstrapCount, preparation_count: preparationIds.size, client_delete_count: clientDeleteCount,
       delete_status: endedResponse.status(), reconnect_status: reconnect.status(),
       room_before: roomBefore, room_after: readRoom(roomName),
       microphone_calls: microphoneCalls,
@@ -137,7 +140,8 @@ test('実bootstrap後の接続失敗で作成したSessionとSFU Roomを解放�
     await testInfo.attach('startup-cleanup.real.json', {
       body: JSON.stringify(evidence), contentType: 'application/json',
     })
-    expect(bootstrapCount).toBe(1)
+    expect(bootstrapCount).toBeGreaterThanOrEqual(2)
+    expect(preparationIds.size).toBe(1)
     expect(clientDeleteCount).toBe(1)
     expect(microphoneCalls).toBe(0)
     expect(rejectedConnections).toBeGreaterThan(0)

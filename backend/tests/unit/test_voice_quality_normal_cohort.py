@@ -11,6 +11,7 @@ SCRIPTS = Path(__file__).resolve().parents[3] / "scripts/voice_quality"
 sys.path.insert(0, str(SCRIPTS))
 spec = importlib.util.spec_from_file_location("normal_cohort_tested", SCRIPTS / "run_normal_cohort.py")
 assert spec and spec.loader
+POLICY = {"method": "controlled_memory_schedulers_v1", "formation_disabled": True, "consolidation_disabled": True}
 cohort = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cohort)
 
@@ -47,7 +48,7 @@ def test_failed_isolated_trials_stay_in_summary_and_do_not_create_acceptance_rep
         trace.mkdir(parents=True)
         (trace / "controlled-trace.jsonl").write_text("")
         (base / "trial-manifest.json").write_text(json.dumps({
-            "initial_state_hash": "same-state", "trials": [{"phase": phase, "outcome": "failure"}],
+            "initial_state_hash": "same-state", "trials": [{"phase": phase, "outcome": "failure", "initial_state_evidence": {"memory_scheduler_policy": POLICY}}],
         }))
     assert cohort.aggregate(runs, output, "revision", 1) == 1
     summary = json.loads((output / "summary.json").read_text())
@@ -57,27 +58,128 @@ def test_failed_isolated_trials_stay_in_summary_and_do_not_create_acceptance_rep
     assert not (output / "report.json").exists()
 
 
-def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standard(tmp_path, monkeypatch):
+@pytest.mark.parametrize("profile", ["integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"])
+def test_standard_profile_allows_verified_teardown_but_pcm_profile_is_not_standard(tmp_path, monkeypatch, profile):
     from types import SimpleNamespace
 
     path = tmp_path / "runtime-data/runtime/standalone"
     path.mkdir(parents=True)
     report = {
         "runtime": {"environmentId": "test", "dataRoot": str((tmp_path / "runtime-data").resolve())},
-        "effectiveProfile": {"effectiveProfile": "integration-voice"},
+        "effectiveProfile": {"effectiveProfile": profile},
         "teardown": {"status": "completed"},
         "services": {name: {"owned": True, "containerIdentity": {"containerId": letter * 64}}
                      for name, letter in [("backend", "a"), ("frontend", "b")]},
     }
     (path / "environment-run.json").write_text(json.dumps(report))
     (tmp_path / "native-sdk.json").write_text(json.dumps({"status": "verified"}))
+    scope = "isolated_memory_reference_trial" if profile == "integration-irodori-memory-reference" else "isolated_normal_trial"
     (tmp_path / "trial-manifest.json").write_text(json.dumps({
-        "measurement_revision": "revision", "measurement_scope": "isolated_normal_trial",
+        "measurement_revision": "revision", "measurement_scope": scope,
+        "trials": [{"initial_state_evidence": {"memory_scheduler_policy": POLICY}}],
     }))
+    (path / "resolved-profile.json").write_text(json.dumps({"derivedEnvironment": {
+        "VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION": "true",
+    }}))
     monkeypatch.setattr(cohort.subprocess, "run",
                         lambda *a, **kw: SimpleNamespace(returncode=1, stderr="No such object"))
-    assert cohort.verify_stopped(tmp_path, "revision")["measurement_scope"] == "isolated_normal_trial"
+    assert cohort.verify_stopped(tmp_path, "revision", profile)["measurement_scope"] == scope
     report["effectiveProfile"]["effectiveProfile"] = "integration-voice-pcm"
     (path / "environment-run.json").write_text(json.dumps(report))
     with pytest.raises(ValueError, match="teardown"):
-        cohort.verify_stopped(tmp_path, "revision")
+        cohort.verify_stopped(tmp_path, "revision", profile)
+
+def test_unknown_profile_is_not_accepted_as_an_independent_normal_trial(tmp_path):
+    with pytest.raises(ValueError, match="profile"):
+        cohort.verify_stopped(tmp_path, "revision", "integration-irodori-fault")
+
+
+def test_preparation_summary_keeps_missing_failed_and_invalid_attempts():
+    def observation(**change):
+        return {"preparation_observation": {
+            "method": "browser_click_to_microphone_standby_dom_v1",
+            "clock_domain": "browser_performance", "attempt_count": 1,
+            "started_client_ms": 100, "ready_client_ms": 120100, "duration_ms": 120000,
+            **change,
+        }}
+    summary = cohort.preparation_summary([
+        observation(), observation(ready_client_ms=None, duration_ms=None), {},
+        observation(attempt_count=2), observation(duration_ms=-1),
+        observation(ready_client_ms=float("nan")), observation(duration_ms=10),
+        observation(clock_domain="server_monotonic"),
+    ])
+    assert summary["denominator"] == 8
+    assert (summary["ready"], summary["not_ready"], summary["missing"], summary["invalid"]) == (1, 1, 1, 5)
+    assert summary["coverage"] == 1 / 8
+    assert summary["duration_ms_p95"] == 120000
+    empty = cohort.preparation_summary([])
+    assert empty["duration_ms_p95"] is None
+    assert empty["coverage"] == 0
+
+
+@pytest.mark.parametrize("policy", [None, {}, {**POLICY, "formation_disabled": False},
+                                  {**POLICY, "consolidation_disabled": False}])
+def test_normal_cohort_rejects_missing_or_active_memory_scheduler_policy(policy):
+    with pytest.raises(ValueError, match="isolation evidence"):
+        cohort.require_memory_isolation({"trials": [{"initial_state_evidence": {
+            "memory_scheduler_policy": policy,
+        }}]})
+
+
+def test_formal_aggregation_launches_real_reporter_without_pythonpath(tmp_path, monkeypatch):
+    # 集計subprocessをmockせず、環境依存なしで既存reporterの入力検証へ到達させる。
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    runs = cohort.plan("normal-launch", 100)
+    monkeypatch.setattr(cohort, "run_root", lambda run_id: tmp_path / run_id)
+    output = tmp_path / "summary"
+    output.mkdir()
+    for run_id, phase in runs:
+        base = tmp_path / run_id
+        trace = base / "runtime-data/voice-metrics"
+        trace.mkdir(parents=True)
+        (trace / "controlled-trace.jsonl").write_text("")
+        (base / "trial-manifest.json").write_text(json.dumps({
+            "initial_state_hash": "same-state",
+            "trials": [{"phase": phase, "outcome": "failure",
+                        "initial_state_evidence": {"memory_scheduler_policy": POLICY}}],
+        }))
+    profile = tmp_path / runs[0][0] / "runtime-data/runtime/standalone/resolved-profile.json"
+    profile.parent.mkdir(parents=True)
+    profile.write_text(json.dumps({"effectiveProfile": "unsupported"}))
+
+    assert cohort.aggregate(runs, output, "revision", 100) == 1
+    log = (output / "reporter.log").read_text()
+    assert "pilot requires an integration voice measurement profile" in log
+    assert "ModuleNotFoundError" not in log
+    summary = json.loads((output / "summary.json").read_text())
+    assert summary["failure"] == 105
+    assert summary["existing_reporter_exit"] == 1
+    assert not (output / "report.json").exists()
+
+def test_baseline_snapshot_survives_external_update_during_trials(tmp_path, monkeypatch):
+    import hashlib
+    baseline = tmp_path / "external-baseline.json"
+    original = b'{"metrics": "original"}'
+    baseline.write_bytes(original)
+    monkeypatch.setattr(cohort, "ROOT", tmp_path)
+    monkeypatch.setattr(cohort, "measurement_revision", lambda root: "revision")
+    monkeypatch.setattr(cohort, "run_root", lambda run_id: tmp_path / "runs" / run_id)
+    monkeypatch.setattr(sys, "argv", ["runner", "--cohort-id", "snapshot-test", "--measured", "1",
+        "--profile", "integration-irodori-memory-reference", "--memory-reference",
+        "--baseline-report", str(baseline), "--inference-env", str(tmp_path / "inference"),
+        "--livekit-env", str(tmp_path / "livekit")])
+
+    def trial(*args):
+        baseline.write_text('{"metrics": "changed"}')
+        return 0, {}
+
+    def aggregate(runs, directory, revision, measured, snapshot):
+        assert snapshot != baseline
+        assert snapshot.read_bytes() == original
+        plan = json.loads((directory / "plan.json").read_text())
+        assert plan["baseline_report_sha256"] == hashlib.sha256(snapshot.read_bytes()).hexdigest()
+        return 0
+
+    monkeypatch.setattr(cohort, "trial", trial)
+    monkeypatch.setattr(cohort, "aggregate", aggregate)
+    assert cohort.main() == 0

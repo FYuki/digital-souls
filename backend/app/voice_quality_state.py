@@ -8,6 +8,7 @@ import sqlite3
 from uuid import UUID
 
 from app.memory.persistence.schema import PERSONA_MEMORY_TABLES
+from app.voice_measurement_memory import DISABLE_FORMATION_ENV, POLICY_PATH
 
 
 def inspect_controlled_initial_state(
@@ -20,12 +21,28 @@ def inspect_controlled_initial_state(
     profile = json.loads(profile_path.read_text())
     environment = profile.get('derivedEnvironment', {})
     if identity.get('environmentId') != 'test' or (
-        profile.get('effectiveProfile') not in ('integration-voice', 'integration-voice-pcm', 'integration-irodori')
+        profile.get('effectiveProfile') not in ('integration-voice', 'integration-voice-pcm', 'integration-irodori-cuda-graph-pcm', 'integration-irodori', 'integration-irodori-ollama-candidate', 'integration-irodori-cuda-graph')
         or environment.get('DS_ENVIRONMENT_ID') != 'test'
         or Path(environment.get('DS_DATA_DIR', '')).resolve() != data_root.resolve()
         or environment.get('RAG_ENABLED') != 'false'
     ):
         raise ValueError('controlled state requires its resolved integration-voice test data root')
+    # 設定値だけで無効化済みとみなさず、起動を完了したBackendの記録と照合する。
+    requested = environment.get(DISABLE_FORMATION_ENV, 'false')
+    if requested not in ('true', 'false'):
+        raise ValueError('invalid memory formation isolation setting')
+    policy_path = data_root / POLICY_PATH
+    memory_policy = None
+    if policy_path.exists():
+        memory_policy = json.loads(policy_path.read_text())
+        if (not isinstance(memory_policy, dict)
+                or set(memory_policy) != {'method', 'formation_disabled', 'consolidation_disabled'}
+                or memory_policy.get('method') != 'controlled_memory_schedulers_v1'
+                or memory_policy.get('formation_disabled') is not (requested == 'true')
+                or memory_policy.get('consolidation_disabled') is not (requested == 'true')):
+            raise ValueError('memory scheduler policy does not match requested configuration')
+    elif requested == 'true':
+        raise ValueError('memory scheduler policy receipt is missing')
     # mode=roでDBの作成・変更を禁止する。immutableはWALの最新状態を無視するため使わない。
     history_uri = (data_root / 'conversation-history.db').resolve().as_uri() + '?mode=ro'
     memory_uri = (data_root / 'persona-memory.db').resolve().as_uri() + '?mode=ro'
@@ -65,6 +82,8 @@ def inspect_controlled_initial_state(
             for name in files
         },
     }
+    if memory_policy is not None:
+        evidence['memory_scheduler_policy'] = memory_policy
     digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return {'initial_state_hash': digest, 'evidence': evidence}
 

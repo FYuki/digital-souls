@@ -1,0 +1,42 @@
+{
+  "source_cohort_id": "350-irodori-graph256-full-0919-01",
+  "source_provenance": [
+    {
+      "path": "plan.json",
+      "sha256": "b5ebbe232b75f5de4e9061aeeda50b12133a0c9fdd801cf1544cab6306dc9a04"
+    },
+    {
+      "path": "execution.jsonl",
+      "sha256": "af1d826102be397c927d680cf7570c6add527d5a240b88ecef7757ca8ac2a002"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "1cdca7a65c7caf673ac80b54ed669a42e6b2c192e63455cd5575dd36c235d0ae"
+    },
+    {
+      "path": "reporter.log",
+      "sha256": "fd1fa49225c64c803b3d8f46105121753d0cc15a266f5159a359b4263496e329"
+    },
+    {
+      "path": "report-recovered.json",
+      "sha256": "3283b202510a42ea502743efa5c6f089c088844e5e9ae58d5de876241778347f"
+    },
+    {
+      "path": "reporter-recovered.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "trial-manifest.json",
+      "sha256": "57879fd1c8ef8448d8cf6e23290b396c59b881c9b2e00f63e448f38397513577"
+    },
+    {
+      "path": "controlled-trace.jsonl",
+      "sha256": "38ff224742cf018bab7ed010b2087711cde43fac08bea517ca85d96a1e99b7d2"
+    }
+  ],
+  "files": {
+    "evidence.json": "e845f690ff13ab1deb67aa190f0e8a08e5b3ec09a63a1d47284fa9261d0edf70",
+    "report.json": "3283b202510a42ea502743efa5c6f089c088844e5e9ae58d5de876241778347f",
+    "summary.json": "1cdca7a65c7caf673ac80b54ed669a42e6b2c192e63455cd5575dd36c235d0ae"
+  }
+}

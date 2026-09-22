@@ -51,6 +51,19 @@ VAD推論失敗は発話を破棄して静音後に回復する。reset失敗・
 [移行契約](voice-backend-migration-contract.md)と[検証記録](validation/voice-backend-vad-358.md)を参照する。
 実サービス・前後性能比較・人の実マイク受入は未完了である。
 
+音声Sessionの新規開始は、同じrequest IDの非同期準備をHTTP 202で確認する。
+UIは「準備中」を表示し、token取得・接続完了までマイクを開始しない。
+準備全体の固定期限はなく、Session確保・Room作成・token発行・transport接続等には個別期限がある。
+TTS/VAD/STT/会話用LLMの準備失敗と個別操作のtimeoutは安全なcode・stageから表示し、再試行はユーザー操作で行う。
+準備の取消、アプリ終了、状態確認が30秒途絶えた場合は、その要求が所有する資源を回収する。
+この30秒は放置資源の回収猶予であり、状態確認を続ける準備全体の上限ではない。
+ブラウザ参加の猶予は必要な準備の完了後に開始する。既存Sessionへの再接続は準備を再実行しない。
+STTは100msの無音PCMを通常の認識経路へ送り、会話用LLMは明示的なモデル準備に対応するProviderで
+実際のChatと同じcontext・設定を使う。準備要求に会話本文・記憶を渡さず、認識結果も履歴へ保存しない。
+Ollama以外の未対応Providerへダミー会話やfallbackを送らない。詳細は[Inference運用](inference-operations.md#音声sessionのモデル開始準備)を参照する。
+準備成功は、その後のモデル常駐・速度目標の達成を保証しない。正式性能受入は別途行う。
+全体の要求・受入は[共通指示書](voice-quality-350-423-424-requirements.md)を参照する。
+
 ## 自作BE/FE構成
 
 `digital-souls`のCoreは、自作BE（FastAPI）+ 自作FE（Vite + Svelte）で実装している。
@@ -409,10 +422,10 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 [#185受入](addon-action-185-acceptance.md)、[承認管理UI受入](addon-approval-admin-305-acceptance.md)を参照する。
 この基盤が存在することと、Character Lifeへ高影響操作・副作用回復が接続済みであることは別である。
 
-## 通知とキャラクター会話の分離（後続設計）
+## 通知とキャラクター会話の分離
 
-以下は#183で整理し#187のEpicへ引き継いだ後続設計であり、上記の現行構成に通知タブ・通知用caller・
-新しい応答起点が実装済みであることを意味しない。詳細は
+通知の個別保存・通知用caller・独立した通知タブは#183で実装している。
+会話への関連付け・キャラクターによる報告生成は#364配下の後続設計である。詳細は
 [通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md)を正本とする。
 
 ```text
@@ -448,7 +461,7 @@ snapshotを再検証する。#363はLLMを介さなくても共有Gateを通り�
 
 通知の閲覧だけでは別キャラクターへ内容を渡さない。ユーザーがコピー・会話引用で明示共有した範囲は
 通常会話の話題として扱い、その会話・回答・記憶を元の非同期処理の担当・対象・監視・実行・報告状態へ
-伝播させない。通知からの会話導線は登録時担当へ戻す。用語の対応は[用語集](glossary.md)を参照する。
+伝播させない。#366で設計する通知からの会話導線は登録時担当へ戻す。用語の対応は[用語集](glossary.md)を参照する。
 
 Event取得・復旧の詳細は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)と
 [要件指示書](epic-187-addon-event-requirements.md)を参照する。取得位置と有限sanitized bufferの永続化、
@@ -458,7 +471,7 @@ Epic #183は共有Eventを独立購読するNotificationRuntime / NotificationSt
 個別保存・ユーザーごとの通知設定・初回保存から30日と件数上限・独立参照は[通知runtime](notification-runtime.md)を参照する。
 既存ToolRuntimeの共有Gateとライフサイクルへ接続し、MCP標準Tool/Resourceを使う。
 設定・consumer API・公開結果契約・検証入口は[Event runtime](addon-event-runtime.md)を参照する。
-通知の個別保存・保持・設定・削除後の再取得は通知／会話分離ADRの2026-09-16追記と[通知要件](epic-183-notification-requirements.md)で定め、後続consumerで実装する。
+通知の個別保存・保持・設定・削除後の再取得は通知／会話分離ADRの2026-09-16追記と[通知要件](epic-183-notification-requirements.md)で定め、NotificationRuntime / NotificationStore / NotificationReaderに実装している。会話側で独立した依頼参照を保存・利用する接続は#365の後続範囲である。
 
 ## Character Life Runtime
 

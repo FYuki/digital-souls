@@ -31,6 +31,7 @@ const mountLiveKitEntrypoint = async () => {
 describe('LiveKit experimental page client flow', () => {
   beforeEach(() => {
     fetchMock.mockReset()
+    fetchMock.mockResolvedValue(new Response(null, {status: 204}))
     vi.stubGlobal('fetch', fetchMock)
   })
 
@@ -95,7 +96,7 @@ describe('LiveKit experimental page client flow', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain(
-        'LiveKit response field reconnect_grace_ms',
+        'サーバーの応答形式が不正です',
       )
     })
     expect(screen.getByRole('button', { name: 'Room接続' }).hasAttribute('disabled')).toBe(true)

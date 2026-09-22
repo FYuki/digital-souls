@@ -25,6 +25,7 @@ from app.conversation_core.adapters import (
     PromptLlmAdapter,
     SpeakerSynthesizer,
     SyncTranscriber,
+    SttCapacityError,
     VoicevoxTtsAdapter,
     WhisperSttAdapter,
     ScreenLineageResponseState,
@@ -36,6 +37,7 @@ from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
     BootstrapService,
+    preparation_operation,
     CharacterConversationBindingValidator,
     InMemorySessionBindingRepository,
 )
@@ -49,6 +51,9 @@ from app.livekit_transport.coordinator import (
 )
 from app.livekit_transport.delivery import CoreNotificationPort, TerminalProtocolError
 from app.livekit_transport.errors import RoomCleanupPendingError
+from app.livekit_transport.preparation import VoiceModelPreparationError
+from app.inference.errors import InferenceError
+from app.stt.remote_whisper_client import RemoteWhisperError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.microphone_frames import (
@@ -328,6 +333,8 @@ class ProductionConversationCoreSessionFactory:
             ],
             AsyncIterator[str],
         ] | None = None,
+        prepare_inference: Callable[[], Awaitable[bool]] | None = None,
+        prepare_prompt: Callable[[str], Awaitable[None]] | None = None,
         measurement_kind: MeasurementKind = "automated_test",
         trace_record: Callable[[TraceEvent], None] | None = None,
         measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
@@ -342,6 +349,8 @@ class ProductionConversationCoreSessionFactory:
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
         self._generate_screen_reply_stream = generate_screen_reply_stream
+        self._prepare_inference = prepare_inference
+        self._prepare_prompt = prepare_prompt
         self._measurement_kind = measurement_kind
         self._trace_record = trace_record
         self._measurement_clock_ns = measurement_clock_ns
@@ -382,6 +391,25 @@ class ProductionConversationCoreSessionFactory:
         tts = self._tts_adapter(load_tts_config(character_id))
         if isinstance(tts, IrodoriTtsAdapter):
             await tts.prepare()
+        try:
+            await self._stt.prepare_required()
+        except (RemoteWhisperError, SttCapacityError) as error:
+            raise VoiceModelPreparationError(stage="stt", code=error.error_code) from error
+        except Exception as error:
+            raise VoiceModelPreparationError(stage="stt", code="stt_preparation_failed") from error
+        if self._prepare_inference is not None:
+            try:
+                prepared = await self._prepare_inference()
+                if prepared and self._prepare_prompt is not None:
+                    await self._prepare_prompt(character_id)
+            except InferenceError as error:
+                raise VoiceModelPreparationError(
+                    stage="inference", code=f"inference_{error.category.value}",
+                ) from error
+            except Exception as error:
+                raise VoiceModelPreparationError(
+                    stage="inference", code="inference_preparation_failed",
+                ) from error
         return self._create(
             session_id=session_id, character_id=character_id,
             conversation_id=conversation_id, delivery=delivery,
@@ -1015,7 +1043,8 @@ class _ConversationCoreBridge:
             return VoiceInputPipeline()
         task = asyncio.create_task(asyncio.to_thread(prepare))
         try:
-            pipeline = await asyncio.shield(task)
+            async with preparation_operation("vad", BOOTSTRAP_TIMEOUT_SECONDS):
+                pipeline = await asyncio.shield(task)
         except BaseException:
             def release(done: asyncio.Task[VoiceInputPipeline]) -> None:
                 if not done.cancelled() and done.exception() is None:
@@ -1083,12 +1112,12 @@ class _ConversationCoreBridge:
             and self._microphone_received_bytes // 2 + capture.media_offset_samples
             == detection.detected_sample
         )
-        await self._publish_audio(self._speech_event("speech_stopped", boundary))
-        if self._measurement is not None:
-            self._measurement.record_utterance_event(
-                utterance_id=boundary.utterance_id, name="vad_speech_end", stage="vad",
-            )
         try:
+            await self._publish_audio(self._speech_event("speech_stopped", boundary))
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=boundary.utterance_id, name="vad_speech_end", stage="vad",
+                )
             if self._verify_audio_integrity is None:
                 raise AudioInputFault("audio_integrity_unavailable")
             await self._verify_audio_integrity(
@@ -1105,6 +1134,14 @@ class _ConversationCoreBridge:
             # 先行発話が失敗しても、別世代で終了・検証済みの後続を滞留させない。
             await self._finalize_user_audio_if_ready()
             return
+        except BaseException:
+            # track交換や切断はreaderの確定待ちも取り消す。未検証の先頭captureを
+            # 残すと、別trackで検証済みの後続発話までSTTへ進めなくなる。
+            # text優先で既に破棄済みなら重ねて通知しない。取消・元例外は伝播する。
+            if any(item is capture for item in self._user_audio_captures):
+                self._audio_discarded(boundary.utterance_id, "audio_integrity_unavailable")
+                self._schedule(self._finalize_user_audio_if_ready())
+            raise
         if not any(item is capture for item in self._user_audio_captures):
             return
         # BE自身がPCM境界を検出するため、FE通知後のmedia tail待機は不要。
@@ -1112,7 +1149,12 @@ class _ConversationCoreBridge:
         await self._finalize_user_audio_if_ready()
 
     def _audio_discarded(self, utterance_id: str | None, reason: str) -> None:
-        self._microphone_preroll.clear()
+        # 終了済み発話の検証失敗は、新trackで蓄積中のprerollを所有しない。
+        if utterance_id is None or any(
+            item.utterance_id == utterance_id and not item.finalized
+            for item in self._user_audio_captures
+        ):
+            self._microphone_preroll.clear()
         if utterance_id is not None:
             self._user_audio_captures = deque(
                 item for item in self._user_audio_captures if item.utterance_id != utterance_id
@@ -1167,9 +1209,10 @@ class _ConversationCoreBridge:
             return
         try:
             await source.receive(pcm, start_sample=start_sample, grant=grant)
-        except AudioInputFault:
+        except AudioInputFault as error:
             # resetの失敗は当該入力だけを停止する。旧世代の失敗で新入力を止めない。
             if self._voice_input is source and source.revision == grant.input_revision:
+                logger.warning("LiveKit microphone input reset failed: reason=%s", error.code)
                 self._audio_unavailable(grant)
 
     def _audio_unavailable(self, grant: InputGrant) -> None:
@@ -1181,6 +1224,7 @@ class _ConversationCoreBridge:
 
     def close_microphone_track(
         self, track_sid: str, *, reason: str = "microphone_track_unavailable",
+        reader_reason: str | None = None,
     ) -> None:
         source = self._voice_input
         if source is not None and source.grant is not None and source.grant.track_sid == track_sid:
@@ -1189,6 +1233,7 @@ class _ConversationCoreBridge:
             self._microphone_preroll.clear()
             if reason == "microphone_track_unavailable":
                 # 無音中のreader終了にも通知し、聴取中表示を残さない。
+                logger.warning("LiveKit authorized microphone reader ended: reason=%s", reader_reason or reason)
                 self._audio_unavailable(grant)
 
     async def close_audio(self) -> None:
@@ -1767,7 +1812,8 @@ class ProductionRuntimeManager:
         )
 
     async def wait_until_ready(self, session_id: str) -> None:
-        await self._ready[session_id].wait()
+        async with preparation_operation("readiness", BOOTSTRAP_TIMEOUT_SECONDS):
+            await self._ready[session_id].wait()
 
     async def start_runtime(self, request: dict[str, object]) -> None:
         rtc_module = _livekit_rtc_module()
@@ -1779,17 +1825,18 @@ class ProductionRuntimeManager:
             )
         room_name = f"voice-{session_id}"
         user_identity = f"user-{session_id}"
-        token = await self._signer.issue_token(
-            {
-                "identity": request["identity"],
-                "room": room_name,
-                "ttl_seconds": 90,
-                "can_subscribe": True,
-                "can_publish": True,
-                "can_publish_data": True,
-                "can_publish_sources": ["microphone"],
-            }
-        )
+        async with preparation_operation("token", BOOTSTRAP_TIMEOUT_SECONDS):
+            token = await self._signer.issue_token(
+                {
+                    "identity": request["identity"],
+                    "room": room_name,
+                    "ttl_seconds": 90,
+                    "can_subscribe": True,
+                    "can_publish": True,
+                    "can_publish_data": True,
+                    "can_publish_sources": ["microphone"],
+                }
+            )
         room: rtc.Room = rtc_module.Room()
 
         if self._audio_probe_enabled:
@@ -1836,7 +1883,7 @@ class ProductionRuntimeManager:
                 return
             microphone_readers.pop(key, None)
             if old is not None and old[4] is not None:
-                old[4].cancel()
+                old[4].cancel("microphone_track_replaced")
                 await asyncio.gather(old[4], return_exceptions=True)
             if not coordinator.is_current_participant(identity=identity, participant_sid=participant_sid):
                 return
@@ -2049,7 +2096,7 @@ class ProductionRuntimeManager:
                     old = microphone_readers.pop(id(track), None)
                     microphone_changed.set()
                     if old is not None and old[4] is not None:
-                        old[4].cancel()
+                        old[4].cancel("microphone_track_unsubscribed")
                         await asyncio.gather(old[4], return_exceptions=True)
 
             self._schedule_serialized_participant_operation(session_id, handle_track_unsubscribed)
@@ -2062,11 +2109,12 @@ class ProductionRuntimeManager:
                 or coordinator.phase == "ended"
             )
 
-        await room.connect(self._livekit_url, token)
+        async with preparation_operation("transport", BOOTSTRAP_TIMEOUT_SECONDS):
+            await room.connect(self._livekit_url, token)
         if startup_ended():
             raise RuntimeError("runtime startup ended")
-        coordinator.start_join_deadline()
-        audio_source = await self._prepare_output_track(room)
+        async with preparation_operation("output", BOOTSTRAP_TIMEOUT_SECONDS):
+            audio_source = await self._prepare_output_track(room)
         if startup_ended():
             await audio_source.aclose()
             raise RuntimeError("runtime startup ended")
@@ -2134,8 +2182,14 @@ class ProductionRuntimeManager:
         self._core_sessions[session_id] = core_session
         self._core_bridges[session_id] = bridge
         await bridge.prepare_audio()
+        if startup_ended():
+            # cleanup後に完成した入力も閉じ、終了Sessionへhandlerを再登録しない。
+            await bridge.close_audio()
+            raise RuntimeError("runtime startup ended")
         if isinstance(self._core_port, ProductionCoreEventInbox):
             self._core_port.bind(session_id, bridge.notify)
+        # clientのjoin猶予をモデル準備で消費しない。
+        coordinator.start_join_deadline()
         self._ready[session_id].set()
 
     async def _observe_microphone(
@@ -2171,6 +2225,7 @@ class ProductionRuntimeManager:
         monitor = MicrophoneIntegrity(track.get_stats, lambda: clock.samples_seen)
         self._microphone_integrities[key] = monitor
         monitor_task = asyncio.create_task(monitor.run())
+        exit_reason = "stream_ended"
         try:
             async for event in stream:
                 if (
@@ -2180,14 +2235,19 @@ class ProductionRuntimeManager:
                         participant_sid=participant_sid,
                     )
                 ):
+                    exit_reason = "participant_replaced"
                     return
                 frame = event.frame
                 bridge = self._core_bridges.get(session_id)
                 if bridge is None:
+                    exit_reason = "bridge_closed"
                     return
                 try:
                     pcm, start_sample = clock.read(frame)
-                except AudioInputFault:
+                except AudioInputFault as error:
+                    exit_reason = error.code
+                    # 本文やPCMを出さず、時計検証失敗と通常のreader終了を区別する。
+                    logger.warning("LiveKit microphone frame rejected: reason=%s", error.code)
                     return
                 await bridge.receive_microphone_frame(
                     pcm, start_sample=start_sample, track_sid=str(track.sid),
@@ -2198,8 +2258,14 @@ class ProductionRuntimeManager:
                     received_at_ms=int(time.monotonic() * 1000),
                 )
                 if session_id not in self._rooms:
+                    exit_reason = "room_closed"
                     return
-        except Exception:
+        except asyncio.CancelledError as error:
+            permitted = {"microphone_track_replaced", "microphone_track_unsubscribed"}
+            exit_reason = error.args[0] if error.args and isinstance(error.args[0], str) and error.args[0] in permitted else "cancelled"
+            raise
+        except Exception as error:
+            exit_reason = type(error).__name__
             # 端末trackの読取失敗はfinallyで入力停止として通知する。
             # text・終了済み発話・回答再生はこのreaderの所有物ではない。
             logger.warning("LiveKit microphone reader failed")
@@ -2211,7 +2277,7 @@ class ProductionRuntimeManager:
                 self._microphone_integrities.pop(key, None)
             bridge = self._core_bridges.get(session_id)
             if bridge is not None:
-                bridge.close_microphone_track(str(track.sid))
+                bridge.close_microphone_track(str(track.sid), reader_reason=exit_reason)
             await stream.aclose()
 
     def _schedule_task(

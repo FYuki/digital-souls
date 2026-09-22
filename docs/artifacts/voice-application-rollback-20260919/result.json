@@ -1,0 +1,366 @@
+{
+  "schemaVersion": 1,
+  "runId": "424-practical-rollback-0919-01",
+  "status": "PASS_FOR_CURRENT_MAIN_ROUNDTRIP",
+  "acceptedRoundtrip": {
+    "before": "e51bce16f83c156ffb53db0c3ded67c40cde5001",
+    "candidate": "f5e8228b318d6e716b04e04f5f028cb6da9bd618",
+    "rollback": "e51bce16f83c156ffb53db0c3ded67c40cde5001"
+  },
+  "environment": {
+    "environmentId": "dev",
+    "frontendPort": 5173,
+    "backendPort": 8000,
+    "readyGatePort": 4174,
+    "dedicatedData": true,
+    "dataRestoredFromBackup": false,
+    "sharedServicesModified": false,
+    "candidateScreenCheck": {
+      "frontend": 200,
+      "readyGate": 204
+    }
+  },
+  "fixture": {
+    "path": "frontend/playwright/fixtures/speech.wav",
+    "sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+    "physicalMicrophone": false
+  },
+  "phases": [
+    {
+      "phase": "before",
+      "revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+      "readyAt": "2026-09-19T12:36:15.416794+00:00",
+      "endedAt": "2026-09-19T12:46:02.212005+00:00",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "browser": {
+        "phase": "before",
+        "status": "passed",
+        "priorRows": 0,
+        "voiceCycles": 1,
+        "appendedCompleted": true,
+        "historyRows": 1,
+        "endResponses": [],
+        "transportFailures": []
+      },
+      "database": {
+        "rowCount": 2,
+        "priorRowsUnchanged": null,
+        "countsByStatus": {
+          "completed": 2
+        }
+      },
+      "nativeSdk": {
+        "status": "verified",
+        "pythonSdkVersion": "1.1.16",
+        "ffiVersion": "0.12.73"
+      }
+    },
+    {
+      "phase": "after",
+      "revision": "f5e8228b318d6e716b04e04f5f028cb6da9bd618",
+      "readyAt": "2026-09-19T12:46:23.933684+00:00",
+      "endedAt": "2026-09-19T12:59:07.512663+00:00",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "browser": {
+        "phase": "after",
+        "status": "passed",
+        "priorRows": 1,
+        "priorRowsPreserved": true,
+        "voiceCycles": 1,
+        "appendedCompleted": true,
+        "privacyBodyExcluded": true,
+        "historyRows": 3,
+        "endResponses": [
+          200
+        ],
+        "transportFailures": []
+      },
+      "database": {
+        "rowCount": 5,
+        "priorRowsUnchanged": true,
+        "countsByStatus": {
+          "completed": 3,
+          "interrupted": 1,
+          "privacy_skipped": 1
+        }
+      },
+      "nativeSdk": {
+        "status": "verified",
+        "pythonSdkVersion": "1.1.16",
+        "ffiVersion": "0.12.73"
+      }
+    },
+    {
+      "phase": "main-before",
+      "revision": "e51bce16f83c156ffb53db0c3ded67c40cde5001",
+      "readyAt": "2026-09-19T13:04:34.291314+00:00",
+      "endedAt": "2026-09-19T13:07:07.938460+00:00",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "browser": {
+        "phase": "main-before",
+        "status": "passed",
+        "priorRows": 4,
+        "priorRowsPreserved": true,
+        "voiceCycles": 1,
+        "appendedCompleted": true,
+        "historyRows": 5,
+        "endResponses": [
+          200
+        ],
+        "transportFailures": []
+      },
+      "database": {
+        "rowCount": 6,
+        "priorRowsUnchanged": true,
+        "countsByStatus": {
+          "completed": 4,
+          "interrupted": 1,
+          "privacy_skipped": 1
+        }
+      },
+      "nativeSdk": {
+        "status": "verified",
+        "pythonSdkVersion": "1.1.16",
+        "ffiVersion": "0.12.73"
+      }
+    },
+    {
+      "phase": "main-upgrade",
+      "revision": "f5e8228b318d6e716b04e04f5f028cb6da9bd618",
+      "readyAt": "2026-09-19T13:07:16.975340+00:00",
+      "endedAt": "2026-09-19T13:09:12.986597+00:00",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "browser": {
+        "phase": "main-upgrade",
+        "status": "passed",
+        "priorRows": 5,
+        "priorRowsPreserved": true,
+        "voiceCycles": 1,
+        "appendedCompleted": true,
+        "historyRows": 6,
+        "endResponses": [
+          200
+        ],
+        "transportFailures": []
+      },
+      "database": {
+        "rowCount": 7,
+        "priorRowsUnchanged": true,
+        "countsByStatus": {
+          "completed": 5,
+          "interrupted": 1,
+          "privacy_skipped": 1
+        }
+      },
+      "nativeSdk": {
+        "status": "verified",
+        "pythonSdkVersion": "1.1.16",
+        "ffiVersion": "0.12.73"
+      }
+    },
+    {
+      "phase": "main-rollback",
+      "revision": "e51bce16f83c156ffb53db0c3ded67c40cde5001",
+      "readyAt": "2026-09-19T13:09:21.008983+00:00",
+      "endedAt": "2026-09-19T13:11:14.740558+00:00",
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "browser": {
+        "phase": "main-rollback",
+        "status": "passed",
+        "priorRows": 6,
+        "priorRowsPreserved": true,
+        "voiceCycles": 1,
+        "appendedCompleted": true,
+        "historyRows": 7,
+        "endResponses": [
+          200
+        ],
+        "transportFailures": []
+      },
+      "database": {
+        "rowCount": 8,
+        "priorRowsUnchanged": true,
+        "countsByStatus": {
+          "completed": 6,
+          "interrupted": 1,
+          "privacy_skipped": 1
+        }
+      },
+      "nativeSdk": {
+        "status": "verified",
+        "pythonSdkVersion": "1.1.16",
+        "ffiVersion": "0.12.73"
+      }
+    }
+  ],
+  "unsupportedHistoricalRollback": [
+    {
+      "phase": "rollback",
+      "revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+      "status": "failed",
+      "failure": {
+        "category": "readiness",
+        "message": "one or more services did not become ready"
+      },
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cause": "persona_memory_schema_6_not_supported_by_pre_semantic_memory_revision"
+    },
+    {
+      "phase": "rollback-retry-02",
+      "revision": "07b8b1ee638ca222afe61983ebaf17c6edaaf1f7",
+      "status": "failed",
+      "failure": {
+        "category": "readiness",
+        "message": "one or more services did not become ready"
+      },
+      "teardown": {
+        "status": "completed",
+        "results": [
+          {
+            "service": "frontend",
+            "result": "stopped"
+          },
+          {
+            "service": "backend",
+            "result": "stopped"
+          }
+        ]
+      },
+      "cause": "persona_memory_schema_6_not_supported_by_pre_semantic_memory_revision"
+    }
+  ],
+  "interruption": {
+    "status": "passed",
+    "step": "end-during-playback",
+    "beforeStop": {
+      "acked": 0,
+      "rendered": 88320,
+      "played": 0,
+      "playbackCompletions": 0
+    },
+    "assistantPrefixLength": 9,
+    "historyRows": 4,
+    "activeAudioGraphsAfterEnd": 1,
+    "endResponses": [
+      200
+    ]
+  },
+  "oldClientRejection": {
+    "oldProtocol": "1.1",
+    "transportProtocolIncluded": false,
+    "httpStatus": 409,
+    "detail": {
+      "code": "protocol_version_mismatch",
+      "supported_protocol_version": "2.0"
+    },
+    "resourceNonCreation": "unit/moduleで確認。実サービスでは応答のみ確認"
+  },
+  "harnessFailures": [
+    {
+      "attempt": "before/initial",
+      "result": "FAILED",
+      "cause": "履歴API kind=contentをcompletedと誤判定。実再生完了と1件の保存は済んでおり保持"
+    },
+    {
+      "attempt": "after/browser-01",
+      "result": "FAILED",
+      "cause": "240秒timeout。finallyの終了処理が一次エラーを隠した"
+    },
+    {
+      "attempt": "after/browser-02",
+      "result": "FAILED",
+      "cause": "再読込後に既存スレッドが選択されずマイクdisabled。サイドバーの実選択に変更"
+    },
+    {
+      "attempt": "rollback/browser-01",
+      "result": "FAILED",
+      "cause": "歴史的旧版07b8のbackend起動不成功時に実行。基準版の選択誤りを修正"
+    }
+  ],
+  "limitations": [
+    "07b8への切り戻しはFAILのまま。今回以前の意味記憶schema移行を跨ぐため、e51b基準の結果と区別する",
+    "実マイク・速度・noise免疫をこの固定入力試験から保証しない",
+    "中断直後activeAudioGraphs=1は最後の観測値。即時0や無音継続の証明として扱わない",
+    "旧client実接続は409応答を確認。資源未作成は既存unit/moduleで確認",
+    "記憶形成の速度影響は計測していない"
+  ],
+  "publication": {
+    "databaseDigestsIncluded": false,
+    "conversationIdentifiersIncluded": false,
+    "containerIdentifiersIncluded": false,
+    "rawConversationIncluded": false,
+    "localDetailedEvidenceRetained": true
+  }
+}

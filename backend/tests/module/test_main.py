@@ -181,3 +181,43 @@ async def test_core_reply_prepares_prompt_outside_event_loop_thread(
     assert chunks == ["こんにちは"]
     assert stream_arguments == [(prompt, 123, settings)]
     assert recorded_prompts == [prompt]
+
+
+def test_controlled_memory_isolation_rejects_character_life(monkeypatch, runtime_paths):
+    from app import main
+    monkeypatch.setenv("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION", "true")
+    monkeypatch.setenv("VOICE_MEASUREMENT_KIND", "controlled_baseline")
+    monkeypatch.setenv("VOICE_CONTROLLED_TRACE_PATH", str(runtime_paths.data_root / "controlled.jsonl"))
+    monkeypatch.setenv("DS_CHARACTER_LIFE_ENABLED", "true")
+    with pytest.raises(ValueError, match="Character Life disabled"):
+        with TestClient(main.app):
+            pass
+
+
+def test_memory_isolation_guard_runs_before_inference_creation(monkeypatch):
+    from app import main
+    monkeypatch.setenv("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION", "true")
+    monkeypatch.delenv("VOICE_MEASUREMENT_KIND", raising=False)
+    with patch.object(main, "create_inference_runtime") as create:
+        with pytest.raises(ValueError, match="controlled test"):
+            with TestClient(main.app):
+                pass
+    create.assert_not_called()
+
+
+def test_restore_rejection_preserves_controlled_memory_policy(monkeypatch, runtime_paths):
+    from app import main
+    from app.backup_restore.models import RestoreRecoveryRequiredError
+    from app.voice_measurement_memory import POLICY_PATH
+
+    policy = runtime_paths.data_root / POLICY_PATH
+    policy.parent.mkdir(parents=True, exist_ok=True)
+    evidence = b'{"previous_measurement":true}\n'
+    policy.write_bytes(evidence)
+    runtime_paths.restore_intent_path.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("VOICE_MEASUREMENT_KIND", "controlled_baseline")
+    monkeypatch.setenv("VOICE_CONTROLLED_TRACE_PATH", str(runtime_paths.data_root / "controlled.jsonl"))
+    with pytest.raises(RestoreRecoveryRequiredError):
+        with TestClient(main.app):
+            pass
+    assert policy.read_bytes() == evidence

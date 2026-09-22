@@ -1,0 +1,117 @@
+{
+  "scope": "candidate_startup_transient_dependency_diagnostic",
+  "measurement_revision": "59ee3f2396a4c312d3f7f1aaebfd5f4b8a8150b8",
+  "physical_microphone_tested": false,
+  "startup_root_cause_resolved": false,
+  "intervention": "read_only_metadata_probe_during_startup",
+  "probe_interval_seconds": 0.5,
+  "per_request_timeout_seconds": 1.0,
+  "routes": [
+    "/api/tags",
+    "/api/show"
+  ],
+  "formal_latency_acceptance": false,
+  "runs": [
+    {
+      "run_id": "424-microphone-cancel-browser-0919-03",
+      "revision": "59ee3f2396a4c312d3f7f1aaebfd5f4b8a8150b8",
+      "runner_exit_code": 1,
+      "native_verified": false,
+      "images": {
+        "backend": {
+          "image_id": "sha256:ac22b63301662936c56813207a1c00c6d30ff574222f1a1e93287eb55c67eae8",
+          "image_tag": "digital-souls-voice-quality/backend:59ee3f2396a4c312d3f7f1aaebfd5f4b8a8150b8"
+        },
+        "frontend": {
+          "image_id": "sha256:18201ab68a023215234e48062ed8ef2bd6e314740dd5afb6196a0b6a0ead772e",
+          "image_tag": "digital-souls-voice-quality/frontend:59ee3f2396a4c312d3f7f1aaebfd5f4b8a8150b8"
+        }
+      },
+      "environment_status": "failed",
+      "owned_apps_removed": true,
+      "teardown_status": "completed",
+      "test_status": "NOT_RUN",
+      "failure_category": "backend_startup_inference_unavailable",
+      "environment_started_at": "2026-09-19T11:16:43.757955+00:00",
+      "environment_ended_at": "2026-09-19T11:18:08.943920+00:00",
+      "backend_started_at": "2026-09-19T11:16:46.084254001Z",
+      "frontend_started_at": "2026-09-19T11:17:06.930350581Z",
+      "dependency_probe": {
+        "total_requests": 312,
+        "http_200": 287,
+        "failure_count": 25,
+        "error_types": {
+          "RemoteProtocolError": 4,
+          "ReadError": 10,
+          "ReadTimeout": 11
+        },
+        "first_failure_unix": 1789816607.9161577,
+        "last_failure_unix": 1789816623.0581365
+      },
+      "raw_sha256": {
+        "host": "77f51d1c8db390a5ceb6ba9a58101b2dc8f59459686cb13b6d23e43729f8abf5",
+        "environment": "d33ace1097d3bcdca1c7d31406d066fe776f6df36fbf2181478ecbbded0a5988",
+        "probe": "0a7ee699d968a88eed1b6a33bb954ed41e823b484fb5025d75fed138f1d94c68",
+        "runner_log": "39972a72dff0d728110d581ae471d57c5448aec843a34524fadab46d24a94310",
+        "backend_log": "f395aec6915401bdbc03c38558cc24a89cecb358c9cd369b71b861c9f11b586c",
+        "playwright": "e0882ea1fa25de2b57e27aa8af8d1e6dc05a3213f831cd97fd32acd9c5cccbf5",
+        "profile": "89ce1665be03dce4134307af4b6a8e16e24b76726f15876db93a046ff3152f90"
+      }
+    },
+    {
+      "run_id": "424-microphone-cancel-browser-0919-04",
+      "revision": "59ee3f2396a4c312d3f7f1aaebfd5f4b8a8150b8",
+      "runner_exit_code": 0,
+      "native_verified": true,
+      "images": {
+        "backend": {
+          "image_id": "sha256:efd8e2e54a7b7cb1c30b2b9cd698f2827b23976301117d6903692f96a840141f",
+          "image_tag": "digital-souls-voice-quality/backend:59ee3f2396a4c312d3f7f1aaebfd5f4b8a8150b8"
+        },
+        "frontend": {
+          "image_id": "sha256:0e16e728ee31ba7f718b7d3ecb53268526d3706a72fd7cfae99cb9240a25183c",
+          "image_tag": "digital-souls-voice-quality/frontend:59ee3f2396a4c312d3f7f1aaebfd5f4b8a8150b8"
+        }
+      },
+      "environment_status": "completed",
+      "owned_apps_removed": true,
+      "teardown_status": "completed",
+      "test_status": "passed",
+      "failure_category": null,
+      "environment_started_at": "2026-09-19T11:20:39.029591+00:00",
+      "environment_ended_at": "2026-09-19T11:20:54.221876+00:00",
+      "backend_started_at": "2026-09-19T11:20:39.718652154Z",
+      "frontend_started_at": "2026-09-19T11:20:40.368426772Z",
+      "dependency_probe": {
+        "total_requests": 68,
+        "http_200": 68,
+        "failure_count": 0,
+        "error_types": {},
+        "first_failure_unix": null,
+        "last_failure_unix": null
+      },
+      "raw_sha256": {
+        "host": "b5bbe5e53a069e5048141114d88c2a1c98bc59dc0bb4e8a78443d86f11f36c03",
+        "environment": "ee1897a1a25bbf22e9ea3db32e9d4adab4b6377fe09150045915a511552f5d66",
+        "probe": "a5aa37aa0e546a3be717d70567415257d09f5aee1d3a482774da40428ad036a3",
+        "runner_log": "972cf7ebc78bbe81d8bf8193df677d6983e1e56d4799232aead88b55a4ca3905",
+        "backend_log": "fee52acc9e3b673e798282068746e02f91220a2cd2e24691f65da0bbafff427a",
+        "playwright": "d31d3e67b77e39abd32b5f939bb2a95c10694eae3d22d033ad7ac8be8bba2895",
+        "profile": "479ee8371eb4869a44aed12a73edfeda797fd3a53a566b1669c77f2fb9590315",
+        "native": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+      },
+      "browser_evidence": {
+        "scope": "real_browser_synthetic_device_delayed_permission_result",
+        "acquired": 1,
+        "released": true,
+        "trackStates": [
+          "ended"
+        ],
+        "responseStartedCount": 0,
+        "deleteCount": 1,
+        "endedHttpStatus": 200,
+        "physicalMicrophoneTested": false
+      }
+    }
+  ]
+}

@@ -2,13 +2,21 @@
 
 `digital-souls`の自作バックエンド（FastAPI）。現在の全体構成は[アーキテクチャ](../docs/system-architecture.md)、概念と実装名の対応は[用語集](../docs/glossary.md)を参照する。
 
-## 音声入力の責務（#358作業ブランチ）
+## 音声入力の責務（#358導入済み）
+
+責務移設はPR #408でmainへ反映済み。品質・実接続・移行・人の受入の残件は
+[#424](https://github.com/FYuki/digital-souls/issues/424)と
+[残受入対応表](../docs/validation/voice-quality-350-423-424-status.md)を参照する。
 
 LiveKitの連続16kHz PCMを`app/voice_input/`で処理し、発話区間と入力世代をBEが所有する。
 FEからのspeech通知は拒否する。CPU ONNX RuntimeとWasmtimeで固定モデル資産を初期化し、準備できないSessionは開始しない。
 終了済みcaptureは追記せず、欠落確認を経て既存STT／Conversation Coreへ渡す。
 [移行契約](../docs/voice-backend-migration-contract.md)と[検証記録](../docs/validation/voice-backend-vad-358.md)を参照する。
 実サービス・前後性能比較・実マイク受入は未完了。
+
+新規音声SessionはTTS・STT・対応Providerの会話用LLMを準備してからCoreを作成する。
+STTの無音入力とLLMの空messagesを会話履歴へ保存せず、失敗・取消では発話受付を開始しない。
+個別期限・Provider対応・実接続確認は[Inference運用](../docs/inference-operations.md#音声sessionのモデル開始準備)を参照する。
 
 ## 主な責務
 
@@ -22,6 +30,7 @@ FEからのspeech通知は拒否する。CPU ONNX RuntimeとWasmtimeで固定モ
 | privacy・prompt・用途別推論 | `app/privacy/`、`app/prompting/`、`app/inference/` |
 | 必要なturnだけの画面参照 | `app/screen_perception/`、`app/routers/screen_perception.py` |
 | 外部MCP・会話利用・承認・管理 | `app/external_mcp/`、`app/tool_use/`、`app/addon_action/`、`app/addon_admin/` |
+| Event取得・通知 | `app/addon_events/`、`app/notifications/`、`app/routers/notifications.py`。設定・保持・認可・LLM未設定／停止時の通知専用起動は[通知runtime](../docs/notification-runtime.md)を参照 |
 | 会話外活動・Life State | `app/character_life/`。DBOS基盤は既定無効、dev/test対象 |
 
 `POST /chat`のHTTP会話に加え、実行中Conversation Sessionでは音声とテキストを同じCoreへ渡す。正式な音声経路はLiveKitであり、`app/routers/ws.py`の旧WebSocketはbaseline／互換用である。

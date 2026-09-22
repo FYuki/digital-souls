@@ -4,9 +4,11 @@
 
 初期キャラクターは[光織（Miori）](characters/miori/)です。runtimeの定義はCharacter Cardを正本とし、記録係などの固定業務ではなく性格を中心に設計しています。役割は実際の会話や活動の文脈で扱います。
 
-#358作業ブランチでは、LiveKitのVAD・発話区間・入力世代をBackendへ接続し、Frontendをマイク・再生とユーザー操作の実行側へ整理した。
-FE／BEはprotocol 2.0へ一組で更新する。実サービス・性能・実マイク受入は未完了。
-[移行契約](docs/voice-backend-migration-contract.md)と[検証記録](docs/validation/voice-backend-vad-358.md)を参照する。
+LiveKitのVAD・発話区間・入力世代をBackendへ移す#358の導入はPR #408でmainへ反映済み。
+FE／BEはprotocol 2.0へ一組で更新する。残る品質・実接続・実マイク受入等は#424で追跡する。
+採用済みIrodoriの品質は#423、既存の再接続・初回推論待ち・相槌は#350で改善する。
+[共通実行指示書](docs/voice-quality-350-423-424-requirements.md)、[移行契約](docs/voice-backend-migration-contract.md)、
+[検証記録](docs/validation/voice-backend-vad-358.md)を参照する。この作業ブランチでは開始準備・取消・失敗表示とSTT／対応LLMの事前準備を実装している。正式な性能・品質受入は未完了。
 
 ## 現在の実装範囲
 
@@ -21,6 +23,7 @@ FE／BEはprotocol 2.0へ一組で更新する。実サービス・性能・実�
 | 推論 | 用途別TargetをOllama／OpenAI API／Codex runtimeへ割り当てる共通境界。Provider・Model・上限は環境設定で解決し、暗黙のfallbackは行わない |
 | 画面知覚 | 利用者が選んだ単一のモニター／ウィンドウ／ブラウザタブを必要なturnだけ参照。Vision Targetは任意設定で、共有ONだけでは画像を送信しない |
 | 外部ツール・管理 | 登録済みMCPへの接続、会話からのTool／Resource利用、接続管理、操作承認・確認・結果回復。実行前の権限・引数・送信内容の検証を共通化 |
+| 通知 | Eventからmetadataを個別保存し、未読・フィルタ・通知元／種類別ON・OFF・明示的な内容取得を提供。初回保存から30日と件数上限で保持。会話への報告・要約連携は後続範囲。[通知runtime](docs/notification-runtime.md)を参照 |
 | Character Life | DBOSによる会話外活動、Life State、許可・実行履歴の基盤。**既定無効・dev/test対象**。SELF Episode、Reflection、人格適応、Skill等との全体接続は未完了 |
 
 既存の非同期形成経路の許可型は`EPISODIC_EVENT`、`USER_PREFERENCE`、`INTERACTION_PREFERENCE`です。複数Episodeからの意味抽象化、独立した内省記憶、経験に基づく人格適応は、既存の記憶統合と区別します。[用語集](docs/glossary.md)に、設計上の概念と現在の実装名の対応をまとめています。
@@ -85,6 +88,7 @@ environments/down.sh
 | 採用判断・優先関係 | [ADR一覧・運用](docs/decisions/README.md) |
 | 開発目標と分解 | [ロードマップ](docs/roadmap.md) / [拡張計画](docs/enhancement-plan.md) |
 | 起動・環境・配備 | [開発環境](docs/development-environment.md) / [インフラ方針](docs/infrastructure-policy.md) / [dogfood運用](infra/dogfood/README.md) |
+| 音声品質改善の合意・段階評価・PR分割 | [#350・#423・#424共通実行指示書](docs/voice-quality-350-423-424-requirements.md) |
 | 推論の設定・検証 | [Inference運用](docs/inference-operations.md) |
 | 外部ツール | [MCP基盤](docs/external-mcp-foundation.md) / [会話からの利用](docs/tool-use.md) / [Addon管理](docs/addon-admin.md) |
 | 会話外の活動 | [Character Life運用](docs/character-life-operations.md) |

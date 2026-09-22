@@ -1,0 +1,419 @@
+{
+  "image": "sha256:16191101d83b43a94ad8834b4f5ef5a8d45a8136282dec1e53239a98c87b3f12",
+  "script_sha256": "bff715d8926e9df5dd72a3b66d7c1ddc1785699382e7fff4b77641ab8343f5a6",
+  "base_revision": "d85b5a825da3a8184cfd3f6986f6dacc521c6dfb",
+  "started_unix": 1789791459.2965353,
+  "finished_unix": 1789791491.9875414,
+  "exit_code": 0,
+  "result": {
+    "status": "success",
+    "scope": "paired_schedule_sync_diagnostic",
+    "formal_acceptance": false,
+    "compile_model": false,
+    "empty_cache_interval": 10,
+    "model_revision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "codec_revision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214",
+    "voice_config_sha256": "39a19d9534e28495b37e081ff5e4a0f9950338cbb98d46bd4a4e9ecb205e585c",
+    "trials": [
+      {
+        "phase": "warmup",
+        "input_sha256": "a0c3b74a6515d7a0932dfded7fa3fe00b2852c2ec9866a8abe4dd0fbe347ae6b",
+        "elapsed_ms": 13601.474386006885,
+        "wav_sha256": "d5201996be86526f8b4d39b293a02a53c9ce021d37d874ec9456bd50816cacb0",
+        "frames": 207360,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 1.6922030044952407,
+          "prepare_reference": 281.4215059988783,
+          "predict_duration": 182.0185059987125,
+          "sample_rf": 800.0260039989371,
+          "unpatchify_latent": 0.00902199826668948,
+          "decode_latent": 48.29301399877295
+        },
+        "total_to_decode_ms": 1314.5576669994625,
+        "seed": 4221,
+        "allocated_bytes": 1983195648,
+        "reserved_bytes": 3770679296
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 906.7808580002747,
+        "wav_sha256": "6873ab53ba192e659bcf2a91f8422dca744a0d1d2220414664be51a4dddf52a0",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.4678000041167252,
+          "prepare_reference": 70.67209500382887,
+          "predict_duration": 36.560502005158924,
+          "sample_rf": 748.8905540012638,
+          "unpatchify_latent": 0.008962997526396066,
+          "decode_latent": 44.342002998746466
+        },
+        "total_to_decode_ms": 901.9297859995277,
+        "seed": 4221,
+        "allocated_bytes": 1981704704,
+        "reserved_bytes": 3948937216,
+        "repetition": 0
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 798.4435700054746,
+        "wav_sha256": "ab14da00eb49af43b8f1e0f1ae8c7937188630a4ceeaffb0d61c702fa45b77ca",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5852659960510209,
+          "prepare_reference": 62.119783004163764,
+          "predict_duration": 37.136006001674104,
+          "sample_rf": 683.0071929944097,
+          "unpatchify_latent": 0.009221999789588153,
+          "decode_latent": 9.418782996363007
+        },
+        "total_to_decode_ms": 793.5614019952482,
+        "seed": 4221,
+        "allocated_bytes": 1982691840,
+        "reserved_bytes": 3948937216,
+        "repetition": 0
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 798.8307560008252,
+        "wav_sha256": "ddc21cc3558a5baf32dbcd2bc7b143c3aa0c905a470026b0715b7d0b0e5ad79d",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.6492589964182116,
+          "prepare_reference": 49.30017900187522,
+          "predict_duration": 35.397580002609175,
+          "sample_rf": 683.3996839995962,
+          "unpatchify_latent": 0.00990999978967011,
+          "decode_latent": 25.5565179977566
+        },
+        "total_to_decode_ms": 795.7109439958003,
+        "seed": 4221,
+        "allocated_bytes": 1983087104,
+        "reserved_bytes": 3948937216,
+        "repetition": 0
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 790.5429670063313,
+        "wav_sha256": "c52d2c825229b75959f0b5e368a3ce835c8eca6fbb38a150b1068bd725e237de",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3273010006523691,
+          "prepare_reference": 49.173608000273816,
+          "predict_duration": 32.665993996488396,
+          "sample_rf": 688.6002680039383,
+          "unpatchify_latent": 0.009267001587431878,
+          "decode_latent": 14.47794800333213
+        },
+        "total_to_decode_ms": 786.1763920009253,
+        "seed": 4221,
+        "allocated_bytes": 1986697728,
+        "reserved_bytes": 3951034368,
+        "repetition": 0
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 798.2540320008411,
+        "wav_sha256": "7df79433e15997f6f0be9c36ec28fd6987e1a8993049cdfbede454419ace4d07",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.7463919973815791,
+          "prepare_reference": 48.404933004349004,
+          "predict_duration": 32.00483500404516,
+          "sample_rf": 686.7165040021064,
+          "unpatchify_latent": 0.008447997970506549,
+          "decode_latent": 24.408021999988705
+        },
+        "total_to_decode_ms": 793.342261997168,
+        "seed": 4221,
+        "allocated_bytes": 1982790144,
+        "reserved_bytes": 3951034368,
+        "repetition": 0
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 779.684316003113,
+        "wav_sha256": "242d90a180b9990579020a4e36f2531b9f08f40a8d109b9957f08ce38a1d0d68",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3427780029596761,
+          "prepare_reference": 49.67169200244825,
+          "predict_duration": 33.562734999577515,
+          "sample_rf": 675.807090003218,
+          "unpatchify_latent": 0.008497001545038074,
+          "decode_latent": 13.329162000445649
+        },
+        "total_to_decode_ms": 773.6725290014874,
+        "seed": 4221,
+        "allocated_bytes": 1985964544,
+        "reserved_bytes": 3951034368,
+        "repetition": 0
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 770.8163669958594,
+        "wav_sha256": "77a4c177a2bba08b26959be9e86d15ecbc02cee21ba3ed8c6a80db6d7eb3176f",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.465667006210424,
+          "prepare_reference": 55.490299993834924,
+          "predict_duration": 33.28585599956568,
+          "sample_rf": 668.697057000827,
+          "unpatchify_latent": 0.008405004336964339,
+          "decode_latent": 9.427194992895238
+        },
+        "total_to_decode_ms": 768.8146549990051,
+        "seed": 4221,
+        "allocated_bytes": 1985903104,
+        "reserved_bytes": 3951034368,
+        "repetition": 1
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 790.171004999138,
+        "wav_sha256": "eeeafd614d48b9b93a385bb0933bf7dc75d1a60f387aed20f8e21dd6a3f2a690",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.3370449994690716,
+          "prepare_reference": 48.181448997638654,
+          "predict_duration": 32.78349399624858,
+          "sample_rf": 692.0035520015517,
+          "unpatchify_latent": 0.008664996130391955,
+          "decode_latent": 9.272117000364233
+        },
+        "total_to_decode_ms": 783.8647790049436,
+        "seed": 4221,
+        "allocated_bytes": 1982609920,
+        "reserved_bytes": 3951034368,
+        "repetition": 1
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 830.583871997078,
+        "wav_sha256": "5b32397e75532d1a959fd8a64f49a1ecec1ed9ab0406926b0fe7b7bad59a35a7",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.6383700019796379,
+          "prepare_reference": 52.487061999272555,
+          "predict_duration": 33.582012001716066,
+          "sample_rf": 712.5921080005355,
+          "unpatchify_latent": 0.008647999493405223,
+          "decode_latent": 14.801511999394279
+        },
+        "total_to_decode_ms": 815.7387730025221,
+        "seed": 4221,
+        "allocated_bytes": 1983982080,
+        "reserved_bytes": 2545942528,
+        "repetition": 1
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 801.3200519999373,
+        "wav_sha256": "0c7983908bd6e7382f895a7724a0a188171aceeac20eb889bfb867412b5dffad",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.39860099786892533,
+          "prepare_reference": 52.89335499401204,
+          "predict_duration": 35.137352999299765,
+          "sample_rf": 692.9564370002481,
+          "unpatchify_latent": 0.008698996680323035,
+          "decode_latent": 14.35998200031463
+        },
+        "total_to_decode_ms": 798.4658749992377,
+        "seed": 4221,
+        "allocated_bytes": 1984078336,
+        "reserved_bytes": 2946498560,
+        "repetition": 1
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 782.3765880020801,
+        "wav_sha256": "ac51dd617e3951113a0958419aa31c18c94356540a2534557cce7cb90164432e",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5544890009332448,
+          "prepare_reference": 47.91618299350375,
+          "predict_duration": 32.285298002534546,
+          "sample_rf": 683.8440530045773,
+          "unpatchify_latent": 0.008156996045727283,
+          "decode_latent": 13.188163997256197
+        },
+        "total_to_decode_ms": 779.6096289966954,
+        "seed": 4221,
+        "allocated_bytes": 1982691840,
+        "reserved_bytes": 2946498560,
+        "repetition": 1
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 777.6769289994263,
+        "wav_sha256": "589acdf42178c33a75b24093e3654a4f793f34c0d3a862ba545e9d2ed30c6e4e",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.4009100011899136,
+          "prepare_reference": 50.02368800342083,
+          "predict_duration": 33.26601399749052,
+          "sample_rf": 675.8510029976605,
+          "unpatchify_latent": 0.008994000381790102,
+          "decode_latent": 14.204499995685183
+        },
+        "total_to_decode_ms": 774.7753669973463,
+        "seed": 4221,
+        "allocated_bytes": 1983646208,
+        "reserved_bytes": 2946498560,
+        "repetition": 1
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 767.9628810001304,
+        "wav_sha256": "10ae652378eb963c3f9cf3f06737e56b28b97bd3c26d202788a6f41cb4e499e9",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.39877199742477387,
+          "prepare_reference": 47.80217499501305,
+          "predict_duration": 32.36842700425768,
+          "sample_rf": 672.444039999391,
+          "unpatchify_latent": 0.00855099642649293,
+          "decode_latent": 9.426128002814949
+        },
+        "total_to_decode_ms": 763.3958240039647,
+        "seed": 4221,
+        "allocated_bytes": 1984588288,
+        "reserved_bytes": 2946498560,
+        "repetition": 2
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "439e44a82b28f76c2661e4e65537f0f3963df49beaed16276f0938471f86a7d2",
+        "elapsed_ms": 776.7926460001036,
+        "wav_sha256": "1bb3cea1f27ea0bec8fc855941b1472482c126ebee2b3695b07d4abd4ed083c4",
+        "frames": 72960,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5177989951334894,
+          "prepare_reference": 49.19729600078426,
+          "predict_duration": 31.960004002030473,
+          "sample_rf": 679.7029189983732,
+          "unpatchify_latent": 0.008734001312404871,
+          "decode_latent": 9.143500996287912
+        },
+        "total_to_decode_ms": 771.7255759998807,
+        "seed": 4221,
+        "allocated_bytes": 1983891968,
+        "reserved_bytes": 2946498560,
+        "repetition": 2
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 789.6429489992443,
+        "wav_sha256": "46c21be90c54519cafc52ea60a8fef9895389f1adf125fdde74cc2f4e97aa998",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5291830020723864,
+          "prepare_reference": 52.59920399839757,
+          "predict_duration": 32.97935199952917,
+          "sample_rf": 682.1261340010096,
+          "unpatchify_latent": 0.008471004548482597,
+          "decode_latent": 14.555521003785543
+        },
+        "total_to_decode_ms": 785.1841440060525,
+        "seed": 4221,
+        "allocated_bytes": 1983066624,
+        "reserved_bytes": 2946498560,
+        "repetition": 2
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "e49dbdf2d7ae9883cdd54ac6d625cfad56c4153c7b7e914156c0c21ea006f82b",
+        "elapsed_ms": 784.4136489948141,
+        "wav_sha256": "2a0fadfa69dfcf3dba4dab1db721e51961d6da0fd6468f2f20b8432dc80f5179",
+        "frames": 124800,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5860050005139783,
+          "prepare_reference": 49.58051999710733,
+          "predict_duration": 32.60910399694694,
+          "sample_rf": 680.9192810032982,
+          "unpatchify_latent": 0.00888299837242812,
+          "decode_latent": 14.29894199827686
+        },
+        "total_to_decode_ms": 779.3159169959836,
+        "seed": 4221,
+        "allocated_bytes": 1983517184,
+        "reserved_bytes": 2946498560,
+        "repetition": 2
+      },
+      {
+        "phase": "baseline",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 769.0557110036025,
+        "wav_sha256": "ebbf7825400e016703386447fe36b64b0bab6516fbcd7fb9efc6f4eaea988e27",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.35628799378173426,
+          "prepare_reference": 47.77181200188352,
+          "predict_duration": 32.58187699975679,
+          "sample_rf": 668.7989319980261,
+          "unpatchify_latent": 0.009316994692198932,
+          "decode_latent": 13.58943999366602
+        },
+        "total_to_decode_ms": 764.7334880020935,
+        "seed": 4221,
+        "allocated_bytes": 1985505792,
+        "reserved_bytes": 2946498560,
+        "repetition": 2
+      },
+      {
+        "phase": "schedule_sync",
+        "input_sha256": "86bf10443da7e0e61119a0de5e08122547d9cf91f6d4674e9edd75f550a2099d",
+        "elapsed_ms": 774.0870699999505,
+        "wav_sha256": "ec05c668ba306005e030b3b54ff8b683a71bcbfe696ec8407b2041b523c52464",
+        "frames": 115200,
+        "sample_rate": 48000,
+        "stages_ms": {
+          "tokenize_text": 0.5913099957979284,
+          "prepare_reference": 49.009069000021555,
+          "predict_duration": 34.4234360018163,
+          "sample_rf": 672.7873859999818,
+          "unpatchify_latent": 0.008101000275928527,
+          "decode_latent": 13.310198999533895
+        },
+        "total_to_decode_ms": 771.5089449993684,
+        "seed": 4221,
+        "allocated_bytes": 1983564288,
+        "reserved_bytes": 2946498560,
+        "repetition": 2
+      }
+    ]
+  },
+  "stderr_present": false
+}

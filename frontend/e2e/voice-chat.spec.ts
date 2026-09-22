@@ -393,3 +393,90 @@ test('連続barge-in後も旧responseを混入させず同じsessionで次の発
     .toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)
 })
+
+
+const observePreparationMicrophone = async (page: Page) => {
+  await page.addInitScript(() => {
+    const target = window as unknown as {__preparationMicRequests: number}
+    target.__preparationMicRequests = 0
+    const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    navigator.mediaDevices.getUserMedia = (...args) => {
+      target.__preparationMicRequests += 1
+      return original(...args)
+    }
+  })
+}
+const preparationMicrophoneRequests = (page: Page) => page.evaluate(() =>
+  (window as unknown as {__preparationMicRequests: number}).__preparationMicRequests)
+
+test('準備中はマイクを開始せず、失敗理由を表示して手動操作で再試行する', async ({page}, testInfo) => {
+  await observePreparationMicrophone(page)
+  let fail = false
+  let retry = false
+  let tokenRequests = 0
+  const requestIds = new Set<string>()
+  await page.route('**/api/voice/livekit/preparation/cancel', route => route.fulfill({status: 204}))
+  await page.route('**/api/voice/livekit/token', async route => {
+    tokenRequests += 1
+    const body = route.request().postDataJSON() as {request_id: string}
+    requestIds.add(body.request_id)
+    if (retry) { await route.fallback(); return }
+    await route.fulfill({
+      status: fail ? 503 : 202, contentType: 'application/json',
+      body: JSON.stringify(fail
+        ? {detail: {code: 'tts_voice_missing', stage: 'tts'}}
+        : {status: 'preparing', request_id: body.request_id}),
+    })
+  })
+  const button = await driver.openVoiceChat(page)
+  await button.click()
+  await expect(page.getByText('セッション: 準備中', {exact: true})).toBeVisible()
+  await expect.poll(() => tokenRequests).toBeGreaterThanOrEqual(2)
+  expect(requestIds.size).toBe(1)
+  expect(await preparationMicrophoneRequests(page)).toBe(0)
+  await testInfo.attach('voice-preparing.png', {body: await page.screenshot(), contentType: 'image/png'})
+  fail = true
+  await expect(page.getByRole('alert')).toContainText('音声合成の準備：選択した音声が登録されていません')
+  await expect(page.getByText('セッション: エラー', {exact: true})).toBeVisible()
+  const failedRequestCount = tokenRequests
+  await page.waitForTimeout(1_000)
+  expect(tokenRequests).toBe(failedRequestCount)
+  await expect(button).toBeEnabled()
+  await testInfo.attach('voice-preparation-error.png', {body: await page.screenshot(), contentType: 'image/png'})
+  retry = true
+  await button.click()
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
+  expect(requestIds.size).toBe(2)
+  await page.getByRole('button', {name: '音声会話を終了'}).click()
+})
+
+test('準備中の終了は状態確認を停止してマイクを開始しない', async ({page}) => {
+  await observePreparationMicrophone(page)
+  let polls = 0
+  let cancellations = 0
+  let requestId: string | null = null
+  await page.route('**/api/voice/livekit/token', async route => {
+    polls += 1
+    const body = route.request().postDataJSON() as {request_id: string}
+    requestId = body.request_id
+    await route.fulfill({status: 202, contentType: 'application/json',
+      body: JSON.stringify({status: 'preparing', request_id: body.request_id})})
+  })
+  await page.route('**/api/voice/livekit/preparation/cancel', async route => {
+    expect(route.request().postDataJSON().request_id).toBe(requestId)
+    cancellations += 1
+    await route.fulfill({status: 204})
+  })
+  const button = await driver.openVoiceChat(page)
+  await button.click()
+  await expect(page.getByText('セッション: 準備中', {exact: true})).toBeVisible()
+  await page.getByRole('button', {name: '音声会話を終了'}).click()
+  await expect.poll(() => cancellations).toBe(1)
+  const lastPollCount = polls
+  await page.waitForTimeout(1_000)
+  expect(polls).toBe(lastPollCount)
+  await expect(page.getByText('セッション: 準備中', {exact: true})).toBeHidden()
+  await expect(page.getByRole('alert')).toBeHidden()
+  await expect(button).toBeEnabled()
+  expect(await preparationMicrophoneRequests(page)).toBe(0)
+})

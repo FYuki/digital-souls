@@ -137,8 +137,12 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False, profile: str = "integration-voice", isolated_normal_phase: str | None = None) -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False, profile: str = "integration-voice", isolated_normal_phase: str | None = None, disable_memory_formation: bool = False, memory_reference: bool = False) -> dict[str, str]:
     run_root(run_id)
+    if type(memory_reference) is not bool or (profile == "integration-irodori-memory-reference") != memory_reference:
+        raise ValueError("reference profile requires explicit reference measurement")
+    if memory_reference and (isolated_normal_phase is None or not disable_memory_formation):
+        raise ValueError("reference measurement requires independent trial and disabled formation")
     if isolated_normal_phase is not None and (
         isolated_normal_phase not in ("warmup", "measured") or trials != 1
         or not scheduled_fixture or controlled or continuous_turns or interruption_cohort
@@ -146,9 +150,11 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         or session_lifecycle
     ):
         raise ValueError("isolated normal trial requires one scheduled independent session")
-    if profile not in {"integration-voice", "integration-irodori"}:
+    if profile not in {"integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"}:
         raise ValueError("unsupported measurement profile")
-    if profile == "integration-irodori" and observe_stt_pcm:
+    if profile in {"integration-irodori-ollama-candidate", "integration-irodori-memory-reference"} and fault_bridge:
+        raise ValueError("candidate profile cannot use the fault bridge profile")
+    if profile not in {"integration-voice", "integration-irodori-cuda-graph"} and observe_stt_pcm:
         raise ValueError("Irodori profile cannot use the PCM observer profile")
     if type(session_lifecycle) is not bool or (session_lifecycle and (
         trials != 2 or not scheduled_fixture or controlled or continuous_turns
@@ -231,8 +237,14 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         env["VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY"] = "1"
     if observe_stt_pcm:
         env["VOICE_QUALITY_OBSERVE_STT_PCM"] = "1"
-    env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else (f"{profile}-fault" if fault_bridge else profile)
+    env["DS_PROFILE"] = f"{profile}-pcm" if observe_stt_pcm else (f"{profile}-fault" if fault_bridge else profile)
     env["VOICE_QUALITY_PROFILE"] = profile
+    # 常駐モデルの観測先も、Backendが解決するProfileの接続先に揃える。
+    selected = json.loads((ROOT / "environments/profiles" / f'{env["DS_PROFILE"]}.json').read_text())
+    env["OLLAMA_BASE_URL"] = selected["dependencies"]["ollama"]["baseUrl"]
+    irodori = selected["dependencies"].get("irodori", {})
+    if irodori.get("mode") == "real":
+        env["IRODORI_BASE_URL"] = irodori["baseUrl"]
     if fault_bridge:
         env["VOICE_QUALITY_FAULT_BRIDGE"] = "1"
     env.pop("VOICE_QUALITY_CONTROL_PROBE", None)
@@ -253,6 +265,12 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     env.pop("VOICE_QUALITY_ISOLATED_NORMAL_PHASE", None)
     if isolated_normal_phase is not None:
         env["VOICE_QUALITY_ISOLATED_NORMAL_PHASE"] = isolated_normal_phase
+    env.pop("VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION", None)
+    if disable_memory_formation:
+        env["VOICE_MEASUREMENT_DISABLE_MEMORY_FORMATION"] = "true"
+    env.pop("VOICE_QUALITY_MEMORY_REFERENCE", None)
+    if memory_reference:
+        env["VOICE_QUALITY_MEMORY_REFERENCE"] = "1"
     return env
 
 
@@ -264,7 +282,7 @@ def run(args: argparse.Namespace) -> int:
     from native_sdk import NativeSdkSampler
     from native_sdk_experiment.prepare import REVISION
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False), getattr(args, "profile", "integration-voice"), getattr(args, "isolated_normal_phase", None))
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False), getattr(args, "profile", "integration-voice"), getattr(args, "isolated_normal_phase", None), getattr(args, "disable_memory_formation", False), getattr(args, "memory_reference", False))
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -282,6 +300,9 @@ def run(args: argparse.Namespace) -> int:
     configured_contexts = configured_chat_model_contexts(env)
     base = run_root(args.run_id)
     base.mkdir(parents=True, exist_ok=False)  # 失敗した試行のdata rootも上書きしない。
+    if getattr(args, "memory_reference", False):
+        from app.voice_quality_reference_state import prepare
+        prepare(base / "runtime-data", ROOT)
     with ExitStack() as owned:
         if getattr(args, 'observe_stt_pcm', False):
             from whisper_pcm_observer import WhisperPcmObserver
@@ -329,7 +350,7 @@ def run(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori"),
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori", "integration-irodori-ollama-candidate", "integration-irodori-cuda-graph", "integration-irodori-memory-reference"),
                         default="integration-voice", help="共有TTS検証Profile。声の選択はCCVで行う。")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--isolated-normal-phase", choices=("warmup", "measured"),
@@ -356,6 +377,10 @@ if __name__ == "__main__":
                         help="通常経路の受信・復号・配送・再生の数値診断。Whisper中継は起動しない。")
     parser.add_argument("--session-lifecycle", action="store_true",
                         help="発話を供給せず、正常終了とbrowser切断の2 sessionを実環境で確認する。trials 2必須。")
+    parser.add_argument("--disable-memory-formation", action="store_true",
+                        help="専用controlled testのみ形成・統合schedulerを無効化する。")
+    parser.add_argument("--memory-reference", action="store_true",
+                        help="固定合成記憶の参照のみを測る。専用Profileと独立試行、形成停止が必須。")
     parser.add_argument("--disable-thinking", action="store_true")
     parser.add_argument("--scheduled-fixture", action="store_true")
     parser.add_argument("--continuous-turns", type=int, default=0,

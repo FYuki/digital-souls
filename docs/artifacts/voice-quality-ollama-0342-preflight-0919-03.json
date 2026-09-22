@@ -1,0 +1,10 @@
+{
+  "attempt_id": "350-ollama-0342-0919-03",
+  "classification": "preflight_failure",
+  "reason": "候補11534の/api/versionが5秒の事前接続timeout。runner起動とtrial manifest作成より前に停止。",
+  "planned_measured": 1,
+  "measurement_started": false,
+  "measured_succeeded": 0,
+  "ttfa_ms": null,
+  "followup": "コンテナはrunning・OOMなし。追加のread-only照会で候補0.34.2が応答。再起動せず新ID04へ進む。"
+}

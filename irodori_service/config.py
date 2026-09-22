@@ -18,6 +18,8 @@ class ServiceConfig:
     voices_dir: Path
     model_cache: Path
     warmup_voice: str = "miori-b3-4221"
+    cuda_graph: bool = False
+    reference_cache: bool = False
     max_pending: int = 8
     max_voice_checks: int = 2
     queue_timeout: float = 10.0
@@ -25,6 +27,10 @@ class ServiceConfig:
     startup_timeout: float = 300.0
 
     def __post_init__(self) -> None:
+        if type(self.reference_cache) is not bool:
+            raise ValueError("reference_cache must be boolean")
+        if type(self.cuda_graph) is not bool:
+            raise ValueError("cuda_graph must be boolean")
         if type(self.max_pending) is not int or self.max_pending < 1:
             raise ValueError("max_pending must be positive")
         if type(self.max_voice_checks) is not int or self.max_voice_checks < 1:
@@ -35,10 +41,18 @@ class ServiceConfig:
 
 
 def load_config() -> ServiceConfig:
+    graph = os.environ.get("DS_IRODORI_CUDA_GRAPH", "false")
+    if graph not in {"true", "false"}:
+        raise ValueError("DS_IRODORI_CUDA_GRAPH must be true or false")
+    reference_cache = os.environ.get("DS_IRODORI_REFERENCE_CACHE", "false")
+    if reference_cache not in {"true", "false"}:
+        raise ValueError("DS_IRODORI_REFERENCE_CACHE must be true or false")
     return ServiceConfig(
         voices_dir=Path(os.environ.get("DS_IRODORI_VOICES_DIR", "/voices")),
         model_cache=Path(os.environ.get("DS_IRODORI_MODEL_CACHE", "/models/huggingface")),
         warmup_voice=os.environ.get("DS_IRODORI_WARMUP_VOICE", "miori-b3-4221"),
+        cuda_graph=graph == "true",
+        reference_cache=reference_cache == "true",
         max_pending=int(os.environ.get("DS_IRODORI_MAX_PENDING", "8")),
         max_voice_checks=int(os.environ.get("DS_IRODORI_MAX_VOICE_CHECKS", "2")),
         queue_timeout=float(os.environ.get("DS_IRODORI_QUEUE_TIMEOUT_SECONDS", "10")),

@@ -18,6 +18,8 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
+- [音声Session開始準備](voice-session-preparation-2026-09.md)は、#350/#423/#424の開始準備、全体の固定時間上限なし、処理側の失敗検出、手動再試行を定める。既存の個別要求・worker・入力ACK等の期限や通信再接続は維持する。採用済みの要件であり、実装・受入完了ではない。[共通指示書](../voice-quality-350-423-424-requirements.md)を参照する。
+
 - [`addon-event-recovery-2026-09.md`](addon-event-recovery-2026-09.md)は、#187の共有取得、有限バッファと処理位置の永続化、上限超過・欠落時の復旧を具体化する。この範囲はAddon接続ADR・通知／会話分離ADRの抽象記述に優先する。通知の保持とUIは通知／会話分離ADRの2026-09-16追記、実装要求は[要件指示書](../epic-187-addon-event-requirements.md)を参照する。設計確定であり、実装完了を示さない。
 - [`voice-backend-authority-2026-09.md`](voice-backend-authority-2026-09.md)は、#358のBEによる音声活動・正式発話境界の所有、FE／BE一括更新・切り戻し、復元不能な音声欠落の扱いを定める。この移設範囲では既存音声・Speech/Text・共通client ADRより優先する。採用済み設計であり、移設の実装・受入は未完了。詳細は[要件指示書](../epic-358-voice-backend-requirements.md)を参照する。
 

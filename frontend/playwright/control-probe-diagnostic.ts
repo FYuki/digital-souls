@@ -1,5 +1,6 @@
+import {startMeasuredSession} from './start-measured-session'
 import { readVoiceMeasurementBaseUrl } from './resolved-profile'
-import { expect, type Browser } from '@playwright/test'
+import { expect, type Browser, type TestInfo } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import {faultToBrowserOffset, type FaultClockCalibration} from './fault-clock'
@@ -13,7 +14,7 @@ import { createVoiceChatDriver } from './voice-chat-suite'
 
 // 1 sessionの実制御・音声を診断する。明示時だけ専用bridgeを切断し、再接続100件とは分離する。
 export async function measureControlProbeSession(browser: Browser, fixture: ScheduledFixture,
-  count: number, output: string): Promise<void> {
+  count: number, output: string, testInfo: TestInfo): Promise<void> {
   const page = await browser.newPage({baseURL: await readVoiceMeasurementBaseUrl(), permissions: ['microphone']})
   const driver = createVoiceChatDriver()
   const networkFault = process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
@@ -85,19 +86,14 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
       record.fault_clock_before = clockBefore
     }
     stage = 'session_create'
-    const issuedResponse = page.waitForResponse(response => response.request().method() === 'POST'
-      && new URL(response.url()).pathname.endsWith('/voice/livekit/token'), {timeout: 10000}).catch(() => null)
-    await microphone.click()
-    const issued = await issuedResponse
-    record.session_create_http_status = issued?.status() ?? null
-    if (issued === null || !issued.ok()) throw new Error('session creation unavailable')
-    const {session_id: sessionId} = await issued.json() as {session_id?: unknown}
-    if (typeof sessionId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(sessionId)) {
-      throw new Error('session identity unavailable')
-    }
-    record.session_id = sessionId
+    let sessionId: string | undefined
+    await startMeasuredSession(page, microphone, testInfo, issued => {
+      sessionId = issued.sessionId
+      record.session_id = sessionId
+      record.session_create_http_status = issued.httpStatus
+    })
+    record.preparation_observation = await page.evaluate(() => window.__voicePreparationProbe!.snapshot())
     stage = 'first_playback'
-    await expect(microphone).toHaveAttribute('aria-pressed', 'true')
     await page.evaluate(() => window.__voiceFixtureClock!.start())
     const cycle = await driver.waitForCompletedVoiceCycle(page)
     record.initial_cycle = cycle
@@ -176,6 +172,8 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   } catch {
     record.failure_stage = stage
   } finally {
+    record.preparation_observation = await page.evaluate(() => window.__voicePreparationProbe?.snapshot() ?? null)
+      .catch(() => record.preparation_observation ?? null)
     if (networkFault) {
       record.sdk_clock = await finishSdkClockDiagnostic(page)
       record.browser_rtc = await page.evaluate(() => (window as typeof window & {
