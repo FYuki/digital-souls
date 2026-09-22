@@ -316,6 +316,15 @@ class ApplicationRuntime:
             paths, disabled=self.disable_memory_formation
         )
 
+    def abort(self) -> None:
+        """prepare/acquire_persistent_stateの失敗で残った資源を回収する。
+
+        shutdown()はstart()進入後の回収経路。それより前の失敗では
+        構築済みのinference runtimeだけをここで解放する。
+        """
+        if self.inference is not None:
+            self.inference.close()
+
     async def shutdown(self) -> None:
         """確保済み資源を現行の停止順で回収する。"""
         app = self.app
@@ -347,7 +356,7 @@ class ApplicationRuntime:
             )
             await run_cleanup(livekit.runtime_manager.stop_all())
             await run_cleanup(livekit.api.aclose())
-        if self.life.runtime is not None:
+        if self.life.started and self.life.runtime is not None:
             await run_cleanup(self.life.runtime.close())
         if hasattr(app.state, "character_life_runtime"):
             del app.state.character_life_runtime

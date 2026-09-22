@@ -51,12 +51,13 @@ class ScreenResources:
     ) -> None:
         runtime = inference.runtime
         routing_policy = resolve_routing_policy(runtime.settings, runtime.registry)
-        app.state.screen_http_security = self.security
-        app.state.screen_perception_service = ScreenPerceptionService(
+        service = ScreenPerceptionService(
             vision=VisionInferenceClient(router=runtime.router),
             routing_policy=lambda: routing_policy,
             validate_context=validate_context,
             reference_router=runtime.router,
         )
-        self.service = app.state.screen_perception_service
+        app.state.screen_http_security = self.security
+        app.state.screen_perception_service = service
+        self.service = service
         self.published = True
