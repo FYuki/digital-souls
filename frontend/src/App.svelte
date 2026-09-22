@@ -5,8 +5,7 @@
   import AudioRecorder from './lib/AudioRecorder.svelte'
   import CharacterPortrait from './lib/CharacterPortrait.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
-  import type {SettledVoiceTurnDisplay} from './lib/voice-turn-display'
-  import type {SelectedConversationContext} from './lib/conversations/controller'
+  import { createVoiceHistoryController, visibleVoiceTurns } from './lib/voice-history/controller'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
@@ -45,7 +44,6 @@
     type VoiceSessionSnapshot,
     type VoiceSessionContext,
   } from './livekit/voice-session'
-  import {VoiceHistoryProjection} from './livekit/history-projection'
 
   const INITIAL_CHARACTER_ID = 'miori'
   const ERROR_MESSAGE = '応答の取得に失敗しました。'
@@ -104,31 +102,12 @@
   let compactLayout = false
   let visualViewportHeight: number | null = null
   let visualViewportOffsetTop = 0
-  type LiveVoiceTurn = {
-    context: SelectedConversationContext
-    historyTurnId?: string
-    responseId: string | null
-    sourceUtteranceIds: string[]
-    userContent: string
-    assistantContent: string
-    lastTextSequence: number
-  }
-  let liveVoiceTurn: LiveVoiceTurn | null = null
-  let settledVoiceTurns: (SettledVoiceTurnDisplay & {context: SelectedConversationContext})[] = []
-  type FailedVoiceTurn = {
-    responseId: string
-    characterId: string
-    conversationId: string
-    userContent: string
-    assistantContent: string
-  }
-  let failedVoiceTurns: FailedVoiceTurn[] = []
-  $: visibleFailedVoiceTurns = failedVoiceTurns.filter((turn) => (
-    turn.characterId === $conversationController.character
-    && turn.conversationId === $conversationController.selectedConversationId
-  ))
-  const finalizedUtterances = new Map<string, string>()
-  const voiceHistory = new VoiceHistoryProjection()
+  const voiceHistory = createVoiceHistoryController({
+    selectedContext: () => conversationController.selectedContext(),
+    refreshTurns: (context) => conversationController.refreshTurns(context),
+    savedTurns: () => $conversationController.turns,
+    refreshCharacter: (characterId) => sidebarController.refreshCharacter(characterId),
+  })
   let voiceSnapshot: VoiceSessionSnapshot = {
     phase: 'idle',
     input: 'inactive',
@@ -147,138 +126,16 @@
   )
 
   function receiveVoiceCoreEvent(event: VoiceSessionEvent, voiceContext: VoiceSessionContext) {
-    const selected = conversationController.selectedContext()
-    const context: SelectedConversationContext = selected?.character === voiceContext.characterId
-      && selected.conversationId === voiceContext.conversationId ? selected
-      : {character: voiceContext.characterId, conversationId: voiceContext.conversationId, version: -1}
-    const projected = voiceHistory.receive(event, voiceContext, voiceSnapshot.textSubmissions)
-    if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
-      const transcript = event.transcript ?? ''
-      if (event.should_response === false) return
-      if (screenReferenceAvailable) screenReferenceDecisionActive = true
-      finalizedUtterances.set(event.utterance_id, transcript)
-      if (liveVoiceTurn === null) {
-        liveVoiceTurn = {
-          context,
-          responseId: null,
-          sourceUtteranceIds: [event.utterance_id],
-          userContent: transcript,
-          assistantContent: '',
-          lastTextSequence: 0,
-        }
-      } else if (liveVoiceTurn.responseId === null) {
-        liveVoiceTurn = {
-          ...liveVoiceTurn,
-          sourceUtteranceIds: [...liveVoiceTurn.sourceUtteranceIds, event.utterance_id],
-          userContent: [liveVoiceTurn.userContent, transcript]
-            .filter((text) => text !== '')
-            .join('\n'),
-        }
-      }
-      return
-    }
-    if (event.type === 'response_privacy_skipped' && event.response_id !== undefined) {
-      const sourceIds = (event.source_inputs ?? []).filter(source => source.source === 'speech')
-        .map(source => source.input_id)
-      for (const utteranceId of sourceIds) finalizedUtterances.delete(utteranceId)
-      if (liveVoiceTurn?.responseId === event.response_id
-        || (liveVoiceTurn?.responseId === null
-          && liveVoiceTurn.sourceUtteranceIds.some(id => sourceIds.includes(id)))) {
-        liveVoiceTurn = null
-        screenReferenceDecisionActive = false
-      }
-      // 開始前に省略されたテキストにも保存済みのprivacy表示を反映する。
-      void conversationController.refreshTurns(context)
-      void sidebarController.refreshCharacter(context.character)
-      return
-    }
-    if (event.type === 'response_started' && event.response_id !== undefined) {
-      if (projected === null) return
-      const sourceIds = event.source_utterance_ids ?? []
-      liveVoiceTurn = {
-        context,
-        ...(event.history_turn_id === undefined ? {} : {historyTurnId: event.history_turn_id}),
-        responseId: event.response_id,
-        sourceUtteranceIds: sourceIds,
-        userContent: projected.userContent,
-        assistantContent: '',
-        lastTextSequence: 0,
-      }
-      return
-    }
-    if (
-      event.type === 'response_delta'
-      && event.response_id !== undefined
-      && event.text_sequence !== undefined
-      && event.text !== undefined
-      && liveVoiceTurn?.responseId === event.response_id
-      && projected !== null
-    ) {
-      screenReferenceDecisionActive = false
-      liveVoiceTurn = {
-        ...liveVoiceTurn,
-        assistantContent: projected.assistantContent,
-        lastTextSequence: projected.lastTextSequence,
-      }
-      return
-    }
-    if (
-      ['response_completed', 'response_cancelled', 'response_failed'].includes(event.type)
-      && liveVoiceTurn !== null
-      && event.response_id === liveVoiceTurn.responseId
-    ) {
-      screenReferenceDecisionActive = false
-      const responseContext = liveVoiceTurn.context
-      if (event.type === 'response_failed') {
-        const context = responseContext
-        if (context !== null) {
-          failedVoiceTurns = [...failedVoiceTurns, {
-            responseId: event.response_id,
-            characterId: context.character,
-            conversationId: context.conversationId,
-            userContent: liveVoiceTurn.userContent,
-            assistantContent: liveVoiceTurn.assistantContent,
-          }]
-        }
-      }
-      for (const utteranceId of liveVoiceTurn.sourceUtteranceIds) {
-        finalizedUtterances.delete(utteranceId)
-      }
-      if (event.type !== 'response_failed' && liveVoiceTurn.historyTurnId !== undefined
-        && liveVoiceTurn.responseId !== null) {
-        settledVoiceTurns = [...settledVoiceTurns, {...liveVoiceTurn,
-          historyTurnId: liveVoiceTurn.historyTurnId, responseId: liveVoiceTurn.responseId,
-          terminal: event.type === 'response_cancelled' ? 'cancelled' : 'completed'}]
-      }
-      liveVoiceTurn = null
-      if (event.type !== 'response_failed') {
-        void conversationController.refreshTurns(responseContext).then(() => {
-          // 失敗時や別会話の再取得では、未反映の表示を消さない。
-          const current = conversationController.selectedContext()
-          if (current?.character !== responseContext.character || current.conversationId !== responseContext.conversationId
-            || current.version !== responseContext.version) return
-          const loadedIds = new Set($conversationController.turns.map(turn => turn.turn_id))
-          settledVoiceTurns = settledVoiceTurns.filter(turn => !loadedIds.has(turn.historyTurnId))
-        })
-        void sidebarController.refreshCharacter(responseContext.character)
-      }
-      return
-    }
-    if (event.type === 'error') {
-      screenReferenceDecisionActive = false
-      if (event.utterance_id !== undefined) finalizedUtterances.delete(event.utterance_id)
-      voiceErrors = {...voiceErrors, [`${context.character}:${context.conversationId}`]:
-        event.error_code === 'audio_input_repeat_required'
-          ? '音声の一部を受け取れませんでした。もう一度話してください。'
-          : event.error_code === 'audio_input_unavailable'
-            ? '音声入力が停止しました。マイクを再開して、もう一度話してください。' : ERROR_MESSAGE}
-      return
-    }
-    if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
-      screenReferenceDecisionActive = false
-      finalizedUtterances.delete(event.utterance_id)
-      if (liveVoiceTurn?.responseId === null) liveVoiceTurn = null
-    }
+    const received = voiceHistory.receive(event, voiceContext, voiceSnapshot.textSubmissions)
+    if (received.pendingInputAccepted && screenReferenceAvailable) screenReferenceDecisionActive = true
+    if (received.pendingInputResolved) screenReferenceDecisionActive = false
+    if (event.type !== 'error') return
+    screenReferenceDecisionActive = false
+    voiceErrors = {...voiceErrors, [`${voiceContext.characterId}:${voiceContext.conversationId}`]:
+      event.error_code === 'audio_input_repeat_required'
+        ? '音声の一部を受け取れませんでした。もう一度話してください。'
+        : event.error_code === 'audio_input_unavailable'
+          ? '音声入力が停止しました。マイクを再開して、もう一度話してください。' : ERROR_MESSAGE}
   }
 
   $: interactionsDisabled = pendingRequest !== null
@@ -295,10 +152,13 @@
     entry.context.characterId === $conversationController.character
     && entry.context.conversationId === $conversationController.selectedConversationId
     && (entry.sessionId === voiceSnapshot.sessionId || entry.status === 'sending' || entry.status === 'confirming')) ?? null
-  $: visibleLiveVoiceTurn = liveVoiceTurn?.context.character === $conversationController.character
-    && liveVoiceTurn.context.conversationId === $conversationController.selectedConversationId ? liveVoiceTurn : null
-  $: visibleSettledVoiceTurns = settledVoiceTurns.filter(turn => turn.context.character === $conversationController.character
-    && turn.context.conversationId === $conversationController.selectedConversationId)
+  $: visibleVoiceHistory = visibleVoiceTurns($voiceHistory, selectedVoiceContext === null ? null : {
+    character: selectedVoiceContext.characterId,
+    conversationId: selectedVoiceContext.conversationId,
+  })
+  $: visibleLiveVoiceTurn = visibleVoiceHistory.live
+  $: visibleSettledVoiceTurns = visibleVoiceHistory.settled
+  $: visibleFailedVoiceTurns = visibleVoiceHistory.failed
   $: visibleVoiceError = voiceErrors[`${$conversationController.character}:${$conversationController.selectedConversationId}`] ?? ''
   $: syncVoiceSelection(
     $conversationController.character,
