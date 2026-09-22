@@ -1,3 +1,4 @@
+import { requestHttp } from '../http-client'
 import type {
   CharacterUiState,
   HistoryHeightPercent,
@@ -79,11 +80,15 @@ const requestSettings = async (
   path: string,
   init?: RequestInit,
 ): Promise<UiSettings> => {
-  const response = await fetch(path, init)
-  if (!response.ok) {
-    throw new Error(`UI settings request failed with status ${response.status}`)
-  }
-  return parseSettings(await response.json())
+  const value = await requestHttp(
+    path,
+    init,
+    (response) => new Error(
+      `UI settings request failed with status ${response.status}`,
+    ),
+    'json',
+  )
+  return parseSettings(value)
 }
 
 export const getUiSettings = async (): Promise<UiSettings> => (

@@ -1,3 +1,5 @@
+import { requestHttp } from '../lib/http-client'
+
 export type TokenResponse = Readonly<{
   session_id: string
   participant_id: string
@@ -221,13 +223,14 @@ export type ConversationBinding = Readonly<{
   conversation_id: string
 }>
 
-export const createConversation = async (): Promise<ConversationBinding> => {
-  const response = await fetch(`${API_PREFIX}/characters/${CHARACTER_ID}/conversations`, {
-    method: 'POST',
-  })
-  if (!response.ok) throw new Error(`Conversation creation failed: ${response.status}`)
-  return parseConversationBinding(await response.json() as unknown)
-}
+export const createConversation = async (): Promise<ConversationBinding> => (
+  parseConversationBinding(await requestHttp(
+    `${API_PREFIX}/characters/${CHARACTER_ID}/conversations`,
+    { method: 'POST' },
+    (response) => new Error(`Conversation creation failed: ${response.status}`),
+    'json',
+  ))
+)
 
 export const getInitialToken = async (): Promise<{
   conversationId: string

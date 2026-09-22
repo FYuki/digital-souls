@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, test, vi} from 'vitest'
-import {requestLiveKitToken, VoicePreparationError} from './client'
+import {createConversation, requestLiveKitToken, VoicePreparationError} from './client'
 
 const token = {
   session_id: 'session', participant_id: 'participant', room: 'room',
@@ -86,6 +86,32 @@ describe('音声開始準備の状態確認', () => {
     expect(calls).toHaveLength(2)
     expect(calls[1].url).toContain('/preparation/cancel')
     expect(calls[1].body.request_id).toBe(calls[0].body.request_id)
+  })
+
+  test('会話作成は固定characterへPOSTし、bindingを返す', async () => {
+    const binding = {
+      character_id: 'miori',
+      conversation_id: '30000000-0000-4000-8000-000000000001',
+    }
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(binding), {status: 200}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(createConversation()).resolves.toEqual(binding)
+    expect(fetchMock).toHaveBeenCalledWith('/api/characters/miori/conversations', {method: 'POST'})
+  })
+
+  test('会話作成のHTTP失敗はstatusを含むErrorでrejectする', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', {status: 500})))
+
+    await expect(createConversation()).rejects.toThrow('Conversation creation failed: 500')
+  })
+
+  test('会話作成はbinding必須fieldを欠く応答を拒否する', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({character_id: 'miori'}), {status: 200},
+    )))
+
+    await expect(createConversation()).rejects.toThrow('conversation_id')
   })
 
   test('既存Sessionの再接続は新しい準備を開始しない', async () => {
