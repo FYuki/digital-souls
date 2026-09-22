@@ -8,16 +8,19 @@ def test_enabled_main_lifespan_owns_single_gate_and_collects_runtime(
 ):
     from app import main
     from app.character_life import runtime as life_runtime
+    import app.runtime.tools as tool_runtime_module
 
     tools = []
-    original = main.ToolRuntime
+    original = tool_runtime_module.ToolRuntime
 
     class RecordingToolRuntime(original):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             tools.append(self)
 
-    monkeypatch.setattr(main, "ToolRuntime", RecordingToolRuntime)
+    monkeypatch.setattr(
+        tool_runtime_module, "ToolRuntime", RecordingToolRuntime
+    )
     monkeypatch.setenv("DS_CHARACTER_LIFE_ENABLED", "true")
     monkeypatch.setenv("DS_CHARACTER_LIFE_CRON", "0 0 1 1 *")
     monkeypatch.setenv("INFERENCE_TARGET_CHARACTER_LIFE", "ollama/gemma4:e4b")

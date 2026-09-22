@@ -73,6 +73,7 @@ Ollama以外の未対応Providerへダミー会話やfallbackを送らない。�
 * `routers/chat.py` — テキストチャットのHTTPエンドポイント
 * `routers/ws.py` — 移行前baselineとして凍結するターン型音声WebSocketエンドポイント。Wave 3機能は追加しない
 * `routers/livekit.py` / `livekit_transport/` — LiveKit join認証、Roomとsessionの対応付け、control event配送、character audio runtimeを担うWave 3の正式な音声transport境界
+* `main.py` / `runtime/` — FastAPI lifespanの入口と起動資源の所有境界。`main.py`はroute登録・health endpoint・業務callbackのwiringだけを持ち、`runtime/`配下の資源ownerが推論・履歴・記憶・privacy・画面知覚・tool・Character Life・音声・chatの構築・`app.state`公開・起動・停止を担う。起動順・停止順・失敗時の回収と`app.state`属性名は`runtime/application.py`の`ApplicationRuntime`へ固定する。owner別の所有表と起動・停止順は後述の「lifespanの資源所有と起動・停止順」を参照
 * `voice_input/` — LiveKitの連続PCMをCPUのSilero legacy／libfvadへ入力し、発話区間と正式utterance・入力世代をBEで確定する。モデル資産はhash固定、処理とbufferには上限を設ける
 * `livekit_transport/microphone_frames.py` / `microphone_integrity.py` — SDK queue前のsample位置とtrack統計から欠落を確認し、終了済みcaptureを固定してSTTへ渡す
 * `livekit_transport/paced_audio.py` — 応答ごとのPCM queueを最大1秒に制限し、入力のある10ms frameだけをbufferなしのnative AudioSourceへ供給する。cancel時はqueueと送信taskを止め、応答末尾は明示的にpaddingしてnative供給完了を待つ
@@ -107,6 +108,97 @@ Irodori対応はepic実装であり、本採用・性能受入は#329の実測�
 詳細は[共有TTS運用](../infra/irodori/README.md)を参照する。
 
 共有VOICEVOX clientは同期HTTP requestを合成全体30秒のdeadline内で実行する。process shutdownでは新規synthesis受付を止め、in-flight requestを既定35秒までdrainしてからclientをcloseする。防御的なdrain timeout時は本文を含まない理由コードを記録してshutdown処理を進めるが、in-flightより先にclientをcloseせず、最後のrequestが終了したthreadで遅延closeする。通常requestは全体30秒deadlineが35秒drainより短いため、このtimeoutはHTTP libraryがdeadlineに従わない異常の識別用である。synthesis lifecycleは`completed`、`request_timeout`、`connection_failed`、`request_failed`を本文なしで記録する。barge-inによるasync response cancelはConversation CoreのTTS stageへ`cancelled`として記録し、process shutdownと区別する。cancel後も同期requestが終了するまではclientを早期closeしない。
+
+#### lifespanの資源所有と起動・停止順
+
+`main.py`の`lifespan()`は`ApplicationRuntime`（`runtime/application.py`）を生成し、
+`prepare()`→`acquire_persistent_state()`→`start()`→稼働→`shutdown()`の順で進む。
+`ApplicationRuntime`は9つの資源owner、解決済み設定（inference・tool・model）、runtime path、
+記憶発生timezone、clockを保持し、会話履歴SQLiteのmaintenance leaseの寿命とowner横断の
+起動・停止・失敗回収順を所有するcoordinatorである。`main.py`は`LifespanWiring`経由で
+ChatService生成・Conversation Core session factory生成・画面context検証・記憶entity label解決の
+業務callbackを注入し、資源は所有しない。
+
+各ownerの所有資源と公開契約は次のとおりである。
+
+| owner | 所有資源 | 依存owner | 公開する`app.state` | 開始・公開成功状態 | 停止・解放方法 |
+|---|---|---|---|---|---|
+| `InferenceResources` | `InferenceRuntime`（用途別router・health・Provider adapter）、起動probe、`llm_router`へのprocess-wide router登録 | なし | `inference_router`、`inference_health` | `router_registered`（router登録済み）、`state_published`（2属性公開済み） | 冪等な`close()`。正常停止では`inference_health`削除→`close()`→router登録解除・`inference_router`削除 |
+| `HistoryResources` | `ConversationHistoryConfig`、maintenance lease参照、WAL cleanup、`ConversationHistoryRepository`、`ConversationLifecycleService`、`UiSettingsRepository`、`ConversationHistoryService` | Privacy（履歴Service構築時に`history_sanitizer`を注入） | `conversation_history_repository`、`conversation_lifecycle_service`、`ui_settings_repository` | `repository_published`、`lifecycle_published`、`ui_settings_published` | 公開済みフラグに応じて3属性を削除。leaseは`ApplicationRuntime`が全資源回収後に解放し、owner自身は解放しない |
+| `PrivacyResources` | `MemoryPolicy`、決定論的`PrivacyScanner`、`HistorySanitizer`、semantic classifierとその推論client | Inference（classifier clientがrouter・settings・model digest解決を利用） | `semantic_privacy_classifier` | `classifier_published` | `classifier_client.close()`、`classifier_published`時に`semantic_privacy_classifier`削除 |
+| `MemoryResources` | 記憶repository群（approved・episodic・読み取り・outbox・temporary record）、`ResponseProvenanceRecorder`、`MemoryInferenceEmbedder`、`MemoryIndexSync`、`SemanticStore`、各管理Service、推論client3種（extractor・consolidation・consolidation classifier）、`MemoryCandidateExtractor`、preference・formation・index・consolidation各scheduler | History（repository・設定）、Inference（router・settings）、Privacy（scanner・classifier・policy） | `semantic_store`、`semantic_memory_management`、`persona_memory_provider`、`episodic_memory_management`、`addon_record_provider`、`rag_admission_service` | `semantic_published`、`persona_published`、`episodic_published`、`addon_published`、`rag_published`、`formation_started`、`index_started`、`consolidation_started` | `consolidation_started`→`formation_started`→`index_started`の順に、開始済みのschedulerだけを停止。公開済みフラグに応じて6属性を削除し、3 clientをclose |
+| `ToolResources` | `ToolRuntime`（management・events・action_policy・service）、routing service | Inference（routerと`TOOL_ROUTING` targetの有無）、Privacy（scanner）、Memory（consolidation用classifier） | `addon_manager`、`event_source`、`action_policy`、`tool_service`（`TOOL_ROUTING`未設定時は`None`） | 専用フラグは持たず、`runtime`構築済みが回収判定 | `runtime.close()`、`tool_service`・`action_policy`を削除。`addon_manager`・`event_source`は現行では`app.state`に残る |
+| `LifeResources` | `LifeSettings`、`LifeStore`（character-life.db）、`LifeService`（Cognition・Privacy・Formation含む）、`LifeRuntime`（DBOS）、`LifeContext` | Inference（`CHARACTER_LIFE` target必須）、Tool（gate・sanitizer・bindings）、History（履歴repositoryによるforeground確認）、Memory（privacy classifier） | `character_life_runtime`（有効かつstart成功時のみ） | `started`（`runtime.start()`成功後のみTrue） | `runtime`存在時に`runtime.close()`し`character_life_runtime`を削除。無効時は構築・公開しない |
+| `ScreenResources` | `ScreenHttpSecurity`、`ScreenPerceptionService`（Vision client・routing policy・context検証） | Inference（router・settings・registry）。context検証は`main.py` wiring経由で履歴repositoryを参照する | `screen_http_security`、`screen_perception_service` | `published` | `published`時に2属性を削除 |
+| `ChatResources` | `ChatService`、既定chat service resolver | `main.py` wiring経由でPrivacy・History・Memory・Tool・Life | `chat_service` | `published`、`resolver_registered` | `published`時に`chat_service`削除、`resolver_registered`時に既定resolverを解除 |
+| `AudioResources` | 測定種別、任意`JsonlTraceRecorder`（controlled_baseline・dogfoodのみ）、`AudioRuntimeConfig`、旧`AudioPipelineService`、Core STT/TTS client（LiveKit有効時のみ構築）、任意`ProductionResources`（LiveKit API client・room manager・session repository・runtime manager・token signer・bootstrap service・core events・url） | History（会話repository）、Screen（session revoker）。Core session factoryは`main.py` wiring経由 | `voice_measurement_kind`（常時）、`voice_trace_recorder`（recorder存在時のみ）、`audio_pipeline_service`、LiveKit有効時は`livekit_room_manager`・`livekit_session_repository`・`livekit_runtime_manager`・`livekit_token_signer`・`livekit_bootstrap_service`・`livekit_core_events`・`livekit_url` | `kind_published`、`recorder_published`、`pipeline_published`、`livekit_resources`の有無 | LiveKit構築済みなら`cancel_all_preparations`→`stop_all`→`api.aclose`を非同期で実行し、同期cleanupでpipeline closeと属性削除、STT/TTS client close、measurement・trace・LiveKit属性削除 |
+
+起動は次の順で進む。`prepare()`と`acquire_persistent_state()`は同期構築、`start()`は
+公開・起動の非同期区間である。
+
+1. `prepare()`で設定を解決する。legacy Inference環境の拒否、Inference・Tool・Model設定、
+   記憶発生timezone、runtime path、memory formation無効判定（無効時はCharacter Lifeの
+   有効化を拒否）を行い、`InferenceResources`と`ScreenResources`を構築する。その後、推論probe、
+   runtime data root初期化、`AudioResources.create_measurement`（controlled_baseline・dogfood
+   時のみtrace recorderを構築）、restore intent確認とcontrolled policy record削除、
+   `PrivacyResources`構築、legacy Chroma削除、設定ログ、scanner・sanitizer構築、
+   `HistoryResources`解決を行う。
+2. `acquire_persistent_state()`で会話履歴SQLiteのmaintenance leaseを排他取得し、保持下で
+   履歴schema初期化（dogfoodでは事前backup gateと失敗時rollback付き）→leaseのruntime mode
+   遷移→記憶schema初期化→clock設定→`history.build`（WAL cleanup・repository・stale回復・
+   lifecycle・UI settings）→`memory.build`（記憶repository・embedder・index sync・
+   index scheduler・formation・consolidation設定）を行う。
+3. `start()`で次の順に公開・起動する。
+   1. `inference.publish`：process-wide router登録と`inference_router`・`inference_health`公開
+   2. `audio.publish_measurement`：`voice_measurement_kind`と任意の`voice_trace_recorder`公開
+   3. `history.publish_repository`：`conversation_history_repository`公開
+   4. `screen.publish`：`screen_http_security`・`screen_perception_service`公開
+   5. `history.publish_services`：`conversation_lifecycle_service`・`ui_settings_repository`公開
+   6. `privacy.build_classifier`と`privacy.publish`：`semantic_privacy_classifier`公開
+   7. `memory.build_management`：記憶管理6属性の公開
+   8. `memory.build_clients`→`memory.build_formation`→`memory.start_formation`：formation
+      scheduler開始（無効時は`DisabledFormationScheduler`を組み込んで開始する）
+   9. `memory.build_consolidation`：consolidation scheduler構築
+   10. `history.build_service`：privacy sanitizerを注入して履歴Serviceを構築
+   11. `life.load_settings`と`life.check_enabled`：有効時は`CHARACTER_LIFE` targetを要求
+   12. `tools.build`→`tools.publish_addons`→`tools.start`→`tools.publish_service`：
+       addon3属性公開・ToolRuntime起動・`tool_service`公開
+   13. `life.start_if_enabled`：有効時のみLife構築・start・`character_life_runtime`公開
+   14. `chat.publish`：wiring経由でChatServiceを生成し`chat_service`公開
+   15. `audio.build_pipeline`：`audio_pipeline_service`公開
+   16. LiveKit有効時のみ`audio.build_core_clients`とwiringのCore session factory生成を行い、
+       `audio.configure`で`ProductionResources`を構築してLiveKit 7属性を公開
+   17. `chat.register_resolver`：既定chat service resolver登録
+   18. `memory.start_index`：index scheduler開始
+   19. `memory.start_consolidation`：memory formation無効時を除きconsolidation scheduler開始
+   20. `audio.record_controlled_policy`：controlled測定時のみpolicy記録
+
+停止は`shutdown()`が担い、`start()`へ進入した後の正常終了と途中失敗の両方で実行する。
+
+1. 非同期cleanup。各操作の失敗は`cleanup_errors`へ集約し、残りの回収を継続する。
+   1. `livekit_resources`構築済みなら`bootstrap_service.cancel_all_preparations`→
+      `runtime_manager.stop_all`→`api.aclose`
+   2. `life.runtime`構築済みなら`runtime.close`し、`character_life_runtime`を削除
+   3. `tools.runtime`構築済みなら`runtime.close`し、`tool_service`・`action_policy`を削除
+      （`addon_manager`・`event_source`は現行では`app.state`に残る）
+   4. `consolidation_started`ならconsolidation schedulerを停止
+   5. `formation_started`ならformation schedulerを停止
+   6. `index_started`ならindex schedulerを停止
+2. 同期cleanup。`ExitStack`へ登録し、登録の逆順で実行する（いずれかが失敗しても残りを
+   実行する）。`inference_health`削除→`inference.close`→consolidation_classifier・
+   consolidation・extractor・privacy classifierの各推論client close→`screen_http_security`・
+   `screen_perception_service`削除→記憶6属性削除→router登録解除・`inference_router`削除→
+   `semantic_privacy_classifier`削除→履歴3属性削除→chat既定resolver解除→Core STT/TTS
+   client close→`audio_pipeline_service` closeと削除→`chat_service`削除→
+   `voice_measurement_kind`・`voice_trace_recorder`削除→LiveKit 7属性削除。
+3. 非同期cleanupに失敗があれば最初の例外を再送出する。
+4. `acquire_persistent_state`ブロックの離脱でmaintenance leaseを最後に解放する。
+
+失敗時の回収経路は到達位置で分かれる。`start()`内の失敗では`finally`が`shutdown()`を
+実行し、各ownerの成功フラグと構築済み判定に従って資源を回収する。maintenance leaseは
+contextmanagerのブロック離脱時に解放する。`prepare()`と永続資源構築中の推論資源回収、
+Life起動失敗時の二重close、画面Service構築失敗時のsecurity属性残留は現行挙動を保持し、
+構造変更と分離した不具合修正で扱う。
 
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
