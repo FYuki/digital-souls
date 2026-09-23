@@ -45,11 +45,6 @@ from app.screen_perception.service import (
     ScreenPerceptionError,
     ScreenTurnMaterial,
 )
-from app.tool_use.prompt import (
-    require_tool_room,
-    routing_history,
-    with_tool_material,
-)
 from app.tool_use.service import ToolService
 
 if TYPE_CHECKING:
@@ -300,68 +295,33 @@ async def _stream_core_reply(
     from app.inference.diagnostics import diagnostic
 
     diagnostic("prompt_preparation_started")
-    prepare_arguments: tuple[object, ...] = (character, history_session, transcript)
-    if tools is not None and conversation_id is not None:
-        prepare_arguments = (*prepare_arguments, screen, history_access, False)
-    elif screen is not None or history_access is not None:
-        prepare_arguments = (*prepare_arguments, screen, history_access)
-    prompt, max_output_tokens = await run_sync(
-        chat_service.prepare_unrecorded_generation,
-        *prepare_arguments,
+    prepared = await chat_service.prepare_reply(
+        character,
+        transcript,
+        history_session,
+        conversation=conversation_id,
+        screen=screen,
+        history_access=history_access,
+        tools=tools,
+        base_prompt_observer=(
+            None
+            if screen_lineage_observer is None
+            else lambda prompt: screen_lineage_observer(prompt.screen_lineages)
+        ),
+        tool_scope=(
+            confirmation_resume_scope(
+                character, conversation_id, current_control_request()
+            )
+            if tools is not None and conversation_id is not None
+            else None
+        ),
     )
-    if screen_lineage_observer is not None:
-        screen_lineage_observer(prompt.screen_lineages)
-    if tools is not None and conversation_id is not None:
-
-        async def before_execute() -> None:
-            if screen is not None and not screen.is_current:
-                raise ScreenPerceptionError("request_cancelled", stage="chat")
-            if history_access is not None and not all(
-                history_access.allows(lineage) for lineage in prompt.screen_lineages
-            ):
-                raise ScreenPerceptionError("request_cancelled", stage="chat")
-            await run_sync(
-                require_tool_room,
-                prompt,
-                lambda messages: llm_router.count_input_tokens(
-                    messages, settings=model_settings
-                ),
-                model_settings.chat_context_tokens - max_output_tokens,
-            )
-
-        with confirmation_resume_scope(character, conversation_id, current_control_request()):
-            material = await tools.run(
-                character,
-                conversation_id,
-                transcript,
-                history=routing_history(prompt),
-                before_execute=before_execute,
-            )
-        if screen is not None and not screen.is_current:
-            tools.stop(character, conversation_id)
-            raise ScreenPerceptionError("request_cancelled", stage="chat")
-        if material.direct_text is not None:
-            if history_access is not None and not all(
-                history_access.allows(lineage) for lineage in prompt.screen_lineages
-            ):
-                tools.stop(character, conversation_id)
-                raise ScreenPerceptionError("request_cancelled", stage="chat")
-            if prompt_observer is not None:
-                prompt_observer(prompt)
-            yield material.direct_text
-            return
-        prompt = await run_sync(
-            with_tool_material,
-            prompt,
-            material,
-            lambda messages: llm_router.count_input_tokens(
-                messages, settings=model_settings
-            ),
-            model_settings.chat_context_tokens - max_output_tokens,
-        )
-        prompt = await run_sync(chat_service.with_life_context, character, prompt)
+    prompt = prepared.prompt
     if prompt_observer is not None:
         prompt_observer(prompt)
+    if prepared.direct_reply is not None:
+        yield prepared.direct_reply
+        return
     # ツール結果と生活状態を反映した、生成へ渡す最終promptを計測する。
     diagnostic("prompt_preparation_completed")
     diagnostic("prompt_message_count", len(prompt.messages))
@@ -374,7 +334,7 @@ async def _stream_core_reply(
         raise ScreenPerceptionError("request_cancelled", stage="chat")
     async for text in llm_router.stream_response(
         prompt,
-        max_output_tokens=max_output_tokens,
+        max_output_tokens=prepared.max_output_tokens,
         settings=model_settings,
         latency_sensitive=True,
     ):
