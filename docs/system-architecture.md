@@ -506,6 +506,18 @@ loopに固定した候補を資格・関連性・schema容量で絞り、専用`
 結果は秘密情報・生エラーを除いた非信頼データとして現在turnの最終回答へ統合する。
 履歴・Memory Formationには既存privacy方針を通った通常の会話だけが渡り、native payloadは渡らない。
 
+Toolを含む応答準備は、HTTP全量生成とLiveKit音声streamが同じ呼出境界を使う。
+`_chat_runtime.py`の`ChatService.prepare_reply`が、現在の画面materialの確認、Life Stateを含まない
+基底promptの構築、Tool結果用の入力token枠の確保、`ToolService`によるTool実行、結果のprompt合成、
+その後のLife State追加、準備完了時の画面material・履歴access再検証までを担い、最終prompt・
+出力token上限・任意のTool直接返信を不変な結果として返す。同期I/Oは`run_sync`経由のままとし、
+event loopへ移さない。HTTP側は`generate_reply_async`がこの結果を受けて全量Inferenceを呼び、
+履歴のstart/complete/fail、screen lineage・provenance記録、Memory Formation投入を従来どおり所有する。
+音声側は`main.py::_stream_core_reply`が`confirmation_resume_scope`、最終prompt observer、音声診断、
+`llm_router.stream_response`による逐次生成、stream中の画面/履歴access再検証を担い、終端永続化は
+Conversation Coreのpersistence adapterが所有する。この共通化は#3の応答準備整理の一部であり、
+Runner/SDKやPydantic AIの導入、#3全体の完了を意味しない。
+
 MRTRの追加情報は既存contextで補える場合に再開し、不足時は通常の入力欄・音声で質問する。
 入力待ちは同じsnapshot・grant・budget・bindingを最大10分保持する。停止・会話切替・音声切断で破棄し、
 回答中のbarge-inでは古い音声を止めつつ入力待ちを保つ。Target未設定なら通常会話を維持する。
