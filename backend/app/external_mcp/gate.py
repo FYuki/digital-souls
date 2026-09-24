@@ -8,7 +8,7 @@ import time
 from collections import Counter, deque
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, AsyncIterator, Callable, Iterator
+from typing import TYPE_CHECKING, AsyncIterator, Callable, Iterator, Literal, cast
 from uuid import uuid4
 from app.addon_action.models import ActionInvocation, ApprovalTicket, ExecutionScene
 
@@ -23,6 +23,8 @@ from .models import (
     validate_arguments,
     validate_contract,
 )
+from .execution import ExecutionPreparation, normalize_execution_input
+from .result_classification import classify_mcp_failure, classify_native_payload
 from .ports import (
     BindingValidatorPort,
     CapabilitySource,
@@ -538,14 +540,10 @@ class ExecutionGate:
             "audit": {"character_id": loop.context.character_id},
         }
         try:
-            try:
-                arguments = json.loads(encode(arguments))
-                original_arguments = arguments
-                responses = (
-                    json.loads(encode(responses)) if responses is not None else None
-                )
-            except (ValueError, TypeError):
-                raise MCPFailure("validation", "invalid_arguments") from None
+            normalized = normalize_execution_input(arguments, responses)
+            original_arguments = normalized.original_arguments
+            arguments = normalized.arguments
+            responses = normalized.responses
             if connection_id not in loop.snapshots:
                 raise MCPFailure("policy", "snapshot_not_granted")
             snapshot, generation = loop.snapshots[connection_id]
@@ -687,10 +685,24 @@ class ExecutionGate:
                 effective["concurrency"] == "parallel" and "force_serial" not in rules
             )
             retry = effective["retry"] == "read_once" and "disable_retry" not in rules
-            async with self._locks[connection_id].hold(parallel):
+            preparation = ExecutionPreparation(
+                connection_id=connection_id,
+                operation=operation,
+                kind=cast(Literal["tool", "resource"], kind),
+                arguments=arguments,
+                responses=responses,
+                binding_id=binding_id,
+                generation=generation,
+                policy=policy,
+                effective=effective,
+                rules=rules,
+                parallel=parallel,
+                retry=retry,
+            )
+            async with self._locks[connection_id].hold(preparation.parallel):
                 with self._execution(connection_id):
                     payload: Json
-                    for attempt in range(2 if retry else 1):
+                    for attempt in range(2 if preparation.retry else 1):
                         source = self._live(loop, connection_id, generation)
                         if (
                             policy["resource_binding_required"]
@@ -777,7 +789,7 @@ class ExecutionGate:
                                 )
                             break
                         except MCPFailure as error:
-                            if retry and attempt == 0 and error.retryable:
+                            if preparation.retry and attempt == 0 and error.retryable:
                                 result["retry_count"] = 1
                                 continue
                             if error.category in {"transport", "protocol", "auth"}:
@@ -787,6 +799,13 @@ class ExecutionGate:
                     result["native_payload"] = payload
                     if payload.get("resultType") == "input_required":
                         self._live(loop, connection_id, generation)
+                    classification = classify_native_payload(
+                        payload,
+                        claimed_action=claimed_action is not None,
+                        dispatch_started=dispatch_started,
+                    )
+                    dispatch_started = classification.dispatch_started
+                    if classification.outcome == "input_required":
                         request_state = payload.get("requestState")
                         requests = payload.get("inputRequests") or {}
                         if (
@@ -794,14 +813,6 @@ class ExecutionGate:
                             and not isinstance(request_state, str)
                         ) or not isinstance(requests, dict):
                             raise MCPFailure("protocol", "invalid_input_required")
-                        if any(
-                            not isinstance(request, dict)
-                            or request.get("method") != "elicitation/create"
-                            for request in requests.values()
-                        ):
-                            raise MCPFailure(
-                                "policy", "required_capability_unsupported"
-                            )
                         interaction_id = str(uuid4())
                         self._pending[interaction_id] = _Pending(
                             loop_id,
@@ -810,21 +821,27 @@ class ExecutionGate:
                             kind,
                             encode(original_arguments),
                             request_state,
-                            frozenset(requests),
+                            classification.request_ids or frozenset(),
                             (pending.rounds if pending else 0) + 1,
                             binding_id,
                         )
                         result.update(
                             outcome="input_required", interaction_id=interaction_id
                         )
-                    elif payload.get("isError"):
-                        # Toolの失敗応答だけでは、部分的な副作用が無かったと保証できない。
-                        result.update(
-                            outcome="result_unknown" if claimed_action else "failed",
-                            error_category="tool_error",
-                        )
                     else:
-                        result["outcome"] = "succeeded"
+                        result.update(
+                            outcome=classification.outcome,
+                            **(
+                                {"error_category": classification.error_category}
+                                if classification.error_category is not None
+                                else {}
+                            ),
+                            **(
+                                {"native_error": classification.native_error}
+                                if classification.native_error is not None
+                                else {}
+                            ),
+                        )
         except ConfirmationNeeded as error:
             self._confirmation_pending[error.request_id] = _ConfirmationPending(
                 loop_id,
@@ -843,38 +860,16 @@ class ExecutionGate:
                 error_category="policy",
             )
         except MCPFailure as error:
-            outcome = "failed"
-            if (
-                claimed_action
-                and dispatch_started
-                and error.request_started is not False
-            ):
-                outcome = "result_unknown"
-            elif (
-                error.category == "recovery"
-                and error.code == "scope_has_unresolved_action"
-            ):
-                outcome = "result_unknown"
-            elif error.code in {"budget_exceeded", "rate_limit_exceeded"}:
-                outcome = "budget_exceeded"
-            elif error.code in {
-                "tasks_unsupported",
-                "unsupported_auth",
-                "required_capability_unsupported",
-            }:
-                outcome = "unsupported"
-            elif error.code == "user_stopped":
-                outcome = "cancel_requested"
-            elif error.code == "confirmation_wait_ended":
-                outcome = "deferred"
-            elif error.code == "action_rejected":
-                outcome = "rejected"
-            if error.request_started is False:
-                dispatch_started = False
+            classification = classify_mcp_failure(
+                error,
+                claimed_action=claimed_action is not None,
+                dispatch_started=dispatch_started,
+            )
+            dispatch_started = classification.dispatch_started
             result.update(
-                outcome=outcome,
-                error_category=error.category,
-                native_error={"code": error.code},
+                outcome=classification.outcome,
+                error_category=classification.error_category,
+                native_error=classification.native_error,
             )
         except BaseException:
             if claimed_action is not None:
