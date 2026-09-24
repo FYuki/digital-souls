@@ -5,7 +5,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from app.livekit_transport.production import _ConversationCoreBridge
+from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 from tests.voice_capture_test_support import begin_capture, finish_capture
 
 

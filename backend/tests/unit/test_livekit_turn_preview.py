@@ -2,7 +2,10 @@ import asyncio
 
 import pytest
 
-import app.livekit_transport.production as production
+import app.livekit_transport.microphone_bridge as microphone_bridge
+
+# STT preview snapshotは16kHz・16bit monoの0.8秒分。維持対象の契約値として固定する。
+STT_TURN_PREVIEW_PCM_BYTES = int(16_000 * 2 * 0.8)
 
 
 from tests.voice_capture_test_support import begin_capture
@@ -24,11 +27,11 @@ def test_additional_audio_can_change_preview_without_waiting_for_speech_end(init
                 requests.append(request)
                 return initial if len(requests) == 1 else "take_turn"
 
-        bridge = production._ConversationCoreBridge(
+        bridge = microphone_bridge._ConversationCoreBridge(
             Core(), lambda op: tasks.append(asyncio.create_task(op))
         )
         start(bridge)
-        window = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+        window = b"\x00\x10" * (STT_TURN_PREVIEW_PCM_BYTES // 2)
         bridge.receive_microphone(window)
         await asyncio.gather(*tasks)
         assert len(requests) == 1
@@ -56,13 +59,13 @@ def test_preview_retries_are_bounded_even_when_no_decision_is_possible():
                 requests.append(request)
                 return "indeterminate"
 
-        bridge = production._ConversationCoreBridge(
+        bridge = microphone_bridge._ConversationCoreBridge(
             Core(), lambda op: tasks.append(asyncio.create_task(op))
         )
         start(bridge)
         for _ in range(10):
             bridge.receive_microphone(
-                b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+                b"\x00\x10" * (STT_TURN_PREVIEW_PCM_BYTES // 2)
             )
             await asyncio.gather(*tasks)
         assert len(requests) == 3
@@ -87,11 +90,11 @@ def test_inflight_preview_serializes_new_audio_and_does_not_restart_closed_captu
                 await release.wait()
                 return "backchannel"
 
-        bridge = production._ConversationCoreBridge(
+        bridge = microphone_bridge._ConversationCoreBridge(
             Core(), lambda op: tasks.append(asyncio.create_task(op))
         )
         start(bridge)
-        window = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+        window = b"\x00\x10" * (STT_TURN_PREVIEW_PCM_BYTES // 2)
         bridge.receive_microphone(window)
         await entered.wait()
         bridge.receive_microphone(window)
@@ -118,11 +121,11 @@ def test_cancelled_preview_does_not_resurrect_queued_audio():
                 entered.set()
                 await asyncio.Future()
 
-        bridge = production._ConversationCoreBridge(
+        bridge = microphone_bridge._ConversationCoreBridge(
             Core(), lambda op: tasks.append(asyncio.create_task(op))
         )
         start(bridge)
-        window = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+        window = b"\x00\x10" * (STT_TURN_PREVIEW_PCM_BYTES // 2)
         bridge.receive_microphone(window)
         await entered.wait()
         bridge.receive_microphone(window)
@@ -157,9 +160,9 @@ def test_queued_final_transcription_runs_before_an_additional_preview():
                 calls.append("final")
                 return asyncio.create_task(finish_final.wait())
 
-        bridge = production._ConversationCoreBridge(Core(), lambda op: tasks.append(asyncio.create_task(op)))
+        bridge = microphone_bridge._ConversationCoreBridge(Core(), lambda op: tasks.append(asyncio.create_task(op)))
         start(bridge)
-        window = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+        window = b"\x00\x10" * (STT_TURN_PREVIEW_PCM_BYTES // 2)
         bridge.receive_microphone(window)
         await entered.wait()
         bridge.receive_microphone(window)
@@ -185,9 +188,9 @@ def test_no_new_preview_after_input_stops_accepting_audio():
                 return "backchannel"
 
         core = Core()
-        bridge = production._ConversationCoreBridge(core, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge = microphone_bridge._ConversationCoreBridge(core, lambda op: tasks.append(asyncio.create_task(op)))
         start(bridge)
-        window = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+        window = b"\x00\x10" * (STT_TURN_PREVIEW_PCM_BYTES // 2)
         bridge.receive_microphone(window)
         await asyncio.gather(*tasks)
         core.accepting_input = False

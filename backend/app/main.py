@@ -48,7 +48,7 @@ from app.screen_perception.service import (
 from app.tool_use.service import ToolService
 
 if TYPE_CHECKING:
-    from app.livekit_transport.production import (
+    from app.livekit_transport.core_factory import (
         ProductionConversationCoreSessionFactory,
     )
 
@@ -135,7 +135,7 @@ def _create_app_chat_service(
 def _create_core_session_factory(
     runtime: ApplicationRuntime,
 ) -> ProductionConversationCoreSessionFactory:
-    from app.livekit_transport.production import (
+    from app.livekit_transport.core_factory import (
         ProductionConversationCoreSessionFactory,
     )
 

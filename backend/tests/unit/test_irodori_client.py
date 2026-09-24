@@ -116,7 +116,7 @@ def test_cancel_closes_http_wait_without_retry_or_fallback() -> None:
 
 
 def test_factory_waits_for_readiness_and_freezes_voice_until_new_session(monkeypatch) -> None:
-    from app.livekit_transport import production
+    from app.livekit_transport import core_factory
     async def scenario() -> None:
         selected = voice()
         entered, release = asyncio.Event(), asyncio.Event()
@@ -133,8 +133,8 @@ def test_factory_waits_for_readiness_and_freezes_voice_until_new_session(monkeyp
             async def publish(self, event): pass
         class History:
             def open_session(self, *args): return object()
-        monkeypatch.setattr(production, "load_tts_config", lambda _: selected)
-        factory = production.ProductionConversationCoreSessionFactory(
+        monkeypatch.setattr(core_factory, "load_tts_config", lambda _: selected)
+        factory = core_factory.ProductionConversationCoreSessionFactory(
             transcriber=SimpleNamespace(transcribe=lambda _audio: ""), synthesizer=object(), history_service=History(),
             irodori_client=Client(), generate_reply=lambda *_: "応答。",
         )
@@ -158,11 +158,11 @@ def test_factory_waits_for_readiness_and_freezes_voice_until_new_session(monkeyp
 
 
 def test_unready_service_never_creates_a_conversation(monkeypatch) -> None:
-    from app.livekit_transport import production
+    from app.livekit_transport import core_factory
     async def scenario() -> None:
         async def reject(_): raise IrodoriTtsError("tts_not_ready")
-        monkeypatch.setattr(production, "load_tts_config", lambda _: voice())
-        factory = production.ProductionConversationCoreSessionFactory(
+        monkeypatch.setattr(core_factory, "load_tts_config", lambda _: voice())
+        factory = core_factory.ProductionConversationCoreSessionFactory(
             transcriber=object(), synthesizer=object(),
             history_service=SimpleNamespace(open_session=lambda *_: pytest.fail("must not open")),
             irodori_client=SimpleNamespace(ensure_ready=reject),

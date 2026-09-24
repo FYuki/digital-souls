@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.livekit_transport.production import _ConversationCoreBridge
+from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 
 
 @pytest.mark.parametrize("old_stage", ["transcription", "preview"])

@@ -51,7 +51,7 @@ from app.voice_measurement_memory import formation_disabled
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from app.livekit_transport.production import (
+    from app.livekit_transport.core_factory import (
         ProductionConversationCoreSessionFactory,
     )
 
