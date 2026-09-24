@@ -157,6 +157,7 @@
     entry.context.characterId === $conversationController.character
     && entry.context.conversationId === $conversationController.selectedConversationId
     && (entry.sessionId === voiceSnapshot.sessionId || entry.status === 'sending' || entry.status === 'confirming')) ?? null
+  $: voiceHistory.reconcileSavedTurns(conversationController.selectedContext(), $conversationController.turns)
   $: visibleVoiceHistory = visibleVoiceTurns($voiceHistory, selectedVoiceContext === null ? null : {
     character: selectedVoiceContext.characterId,
     conversationId: selectedVoiceContext.conversationId,
