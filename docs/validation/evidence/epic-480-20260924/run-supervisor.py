@@ -1,7 +1,10 @@
-import os,sys,pathlib,subprocess,socket,time,json,uuid,signal,urllib.request
-root=pathlib.Path(sys.argv[1])
-py='/home/asa/dev/digital-souls-worktrees/issue-358/backend/.venv/bin/python'
-run=pathlib.Path('/tmp')/('ds486-it2-'+time.strftime('%Y%m%d-%H%M%S'));run.mkdir(mode=0o700)
+import os,sys,pathlib,subprocess,socket,time,json,uuid,signal,urllib.request,shutil,tempfile
+root=pathlib.Path(sys.argv[1]).resolve(strict=True)
+py=root/'backend/.venv/bin/python'
+if not py.is_file():raise SystemExit('指定worktreeのbackend/.venvにPythonがありません')
+node=shutil.which('node')
+if node is None:raise SystemExit('PATH上にNode.jsがありません')
+run=pathlib.Path(tempfile.mkdtemp(prefix='ds486-it2-'))
 print('EVIDENCE',str(run),flush=True)
 for port,typ in [(15195,socket.SOCK_STREAM),(19495,socket.SOCK_STREAM),(19586,socket.SOCK_STREAM),(19587,socket.SOCK_STREAM),(19588,socket.SOCK_DGRAM)]:
  with socket.socket(socket.AF_INET,typ) as s:
@@ -13,8 +16,6 @@ env.update(SCREEN_ALLOWED_ORIGIN='http://127.0.0.1:15195',PYTHON_DOTENV_DISABLED
 for role in ['CHAT','PRIVACY','MEMORY_EXTRACTION','MEMORY_CONSOLIDATION']:
  env['INFERENCE_TARGET_'+role]='ollama/gemma4:e4b';env['INFERENCE_TARGET_'+role+'_MAX_INPUT_TOKENS']='7168' if role=='CHAT' else '7680';env['INFERENCE_TARGET_'+role+'_MAX_OUTPUT_TOKENS']='1024' if role=='CHAT' else '512'
 env['INFERENCE_TARGET_EMBEDDING']='ollama/nomic-embed-text:latest';env['INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS']='8192'
-venv=root/'backend/.venv'
-if not venv.exists():venv.symlink_to('/home/asa/dev/digital-souls-worktrees/issue-358/backend/.venv',target_is_directory=True)
 sys.path.insert(0,str(root/'scripts/voice_quality'))
 from run_pilot import measurement_revision
 revision=measurement_revision(root)
@@ -35,7 +36,6 @@ try:
   except Exception:time.sleep(.2)
  else:raise RuntimeError('backend startup timeout')
  env.update(DS_BACKEND_ORIGIN='http://127.0.0.1:19495',LIVEKIT_TEST_FRONTEND_URL='http://127.0.0.1:15195')
- env['PATH']='/home/asa/.nvm/versions/node/v24.15.0/bin:'+env['PATH']
  profile={'reportSchemaVersion':1,'effectiveProfile':'integration-voice','readyGate':{'baseUrl':'http://127.0.0.1:19495','host':'127.0.0.1','port':19495},'dependencies':{},'capabilities':['text-chat-real','voice-chat-real']}
  for name,port in [('backend',19495),('frontend',15195),('ollama',11434),('voicevox',50021),('whisper',50022),('livekit',19586)]:
   profile['dependencies'][name]={'mode':'real','source':'managed' if name in ('backend','frontend') else 'external','baseUrl':'http://127.0.0.1:'+str(port)}
@@ -43,7 +43,6 @@ try:
  profile['derivedEnvironment']={k:env[k] for k in ['DS_ENVIRONMENT_ID','DS_DATA_DIR','RAG_ENABLED']};pp=run/'resolved-profile.json';pp.write_text(json.dumps(profile));env['DS_PROFILE_REPORT']=str(pp)
  with urllib.request.urlopen('http://127.0.0.1:19495/health/ready',timeout=20) as response:
   result['backend_readiness_status']=response.status
- node='/home/asa/.nvm/versions/node/v24.15.0/bin/node'
  with (run/'vite.log').open('w') as log:
   frontend=subprocess.Popen([node,'node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','15195','--strictPort'],cwd=root/'frontend',env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
  for _ in range(100):
@@ -85,4 +84,9 @@ finally:
  if container:
   logs=subprocess.run(['docker','logs',container],capture_output=True,text=True);(run/'livekit.log').write_text(logs.stdout+logs.stderr)
   subprocess.run(['docker','stop','--time','5',container],capture_output=True,check=True);subprocess.run(['docker','rm',container],capture_output=True,check=True)
- result['owned_resources_stopped']=True;(run/'result.json').write_text(json.dumps(result,indent=2));print('RESULT',json.dumps(result),flush=True)
+ config.unlink(missing_ok=True)
+ result['owned_resources_stopped']=True
+ (run/'result.json').write_text(json.dumps(result,indent=2))
+ print('RESULT',json.dumps(result),flush=True)
+if result.get('browser_voice_exit') != 0 or 'exception' in result:
+ raise SystemExit(1)
