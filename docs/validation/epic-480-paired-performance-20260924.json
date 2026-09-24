@@ -1,6 +1,6 @@
 [
   {
-    "evidence": "/tmp/ds486-it2-20260924-204312",
+    "evidence": "docs/validation/evidence/epic-480-20260924/baseline/pair-1",
     "revision": "64a9d60c4d03eff73ec1f9708852fbb111bb5628",
     "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
     "fixture": {
@@ -24,7 +24,7 @@
     "outcome": "success"
   },
   {
-    "evidence": "/tmp/ds486-it2-20260924-204332",
+    "evidence": "docs/validation/evidence/epic-480-20260924/updated/pair-1",
     "revision": "37ace8107c7fff53f1c9e4a29b6344b2fcb77956",
     "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
     "fixture": {
@@ -48,7 +48,7 @@
     "outcome": "success"
   },
   {
-    "evidence": "/tmp/ds486-it2-20260924-204348",
+    "evidence": "docs/validation/evidence/epic-480-20260924/baseline/pair-2",
     "revision": "64a9d60c4d03eff73ec1f9708852fbb111bb5628",
     "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
     "fixture": {
@@ -72,7 +72,7 @@
     "outcome": "success"
   },
   {
-    "evidence": "/tmp/ds486-it2-20260924-204402",
+    "evidence": "docs/validation/evidence/epic-480-20260924/updated/pair-2",
     "revision": "37ace8107c7fff53f1c9e4a29b6344b2fcb77956",
     "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
     "fixture": {
@@ -96,7 +96,7 @@
     "outcome": "success"
   },
   {
-    "evidence": "/tmp/ds486-it2-20260924-204419",
+    "evidence": "docs/validation/evidence/epic-480-20260924/baseline/pair-3",
     "revision": "64a9d60c4d03eff73ec1f9708852fbb111bb5628",
     "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
     "fixture": {
@@ -120,7 +120,7 @@
     "outcome": "success"
   },
   {
-    "evidence": "/tmp/ds486-it2-20260924-204437",
+    "evidence": "docs/validation/evidence/epic-480-20260924/updated/pair-3",
     "revision": "37ace8107c7fff53f1c9e4a29b6344b2fcb77956",
     "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
     "fixture": {

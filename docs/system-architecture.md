@@ -127,7 +127,7 @@ ChatService生成・Conversation Core session factory生成・画面context検�
 | `HistoryResources` | `ConversationHistoryConfig`、maintenance lease参照、WAL cleanup、`ConversationHistoryRepository`、`ConversationLifecycleService`、`UiSettingsRepository`、`ConversationHistoryService` | Privacy（履歴Service構築時に`history_sanitizer`を注入） | `conversation_history_repository`、`conversation_lifecycle_service`、`ui_settings_repository` | `repository_published`、`lifecycle_published`、`ui_settings_published` | 公開済みフラグに応じて3属性を削除。leaseは`ApplicationRuntime`が全資源回収後に解放し、owner自身は解放しない |
 | `PrivacyResources` | `MemoryPolicy`、決定論的`PrivacyScanner`、`HistorySanitizer`、semantic classifierとその推論client | Inference（classifier clientがrouter・settings・model digest解決を利用） | `semantic_privacy_classifier` | `classifier_published` | `classifier_client.close()`、`classifier_published`時に`semantic_privacy_classifier`削除 |
 | `MemoryResources` | 記憶repository群（approved・episodic・読み取り・outbox・temporary record）、`ResponseProvenanceRecorder`、`MemoryInferenceEmbedder`、`MemoryIndexSync`、`SemanticStore`、各管理Service、推論client3種（extractor・consolidation・consolidation classifier）、`MemoryCandidateExtractor`、preference・formation・index・consolidation各scheduler | History（repository・設定）、Inference（router・settings）、Privacy（scanner・classifier・policy） | `semantic_store`、`semantic_memory_management`、`persona_memory_provider`、`episodic_memory_management`、`addon_record_provider`、`rag_admission_service` | `semantic_published`、`persona_published`、`episodic_published`、`addon_published`、`rag_published`、`formation_started`、`index_started`、`consolidation_started` | `consolidation_started`→`formation_started`→`index_started`の順に、開始済みのschedulerだけを停止。公開済みフラグに応じて6属性を削除し、3 clientをclose |
-| `ToolResources` | `ToolRuntime`（management・events・action_policy・service）、routing service | Inference（routerと`TOOL_ROUTING` targetの有無）、Privacy（scanner）、Memory（consolidation用classifier） | `addon_manager`、`event_source`、`action_policy`、`tool_service`（`TOOL_ROUTING`未設定時は`None`） | 専用フラグは持たず、`runtime`構築済みが回収判定 | `runtime.close()`、`tool_service`・`action_policy`を削除。`addon_manager`・`event_source`は現行では`app.state`に残る |
+| `ToolResources` | `ToolRuntime`（management・events・action_policy・service）、routing service | Inference（routerと`TOOL_ROUTING` targetの有無）、Privacy（scanner）、Memory（consolidation用classifier） | `addon_manager`、`event_source`、`notifications`、`action_policy`、`tool_service`（`TOOL_ROUTING`未設定時は`None`） | 専用フラグは持たず、`runtime`構築済みが回収判定 | `runtime.close()`後、`addon_manager`・`event_source`・`notifications`・`tool_service`・`action_policy`を削除 |
 | `LifeResources` | `LifeSettings`、`LifeStore`（character-life.db）、`LifeService`（Cognition・Privacy・Formation含む）、`LifeRuntime`（DBOS）、`LifeContext` | Inference（`CHARACTER_LIFE` target必須）、Tool（gate・sanitizer・bindings）、History（履歴repositoryによるforeground確認）、Memory（privacy classifier） | `character_life_runtime`（有効かつstart成功時のみ） | `started`（`runtime.start()`成功後のみTrue） | `started`かつ`runtime`存在時だけ`runtime.close()`し`character_life_runtime`を削除。無効時は構築・公開しない |
 | `ScreenResources` | `ScreenHttpSecurity`、`ScreenPerceptionService`（Vision client・routing policy・context検証） | Inference（router・settings・registry）。context検証は`main.py` wiring経由で履歴repositoryを参照する | `screen_http_security`、`screen_perception_service` | `published` | `published`時に2属性を削除 |
 | `ChatResources` | `ChatService`、既定chat service resolver | `main.py` wiring経由でPrivacy・History・Memory・Tool・Life | `chat_service` | `published`、`resolver_registered` | `published`時に`chat_service`削除、`resolver_registered`時に既定resolverを解除 |
@@ -162,7 +162,7 @@ ChatService生成・Conversation Core session factory生成・画面context検�
    10. `history.build_service`：privacy sanitizerを注入して履歴Serviceを構築
    11. `life.load_settings`と`life.check_enabled`：有効時は`CHARACTER_LIFE` targetを要求
    12. `tools.build`→`tools.publish_addons`→`tools.start`→`tools.publish_service`：
-       addon3属性公開・ToolRuntime起動・`tool_service`公開
+       addon4属性公開・ToolRuntime起動・`tool_service`公開
    13. `life.start_if_enabled`：有効時のみLife構築・start・`character_life_runtime`公開
    14. `chat.publish`：wiring経由でChatServiceを生成し`chat_service`公開
    15. `audio.build_pipeline`：`audio_pipeline_service`公開
@@ -179,8 +179,8 @@ ChatService生成・Conversation Core session factory生成・画面context検�
    1. `livekit_resources`構築済みなら`bootstrap_service.cancel_all_preparations`→
       `runtime_manager.stop_all`→`api.aclose`
    2. `life.started`なら`runtime.close`し、`character_life_runtime`を削除
-   3. `tools.runtime`構築済みなら`runtime.close`し、`tool_service`・`action_policy`を削除
-      （`addon_manager`・`event_source`は現行では`app.state`に残る）
+   3. `tools.runtime`構築済みなら`runtime.close`し、`addon_manager`・`event_source`・
+      `notifications`・`tool_service`・`action_policy`を削除
    4. `consolidation_started`ならconsolidation schedulerを停止
    5. `formation_started`ならformation schedulerを停止
    6. `index_started`ならindex schedulerを停止
@@ -514,8 +514,9 @@ loopに固定した候補を資格・関連性・schema容量で絞り、専用`
 Toolを含む応答準備は、HTTP全量生成とLiveKit音声streamが同じ呼出境界を使う。
 `_chat_runtime.py`の`ChatService.prepare_reply`が、現在の画面materialの確認、Life Stateを含まない
 基底promptの構築、Tool結果用の入力token枠の確保、`ToolService`によるTool実行、結果のprompt合成、
-その後のLife State追加、準備完了時の画面material・履歴access再検証までを担い、最終prompt・
-出力token上限・任意のTool直接返信を不変な結果として返す。同期I/Oは`run_sync`経由のままとし、
+通常経路ではLife Stateを追加し、準備完了時に画面material・履歴accessを再検証する。
+Tool直接返信ではLife Stateを追加せず、直接返信前に画面material・履歴accessを再検証する。
+最終prompt・出力token上限・任意のTool直接返信を不変な結果として返す。同期I/Oは`run_sync`経由のままとし、
 event loopへ移さない。HTTP側は`generate_reply_async`がこの結果を受けて全量Inferenceを呼び、
 履歴のstart/complete/fail、screen lineage・provenance記録、Memory Formation投入を従来どおり所有する。
 音声側は`main.py::_stream_core_reply`が`confirmation_resume_scope`、最終prompt observer、音声診断、
