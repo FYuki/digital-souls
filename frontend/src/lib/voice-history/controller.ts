@@ -258,10 +258,18 @@ export const createVoiceHistoryController = (
     }
 
     if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
-      store.update((state) => (
-        state.live?.responseId === null ? { ...state, live: null } : state
-      ))
-      return { pendingInputAccepted: false, pendingInputResolved: true }
+      const discardedId = event.utterance_id
+      let matched = false
+      store.update((state) => {
+        const live = state.live
+        if (live === null
+          || live.context.character !== context.character
+          || live.context.conversationId !== context.conversationId
+          || !live.sourceUtteranceIds.includes(discardedId)) return state
+        matched = true
+        return live.responseId === null ? { ...state, live: null } : state
+      })
+      return { pendingInputAccepted: false, pendingInputResolved: matched }
     }
 
     return { pendingInputAccepted: false, pendingInputResolved: false }

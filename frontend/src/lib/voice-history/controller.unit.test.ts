@@ -705,6 +705,31 @@ describe('VoiceHistoryController', () => {
     expect(get(controller).live).toBeNull()
   })
 
+  test('ignores a discarded utterance unrelated to the pending turn', () => {
+    const { controller } = createHarness()
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '残す質問'), contextA, [])
+
+    const result = controller.receive(utteranceDiscarded(SECOND_UTTERANCE_ID), contextA, [])
+
+    expect(result).toEqual({ pendingInputAccepted: false, pendingInputResolved: false })
+    expect(get(controller).live).toMatchObject({
+      responseId: null,
+      sourceUtteranceIds: [UTTERANCE_ID],
+      userContent: '残す質問',
+    })
+  })
+
+  test('ignores a discarded utterance from another conversation', () => {
+    const { controller } = createHarness()
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '残す質問'), contextA, [])
+    const contextB: VoiceSessionContext = { characterId: 'miori', conversationId: 'conversation-b' }
+
+    const result = controller.receive(utteranceDiscarded(UTTERANCE_ID), contextB, [])
+
+    expect(result).toEqual({ pendingInputAccepted: false, pendingInputResolved: false })
+    expect(get(controller).live).toMatchObject({ userContent: '残す質問' })
+  })
+
   test('keeps a response-bound live turn when the utterance is discarded', () => {
     const { controller } = createHarness()
     controller.receive(utteranceFinalized(UTTERANCE_ID, '応答済みの質問'), contextA, [])
