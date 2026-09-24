@@ -11,7 +11,7 @@ from app.conversation_core import ConversationCoreSession, InputSource, TextDelt
 from app.conversation_core.adapters import ConversationHistoryPersistenceAdapter
 from app.conversation_history.service import ConversationHistorySession
 from app.livekit_transport.delivery import decode_core_event
-from app.livekit_transport.production import _ConversationCoreDelivery
+from app.livekit_transport.core_delivery import _ConversationCoreDelivery
 from app.livekit_transport.text_input import TextInputReceiver
 from app.privacy.contracts import (
     ConversationHistoryAction, ConversationHistoryDecision, HistoryDecisionReasonCode,

@@ -316,6 +316,7 @@ def _install_owner_stubs(
 def _install_livekit_stubs(
     monkeypatch: pytest.MonkeyPatch, events: list[str], *, fail_configure: bool
 ) -> None:
+    import app.livekit_transport.core_factory as core_factory
     import app.livekit_transport.production as production
     import app.stt.remote_whisper_client as whisper_client
     import app.tts.voicevox_client as voicevox_client
@@ -340,7 +341,7 @@ def _install_livekit_stubs(
         lambda *_args, **_kwargs: StubSynthesizer(),
     )
     monkeypatch.setattr(
-        production,
+        core_factory,
         "ProductionConversationCoreSessionFactory",
         lambda **_kwargs: object(),
     )
@@ -1290,6 +1291,7 @@ class TestOptionalResources:
     def test_disabled_livekit_is_not_constructed(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        import app.livekit_transport.core_factory as core_factory
         import app.livekit_transport.production as production
         from app import main
 
@@ -1297,7 +1299,7 @@ class TestOptionalResources:
         # 構築されなければCore用のSTT/TTS clientやcallbackも生成されない。
         session_factory = Mock(side_effect=AssertionError("must not construct"))
         monkeypatch.setattr(
-            production,
+            core_factory,
             "ProductionConversationCoreSessionFactory",
             session_factory,
         )

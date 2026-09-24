@@ -5,7 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.livekit_transport.production import ProductionRuntimeManager
+from app.livekit_transport.session_runtime import ProductionRuntimeManager
+
+from tests.livekit_session_test_support import session_owner
 
 
 def test_livekit_confirmation_requires_matching_live_binding_and_waits_for_question():
@@ -19,7 +21,9 @@ def test_livekit_confirmation_requires_matching_live_binding_and_waits_for_quest
 
         core.finalize_utterance = finalize
         manager = object.__new__(ProductionRuntimeManager)
-        manager._core_sessions = {"voice": core}
+        manager._owners = {
+            "voice": session_owner("voice", core_session=core)
+        }
         reservation = SimpleNamespace(
             request={"character_id": "miori", "conversation_id": "conversation"}
         )
@@ -94,7 +98,9 @@ def test_confirmation_expiring_while_core_lock_is_held_does_not_register_input()
             llm=Llm(), tts=RecordingTts(),
         )
         manager = object.__new__(ProductionRuntimeManager)
-        manager._core_sessions = {"voice": core}
+        manager._owners = {
+            "voice": session_owner("voice", core_session=core)
+        }
         manager._sessions = {"voice": SimpleNamespace(request={
             "character_id": "miori", "conversation_id": "conversation",
         })}

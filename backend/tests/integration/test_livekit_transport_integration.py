@@ -89,7 +89,8 @@ def _send_core_from_test_app(client, session_id: str, payload: bytes) -> None:
 async def _wait_until_test_app_session_is_available(runtime, session_id: str) -> None:
     deadline = asyncio.get_running_loop().time() + STATE_WAIT_TIMEOUT_SECONDS
     while True:
-        coordinator = runtime._coordinators.get(session_id)
+        owner = runtime._owners.get(session_id)
+        coordinator = owner.coordinator if owner is not None else None
         if coordinator is not None and coordinator.phase == "available":
             return
         if asyncio.get_running_loop().time() >= deadline:
@@ -578,11 +579,11 @@ def test_real_livekit_sustained_microphone_keeps_core_delivery_available(client)
 
             async def verify_real_input() -> None:
                 runtime = client.app.state.livekit_runtime_manager
-                bridge = runtime._core_bridges[session_id]
+                bridge = runtime._owners[session_id].bridge
                 assert bridge._voice_input.grant.track_sid == publication.sid
                 # reader、実CPU VAD、capture前のprerollまでPCMが届いている。
                 assert bridge._microphone_received_bytes >= 16000 * 2 * 3
-                monitor = runtime._microphone_integrities[(session_id, publication.sid)]
+                monitor = runtime._owners[session_id].readers._integrities[publication.sid]
                 # 初期warm-up後の3秒を実SDKのOpus統計で確認する。
                 try:
                     await monitor.verify(16000, 16000 * 4)

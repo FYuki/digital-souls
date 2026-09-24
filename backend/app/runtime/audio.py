@@ -25,8 +25,10 @@ from app.voice_metrics import (
 if TYPE_CHECKING:
     from fastapi import FastAPI
     from app.conversation_history.repository import ConversationHistoryRepository
-    from app.livekit_transport.production import (
+    from app.livekit_transport.core_factory import (
         ProductionConversationCoreSessionFactory,
+    )
+    from app.livekit_transport.production import (
         ProductionResources,
     )
     from app.model_settings import ModelSettings

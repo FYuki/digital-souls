@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from app.livekit_transport.delivery import TerminalProtocolError, decode_core_event
-from app.livekit_transport.production import _ConversationCoreBridge
+from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 from app.voice_input.pipeline import AudioInputFault
 
 

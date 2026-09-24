@@ -12,10 +12,27 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.conversation_core import CoreEvent
+from app.livekit_transport import (
+    core_delivery,
+    core_factory,
+    microphone_bridge,
+    microphone_reader,
+    production_sdk,
+    session_runtime,
+)
 from app.livekit_transport.bootstrap import BootstrapTimeoutError
 
 from tests.conversation_core_test_support import make_pcm16_wav
+from tests.livekit_session_test_support import runtime_shell, session_owner
 from tests.voice_capture_test_support import begin_capture, finish_capture, capture_harness
+
+# LiveKit音声経路の変更対象外契約値。module移動ではなく値そのものを固定する。
+PCM_SAMPLE_RATE = 48_000
+PCM_CHANNELS = 1
+STT_TURN_PREVIEW_PCM_BYTES = int(16_000 * 2 * 0.8)
+STT_MICROPHONE_PREROLL_BYTES = 16_000 * 2 * 2
+STT_MAX_OPEN_CAPTURES = 4
 
 
 def _runtime_module(contract: str):
@@ -46,22 +63,6 @@ class NoopCoreSession:
 class NoopCoreSessionFactory:
     def create(self, **_request: object) -> NoopCoreSession:
         return NoopCoreSession()
-
-
-def _runtime_shell(production):
-    runtime = object.__new__(production.ProductionRuntimeManager)
-    runtime._rooms = {}
-    runtime._coordinators = {}
-    runtime._session_tasks = {}
-    runtime._participant_event_tails = {}
-    runtime._ready = {}
-    runtime._audio_sources = {}
-    runtime._core_sessions = {}
-    runtime._core_bridges = {}
-    runtime._microphone_integrities = {}
-    runtime._core_port = object()
-    runtime._cleanup_states = {}
-    return runtime
 
 
 async def _drain_asyncio_tasks(tasks: set[asyncio.Task[None]]) -> None:
@@ -134,7 +135,6 @@ def test_microphone_observation_is_throttled_to_one_per_second() -> None:
 def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
     monkeypatch,
 ) -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
     events: list[tuple[str, object]] = []
     response_ids: list[str] = []
@@ -235,15 +235,15 @@ def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
         yield "の応答"
         yield "\n"
 
-    monkeypatch.setattr(production, "load_tts_config", load_tts_config)
+    monkeypatch.setattr(core_factory, "load_tts_config", load_tts_config)
     coordinator = RecordingCoordinator()
-    delivery = production._ConversationCoreDelivery(
+    delivery = core_delivery._ConversationCoreDelivery(
         coordinator=coordinator,
-        audio_source=production._LiveKitPcmAudioSource(RtcAudioSource()),
+        audio_source=core_delivery._LiveKitPcmAudioSource(RtcAudioSource()),
         character_participant_id="40000000-0000-4000-8000-000000000010",
         character_id="miori",
     )
-    factory = production.ProductionConversationCoreSessionFactory(
+    factory = core_factory.ProductionConversationCoreSessionFactory(
         transcriber=Transcriber(),
         synthesizer=Synthesizer(),
         history_service=HistoryService(),
@@ -340,7 +340,6 @@ def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
 def test_cancel_clears_character_audio_queue_and_next_response_can_publish(
     monkeypatch,
 ) -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     operations: list[tuple[str, object]] = []
 
     class AudioFrame:
@@ -375,15 +374,15 @@ def test_cancel_clears_character_audio_queue_and_next_response_can_publish(
         def clear_queue(self) -> None:
             operations.append(("clear", None))
 
-    delivery = production._ConversationCoreDelivery(
+    delivery = core_delivery._ConversationCoreDelivery(
         coordinator=Coordinator(),
-        audio_source=production._LiveKitPcmAudioSource(RtcAudioSource()),
+        audio_source=core_delivery._LiveKitPcmAudioSource(RtcAudioSource()),
         character_participant_id="40000000-0000-4000-8000-000000000010",
         character_id="miori",
     )
 
     async def exercise() -> None:
-        await delivery.publish(production.CoreEvent(
+        await delivery.publish(CoreEvent(
             type="response_audio_segment",
             session_id="20000000-0000-4000-8000-000000000010",
             response_id="50000000-0000-4000-8000-000000000010",
@@ -391,13 +390,13 @@ def test_cancel_clears_character_audio_queue_and_next_response_can_publish(
             audio=b"\x01\x00" * 4,
             text_range=(0, 2),
         ))
-        await delivery.publish(production.CoreEvent(
+        await delivery.publish(CoreEvent(
             type="response_cancelled",
             session_id="20000000-0000-4000-8000-000000000010",
             response_id="50000000-0000-4000-8000-000000000010",
             reason="user_request",
         ))
-        await delivery.publish(production.CoreEvent(
+        await delivery.publish(CoreEvent(
             type="response_audio_segment",
             session_id="20000000-0000-4000-8000-000000000010",
             response_id="50000000-0000-4000-8000-000000000020",
@@ -417,7 +416,6 @@ def test_cancel_clears_character_audio_queue_and_next_response_can_publish(
 
 @pytest.mark.parametrize("source", ["speech", "text"])
 def test_response_started_character_speaker_passes_schema_validation(source) -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     coordinator_module = importlib.import_module("app.livekit_transport.coordinator")
     session_id = "20000000-0000-4000-8000-000000000010"
     participant_id = "40000000-0000-4000-8000-000000000010"
@@ -462,7 +460,7 @@ def test_response_started_character_speaker_passes_schema_validation(source) -> 
             participant_sid="PA_user",
             room_sid="RM_room",
         )
-        delivery = production._ConversationCoreDelivery(
+        delivery = core_delivery._ConversationCoreDelivery(
             coordinator=coordinator,
             audio_source=AudioSource(),
             character_participant_id=participant_id,
@@ -474,7 +472,7 @@ def test_response_started_character_speaker_passes_schema_validation(source) -> 
             session_id=session_id, character_id="miori", measurement_kind="automated_test",
             record=None, clock_ns=lambda: 1,
         ))
-        event = production.CoreEvent(
+        event = CoreEvent(
             type="response_started",
             session_id=session_id,
             response_id="50000000-0000-4000-8000-000000000010",
@@ -502,7 +500,6 @@ def test_response_started_character_speaker_passes_schema_validation(source) -> 
 
 
 def test_production_core_bridge_routes_microphone_and_control_to_one_session() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     delivery = importlib.import_module("app.livekit_transport.delivery")
     calls: list[tuple[str, object]] = []
     tasks: set[asyncio.Task[None]] = set()
@@ -535,7 +532,7 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
         task.add_done_callback(tasks.discard)
 
     session = RecordingCoreSession()
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         session, schedule
     )
 
@@ -624,7 +621,6 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
 
 
 def test_production_core_bridge_keeps_preroll_before_speech_started() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     requests: list[dict[str, object]] = []
     tasks: set[asyncio.Task[None]] = set()
 
@@ -645,7 +641,7 @@ def test_production_core_bridge_keeps_preroll_before_speech_started() -> None:
         tasks.add(task)
         task.add_done_callback(tasks.discard)
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         RecordingCoreSession(), schedule
     )
 
@@ -666,7 +662,6 @@ def test_production_core_bridge_keeps_preroll_before_speech_started() -> None:
 
 
 def test_production_core_bridge_keeps_full_vad_confirmation_window() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     requests: list[dict[str, object]] = []
     tasks: set[asyncio.Task[None]] = set()
 
@@ -684,12 +679,12 @@ def test_production_core_bridge_keeps_full_vad_confirmation_window() -> None:
         tasks.add(task)
         task.add_done_callback(tasks.discard)
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         RecordingCoreSession(), schedule
     )
     preroll = bytes(
         index % 251
-        for index in range(production.STT_MICROPHONE_PREROLL_BYTES + 257)
+        for index in range(STT_MICROPHONE_PREROLL_BYTES + 257)
     )
 
     async def exercise() -> None:
@@ -706,15 +701,14 @@ def test_production_core_bridge_keeps_full_vad_confirmation_window() -> None:
     asyncio.run(exercise())
 
     # 実fixtureの最大確認遅れ1,440msと到達差の余裕を保持し、2秒を上限とする。
-    retained_ms = production.STT_MICROPHONE_PREROLL_BYTES * 1000 / (16_000 * 2)
+    retained_ms = STT_MICROPHONE_PREROLL_BYTES * 1000 / (16_000 * 2)
     assert 1600 <= retained_ms <= 2000
     assert requests[0]["audio"] == (
-        preroll[-production.STT_MICROPHONE_PREROLL_BYTES :] + b"live"
+        preroll[-STT_MICROPHONE_PREROLL_BYTES :] + b"live"
     )
 
 
 def test_production_core_bridge_previews_first_audio_before_speech_end() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     previews: list[dict[str, object]] = []
     tasks: set[asyncio.Task[None]] = set()
 
@@ -730,7 +724,7 @@ def test_production_core_bridge_previews_first_audio_before_speech_end() -> None
         tasks.add(task)
         task.add_done_callback(tasks.discard)
 
-    bridge = production._ConversationCoreBridge(RecordingCoreSession(), schedule)
+    bridge = microphone_bridge._ConversationCoreBridge(RecordingCoreSession(), schedule)
 
     async def exercise() -> None:
         bridge._begin_capture({
@@ -739,7 +733,7 @@ def test_production_core_bridge_previews_first_audio_before_speech_end() -> None
                     "utterance_id": "30000000-0000-4000-8000-000000000021",
                     "response_id": "50000000-0000-4000-8000-000000000021",
                 })
-        bridge.receive_microphone(b"x" * production.STT_TURN_PREVIEW_PCM_BYTES)
+        bridge.receive_microphone(b"x" * STT_TURN_PREVIEW_PCM_BYTES)
         await _drain_asyncio_tasks(tasks)
 
     asyncio.run(exercise())
@@ -748,7 +742,7 @@ def test_production_core_bridge_previews_first_audio_before_speech_end() -> None
     assert previews == [
         {
             "utterance_id": "30000000-0000-4000-8000-000000000021",
-            "audio": b"x" * production.STT_TURN_PREVIEW_PCM_BYTES,
+            "audio": b"x" * STT_TURN_PREVIEW_PCM_BYTES,
             "interrupted_response_id": "50000000-0000-4000-8000-000000000021",
         }
     ]
@@ -757,7 +751,6 @@ def test_production_core_bridge_previews_first_audio_before_speech_end() -> None
 @pytest.mark.parametrize("prefix_samples", [0, 32_000])
 def test_turn_preview_waits_for_audio_after_signal_onset(prefix_samples: int) -> None:
     """長い静音のpre-rollを800msの発話冒頭として数えない。"""
-    production = importlib.import_module("app.livekit_transport.production")
     previews: list[bytes] = []
     tasks: set[asyncio.Task[None]] = set()
 
@@ -773,8 +766,8 @@ def test_turn_preview_waits_for_audio_after_signal_onset(prefix_samples: int) ->
         tasks.add(task)
         task.add_done_callback(tasks.discard)
 
-    bridge = production._ConversationCoreBridge(Core(), schedule)
-    voice = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+    bridge = microphone_bridge._ConversationCoreBridge(Core(), schedule)
+    voice = b"\x00\x10" * (STT_TURN_PREVIEW_PCM_BYTES // 2)
 
     async def exercise() -> None:
         bridge.receive_microphone(bytes(prefix_samples * 2))
@@ -794,21 +787,20 @@ def test_turn_preview_waits_for_audio_after_signal_onset(prefix_samples: int) ->
 
 
 def test_turn_preview_does_not_transcribe_silence_or_closed_input() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     scheduled: list[Awaitable[None]] = []
 
     class Core:
         accepting_input = True
 
     core = Core()
-    bridge = production._ConversationCoreBridge(core, scheduled.append)
+    bridge = microphone_bridge._ConversationCoreBridge(core, scheduled.append)
     bridge._begin_capture({"type": "speech_started", "speaker": {"role": "user"},
                               "utterance_id": "preview-silence", "response_id": "old"})
-    bridge.receive_microphone(bytes(production.STT_TURN_PREVIEW_PCM_BYTES * 2))
+    bridge.receive_microphone(bytes(STT_TURN_PREVIEW_PCM_BYTES * 2))
     try:
         assert scheduled == []
         core.accepting_input = False
-        bridge.receive_microphone(b"\x00\x10" * production.STT_TURN_PREVIEW_PCM_BYTES)
+        bridge.receive_microphone(b"\x00\x10" * STT_TURN_PREVIEW_PCM_BYTES)
         assert scheduled == []
     finally:
         for operation in scheduled:
@@ -816,7 +808,6 @@ def test_turn_preview_does_not_transcribe_silence_or_closed_input() -> None:
 
 
 def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     scheduled: list[Awaitable[None]] = []
     stopped: list[str] = []
 
@@ -824,7 +815,7 @@ def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
         async def confirm_playback(self, **_request: object) -> bool:
             return True
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         RecordingCoreSession(),
         scheduled.append,
         stop_audio=stopped.append,
@@ -850,7 +841,6 @@ def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
 
 
 def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     scheduled: list[Awaitable[None]] = []
     operations: list[str] = []
 
@@ -859,7 +849,7 @@ def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -
             operations.append("confirm")
             raise ValueError("invalid playback prefix")
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         RejectingCoreSession(),
         scheduled.append,
         stop_audio=lambda _response_id: operations.append("stop"),
@@ -885,7 +875,6 @@ def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -
 
 
 def test_production_core_bridge_bounds_waiting_stt_and_discards_overflow() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     tasks: set[asyncio.Task[None]] = set()
     started: list[str] = []
     discarded: list[tuple[str, str]] = []
@@ -911,7 +900,7 @@ def test_production_core_bridge_bounds_waiting_stt_and_discards_overflow() -> No
         tasks.add(task)
         task.add_done_callback(tasks.discard)
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         RecordingCoreSession(), schedule
     )
 
@@ -946,7 +935,6 @@ def test_production_core_bridge_bounds_waiting_stt_and_discards_overflow() -> No
 
 
 def test_production_core_bridge_does_not_transcribe_after_core_disconnect() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     tasks: set[asyncio.Task[None]] = set()
 
     class DisconnectedCoreSession:
@@ -960,7 +948,7 @@ def test_production_core_bridge_does_not_transcribe_after_core_disconnect() -> N
         tasks.add(task)
         task.add_done_callback(tasks.discard)
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         DisconnectedCoreSession(), schedule
     )
 
@@ -989,7 +977,6 @@ def test_production_core_bridge_does_not_transcribe_after_core_disconnect() -> N
 
 
 def test_production_core_bridge_discards_malformed_control_events() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     calls: list[dict[str, object]] = []
     scheduled: list[Awaitable[None]] = []
 
@@ -1000,7 +987,7 @@ def test_production_core_bridge_discards_malformed_control_events() -> None:
         async def confirm_playback(self, **request: object) -> None:
             calls.append(request)
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         RecordingCoreSession(), scheduled.append
     )
 
@@ -1091,7 +1078,6 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm():
 
 
 def test_production_core_bridge_discards_oldest_unfinished_capture_at_limit() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     discarded: list[dict[str, object]] = []
     scheduled: list[Awaitable[None]] = []
 
@@ -1099,12 +1085,12 @@ def test_production_core_bridge_discards_oldest_unfinished_capture_at_limit() ->
         async def discard_utterance(self, **request: object) -> None:
             discarded.append(request)
 
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         RecordingCoreSession(), scheduled.append
     )
     utterance_ids = [
         f"30000000-0000-4000-8000-{index:012d}"
-        for index in range(production.STT_MAX_OPEN_CAPTURES + 1)
+        for index in range(STT_MAX_OPEN_CAPTURES + 1)
     ]
 
     async def exercise() -> None:
@@ -1159,7 +1145,7 @@ def test_production_core_bridge_does_not_attach_later_pcm_to_an_empty_ended_boun
 
 
 def test_production_core_bridge_rejects_prebind_client_boundaries():
-    from app.livekit_transport.production import ProductionCoreEventInbox
+    from app.livekit_transport.core_delivery import ProductionCoreEventInbox
     from app.livekit_transport.delivery import TerminalProtocolError
     async def exercise():
         bridge, requests, tasks = capture_harness()
@@ -1195,8 +1181,7 @@ def test_production_core_bridge_does_not_use_client_text_without_pcm():
 
 
 def test_production_core_event_inbox_delivers_each_session_in_order_once() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
-    inbox = production.ProductionCoreEventInbox()
+    inbox = core_delivery.ProductionCoreEventInbox()
     session_id = "20000000-0000-4000-8000-000000000010"
     other_session_id = "20000000-0000-4000-8000-000000000011"
     received: list[str] = []
@@ -1230,8 +1215,7 @@ def test_production_core_event_inbox_delivers_each_session_in_order_once() -> No
 
 
 def test_production_core_event_inbox_unbind_discards_session_state() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
-    inbox = production.ProductionCoreEventInbox()
+    inbox = core_delivery.ProductionCoreEventInbox()
     session_id = "20000000-0000-4000-8000-000000000010"
     received: list[str] = []
 
@@ -1259,7 +1243,6 @@ def test_production_core_event_inbox_unbind_discards_session_state() -> None:
 def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
     monkeypatch,
 ) -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     token_requests: list[dict[str, object]] = []
     published_tracks: list[tuple[object, object]] = []
 
@@ -1295,8 +1278,8 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
 
     class AudioSource:
         def __init__(self, sample_rate: int, channels: int) -> None:
-            assert sample_rate == production.PCM_SAMPLE_RATE
-            assert channels == production.PCM_CHANNELS
+            assert sample_rate == PCM_SAMPLE_RATE
+            assert channels == PCM_CHANNELS
 
         async def capture_frame(self, frame: object) -> None:
             del frame
@@ -1333,7 +1316,7 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
         def notify(self, payload: bytes) -> None:
             del payload
 
-    runtime = production.ProductionRuntimeManager(
+    runtime = session_runtime.ProductionRuntimeManager(
         livekit_url="ws://127.0.0.1:7880",
         signer=RecordingSigner(),
         room_manager=Rooms(),
@@ -1374,7 +1357,6 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
 
 
 def test_microphone_observer_returns_when_bridge_was_released(monkeypatch) -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     stream_closed = False
 
     class AudioStream:
@@ -1412,17 +1394,20 @@ def test_microphone_observer_returns_when_bridge_was_released(monkeypatch) -> No
     async def publish_data(_payload: bytes, _topic: str) -> None:
         return None
 
-    runtime = _runtime_shell(production)
+    owner = session_owner(
+        "released-session",
+        room=object(),
+        coordinator=Coordinator(),
+        publish_data=publish_data,
+    )
+    readers = microphone_reader.MicrophoneReaderOwner(owner)
 
     asyncio.run(
-        runtime._observe_microphone(
-            "released-session",
+        readers.observe(
             SimpleNamespace(sid="TR_released", get_stats=AsyncMock(return_value=[])),
-            Coordinator(),
             "user-identity",
             "participant-sid",
             1,
-            publish_data,
         )
     )
 
@@ -1433,7 +1418,6 @@ def test_microphone_observer_returns_when_bridge_was_released(monkeypatch) -> No
 def test_serialized_participant_events_and_generation_microphone_ownership(
     monkeypatch, mode,
 ) -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
     user_identity = f"user-{session_id}"
     callbacks: dict[str, object] = {}
@@ -1488,8 +1472,8 @@ def test_serialized_participant_events_and_generation_microphone_ownership(
 
     class AudioSource:
         def __init__(self, sample_rate: int, channels: int) -> None:
-            assert sample_rate == production.PCM_SAMPLE_RATE
-            assert channels == production.PCM_CHANNELS
+            assert sample_rate == PCM_SAMPLE_RATE
+            assert channels == PCM_CHANNELS
 
         async def capture_frame(self, frame: object) -> None:
             del frame
@@ -1530,7 +1514,7 @@ def test_serialized_participant_events_and_generation_microphone_ownership(
         def notify(self, payload: bytes) -> None:
             del payload
 
-    runtime = production.ProductionRuntimeManager(
+    runtime = session_runtime.ProductionRuntimeManager(
         livekit_url="ws://127.0.0.1:7880",
         signer=RecordingSigner(),
         room_manager=Rooms(),
@@ -1545,17 +1529,13 @@ def test_serialized_participant_events_and_generation_microphone_ownership(
         reader_events: list[tuple[str, int]] = []
 
         async def observe_microphone(
-            owned_session_id: str,
+            _readers: object,
             track: object,
-            coordinator: object,
             participant_identity: str,
             participant_sid: str,
             generation: int,
-            publish_data: object,
         ) -> None:
-            del coordinator, publish_data
             observations.append((participant_identity, participant_sid, track))
-            assert owned_session_id == session_id
             observation_started.set()
             reader_events.append(("started", generation))
             if mode == "generation_sync":
@@ -1564,7 +1544,11 @@ def test_serialized_participant_events_and_generation_microphone_ownership(
                 finally:
                     reader_events.append(("closed", generation))
 
-        runtime._observe_microphone = observe_microphone
+        monkeypatch.setattr(
+            microphone_reader.MicrophoneReaderOwner,
+            "observe",
+            observe_microphone,
+        )
         await runtime.start_runtime(
             {
                 "session_id": session_id,
@@ -1576,7 +1560,7 @@ def test_serialized_participant_events_and_generation_microphone_ownership(
             }
         )
         await asyncio.wait_for(observation_started.wait(), timeout=0.5)
-        coordinator = runtime._coordinators[session_id]
+        coordinator = runtime._owners[session_id].coordinator
 
         if mode == "generation_sync":
             async def sync(generation: int) -> None:
@@ -1617,8 +1601,130 @@ def test_serialized_participant_events_and_generation_microphone_ownership(
     asyncio.run(exercise())
 
 
+def test_production_stop_releases_running_microphone_reader_resources(monkeypatch) -> None:
+    session_id = "20000000-0000-4000-8000-000000000010"
+
+    async def exercise() -> None:
+        stream_entered = asyncio.Event()
+        stream_closed = asyncio.Event()
+        monitor_started = asyncio.Event()
+        monitor_finished = asyncio.Event()
+        release_stream = asyncio.Event()
+        disconnect_calls: list[str] = []
+        deleted_sessions: list[str] = []
+        deleted_rooms: list[str] = []
+        cleanup_reasons: list[str] = []
+
+        class AudioStream:
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
+                pass
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                stream_entered.set()
+                await release_stream.wait()
+                raise StopAsyncIteration
+
+            async def aclose(self) -> None:
+                stream_closed.set()
+                release_stream.set()
+
+        rtc = SimpleNamespace(AudioStream=AudioStream)
+        monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+        monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
+
+        original_monitor_run = microphone_reader.MicrophoneIntegrity.run
+
+        async def run_monitor(monitor) -> None:
+            monitor_started.set()
+            try:
+                await original_monitor_run(monitor)
+            finally:
+                monitor_finished.set()
+
+        monkeypatch.setattr(
+            microphone_reader.MicrophoneIntegrity, "run", run_monitor
+        )
+
+        class Coordinator:
+            generation = 0
+            phase = "available"
+
+            def is_current_participant(self, **_request: object) -> bool:
+                return True
+
+            async def cleanup(self, reason: str) -> None:
+                cleanup_reasons.append(reason)
+                await runtime._cleanup_owned_session(session_id)
+
+        class Bridge:
+            async def close_audio(self) -> None:
+                return None
+
+            async def receive_microphone_frame(self, *args: object, **kwargs: object) -> None:
+                del args, kwargs
+
+        class Room:
+            async def disconnect(self) -> None:
+                disconnect_calls.append(session_id)
+
+        class Sessions:
+            async def delete(self, deleted_session_id: str) -> None:
+                deleted_sessions.append(deleted_session_id)
+
+        class Rooms:
+            async def delete(self, room_name: str) -> None:
+                deleted_rooms.append(room_name)
+
+        async def publish_data(_payload: bytes, _topic: str) -> None:
+            return None
+
+        runtime = session_runtime.ProductionRuntimeManager(
+            livekit_url="ws://127.0.0.1:7880",
+            signer=object(),
+            room_manager=Rooms(),
+            session_repository=Sessions(),
+            core_port=object(),
+        )
+        owner = session_runtime.ProductionSessionOwner(session_id)
+        owner.room = Room()
+        owner.coordinator = Coordinator()
+        owner.bridge = Bridge()
+        owner.publish_data = publish_data
+        runtime._owners[session_id] = owner
+
+        track = SimpleNamespace(
+            sid="TR_running",
+            get_stats=AsyncMock(return_value=[]),
+        )
+        await owner.readers.subscribe(track, "user", "participant")
+        assert owner.tasks is not None
+        reader_tasks = tuple(owner.tasks)
+        assert len(reader_tasks) == 1
+        reader_task = reader_tasks[0]
+        await asyncio.wait_for(stream_entered.wait(), timeout=0.5)
+        await asyncio.wait_for(monitor_started.wait(), timeout=0.5)
+        assert "TR_running" in owner.readers._integrities
+
+        await asyncio.wait_for(runtime.stop(session_id), timeout=0.5)
+
+        assert stream_closed.is_set()
+        assert monitor_finished.is_set()
+        assert reader_task.done()
+        assert reader_task.cancelled()
+        assert owner.readers._integrities == {}
+        assert runtime._owners == {}
+        assert cleanup_reasons == ["explicit"]
+        assert disconnect_calls == [session_id]
+        assert deleted_sessions == [session_id]
+        assert deleted_rooms == [f"voice-{session_id}"]
+
+    asyncio.run(exercise())
+
+
 def test_production_stop_releases_local_ownership_before_external_cleanup_finishes() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
     async def exercise() -> None:
@@ -1642,35 +1748,39 @@ def test_production_stop_releases_local_ownership_before_external_cleanup_finish
                 delete_started.set()
                 await release_cleanup.wait()
 
-        runtime = _runtime_shell(production)
+        runtime = runtime_shell()
         runtime._sessions = Sessions()
         runtime._room_manager = Rooms()
-        runtime._rooms = {session_id: HangingRoom()}
-        runtime._coordinators = {}
-        runtime._session_tasks = {session_id: set()}
-        runtime._ready = {session_id: asyncio.Event()}
-        runtime._audio_sources = {session_id: SimpleNamespace(aclose=AsyncMock())}
-        runtime._cleanup_states = {}
+        runtime._owners = {
+            session_id: session_owner(
+                session_id,
+                room=HangingRoom(),
+                tasks=set(),
+                audio_source=SimpleNamespace(aclose=AsyncMock()),
+            )
+        }
 
         stop_task = asyncio.create_task(runtime.stop(session_id))
         await asyncio.wait_for(disconnect_started.wait(), timeout=0.5)
         await asyncio.wait_for(delete_started.wait(), timeout=0.5)
 
         assert deleted_sessions == [session_id]
-        assert session_id not in runtime._rooms
-        assert session_id not in runtime._session_tasks
-        assert session_id not in runtime._ready
-        assert session_id not in runtime._audio_sources
+        owner = runtime._owners[session_id]
+        # 外部cleanupの完了を待たずにlocal ownershipだけ先に切り離す。
+        assert owner.room is None
+        assert owner.tasks is None
+        assert owner.ready is None
+        assert owner.audio_source is None
+        assert owner.cleanup is not None
 
         release_cleanup.set()
         await asyncio.wait_for(stop_task, timeout=0.5)
-        assert runtime._cleanup_states == {}
+        assert session_id not in runtime._owners
 
     asyncio.run(exercise())
 
 
 def test_production_room_cleanup_survives_cancelled_stop() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
     async def exercise() -> None:
@@ -1694,15 +1804,17 @@ def test_production_room_cleanup_survives_cancelled_stop() -> None:
             async def disconnect(self) -> None:
                 return None
 
-        runtime = _runtime_shell(production)
+        runtime = runtime_shell()
         runtime._sessions = Sessions()
         runtime._room_manager = Rooms()
-        runtime._rooms = {session_id: Room()}
-        runtime._coordinators = {}
-        runtime._session_tasks = {session_id: set()}
-        runtime._ready = {session_id: asyncio.Event()}
-        runtime._audio_sources = {session_id: SimpleNamespace(aclose=AsyncMock())}
-        runtime._cleanup_states = {}
+        runtime._owners = {
+            session_id: session_owner(
+                session_id,
+                room=Room(),
+                tasks=set(),
+                audio_source=SimpleNamespace(aclose=AsyncMock()),
+            )
+        }
 
         stop_task = asyncio.create_task(runtime.stop(session_id))
         await asyncio.wait_for(delete_started.wait(), timeout=0.5)
@@ -1711,19 +1823,20 @@ def test_production_room_cleanup_survives_cancelled_stop() -> None:
             await stop_task
 
         assert active_rooms == {f"voice-{session_id}"}
+        # 呼出側のcancelでRoom削除taskを失わず、次のstopへ引き継ぐ。
+        assert runtime._owners[session_id].cleanup is not None
         release_delete.set()
         await asyncio.wait_for(runtime.stop_all(), timeout=0.5)
 
         assert active_rooms == set()
         assert delete_calls == [f"voice-{session_id}"]
-        assert runtime._cleanup_states == {}
+        assert runtime._owners == {}
 
     asyncio.run(exercise())
 
 
 def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None:
     bootstrap = importlib.import_module("app.livekit_transport.bootstrap")
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
     async def exercise() -> None:
@@ -1757,7 +1870,7 @@ def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None
         )
         rooms = Rooms()
         signer = Signer()
-        runtime = production.ProductionRuntimeManager(
+        runtime = session_runtime.ProductionRuntimeManager(
             livekit_url="ws://127.0.0.1:7880",
             signer=signer,
             room_manager=rooms,
@@ -1766,10 +1879,9 @@ def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None
         )
 
         async def connect(owned_session_id: str) -> None:
-            runtime._rooms[owned_session_id] = Room()
-            runtime._coordinators.pop(owned_session_id, None)
-            runtime._session_tasks[owned_session_id] = set()
-            runtime._ready[owned_session_id] = asyncio.Event()
+            runtime._owners[owned_session_id] = session_owner(
+                owned_session_id, room=Room(), tasks=set()
+            )
 
         async def wait_until_ready(owned_session_id: str) -> None:
             raise RuntimeError(f"runtime {owned_session_id} is not ready")
@@ -1797,20 +1909,22 @@ def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None
             await asyncio.wait_for(bootstrap_task, timeout=1.5)
 
         assert sessions.contains(session_id) is False
-        assert runtime._rooms == {}
+        owner = runtime._owners[session_id]
+        # bootstrap timeout後もRoom削除の所有は失われない。
+        assert owner.room is None
+        assert owner.cleanup is not None
         assert active_rooms == {f"voice-{session_id}"}
 
         release_delete.set()
         await asyncio.wait_for(runtime.stop_all(), timeout=0.5)
 
         assert active_rooms == set()
-        assert runtime._cleanup_states == {}
+        assert session_id not in runtime._owners
 
     asyncio.run(exercise())
 
 
 def test_production_room_manager_accepts_already_deleted_room(monkeypatch) -> None:
-    production = importlib.import_module("app.livekit_transport.production")
 
     class MissingRoomError(RuntimeError):
         code = "not_found"
@@ -1829,15 +1943,14 @@ def test_production_room_manager_accepts_already_deleted_room(monkeypatch) -> No
         def DeleteRoomRequest(*, room: str) -> str:
             return room
 
-    monkeypatch.setattr(production, "_livekit_api_module", lambda: ApiModule)
+    monkeypatch.setitem(sys.modules, "livekit.api", ApiModule)
 
     asyncio.run(
-        production.ProductionRoomManager(ApiClient()).delete("voice-session")
+        production_sdk.ProductionRoomManager(ApiClient()).delete("voice-session")
     )
 
 
 def test_production_stop_all_retries_failed_room_cleanup() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
     async def exercise() -> None:
@@ -1857,14 +1970,10 @@ def test_production_stop_all_retries_failed_room_cleanup() -> None:
                 active_rooms.remove(room_name)
 
         rooms = Rooms()
-        runtime = _runtime_shell(production)
+        runtime = runtime_shell()
         runtime._sessions = Sessions()
         runtime._room_manager = rooms
-        runtime._rooms = {}
-        runtime._coordinators = {}
-        runtime._session_tasks = {}
-        runtime._ready = {}
-        runtime._cleanup_states = {}
+        # live資源を持たないsessionでも、失敗したRoom削除はownerへ残る。
 
         from app.livekit_transport.errors import RoomCleanupPendingError
 
@@ -1872,17 +1981,17 @@ def test_production_stop_all_retries_failed_room_cleanup() -> None:
             await runtime.stop(session_id)
 
         assert active_rooms == {f"voice-{session_id}"}
+        assert runtime._owners[session_id].cleanup is not None
         await runtime.stop_all()
 
         assert rooms.calls == 2
         assert active_rooms == set()
-        assert runtime._cleanup_states == {}
+        assert runtime._owners == {}
 
     asyncio.run(exercise())
 
 
 def test_production_stop_does_not_classify_local_failure_as_room_pending() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
     async def exercise() -> None:
@@ -1912,14 +2021,12 @@ def test_production_stop_does_not_classify_local_failure_as_room_pending() -> No
                 disconnect_calls += 1
 
         rooms = Rooms()
-        runtime = _runtime_shell(production)
+        runtime = runtime_shell()
         runtime._sessions = Sessions()
         runtime._room_manager = rooms
-        runtime._rooms = {session_id: Room()}
-        runtime._coordinators = {}
-        runtime._session_tasks = {session_id: set()}
-        runtime._ready = {session_id: asyncio.Event()}
-        runtime._cleanup_states = {}
+        runtime._owners = {
+            session_id: session_owner(session_id, room=Room(), tasks=set())
+        }
 
         with pytest.raises(
             RuntimeError, match="session binding deletion failed"
@@ -1929,18 +2036,18 @@ def test_production_stop_does_not_classify_local_failure_as_room_pending() -> No
         from app.livekit_transport.errors import RoomCleanupPendingError
 
         assert not isinstance(raised.value, RoomCleanupPendingError)
-        assert session_id in runtime._cleanup_states
+        owner = runtime._owners[session_id]
+        assert owner.cleanup is not None
         await runtime.stop_all()
         assert runtime._sessions.calls == 2
         assert rooms.calls == 2
         assert disconnect_calls == 1
-        assert runtime._cleanup_states == {}
+        assert runtime._owners == {}
 
     asyncio.run(exercise())
 
 
 def test_production_stop_retries_only_failed_room_disconnect() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
     async def exercise() -> None:
@@ -1969,14 +2076,12 @@ def test_production_stop_retries_only_failed_room_disconnect() -> None:
         sessions = Sessions()
         rooms = Rooms()
         room = Room()
-        runtime = _runtime_shell(production)
+        runtime = runtime_shell()
         runtime._sessions = sessions
         runtime._room_manager = rooms
-        runtime._rooms = {session_id: room}
-        runtime._coordinators = {}
-        runtime._session_tasks = {session_id: set()}
-        runtime._ready = {session_id: asyncio.Event()}
-        runtime._cleanup_states = {}
+        runtime._owners = {
+            session_id: session_owner(session_id, room=room, tasks=set())
+        }
 
         with pytest.raises(RuntimeError, match="room disconnect failed"):
             await runtime.stop(session_id)
@@ -1986,7 +2091,7 @@ def test_production_stop_retries_only_failed_room_disconnect() -> None:
         assert sessions.calls == 1
         assert rooms.calls == 1
         assert room.calls == 2
-        assert runtime._cleanup_states == {}
+        assert runtime._owners == {}
 
     asyncio.run(exercise())
 
@@ -1996,7 +2101,6 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
     monkeypatch, failure_stage,
 ) -> None:
     bootstrap = importlib.import_module("app.livekit_transport.bootstrap")
-    production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
     disconnected: list[str] = []
 
@@ -2052,7 +2156,7 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
     )
     rooms = Rooms()
     signer = Signer()
-    runtime = production.ProductionRuntimeManager(
+    runtime = session_runtime.ProductionRuntimeManager(
         livekit_url="ws://127.0.0.1:7880",
         signer=signer,
         room_manager=rooms,
@@ -2089,13 +2193,10 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
 
     assert sessions.contains(session_id) is False
     assert rooms.active == set()
-    assert runtime._rooms == {}
-    assert runtime._coordinators == {}
-    assert runtime._session_tasks == {}
+    assert runtime._owners == {}
     assert disconnected == [session_id]
 
     assert closed_sources == ([session_id] if failure_stage == "tts_prepare" else [])
-    assert runtime._audio_sources == {}
 
 
 def test_production_core_bridge_waits_for_each_utterances_integrity_without_a_media_tail():
@@ -2137,7 +2238,6 @@ def test_production_core_bridge_waits_for_each_utterances_integrity_without_a_me
 
 @pytest.mark.parametrize("interruption", [False, True])
 def test_backend_detection_clock_does_not_fabricate_client_onset_or_rebind_interruption(interruption) -> None:
-    from app.livekit_transport import production
     from app.livekit_transport.measurement import LiveKitMeasurementSession
 
     events = []
@@ -2147,7 +2247,7 @@ def test_backend_detection_clock_does_not_fabricate_client_onset_or_rebind_inter
     )
     if interruption:
         measurement.bind_response(response_id="old-response", source_utterance_ids=("old-utterance",))
-    bridge = production._ConversationCoreBridge(NoopCoreSession(), lambda task: None, measurement=measurement)
+    bridge = microphone_bridge._ConversationCoreBridge(NoopCoreSession(), lambda task: None, measurement=measurement)
     bridge._begin_capture({
         "type": "speech_started", "utterance_id": "new-utterance", "speaker": {"role": "user"},
         "monotonic_timestamp_ms": 1234,
@@ -2165,7 +2265,6 @@ def test_backend_detection_clock_does_not_fabricate_client_onset_or_rebind_inter
 
 
 def test_core_bridge_prepares_the_same_preroll_for_preview_and_final_stt() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     calls: list[tuple[str, bytes]] = []
     tasks: list[asyncio.Task[None]] = []
 
@@ -2182,7 +2281,7 @@ def test_core_bridge_prepares_the_same_preroll_for_preview_and_final_stt() -> No
         async def preview_turn(self, **request: object) -> None:
             calls.append(("preview", request["audio"]))
 
-    bridge = production._ConversationCoreBridge(Core(), lambda operation: tasks.append(asyncio.create_task(operation)))
+    bridge = microphone_bridge._ConversationCoreBridge(Core(), lambda operation: tasks.append(asyncio.create_task(operation)))
     original = bytes(32000 * 2) + b"\x00\x10" * 8000
     expected = bytes(5120 * 2) + b"\x00\x10" * 8000
 
@@ -2218,7 +2317,6 @@ class PreparationCoreSession:
 @pytest.mark.parametrize("fail", [False, True])
 def test_bridge_prepares_once_after_contiguous_quiet_without_ending_or_trimming_audio(fail) -> None:
     async def exercise() -> None:
-        production = importlib.import_module("app.livekit_transport.production")
         session = PreparationCoreSession(fail=fail)
         tasks: set[asyncio.Task[None]] = set()
 
@@ -2227,7 +2325,7 @@ def test_bridge_prepares_once_after_contiguous_quiet_without_ending_or_trimming_
             tasks.add(task)
             task.add_done_callback(tasks.discard)
 
-        bridge = production._ConversationCoreBridge(session, schedule)
+        bridge = microphone_bridge._ConversationCoreBridge(session, schedule)
         begin_capture(bridge, "preparation")
         # 290msの静音は準備しない。途中の有音で静音の連続時間をリセットする。
         pieces = [b"\x10\x01" * 160, bytes(16_000 * 2 * 290 // 1000),
@@ -2255,10 +2353,9 @@ def test_bridge_prepares_once_after_contiguous_quiet_without_ending_or_trimming_
 
 def test_bridge_uses_retained_pcm_quiet_only_after_confirmed_speech_start() -> None:
     async def exercise() -> None:
-        production = importlib.import_module("app.livekit_transport.production")
         session = PreparationCoreSession()
         tasks = []
-        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge = microphone_bridge._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
         original = b"\x10\x01" * 160 + bytes(9600)
         bridge.receive_microphone(original)
         assert tasks == []
@@ -2274,10 +2371,9 @@ def test_bridge_uses_retained_pcm_quiet_only_after_confirmed_speech_start() -> N
 @pytest.mark.parametrize("gate", ["interruption", "active", "capacity", "ended", "finalized"])
 def test_bridge_skips_preparation_when_not_safe(gate: str) -> None:
     async def exercise() -> None:
-        production = importlib.import_module("app.livekit_transport.production")
         session = PreparationCoreSession()
         tasks = []
-        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge = microphone_bridge._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
         begin_capture(bridge, "preparation", "old-response" if gate == "interruption" else None)
         capture = bridge._user_audio_captures[0]
         if gate == "active":
@@ -2298,10 +2394,9 @@ def test_bridge_skips_preparation_when_not_safe(gate: str) -> None:
 
 def test_scheduled_preparation_does_not_start_after_session_ends() -> None:
     async def exercise() -> None:
-        production = importlib.import_module("app.livekit_transport.production")
         session = PreparationCoreSession()
         tasks = []
-        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge = microphone_bridge._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
         begin_capture(bridge, "preparation")
         bridge.receive_microphone(bytes(9600))
         assert len(tasks) == 1
@@ -2313,13 +2408,12 @@ def test_scheduled_preparation_does_not_start_after_session_ends() -> None:
 
 
 def test_only_explicit_full_playback_confirmation_releases_output_wait():
-    production = importlib.import_module("app.livekit_transport.production")
     scheduled, confirmations = [], []
     class Session:
         async def confirm_playback(self, **_request):
             # 最後のprefix自体は既に進捗通知で確認済みでも、全出力確認は受ける。
             return False
-    bridge = production._ConversationCoreBridge(
+    bridge = microphone_bridge._ConversationCoreBridge(
         Session(), scheduled.append,
         confirm_response_playback=lambda response, sequence: confirmations.append((response, sequence)) or True,
     )
@@ -2333,17 +2427,16 @@ def test_only_explicit_full_playback_confirmation_releases_output_wait():
 
 
 def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
     records = []
     wire = []
     async def send(payload):
         wire.append(json.loads(payload))
-    delivery = production._ConversationCoreDelivery(
+    delivery = core_delivery._ConversationCoreDelivery(
         coordinator=SimpleNamespace(send_core=send), audio_source=SimpleNamespace(clear=lambda _: None),
         character_participant_id="40000000-0000-4000-8000-000000000010", character_id="miori",
     )
     delivery.attach_measurement(SimpleNamespace(record_response_event=lambda **row: records.append(row)))
-    asyncio.run(delivery.publish(production.CoreEvent(type="response_cancelled",
+    asyncio.run(delivery.publish(CoreEvent(type="response_cancelled",
         session_id="20000000-0000-4000-8000-000000000010", response_id="50000000-0000-4000-8000-000000000010",
         reason="barge_in", terminal_state_bounds_ns=(1_234_000, 1_234_900))))
     assert [(r["name"], r.get("timestamp")) for r in records] == [
@@ -2357,7 +2450,6 @@ def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() 
 @pytest.mark.parametrize("waiting_stage", ["connect", "output", "tts", "vad"])
 def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypatch, waiting_stage):
     from uuid import uuid4
-    production = importlib.import_module("app.livekit_transport.production")
 
     async def scenario():
         entered, release = asyncio.Event(), asyncio.Event()
@@ -2398,11 +2490,11 @@ def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypat
             await pause("vad")
             bridge._voice_input = SimpleNamespace(close=AsyncMock(
                 side_effect=lambda: pipeline_closed.append("vad")))
-        monkeypatch.setattr(production._ConversationCoreBridge, "prepare_audio", prepare_vad)
-        inbox = production.ProductionCoreEventInbox()
+        monkeypatch.setattr(microphone_bridge._ConversationCoreBridge, "prepare_audio", prepare_vad)
+        inbox = core_delivery.ProductionCoreEventInbox()
         bind = Mock(wraps=inbox.bind)
         monkeypatch.setattr(inbox, "bind", bind)
-        runtime = production.ProductionRuntimeManager(
+        runtime = session_runtime.ProductionRuntimeManager(
             livekit_url="ws://127.0.0.1:7880",
             signer=SimpleNamespace(issue_token=token),
             room_manager=SimpleNamespace(delete=delete),
@@ -2418,19 +2510,13 @@ def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypat
             "core_participant_id": str(uuid4()), "reconnect_grace_ms": 60_000,
         }))
         await asyncio.wait_for(entered.wait(), 1)
-        coordinator = runtime._coordinators[session_id]
+        coordinator = runtime._owners[session_id].coordinator
         # 90秒待たずに、実際のjoin期限処理とcleanupを通す。
         await coordinator._expire_after(0)
         release.set()
         with pytest.raises(RuntimeError, match="runtime startup ended"):
             await asyncio.wait_for(pending, 1)
-        assert runtime._core_sessions == {}
-        assert runtime._core_bridges == {}
-        assert runtime._audio_sources == {}
-        assert runtime._coordinators == {}
-        assert runtime._rooms == {}
-        assert runtime._ready == {}
-        assert runtime._cleanup_states == {}
+        assert runtime._owners == {}
         assert closed == ([] if waiting_stage == "connect" else ["audio"])
         assert ended == (["core"] if waiting_stage in {"tts", "vad"} else [])
         assert pipeline_closed == (["vad"] if waiting_stage == "vad" else [])
@@ -2442,7 +2528,6 @@ def test_join_expiry_during_startup_does_not_restore_cleaned_resources(monkeypat
 @pytest.mark.parametrize("ending", ["eof", "exception", "invalid_frame", "cancel"])
 def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeypatch, ending):
     """無音中のEOF・例外・不正frameでも、終了処理と入力停止を省略しない。"""
-    production = importlib.import_module("app.livekit_transport.production")
     stream_closed = False
     closed_tracks = []
     class AudioStream:
@@ -2466,7 +2551,8 @@ def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeyp
             nonlocal stream_closed
             stream_closed = True
     rtc = SimpleNamespace(AudioStream=AudioStream)
-    monkeypatch.setattr(production, "_livekit_rtc_module", lambda: rtc)
+    monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+    monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
     class Coordinator:
         generation = 1
         def is_current_participant(self, **kwargs):
@@ -2479,11 +2565,17 @@ def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeyp
     async def publish_data(*args):
         pass
     async def scenario():
-        runtime = _runtime_shell(production)
-        runtime._core_bridges["session"] = Bridge()
-        operation = runtime._observe_microphone(
-            "session", SimpleNamespace(sid="TR_first", get_stats=AsyncMock(return_value=[])),
-            Coordinator(), "user", "participant", 1, publish_data,
+        owner = session_owner(
+            "session",
+            room=object(),
+            coordinator=Coordinator(),
+            bridge=Bridge(),
+            publish_data=publish_data,
+        )
+        readers = microphone_reader.MicrophoneReaderOwner(owner)
+        operation = readers.observe(
+            SimpleNamespace(sid="TR_first", get_stats=AsyncMock(return_value=[])),
+            "user", "participant", 1,
         )
         if ending == "cancel":
             with pytest.raises(asyncio.CancelledError):
@@ -2496,7 +2588,7 @@ def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeyp
         }[ending]
         assert closed_tracks == [("TR_first", expected_reason)]
         assert stream_closed
-        assert runtime._microphone_integrities == {}
+        assert readers._integrities == {}
     asyncio.run(scenario())
 
 
@@ -2504,7 +2596,6 @@ def test_microphone_reader_termination_closes_input_and_releases_monitor(monkeyp
 def test_join_deadline_starts_only_after_all_preparation(monkeypatch, waiting_stage):
     """準備中は参加期限を消費せず、準備完了後の未参加は従来どおり終了する。"""
     from uuid import uuid4
-    production = importlib.import_module("app.livekit_transport.production")
 
     async def scenario():
         entered, release = asyncio.Event(), asyncio.Event()
@@ -2521,16 +2612,18 @@ def test_join_deadline_starts_only_after_all_preparation(monkeypatch, waiting_st
                 pass
             async def disconnect(self):
                 pass
-        monkeypatch.setattr(production, "_livekit_rtc_module", lambda: SimpleNamespace(Room=Room))
+        rtc = SimpleNamespace(Room=Room)
+        monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+        monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
         async def create(**_kwargs):
             await pause("tts")
             return NoopCoreSession()
         async def prepare_vad(_self):
             await pause("vad")
-        monkeypatch.setattr(production._ConversationCoreBridge, "prepare_audio", prepare_vad)
+        monkeypatch.setattr(microphone_bridge._ConversationCoreBridge, "prepare_audio", prepare_vad)
         room_manager = SimpleNamespace(delete=AsyncMock())
         session_repository = SimpleNamespace(delete=AsyncMock())
-        runtime = production.ProductionRuntimeManager(
+        runtime = session_runtime.ProductionRuntimeManager(
             livekit_url="ws://127.0.0.1:7880",
             signer=SimpleNamespace(issue_token=AsyncMock(return_value="character-token")),
             room_manager=room_manager,
@@ -2548,40 +2641,37 @@ def test_join_deadline_starts_only_after_all_preparation(monkeypatch, waiting_st
             "reconnect_grace_ms": 60_000,
         }))
         await asyncio.wait_for(entered.wait(), 1)
-        coordinator = runtime._coordinators[session_id]
+        coordinator = runtime._owners[session_id].coordinator
         assert coordinator._deadline_task is None
-        assert not runtime._ready[session_id].is_set()
+        assert not runtime._owners[session_id].ready.is_set()
         release.set()
         await asyncio.wait_for(pending, 1)
-        assert runtime._ready[session_id].is_set()
+        assert runtime._owners[session_id].ready.is_set()
         assert coordinator._deadline_task is not None
         await coordinator._expire_after(0)
-        assert not runtime._rooms and not runtime._coordinators
-        assert not runtime._core_sessions and not runtime._audio_sources
+        assert runtime._owners == {}
         room_manager.delete.assert_awaited_once()
         session_repository.delete.assert_awaited_once()
     asyncio.run(scenario())
 
 
 def test_readiness_wait_has_an_individual_deadline(monkeypatch):
-    production = importlib.import_module("app.livekit_transport.production")
-    monkeypatch.setattr(production, "BOOTSTRAP_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(session_runtime, "BOOTSTRAP_TIMEOUT_SECONDS", 0.01)
 
     async def scenario():
-        runtime = _runtime_shell(production)
-        runtime._ready["session"] = asyncio.Event()
+        runtime = runtime_shell()
+        runtime._owners["session"] = session_owner("session")
         with pytest.raises(BootstrapTimeoutError) as caught:
             await runtime.wait_until_ready("session")
         assert caught.value.stage == "readiness"
-        runtime._ready["session"].set()
+        runtime._owners["session"].ready.set()
         await runtime.wait_until_ready("session")
     asyncio.run(scenario())
 
 
 def test_vad_preparation_timeout_closes_late_pipeline(monkeypatch):
     import threading
-    production = importlib.import_module("app.livekit_transport.production")
-    monkeypatch.setattr(production, "BOOTSTRAP_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(microphone_bridge, "BOOTSTRAP_TIMEOUT_SECONDS", 0.01)
     release, entered, closed = threading.Event(), threading.Event(), threading.Event()
 
     def prepare():
@@ -2590,11 +2680,11 @@ def test_vad_preparation_timeout_closes_late_pipeline(monkeypatch):
             raise RuntimeError("test preparation was not released")
         return SimpleNamespace(close=closed.set)
 
-    monkeypatch.setattr(production, "check_ready", lambda: None)
-    monkeypatch.setattr(production, "VoiceInputPipeline", prepare)
+    monkeypatch.setattr(microphone_bridge, "check_ready", lambda: None)
+    monkeypatch.setattr(microphone_bridge, "VoiceInputPipeline", prepare)
 
     async def scenario():
-        bridge = production._ConversationCoreBridge(NoopCoreSession(), lambda task: None)
+        bridge = microphone_bridge._ConversationCoreBridge(NoopCoreSession(), lambda task: None)
         try:
             with pytest.raises(BootstrapTimeoutError) as caught:
                 await bridge.prepare_audio()
