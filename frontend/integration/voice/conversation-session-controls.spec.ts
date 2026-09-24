@@ -148,6 +148,9 @@ test('実音声session Aを維持してBへ通常textを送り、A復帰後の�
   await waitForPlayback(page, responseA)
   expect(await page.evaluate(id => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
     event.responseId === id && event.type === 'response_cancelled'), responseA)).toBe(false)
+  // 終端イベント後、履歴の保存結果は GET で別途確認する。
+  await page.waitForFunction(id => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+    event.responseId === id && event.type === 'response_completed'), responseA, {timeout: 60_000})
   for (const id of [a, b]) {
     const result = await page.request.get(`/api/characters/miori/conversations/${id}/turns`)
     expect(result.ok()).toBe(true)
