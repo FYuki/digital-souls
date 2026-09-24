@@ -17,6 +17,7 @@ import type {
 export type LiveVoiceTurn = VoiceTurnDisplay & {
   context: SelectedConversationContext
   sourceUtteranceIds: string[]
+  pendingUtterances: { id: string; text: string }[]
   lastTextSequence: number
 }
 
@@ -77,11 +78,13 @@ const publishState = (state: VoiceHistoryState): VoiceHistoryState => ({
     ...state.live,
     context: { ...state.live.context },
     sourceUtteranceIds: [...state.live.sourceUtteranceIds],
+    pendingUtterances: state.live.pendingUtterances.map((utterance) => ({ ...utterance })),
   },
   settled: state.settled.map((turn) => ({
     ...turn,
     context: { ...turn.context },
     sourceUtteranceIds: [...turn.sourceUtteranceIds],
+    pendingUtterances: turn.pendingUtterances.map((utterance) => ({ ...utterance })),
   })),
   failed: state.failed.map((turn) => ({ ...turn, context: { ...turn.context } })),
 })
@@ -158,6 +161,7 @@ export const createVoiceHistoryController = (
               context,
               responseId: null,
               sourceUtteranceIds: [utteranceId],
+              pendingUtterances: [{ id: utteranceId, text: transcript }],
               userContent: transcript,
               assistantContent: '',
               lastTextSequence: 0,
@@ -165,14 +169,18 @@ export const createVoiceHistoryController = (
           }
         }
         if (state.live.responseId === null) {
+          const pendingUtterances = [
+            ...state.live.pendingUtterances,
+            { id: utteranceId, text: transcript },
+          ]
           return {
             ...state,
             live: {
               ...state.live,
               sourceUtteranceIds: [...state.live.sourceUtteranceIds, utteranceId],
-              userContent: [state.live.userContent, transcript]
-                .filter((text) => text !== '')
-                .join('\n'),
+              pendingUtterances,
+              userContent: pendingUtterances.map((utterance) => utterance.text)
+                .filter(Boolean).join('\n'),
             },
           }
         }
@@ -213,6 +221,7 @@ export const createVoiceHistoryController = (
             : { historyTurnId: event.history_turn_id }),
           responseId,
           sourceUtteranceIds: event.source_utterance_ids ?? [],
+          pendingUtterances: [],
           userContent: projected.userContent,
           assistantContent: '',
           lastTextSequence: 0,
@@ -277,17 +286,36 @@ export const createVoiceHistoryController = (
 
     if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
       const discardedId = event.utterance_id
-      let matched = false
+      let resolved = false
       store.update((state) => {
         const live = state.live
         if (live === null
           || live.context.character !== context.character
           || live.context.conversationId !== context.conversationId
           || !live.sourceUtteranceIds.includes(discardedId)) return state
-        matched = true
-        return live.responseId === null ? { ...state, live: null } : state
+        if (live.responseId !== null) {
+          resolved = true
+          return state
+        }
+        const pendingUtterances = live.pendingUtterances.filter(
+          (utterance) => utterance.id !== discardedId,
+        )
+        if (pendingUtterances.length === 0) {
+          resolved = true
+          return { ...state, live: null }
+        }
+        return {
+          ...state,
+          live: {
+            ...live,
+            sourceUtteranceIds: pendingUtterances.map((utterance) => utterance.id),
+            pendingUtterances,
+            userContent: pendingUtterances.map((utterance) => utterance.text)
+              .filter(Boolean).join('\n'),
+          },
+        }
       })
-      return { pendingInputAccepted: false, pendingInputResolved: matched }
+      return { pendingInputAccepted: false, pendingInputResolved: resolved }
     }
 
     return { pendingInputAccepted: false, pendingInputResolved: false }
