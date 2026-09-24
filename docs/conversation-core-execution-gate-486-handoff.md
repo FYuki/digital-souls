@@ -14,7 +14,9 @@ Tool Useは`decision_loop.py`へ候補、判断、入力待ち、確認再開、
 - `C486-03` / `C486-04` / `C486-05`: [Execution Gate / Tool Use検証記録](validation/execution-gate-tool-use-486-20260924.md)
 - 公開API、schema、DB、model、prompt、音声設定、認可policy、保存規則、retry上限は変更していない。
 
-## 残課題
+## TAKT実行時点の残課題
+
+以下はTAKT実行時点の記録。監督側による独立LiveKit IT2、初期mainとの性能比較、残る履歴失敗と間欠的な終了異常は[統合受入れ記録](validation/epic-480-acceptance-20260924.md)を参照する。TAKT時点の未実施と後続の実測結果を区別する。
 
 Frontend依存は作業用worktreeへ既存lockfileどおり`npm ci`で導入し、build、check、Frontend unit/module、Backend VAD parityを実行済みである。実Ollama、実Whisper、実MCP、実ToolServiceもtest識別・一時dataで確認済みである。
 
