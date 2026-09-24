@@ -38,6 +38,10 @@ export type VoiceHistoryReceiveResult = {
 }
 
 export type VoiceHistoryController = Readable<VoiceHistoryState> & {
+  reconcileSavedTurns: (
+    context: SelectedConversationContext | null,
+    savedTurns: readonly ConversationTurn[],
+  ) => void
   receive: (
     event: VoiceSessionEvent,
     voiceContext: VoiceSessionContext,
@@ -120,6 +124,20 @@ export const createVoiceHistoryController = (
       }))
     }).catch(retainOnRefreshFailure)
     void dependencies.refreshCharacter(context.character).catch(retainOnRefreshFailure)
+  }
+
+  // 選択し直した会話の履歴が後から読み込まれた場合も、保存済みの一時表示を回収する。
+  const reconcileSavedTurns: VoiceHistoryController['reconcileSavedTurns'] = (context, savedTurns) => {
+    if (context === null || savedTurns.length === 0) return
+    const savedIds = new Set(savedTurns.map((turn) => turn.turn_id))
+    store.update((state) => {
+      const settled = state.settled.filter((turn) => !(
+        turn.context.character === context.character
+        && turn.context.conversationId === context.conversationId
+        && savedIds.has(turn.historyTurnId)
+      ))
+      return settled.length === state.settled.length ? state : { ...state, settled }
+    })
   }
 
   const receive: VoiceHistoryController['receive'] = (event, voiceContext, submissions) => {
@@ -281,5 +299,6 @@ export const createVoiceHistoryController = (
       invalidate,
     ),
     receive,
+    reconcileSavedTurns,
   }
 }

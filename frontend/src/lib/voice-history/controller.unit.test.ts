@@ -520,6 +520,26 @@ describe('VoiceHistoryController', () => {
     expect(get(controller).settled).toHaveLength(1)
   })
 
+  test('reconciles a persisted turn after the same conversation is reselected', async () => {
+    const refresh = deferred<void>()
+    const { controller, refreshTurns, select, saveTurns } = createHarness()
+    refreshTurns.mockImplementation(() => refresh.promise)
+    select(selectionA(1))
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '以前の質問'), contextA, [])
+    controller.receive(responseStarted(RESPONSE_ID, { historyTurnId: HISTORY_TURN_ID }), contextA, [])
+    controller.receive(responseTerminal('response_completed', RESPONSE_ID), contextA, [])
+
+    select(selectionB(2))
+    select(selectionA(3))
+    saveTurns([savedTurn(HISTORY_TURN_ID)])
+    controller.reconcileSavedTurns(selectionA(3), [savedTurn(HISTORY_TURN_ID)])
+
+    expect(get(controller).settled).toEqual([])
+    refresh.resolve(undefined)
+    await flush()
+    expect(get(controller).settled).toEqual([])
+  })
+
   test('keeps late events for the previous conversation out of the current view', async () => {
     const { controller, refreshTurns, select, saveTurns } = createHarness()
     select(selectionA(1))
