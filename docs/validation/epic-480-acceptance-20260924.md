@@ -26,13 +26,13 @@
 
 この3組では本文開始・実再生開始の悪化は観測されなかった。試行数が少なく、推論出力の長さや共有GPU負荷も変動するため、統計的な性能保証・CPU改善の認定は `INCONCLUSIVE` とする。GPU負荷は `NOT_RUN`。CPU/RSSはBackendプロセスだけの0.5秒間隔観測であり、共有推論サービスを含む総負荷ではない。初期mainから同期後headまでには後発の通知main変更も含まれ、純粋なリファクタリングだけへの因果帰属はしない。
 
-証拠: `/tmp/epic480-paired-performance.json` と以下の各trial-manifest、controlled-trace、backend-resources。
-- /tmp/ds486-it2-20260924-204312
-- /tmp/ds486-it2-20260924-204332
-- /tmp/ds486-it2-20260924-204348
-- /tmp/ds486-it2-20260924-204402
-- /tmp/ds486-it2-20260924-204419
-- /tmp/ds486-it2-20260924-204437
+証拠はリポジトリ内の[集計JSON](epic-480-paired-performance-20260924.json)と[保存方法・再計算手順](evidence/epic-480-20260924/README.md)から取得できる。各行に保存したtrial-manifest、controlled-trace、backend-resourcesを示す。生成IDを除いた公開版の元ファイル／保存版SHA-256も同ディレクトリにある。
+
+| 組 | 初期main | 同期後head |
+|---|---|---|
+| 1 | [manifest](evidence/epic-480-20260924/baseline/pair-1/trial-manifest.json)・[trace](evidence/epic-480-20260924/baseline/pair-1/controlled-trace.jsonl)・[CPU/RSS](evidence/epic-480-20260924/baseline/pair-1/backend-resources.jsonl) | [manifest](evidence/epic-480-20260924/updated/pair-1/trial-manifest.json)・[trace](evidence/epic-480-20260924/updated/pair-1/controlled-trace.jsonl)・[CPU/RSS](evidence/epic-480-20260924/updated/pair-1/backend-resources.jsonl) |
+| 2 | [manifest](evidence/epic-480-20260924/baseline/pair-2/trial-manifest.json)・[trace](evidence/epic-480-20260924/baseline/pair-2/controlled-trace.jsonl)・[CPU/RSS](evidence/epic-480-20260924/baseline/pair-2/backend-resources.jsonl) | [manifest](evidence/epic-480-20260924/updated/pair-2/trial-manifest.json)・[trace](evidence/epic-480-20260924/updated/pair-2/controlled-trace.jsonl)・[CPU/RSS](evidence/epic-480-20260924/updated/pair-2/backend-resources.jsonl) |
+| 3 | [manifest](evidence/epic-480-20260924/baseline/pair-3/trial-manifest.json)・[trace](evidence/epic-480-20260924/baseline/pair-3/controlled-trace.jsonl)・[CPU/RSS](evidence/epic-480-20260924/baseline/pair-3/backend-resources.jsonl) | [manifest](evidence/epic-480-20260924/updated/pair-3/trial-manifest.json)・[trace](evidence/epic-480-20260924/updated/pair-3/controlled-trace.jsonl)・[CPU/RSS](evidence/epic-480-20260924/updated/pair-3/backend-resources.jsonl) |
 
 ## 実接続検証
 
