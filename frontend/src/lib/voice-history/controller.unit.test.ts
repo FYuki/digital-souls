@@ -520,6 +520,26 @@ describe('VoiceHistoryController', () => {
     expect(get(controller).settled).toHaveLength(1)
   })
 
+  test('reconciles a persisted turn after the same conversation is reselected', async () => {
+    const refresh = deferred<void>()
+    const { controller, refreshTurns, select, saveTurns } = createHarness()
+    refreshTurns.mockImplementation(() => refresh.promise)
+    select(selectionA(1))
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '以前の質問'), contextA, [])
+    controller.receive(responseStarted(RESPONSE_ID, { historyTurnId: HISTORY_TURN_ID }), contextA, [])
+    controller.receive(responseTerminal('response_completed', RESPONSE_ID), contextA, [])
+
+    select(selectionB(2))
+    select(selectionA(3))
+    saveTurns([savedTurn(HISTORY_TURN_ID)])
+    controller.reconcileSavedTurns(selectionA(3), [savedTurn(HISTORY_TURN_ID)])
+
+    expect(get(controller).settled).toEqual([])
+    refresh.resolve(undefined)
+    await flush()
+    expect(get(controller).settled).toEqual([])
+  })
+
   test('keeps late events for the previous conversation out of the current view', async () => {
     const { controller, refreshTurns, select, saveTurns } = createHarness()
     select(selectionA(1))
@@ -703,6 +723,31 @@ describe('VoiceHistoryController', () => {
 
     expect(result).toEqual({ pendingInputAccepted: false, pendingInputResolved: true })
     expect(get(controller).live).toBeNull()
+  })
+
+  test('ignores a discarded utterance unrelated to the pending turn', () => {
+    const { controller } = createHarness()
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '残す質問'), contextA, [])
+
+    const result = controller.receive(utteranceDiscarded(SECOND_UTTERANCE_ID), contextA, [])
+
+    expect(result).toEqual({ pendingInputAccepted: false, pendingInputResolved: false })
+    expect(get(controller).live).toMatchObject({
+      responseId: null,
+      sourceUtteranceIds: [UTTERANCE_ID],
+      userContent: '残す質問',
+    })
+  })
+
+  test('ignores a discarded utterance from another conversation', () => {
+    const { controller } = createHarness()
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '残す質問'), contextA, [])
+    const contextB: VoiceSessionContext = { characterId: 'miori', conversationId: 'conversation-b' }
+
+    const result = controller.receive(utteranceDiscarded(UTTERANCE_ID), contextB, [])
+
+    expect(result).toEqual({ pendingInputAccepted: false, pendingInputResolved: false })
+    expect(get(controller).live).toMatchObject({ userContent: '残す質問' })
   })
 
   test('keeps a response-bound live turn when the utterance is discarded', () => {

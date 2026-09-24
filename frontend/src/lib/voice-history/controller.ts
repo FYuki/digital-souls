@@ -38,6 +38,10 @@ export type VoiceHistoryReceiveResult = {
 }
 
 export type VoiceHistoryController = Readable<VoiceHistoryState> & {
+  reconcileSavedTurns: (
+    context: SelectedConversationContext | null,
+    savedTurns: readonly ConversationTurn[],
+  ) => void
   receive: (
     event: VoiceSessionEvent,
     voiceContext: VoiceSessionContext,
@@ -120,6 +124,20 @@ export const createVoiceHistoryController = (
       }))
     }).catch(retainOnRefreshFailure)
     void dependencies.refreshCharacter(context.character).catch(retainOnRefreshFailure)
+  }
+
+  // 選択し直した会話の履歴が後から読み込まれた場合も、保存済みの一時表示を回収する。
+  const reconcileSavedTurns: VoiceHistoryController['reconcileSavedTurns'] = (context, savedTurns) => {
+    if (context === null || savedTurns.length === 0) return
+    const savedIds = new Set(savedTurns.map((turn) => turn.turn_id))
+    store.update((state) => {
+      const settled = state.settled.filter((turn) => !(
+        turn.context.character === context.character
+        && turn.context.conversationId === context.conversationId
+        && savedIds.has(turn.historyTurnId)
+      ))
+      return settled.length === state.settled.length ? state : { ...state, settled }
+    })
   }
 
   const receive: VoiceHistoryController['receive'] = (event, voiceContext, submissions) => {
@@ -258,10 +276,18 @@ export const createVoiceHistoryController = (
     }
 
     if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
-      store.update((state) => (
-        state.live?.responseId === null ? { ...state, live: null } : state
-      ))
-      return { pendingInputAccepted: false, pendingInputResolved: true }
+      const discardedId = event.utterance_id
+      let matched = false
+      store.update((state) => {
+        const live = state.live
+        if (live === null
+          || live.context.character !== context.character
+          || live.context.conversationId !== context.conversationId
+          || !live.sourceUtteranceIds.includes(discardedId)) return state
+        matched = true
+        return live.responseId === null ? { ...state, live: null } : state
+      })
+      return { pendingInputAccepted: false, pendingInputResolved: matched }
     }
 
     return { pendingInputAccepted: false, pendingInputResolved: false }
@@ -273,5 +299,6 @@ export const createVoiceHistoryController = (
       invalidate,
     ),
     receive,
+    reconcileSavedTurns,
   }
 }
