@@ -44,6 +44,24 @@
 
 同期後Backend LiveKitは `/tmp/ds486-it2-20260924-204524` で12件のassertion成功後に試験プロセスがnative FFI abort（exit -6）。Backend自体は存続したが、suite全体は成功としない。初期main比較 `/tmp/ds486-it2-20260924-204728` は12件成功・exit 0。診断実行 `/tmp/ds486-it2-20260924-204935` は2件目のbootstrapが503となり、SFUにDTLS timeoutを記録した。終了時異常と503の原因・再現条件は未確定。その後、失敗時だけHTTP応答を記録する診断を追加し、他の実音声試験と重ならない直列実行 `/tmp/ds486-it2-20260924-205309` で同じ12件が成功・exit 0となった。assertionやタイムアウト、SDK、サービスの設定は緩和していない。実接続成功の証拠は得たが、間欠的なnative終了異常と503を修正済みとは扱わない。
 
+## 2026-09-25 JST時点の最新コード追試
+
+対象の製品コードはEpic head `7020f9360766089c5dcf6745d6ec710e476472ac`。後続の文書追記は製品コードと試験のassertionを変更しない。上記の同期後検証は過去の実行として残し、以下を最新コードに対する別の証拠として扱う。
+
+音声準備で発生したtoken 503は、試験専用worktreeで応答の固定診断項目だけを取得し、`code=tts_not_ready`、`stage=tts`を確認した。設定済みの共有Irodori TTSは停止していた。所有元の正式なサービス管理経路で起動し、`/health/ready`のreadyと登録音声1件を確認した。初期main `64a9d60`、以前の実音声成功head `b53cff8`、503発生head `6416ea2`、現head `7020f93`では、Irodori readiness client、tokenの503変換、Character CardのTTS設定のGit blobがそれぞれ同一だった。今回の再現は環境側のTTS停止で説明できるが、過去2回の503は詳細codeを採取していないため同一原因と断定しない。LiveKitのDTLS timeout警告や過去のnative FFI終了異常も、この診断だけで解決したとは扱わない。診断と復旧の追跡は[#510](https://github.com/FYuki/digital-souls/issues/510)に記録した。
+
+復旧後、既存の試験所有LiveKit・Backend・Frontendと一時dataを使用し、共有推論・STT・TTSには接続のみ行った。全試験で対象revisionを現Epic headに固定し、試験所有プロセス・containerを終了した。
+
+| 現headでの検証 | 結果 | 区別する事項 |
+|---|---|---|
+| 固定音声の測定用独立試行 | 1件成功。音声track受信・decode、応答対応、再生完了、session終了を確認 | 正式な100試行や人の実マイク・聴感ではない |
+| 実音声の通常UI試験 | 14件成功。生成中／再生中のtext割込み、音声→text→音声、同一sessionの3往復、privacy、ミュート保持、barge-inを含む | 初期mainでも失敗する履歴ケース1件[#501](https://github.com/FYuki/digital-souls/issues/501)を明示的に除外し、成功件数に含めない |
+| LiveKit接続・再接続 | 2件成功。fake microphoneのroom通過と、一時切断後の同一session再接続を確認 | 最初の一時ハーネスは公式のfake microphone設定を欠き、1件失敗・1件未実行で`INCONCLUSIVE`。公式設定を反映した再実行の2件成功を採用 |
+
+測定用試行はリポジトリの`docs/validation/evidence/epic-480-20260924/run-supervisor.py`を使用した。実音声14件は、このsupervisorの一時コピーで対象Playwright testDirと既知の#501履歴ケースの除外指定だけを変更した。接続・再接続2件の一時コピーは対象testDirを変更し、`playwright.integration-livekit.config.ts`と同じfake microphone引数・permissionを与えた。製品コードと既存assertionは変更していない。ローカルの試験結果は順に`/tmp/ds486-it2-uuq752ep`、`/tmp/ds486-it2-e31552fa`、`/tmp/ds486-it2-8fgmo8_s`。一時秘密設定は削除済みで、会話原文をこの文書に載せない。
+
+#501の履歴ケースは別修正PR [#512](https://github.com/FYuki/digital-souls/pull/512)がmain宛でOPENであり、Epicの14件成功に算入しない。既存の取消・終了問題[#507](https://github.com/FYuki/digital-souls/issues/507)も別追跡。実マイク・聴感はユーザー担当で`NOT_RUN`、長時間安定性はこの1回＋14件＋2件からは保証できない。EpicのCI・Container images成功とCodeRabbit差分レビューは[main向けPR #502](https://github.com/FYuki/digital-souls/pull/502)で現headに対して確認する。mainへのマージはユーザーが行う。
+
 ## 状態の区別
 
-TAKT成功、PRのCI成功、Epic統合、実接続成功は別に管理する。後続のCI・Container images、main向けCodeRabbit差分レビューと指摘修正は最新headで追跡する。実マイク・聴感はユーザー担当であり、Codexの疎通検証をユーザーへ移管しない。共有サービスとdogfoodデータは保護し、各試験の所有プロセス・コンテナだけを終了した。
+TAKT成功、PRのCI成功、Epic統合、実接続成功は別に管理する。製品コードhead `7020f93`では通常CI・Container imagesが成功し、main向けCodeRabbit差分レビューの指摘修正も確認した。上記の実接続追試は試験所有環境の結果であり、実マイク・聴感はユーザー担当の`NOT_RUN`である。#501の除外と#507の別追跡を成功に読み替えない。共有サービスとdogfoodデータは保護し、各試験の所有プロセス・コンテナだけを終了した。
