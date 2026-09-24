@@ -1,0 +1,146 @@
+[
+  {
+    "evidence": "/tmp/ds486-it2-20260924-204312",
+    "revision": "64a9d60c4d03eff73ec1f9708852fbb111bb5628",
+    "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+    "fixture": {
+      "fixture_version": "speech-v2",
+      "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+      "sample_rate_hz": 48000,
+      "speech_start_sample": 15840,
+      "speech_end_sample": 45120
+    },
+    "text_from_finalized_ms": 1121.452522,
+    "text_from_vad_end_ms": 1252.597166,
+    "playback_from_send_ms": 2118.3323333333337,
+    "playback_from_speech_end_ms": 3025.4323333273733,
+    "backend_cpu_seconds": 7.92,
+    "backend_cpu_percent": 47.82218249479482,
+    "backend_peak_rss_mib": 362.6015625,
+    "browser_diagnostics": {
+      "cpu_percent": 3.8128542470220155,
+      "maximum_resident_set_bytes": 214188032
+    },
+    "outcome": "success"
+  },
+  {
+    "evidence": "/tmp/ds486-it2-20260924-204332",
+    "revision": "37ace8107c7fff53f1c9e4a29b6344b2fcb77956",
+    "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+    "fixture": {
+      "fixture_version": "speech-v2",
+      "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+      "sample_rate_hz": 48000,
+      "speech_start_sample": 15840,
+      "speech_end_sample": 45120
+    },
+    "text_from_finalized_ms": 1044.186009,
+    "text_from_vad_end_ms": 1180.527611,
+    "playback_from_send_ms": 2099.032333336313,
+    "playback_from_speech_end_ms": 3009.332333333333,
+    "backend_cpu_seconds": 3.67,
+    "backend_cpu_percent": 28.085142923265536,
+    "backend_peak_rss_mib": 354.109375,
+    "browser_diagnostics": {
+      "cpu_percent": 4.774040422543856,
+      "maximum_resident_set_bytes": 212869120
+    },
+    "outcome": "success"
+  },
+  {
+    "evidence": "/tmp/ds486-it2-20260924-204348",
+    "revision": "64a9d60c4d03eff73ec1f9708852fbb111bb5628",
+    "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+    "fixture": {
+      "fixture_version": "speech-v2",
+      "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+      "sample_rate_hz": 48000,
+      "speech_start_sample": 15840,
+      "speech_end_sample": 45120
+    },
+    "text_from_finalized_ms": 1024.136153,
+    "text_from_vad_end_ms": 1156.761317,
+    "playback_from_send_ms": 2084.9323333422735,
+    "playback_from_speech_end_ms": 2998.6323333303526,
+    "backend_cpu_seconds": 2.79,
+    "backend_cpu_percent": 23.190406753719916,
+    "backend_peak_rss_mib": 352.11328125,
+    "browser_diagnostics": {
+      "cpu_percent": 4.990072344370869,
+      "maximum_resident_set_bytes": 213594112
+    },
+    "outcome": "success"
+  },
+  {
+    "evidence": "/tmp/ds486-it2-20260924-204402",
+    "revision": "37ace8107c7fff53f1c9e4a29b6344b2fcb77956",
+    "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+    "fixture": {
+      "fixture_version": "speech-v2",
+      "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+      "sample_rate_hz": 48000,
+      "speech_start_sample": 15840,
+      "speech_end_sample": 45120
+    },
+    "text_from_finalized_ms": 1008.275562,
+    "text_from_vad_end_ms": 1133.530977,
+    "playback_from_send_ms": 2038.0323333214128,
+    "playback_from_speech_end_ms": 2940.8323333333337,
+    "backend_cpu_seconds": 3.9,
+    "backend_cpu_percent": 29.18241348076844,
+    "backend_peak_rss_mib": 355.57421875,
+    "browser_diagnostics": {
+      "cpu_percent": 4.513680465074037,
+      "maximum_resident_set_bytes": 211734528
+    },
+    "outcome": "success"
+  },
+  {
+    "evidence": "/tmp/ds486-it2-20260924-204419",
+    "revision": "64a9d60c4d03eff73ec1f9708852fbb111bb5628",
+    "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+    "fixture": {
+      "fixture_version": "speech-v2",
+      "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+      "sample_rate_hz": 48000,
+      "speech_start_sample": 15840,
+      "speech_end_sample": 45120
+    },
+    "text_from_finalized_ms": 1023.447598,
+    "text_from_vad_end_ms": 1160.53131,
+    "playback_from_send_ms": 2168.865666669647,
+    "playback_from_speech_end_ms": 3089.1656666666668,
+    "backend_cpu_seconds": 6.99,
+    "backend_cpu_percent": 42.32082476350481,
+    "backend_peak_rss_mib": 357.01953125,
+    "browser_diagnostics": {
+      "cpu_percent": 3.6387840271635867,
+      "maximum_resident_set_bytes": 214441984
+    },
+    "outcome": "success"
+  },
+  {
+    "evidence": "/tmp/ds486-it2-20260924-204437",
+    "revision": "37ace8107c7fff53f1c9e4a29b6344b2fcb77956",
+    "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+    "fixture": {
+      "fixture_version": "speech-v2",
+      "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+      "sample_rate_hz": 48000,
+      "speech_start_sample": 15840,
+      "speech_end_sample": 45120
+    },
+    "text_from_finalized_ms": 1016.874814,
+    "text_from_vad_end_ms": 1151.519681,
+    "playback_from_send_ms": 2134.9323333422735,
+    "playback_from_speech_end_ms": 3041.332333333333,
+    "backend_cpu_seconds": 3.62,
+    "backend_cpu_percent": 21.15670214488032,
+    "backend_peak_rss_mib": 352.75390625,
+    "browser_diagnostics": {
+      "cpu_percent": 3.433882391709353,
+      "maximum_resident_set_bytes": 212701184
+    },
+    "outcome": "success"
+  }
+]

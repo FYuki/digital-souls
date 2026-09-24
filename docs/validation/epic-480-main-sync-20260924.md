@@ -19,3 +19,7 @@ Epic `f9c4cc5` のtreeは監督検証版 `5a324a6` と一致する。検証専�
 ## 残る受入れ
 
 main同期後の最新headの通常CI／Container images、実接続再確認、固定条件の前後性能比較、main向けPRのCodeRabbit差分レビューを追跡する。同期前の成功を同期後の成功とは扱わない。TAKT実行時のnative abortは検証専用環境では再現しなかったが、元環境での根本原因は未確定。実マイク・聴感はユーザー担当であり、Codex側の判断待ちとはしない。
+
+## 同期後の結果
+
+PR #500は最新headの全CI成功後、Epic `b53cff84` へ統合した。同期後の実接続再確認、固定条件の前後比較、残る失敗の詳細は[統合受入れ記録](epic-480-acceptance-20260924.md)を参照する。main向けPR #502のCodeRabbit差分レビューと最終push CI／Container imagesは引き続き追跡する。
