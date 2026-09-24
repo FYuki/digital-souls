@@ -492,6 +492,11 @@ Gateはloop開始時のsnapshotと接続世代を固定し、実行直前にgran
 未信頼annotationはunknownとして直列・retryなしにし、実効read-onlyだけ並列・最大1 retryを許可する。
 Resourcesをnativeに読み取り、Promptsはdiscoveryまでに限定する。入力待ちは上位判断へ返し、
 回答後も同じloopと許可で再実行する。self-owned runtimeは#221が担当する。
+Gate内部では`result_classification.py`がnative payloadと`MCPFailure`を副作用なしに一度だけ分類し、
+`execution.py`がJSON正規化後の検証済み入力と実行準備を型で表す。`ExecutionGate`は認可・承認・journal・
+dispatch・settlementの順序と実行直前の再認可を所有し、分類結果から外部envelopeとjournal結果を投影する。
+`tool_use/decision_loop.py`は候補投影、router判断、入力待ち・確認再開、結果採用を所有し、外部dispatchの
+権限境界は既存のExecution Gateだけを呼び出す。内部型とdecision loopは公開Python APIへ追加しない。
 設定・公開Python API・制限は[外部MCP利用基盤](external-mcp-foundation.md)を参照する。
 
 管理UIはExternal MCPのHTTP/stdio設定と接続専有credentialを管理する。接続・credentialは
