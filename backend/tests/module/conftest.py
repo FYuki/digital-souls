@@ -103,7 +103,7 @@ def isolate_episodic_inference(monkeypatch: pytest.MonkeyPatch, request: pytest.
         prompt_version=COMPACT_EXTRACTOR_VERSION,
     ))
     if "episodic_model_output" not in request.fixturenames:
-        from app import main
+        import app.runtime.memory as memory_runtime
 
         class EmptyEpisodeClient:
             def fits(self, *args, **kwargs):
@@ -124,4 +124,8 @@ def isolate_episodic_inference(monkeypatch: pytest.MonkeyPatch, request: pytest.
                 },
             })
 
-        monkeypatch.setattr(main, "build_episodic_scheduler", build_without_external_episode_llm)
+        monkeypatch.setattr(
+            memory_runtime,
+            "build_episodic_scheduler",
+            build_without_external_episode_llm,
+        )

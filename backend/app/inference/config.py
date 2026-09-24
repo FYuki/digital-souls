@@ -8,6 +8,7 @@ import re
 from types import MappingProxyType
 from typing import cast
 
+from app.config_values import parse_positive_integer
 from app.inference.contracts import (
     InferenceCapability,
     InferenceTarget,
@@ -320,23 +321,14 @@ def _options(
 def _required_positive_integer(environment: Mapping[str, str], key: str) -> int:
     if key not in environment:
         raise ValueError(f"missing inference target setting: {key}")
-    return _positive_integer(environment[key], key)
+    return parse_positive_integer(environment[key], key)
 
 
 def _optional_positive_integer(
     environment: Mapping[str, str], key: str, default: int | None = None
 ) -> int | None:
     raw_value = environment.get(key)
-    return default if raw_value is None else _positive_integer(raw_value, key)
-
-
-def _positive_integer(raw_value: str, key: str) -> int:
-    if not raw_value.isascii() or not raw_value.isdecimal():
-        raise ValueError(f"{key} must be a positive integer")
-    value = int(raw_value)
-    if value < 1 or str(value) != raw_value:
-        raise ValueError(f"{key} must be a positive integer")
-    return value
+    return default if raw_value is None else parse_positive_integer(raw_value, key)
 
 
 def _optional_positive_decimal(

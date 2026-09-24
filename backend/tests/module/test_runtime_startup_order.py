@@ -11,7 +11,6 @@ def test_rt_report_01_runtime_log_uses_safe_projection_only(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from app import main
     from app.runtime_paths import resolve_runtime_paths
 
     repository_root = tmp_path / "repository"
@@ -24,8 +23,10 @@ def test_rt_report_01_runtime_log_uses_safe_projection_only(
     monkeypatch.setenv("CONVERSATION_BODY", "会話本文")
     monkeypatch.setenv("SYSTEM_PROMPT", "prompt-value")
 
+    import app.runtime.application as application_runtime
+
     with caplog.at_level(logging.INFO):
-        main.log_runtime_configuration(paths)
+        application_runtime.log_runtime_configuration(paths)
 
     rendered = caplog.text
     assert "test" in rendered
@@ -51,24 +52,33 @@ async def test_rt_start_01_invalid_identity_prevents_all_store_initialization(
         {"DS_ENVIRONMENT_ID": "test", "DS_DATA_DIR": str(tmp_path / "data")},
         repository_root,
     )
+    import sqlite3
+    import app.runtime.application as application_runtime
+    import app.runtime.audio as audio_runtime
+    import app.runtime.history as history_runtime
+
     initialize_schema = Mock(side_effect=AssertionError("SQLite must stay closed"))
     sqlite_connect = Mock(side_effect=AssertionError("SQLite must stay closed"))
     create_chat_service = Mock(side_effect=AssertionError("Chroma must stay closed"))
     create_audio_service = Mock(side_effect=AssertionError("cache must stay untouched"))
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(
-        main,
+        application_runtime, "resolve_runtime_paths", lambda *_args: paths
+    )
+    monkeypatch.setattr(
+        application_runtime,
         "initialize_runtime_data_root",
         Mock(side_effect=ValueError("environment identity mismatch")),
     )
     monkeypatch.setattr(
-        main,
+        history_runtime,
         "initialize_conversation_history_schema",
         initialize_schema,
     )
-    monkeypatch.setattr(main.sqlite3, "connect", sqlite_connect)
+    monkeypatch.setattr(sqlite3, "connect", sqlite_connect)
     monkeypatch.setattr(main._chat_runtime, "create_chat_service", create_chat_service)
-    monkeypatch.setattr(main, "create_audio_pipeline_service", create_audio_service)
+    monkeypatch.setattr(
+        audio_runtime, "create_audio_pipeline_service", create_audio_service
+    )
 
     with pytest.raises(ValueError, match="environment identity mismatch"):
         async with main.lifespan(FastAPI()):
@@ -107,11 +117,24 @@ async def test_rt_start_02_derived_symlink_prevents_all_store_initialization(
     sqlite_connect = Mock(side_effect=AssertionError("SQLite must stay closed"))
     create_chat_service = Mock(side_effect=AssertionError("Chroma must stay closed"))
     create_audio_service = Mock(side_effect=AssertionError("cache must stay untouched"))
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_conversation_history_schema", initialize_schema)
-    monkeypatch.setattr(main.sqlite3, "connect", sqlite_connect)
+    import sqlite3
+    import app.runtime.application as application_runtime
+    import app.runtime.audio as audio_runtime
+    import app.runtime.history as history_runtime
+
+    monkeypatch.setattr(
+        application_runtime, "resolve_runtime_paths", lambda *_args: paths
+    )
+    monkeypatch.setattr(
+        history_runtime,
+        "initialize_conversation_history_schema",
+        initialize_schema,
+    )
+    monkeypatch.setattr(sqlite3, "connect", sqlite_connect)
     monkeypatch.setattr(main._chat_runtime, "create_chat_service", create_chat_service)
-    monkeypatch.setattr(main, "create_audio_pipeline_service", create_audio_service)
+    monkeypatch.setattr(
+        audio_runtime, "create_audio_pipeline_service", create_audio_service
+    )
 
     with pytest.raises(ValueError):
         async with main.lifespan(FastAPI()):
@@ -153,12 +176,25 @@ async def test_rt_sqlite_01_startup_passes_one_path_to_schema_wal_and_repository
         seen["repository"] = database_path
         raise StopAfterRepository
 
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
-    monkeypatch.setattr(main, "remove_legacy_chroma_index_once", lambda *_args: None)
-    monkeypatch.setattr(main, "initialize_conversation_history_schema", record_schema)
-    monkeypatch.setattr(main, "ConversationWalCleanup", RecordingWal)
-    monkeypatch.setattr(main, "ConversationHistoryRepository", record_repository)
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
+
+    monkeypatch.setattr(
+        application_runtime, "resolve_runtime_paths", lambda *_args: paths
+    )
+    monkeypatch.setattr(
+        application_runtime, "initialize_runtime_data_root", lambda *_args: None
+    )
+    monkeypatch.setattr(
+        application_runtime, "remove_legacy_chroma_index_once", lambda *_args: None
+    )
+    monkeypatch.setattr(
+        history_runtime, "initialize_conversation_history_schema", record_schema
+    )
+    monkeypatch.setattr(history_runtime, "ConversationWalCleanup", RecordingWal)
+    monkeypatch.setattr(
+        history_runtime, "ConversationHistoryRepository", record_repository
+    )
 
     with pytest.raises(StopAfterRepository):
         async with main.lifespan(FastAPI()):

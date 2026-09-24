@@ -5,7 +5,7 @@ import json
 from uuid import uuid4
 
 from app.conversation_core import ConversationCoreSession
-from app.livekit_transport.production import _ConversationCoreBridge
+from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 from app.livekit_transport.text_input import TextInputReceiver
 from tests.voice_capture_test_support import begin_capture, finish_capture
 from tests.conversation_core_test_support import (

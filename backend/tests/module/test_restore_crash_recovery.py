@@ -252,10 +252,19 @@ def _assert_backend_startup_is_blocked_before_sqlite_open(
             async with main.lifespan(FastAPI()):
                 pytest.fail("backend startup must remain blocked")
 
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
+
     with monkeypatch.context() as patch:
-        patch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-        patch.setattr(main, "inspect_conversation_history_schema", inspect_schema)
-        patch.setattr(main.sqlite3, "connect", sqlite_connect)
+        patch.setattr(
+            application_runtime, "resolve_runtime_paths", lambda *_args: paths
+        )
+        patch.setattr(
+            history_runtime,
+            "inspect_conversation_history_schema",
+            inspect_schema,
+        )
+        patch.setattr(sqlite3, "connect", sqlite_connect)
         asyncio.run(start_backend())
 
     inspect_schema.assert_not_called()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from collections.abc import AsyncIterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
@@ -216,6 +217,67 @@ def test_settings_require_input_and_generation_limits() -> None:
 
     with pytest.raises(ValueError, match="MAX_OUTPUT_TOKENS"):
         resolve_inference_settings(environment, default_provider_registry())
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS",
+        "INFERENCE_TARGET_CHAT_MAX_CONCURRENCY",
+        "INFERENCE_TARGET_EMBEDDING_MAX_OUTPUT_TOKENS",
+    ],
+)
+@pytest.mark.parametrize(
+    "value",
+    ["", "0", "-1", "01", " 1", "1 ", "１２", "+1", "invalid", "1.5"],
+)
+def test_settings_reject_non_positive_or_noncanonical_integer_settings(
+    key: str, value: str
+) -> None:
+    environment = _environment()
+    environment[key] = value
+
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        resolve_inference_settings(environment, default_provider_registry())
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS",
+        "INFERENCE_TARGET_CHAT_MAX_CONCURRENCY",
+    ],
+)
+def test_settings_propagate_standard_int_error_for_oversized_digit_strings(
+    key: str,
+) -> None:
+    raw = "9" * (sys.get_int_max_str_digits() + 1)
+    environment = _environment()
+    environment[key] = raw
+
+    with pytest.raises(ValueError) as direct_error:
+        int(raw)
+    with pytest.raises(ValueError) as settings_error:
+        resolve_inference_settings(environment, default_provider_registry())
+
+    assert str(settings_error.value) == str(direct_error.value)
+
+
+def test_settings_resolve_canonical_positive_integer_overrides() -> None:
+    environment = _environment()
+    environment["INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS"] = "1234"
+    environment["INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS"] = "321"
+    environment["INFERENCE_TARGET_CHAT_MAX_CONCURRENCY"] = "2"
+    environment["INFERENCE_TARGET_EMBEDDING_MAX_OUTPUT_TOKENS"] = "64"
+
+    settings = resolve_inference_settings(environment, default_provider_registry())
+
+    chat = settings.target(InferenceTarget.CHAT)
+    assert chat.max_input_tokens == 1234
+    assert chat.max_output_tokens == 321
+    assert chat.max_concurrency == 2
+    assert settings.target(InferenceTarget.EMBEDDING).max_output_tokens == 64
 
 
 def test_settings_reject_capability_mismatch_and_privacy_cloud_assignment() -> None:

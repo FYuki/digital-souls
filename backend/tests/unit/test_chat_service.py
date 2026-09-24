@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from dataclasses import replace as dataclass_replace
 from datetime import UTC, datetime
 from unittest.mock import ANY, MagicMock, patch
@@ -321,6 +322,20 @@ class _RecordingHistoryService:
         conversation_id: UUID,
     ) -> _RecordingHistorySession:
         return self.session
+
+
+class _ThreadRecordingHistoryService(_RecordingHistoryService):
+    def __init__(self, session: _RecordingHistorySession) -> None:
+        super().__init__(session)
+        self.open_threads: list[int] = []
+
+    def open_session(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> _RecordingHistorySession:
+        self.open_threads.append(threading.get_ident())
+        return super().open_session(character_id, conversation_id)
 
 
 def _chat_service(rag_enabled: bool, policy=None) -> ChatService:
@@ -1530,3 +1545,752 @@ class TestScreenTurnIntegration:
             (history.started_turn, (lineage.as_follow_up(),))
         ]
         submitter.submit.assert_not_called()
+
+
+class TestSharedToolReplyPreparation:
+    """HTTPと音声streamのadapterが同じTool込み応答準備を共有する契約。"""
+
+    @staticmethod
+    def _service(
+        history: _RecordingHistorySession,
+        dependencies: ChatRuntimeDependencies,
+        *,
+        tools=None,
+        settings=_PROMPT_CONFIG,
+    ) -> ChatService:
+        return ChatService(
+            ChatRuntimeConfig(
+                rag_enabled=False,
+                memory_policy=None,
+                prompt_config=settings,
+                chroma_path=_CHROMA_PATH,
+            ),
+            _RecordingHistoryService(history),
+            dataclass_replace(dependencies, tools=tools),
+        )
+
+    @staticmethod
+    def _material(token: InferenceCancellationToken) -> ScreenTurnMaterial:
+        return TestScreenTurnIntegration._material(
+            token,
+            observation=VisionObservation(
+                "identified",
+                (VisionTargetCandidate("警告", "center", "画面の表示", "表示", ()),),
+                (),
+                "不確実性なし",
+            ),
+        )
+
+    @pytest.mark.parametrize("streaming", [True, False])
+    def test_tool_direct_reply_skips_inference_and_persists_once(
+        self, streaming: bool,
+    ) -> None:
+        from app.main import _stream_core_reply
+        from app.tool_use.routing import ToolDecision
+        from tests.tool_use_test_support import Decisions, runtime
+
+        instruction = "追加で確認したいことがあります。"
+        history = _RecordingHistorySession()
+        submitter = MagicMock()
+        dependencies = _runtime_dependencies(submitter)
+        generate = MagicMock(return_value="推論してはいけない回答")
+        decisions = Decisions(ToolDecision("clarify", instruction=instruction))
+        streamed: list[object] = []
+        observed: list[object] = []
+
+        async def scenario() -> list[object]:
+            async with runtime(decisions) as (tools, source, _gate):
+                service = self._service(
+                    history,
+                    dependencies,
+                    tools=None if streaming else tools,
+                )
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    if streaming:
+
+                        async def stream(prompt: object, **_kwargs: object):
+                            streamed.append(prompt)
+                            yield "推論してはいけない回答"
+
+                        with patch.object(llm_router, "stream_response", stream):
+                            chunks = [
+                                chunk
+                                async for chunk in _stream_core_reply(
+                                    service,
+                                    _PROMPT_CONFIG,
+                                    "miori",
+                                    history,
+                                    "確認",
+                                    tools=tools,
+                                    conversation_id=str(CONVERSATION_ID),
+                                    prompt_observer=observed.append,
+                                )
+                            ]
+                        assert chunks == [instruction]
+                    else:
+                        with patch(_GENERATE_RESPONSE, generate):
+                            reply = await service.generate_reply_async(
+                                "miori", CONVERSATION_ID, "確認"
+                            )
+                        assert _assistant_content(reply) == instruction
+                return source.calls
+
+        calls = asyncio.run(scenario())
+
+        assert calls == []
+        assert len(decisions.contexts) == 1
+        if streaming:
+            assert streamed == []
+            assert len(observed) == 1
+            observed_contents = [
+                message.content for message in observed[0].messages
+            ]
+            assert observed_contents[-1] == "確認"
+            assert all(
+                "<untrusted_external_results>" not in content
+                for content in observed_contents
+            )
+            assert all(
+                "<life_state_data>" not in content
+                for content in observed_contents
+            )
+            assert history.start_calls == []
+            assert history.complete_calls == []
+            assert history.fail_calls == []
+        else:
+            generate.assert_not_called()
+            assert history.complete_calls == [
+                (history.started_turn, instruction)
+            ]
+            assert history.fail_calls == []
+            submitter.submit.assert_called_once()
+
+    @pytest.mark.parametrize("streaming", [True, False])
+    def test_tool_results_come_before_life_state_and_current_user(
+        self, tmp_path: Path, streaming: bool,
+    ) -> None:
+        from app.character_life.models import Kind, LifeState
+        from app.character_life.prompt import Context
+        from app.character_life.store import Store
+        from app.main import _stream_core_reply
+        from app.tool_use.routing import ToolDecision
+        from tests.tool_use_test_support import Decisions, call, runtime
+
+        store = Store(tmp_path / "life.db")
+        store.save_state(LifeState(
+            character_id="miori", kind=Kind.INTEREST,
+            content="色彩への関心", source="user",
+        ))
+        settings = resolve_model_settings(
+            {}, chat_context_tokens=64, assistant_max_generation_tokens=1,
+        )
+        history = _RecordingHistorySession()
+        dependencies = _runtime_dependencies()
+        life_context = Context(store, dependencies.input_token_counter, 63)
+        decisions = Decisions(call, ToolDecision("finish"))
+        captured: list[object] = []
+        dispatch_calls: list[object] = []
+
+        async def scenario() -> None:
+            async with runtime(decisions) as (tools, source, _gate):
+                service = self._service(
+                    history,
+                    dataclass_replace(dependencies, life_context=life_context),
+                    tools=None if streaming else tools,
+                    settings=settings,
+                )
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    if streaming:
+
+                        async def stream(prompt: object, **_kwargs: object):
+                            captured.append(prompt)
+                            yield "回答"
+
+                        with patch.object(llm_router, "stream_response", stream):
+                            chunks = [
+                                chunk
+                                async for chunk in _stream_core_reply(
+                                    service,
+                                    settings,
+                                    "miori",
+                                    history,
+                                    "native-toolで取得して",
+                                    tools=tools,
+                                    conversation_id=str(CONVERSATION_ID),
+                                )
+                            ]
+                        assert chunks == ["回答"]
+                    else:
+                        with patch(
+                            _GENERATE_RESPONSE, return_value="回答"
+                        ) as generate:
+                            reply = await service.generate_reply_async(
+                                "miori", CONVERSATION_ID, "native-toolで取得して"
+                            )
+                        assert _assistant_content(reply) == "回答"
+                        captured.append(generate.call_args.args[0])
+                dispatch_calls.extend(source.calls)
+
+        asyncio.run(scenario())
+
+        contents = [message.content for message in captured[0].messages]
+        external_index = next(
+            index
+            for index, content in enumerate(contents)
+            if "<untrusted_external_results>" in content
+        )
+        life_index = next(
+            index
+            for index, content in enumerate(contents)
+            if "<life_state_data>" in content
+        )
+        assert external_index < life_index < len(contents) - 1
+        assert contents[-1] == "native-toolで取得して"
+        assert len(dispatch_calls) == 1
+        assert len(decisions.contexts) == 2
+        assert "色彩への関心" not in str(decisions.contexts)
+        assert "<untrusted_external_results>" not in str(decisions.contexts)
+        if streaming:
+            assert history.start_calls == []
+            assert history.complete_calls == []
+            assert history.fail_calls == []
+        else:
+            assert history.complete_calls == [(history.started_turn, "回答")]
+            assert history.fail_calls == []
+
+    @pytest.mark.parametrize("streaming", [True, False])
+    def test_revoked_material_before_dispatch_skips_tool_and_persistence(
+        self, streaming: bool,
+    ) -> None:
+        from app.main import _stream_core_reply
+        from app.tool_use.routing import ToolDecision
+        from tests.tool_use_test_support import Decisions, call, runtime
+
+        token = InferenceCancellationToken()
+        material = self._material(token)
+        history = _RecordingHistorySession()
+        submitter = MagicMock()
+        dependencies = _runtime_dependencies(submitter)
+        lineages_seen: list[object] = []
+        streamed: list[object] = []
+
+        def revoke_then_call(context: object):
+            token.cancel()
+            return call(context)
+
+        decisions = Decisions(revoke_then_call, ToolDecision("finish"))
+
+        async def scenario() -> list[object]:
+            async with runtime(decisions) as (tools, source, _gate):
+                service = self._service(
+                    history, dependencies, tools=None if streaming else tools,
+                )
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    if streaming:
+
+                        async def stream(prompt: object, **_kwargs: object):
+                            streamed.append(prompt)
+                            yield "採用してはいけない回答"
+
+                        with patch.object(llm_router, "stream_response", stream):
+                            with pytest.raises(ScreenPerceptionError) as error:
+                                async for _chunk in _stream_core_reply(
+                                    service,
+                                    _PROMPT_CONFIG,
+                                    "miori",
+                                    history,
+                                    "画面を見て",
+                                    screen=material,
+                                    screen_lineage_observer=lineages_seen.append,
+                                    tools=tools,
+                                    conversation_id=str(CONVERSATION_ID),
+                                ):
+                                    pass
+                            assert error.value.reason_code == "request_cancelled"
+                    else:
+                        with patch(
+                            _GENERATE_RESPONSE, return_value="採用してはいけない回答"
+                        ):
+                            with pytest.raises(ScreenPerceptionError) as error:
+                                await service.generate_reply_async(
+                                    "miori", CONVERSATION_ID, "画面を見て", material,
+                                )
+                            assert error.value.reason_code == "request_cancelled"
+                return source.calls
+
+        calls = asyncio.run(scenario())
+
+        assert calls == []
+        if streaming:
+            assert lineages_seen == [material.lineages]
+            assert streamed == []
+            assert history.complete_calls == []
+            assert history.fail_calls == []
+        else:
+            assert history.complete_calls == []
+            assert history.fail_calls == [history.started_turn]
+            submitter.submit.assert_not_called()
+
+    @pytest.mark.parametrize("streaming", [True, False])
+    def test_revoked_material_during_generation_discards_result(
+        self, streaming: bool,
+    ) -> None:
+        from app.main import _stream_core_reply
+        from app.tool_use.routing import ToolDecision
+        from tests.tool_use_test_support import Decisions, call, runtime
+
+        token = InferenceCancellationToken()
+        material = self._material(token)
+        history = _RecordingHistorySession()
+        submitter = MagicMock()
+        dependencies = _runtime_dependencies(submitter)
+        reference_logs: list[object] = []
+
+        def revoke_while_generating(prompt: object, *, max_output_tokens: int) -> str:
+            token.cancel()
+            return "採用してはいけない回答"
+
+        async def scenario() -> list[object]:
+            async with runtime(
+                Decisions(call, ToolDecision("finish"))
+            ) as (tools, source, _gate):
+                if streaming:
+                    service = self._service(
+                        history, dependencies, tools=None,
+                    )
+                else:
+                    service = self._service(
+                        history,
+                        dataclass_replace(
+                            dependencies,
+                            llm_response_generator=revoke_while_generating,
+                        ),
+                        tools=tools,
+                    )
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    if streaming:
+
+                        async def stream(prompt: object, **_kwargs: object):
+                            yield "前半"
+                            token.cancel()
+                            yield "採用してはいけない後半"
+
+                        service.record_successful_prompt_references = (
+                            reference_logs.append
+                        )
+                        with patch.object(llm_router, "stream_response", stream):
+                            chunks: list[str] = []
+                            with pytest.raises(ScreenPerceptionError):
+                                async for chunk in _stream_core_reply(
+                                    service,
+                                    _PROMPT_CONFIG,
+                                    "miori",
+                                    history,
+                                    "画面を見て",
+                                    screen=material,
+                                    tools=tools,
+                                    conversation_id=str(CONVERSATION_ID),
+                                ):
+                                    chunks.append(chunk)
+                            assert chunks == ["前半"]
+                    else:
+                        with pytest.raises(ScreenPerceptionError) as error:
+                            await service.generate_reply_async(
+                                "miori", CONVERSATION_ID, "画面を見て", material,
+                            )
+                        assert error.value.reason_code == "request_cancelled"
+                return source.calls
+
+        calls = asyncio.run(scenario())
+
+        assert len(calls) == 1
+        if streaming:
+            assert reference_logs == []
+        else:
+            assert history.complete_calls == []
+            assert history.fail_calls == [history.started_turn]
+            submitter.submit.assert_not_called()
+
+    @pytest.mark.parametrize("streaming", [True, False])
+    def test_revoked_history_access_before_dispatch_skips_tool_and_persistence(
+        self, streaming: bool,
+    ) -> None:
+        from app.main import _stream_core_reply
+        from app.tool_use.routing import ToolDecision
+        from tests.tool_use_test_support import Decisions, call, runtime
+
+        token = InferenceCancellationToken()
+        lineage = ScreenLineage(
+            UUID("51000000-0000-4000-8000-000000000001"),
+            UUID("52000000-0000-4000-8000-000000000001"),
+            4,
+            "same-routing",
+            "natural_language_text",
+            "window",
+        )
+        history = _RecordingHistorySession()
+        history.restored_turns = (
+            RestoredHistoryTurn("画面質問", "保存済みの画面回答", True, (lineage,)),
+        )
+        access = ScreenHistoryAccess(
+            "cloud",
+            lineage.origin_screen_session_id,
+            lineage.origin_generation,
+            lineage.origin_routing_revision,
+            True,
+            token,
+        )
+        dependencies = _runtime_dependencies()
+        streamed: list[object] = []
+
+        def revoke_then_call(context: object):
+            token.cancel()
+            return call(context)
+
+        decisions = Decisions(revoke_then_call, ToolDecision("finish"))
+
+        async def scenario() -> list[object]:
+            async with runtime(decisions) as (tools, source, _gate):
+                service = self._service(
+                    history, dependencies, tools=None if streaming else tools,
+                )
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    if streaming:
+
+                        async def stream(prompt: object, **_kwargs: object):
+                            streamed.append(prompt)
+                            yield "採用してはいけない回答"
+
+                        with patch.object(llm_router, "stream_response", stream):
+                            with pytest.raises(ScreenPerceptionError):
+                                async for _chunk in _stream_core_reply(
+                                    service,
+                                    _PROMPT_CONFIG,
+                                    "miori",
+                                    history,
+                                    "続きを教えて",
+                                    history_access=access,
+                                    tools=tools,
+                                    conversation_id=str(CONVERSATION_ID),
+                                ):
+                                    pass
+                    else:
+                        with patch(
+                            _GENERATE_RESPONSE, return_value="採用してはいけない回答"
+                        ):
+                            with pytest.raises(ScreenPerceptionError):
+                                await service.generate_reply_async(
+                                    "miori",
+                                    CONVERSATION_ID,
+                                    "続きを教えて",
+                                    history_access=access,
+                                )
+                return source.calls
+
+        calls = asyncio.run(scenario())
+
+        assert calls == []
+        if streaming:
+            assert streamed == []
+        assert history.complete_calls == []
+        if not streaming:
+            assert history.fail_calls == [history.started_turn]
+
+    def test_async_reply_without_tools_preserves_prompt_and_persistence(
+        self,
+    ) -> None:
+        history = _RecordingHistorySession()
+        submitter = MagicMock()
+        generate = MagicMock(return_value="回答")
+        generator_threads: list[int] = []
+
+        def generate_on_worker(prompt: object, *, max_output_tokens: int) -> str:
+            generator_threads.append(threading.get_ident())
+            return generate(prompt, max_output_tokens=max_output_tokens)
+
+        dependencies = dataclass_replace(
+            _runtime_dependencies(submitter),
+            llm_response_generator=generate_on_worker,
+        )
+        service = self._service(history, dependencies, tools=None)
+        event_loop_thread: list[int] = []
+
+        async def scenario() -> chat_service.ChatReply:
+            event_loop_thread.append(threading.get_ident())
+            with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                return await service.generate_reply_async(
+                    "miori", CONVERSATION_ID, "こんにちは"
+                )
+
+        reply = asyncio.run(scenario())
+
+        assert _assistant_content(reply) == "回答"
+        prompt = generate.call_args.args[0]
+        assert [message.content for message in prompt.messages] == [
+            "## 応答方針\n# prompt",
+            "こんにちは",
+        ]
+        assert generate.call_args.kwargs == {
+            "max_output_tokens": _PROMPT_CONFIG.assistant_max_generation_tokens
+        }
+        assert generator_threads != []
+        assert all(
+            thread != event_loop_thread[0] for thread in generator_threads
+        )
+        assert history.complete_calls == [(history.started_turn, "回答")]
+        assert history.fail_calls == []
+        submitter.submit.assert_called_once()
+
+    def test_reply_with_tools_routes_bound_service_through_async_adapter(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[tuple[object, ...]] = []
+        original = ChatService.generate_reply_async
+
+        async def spy(
+            service: ChatService, *args: object, **kwargs: object
+        ) -> chat_service.ChatReply:
+            calls.append(args)
+            return await original(service, *args, **kwargs)
+
+        monkeypatch.setattr(ChatService, "generate_reply_async", spy)
+        history = _RecordingHistorySession()
+        service = self._service(history, _runtime_dependencies(), tools=None)
+
+        async def scenario() -> chat_service.ChatReply:
+            with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                with patch(_GENERATE_RESPONSE, return_value="回答"):
+                    return await _chat_runtime.generate_reply_with_tools(
+                        service.generate_chat_reply,
+                        "miori",
+                        CONVERSATION_ID,
+                        "こんにちは",
+                    )
+
+        reply = asyncio.run(scenario())
+
+        assert calls == [("miori", CONVERSATION_ID, "こんにちは")]
+        assert _assistant_content(reply) == "回答"
+        assert history.complete_calls == [(history.started_turn, "回答")]
+
+    def test_bound_http_entry_opens_history_session_on_worker_thread(
+        self,
+    ) -> None:
+        """tools無効のbound `ChatService`でも、履歴session生成の同期参照はworkerで行う。"""
+        history = _RecordingHistorySession()
+        history_service = _ThreadRecordingHistoryService(history)
+        service = ChatService(
+            ChatRuntimeConfig(
+                rag_enabled=False,
+                memory_policy=None,
+                prompt_config=_PROMPT_CONFIG,
+                chroma_path=_CHROMA_PATH,
+            ),
+            history_service,
+            _runtime_dependencies(),
+        )
+        event_loop_thread: list[int] = []
+
+        async def scenario() -> chat_service.ChatReply:
+            event_loop_thread.append(threading.get_ident())
+            with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                with patch(_GENERATE_RESPONSE, return_value="回答"):
+                    return await _chat_runtime.generate_reply_with_tools(
+                        service.generate_chat_reply,
+                        "miori",
+                        CONVERSATION_ID,
+                        "こんにちは",
+                    )
+
+        reply = asyncio.run(scenario())
+
+        assert _assistant_content(reply) == "回答"
+        assert history_service.open_threads
+        assert all(
+            thread != event_loop_thread[0]
+            for thread in history_service.open_threads
+        )
+        assert history.complete_calls == [(history.started_turn, "回答")]
+        assert history.fail_calls == []
+
+    def test_http_and_voice_adapters_share_reply_preparation(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.main import _stream_core_reply
+        from app.tool_use.routing import ToolDecision
+        from tests.tool_use_test_support import Decisions, call, runtime
+
+        helper_calls = {"room": 0, "merge": 0}
+        real_room = _chat_runtime.require_tool_room
+        real_merge = _chat_runtime.with_tool_material
+
+        def room(*args: object, **kwargs: object) -> None:
+            helper_calls["room"] += 1
+            return real_room(*args, **kwargs)
+
+        def merge(*args: object, **kwargs: object) -> object:
+            helper_calls["merge"] += 1
+            return real_merge(*args, **kwargs)
+
+        monkeypatch.setattr(_chat_runtime, "require_tool_room", room)
+        monkeypatch.setattr(_chat_runtime, "with_tool_material", merge)
+
+        settings = resolve_model_settings(
+            {}, chat_context_tokens=64, assistant_max_generation_tokens=1,
+        )
+        history_http = _RecordingHistorySession()
+        history_voice = _RecordingHistorySession()
+        dependencies = _runtime_dependencies()
+        decisions = Decisions(
+            call, ToolDecision("finish"), call, ToolDecision("finish"),
+        )
+        http_prompts: list[object] = []
+        stream_prompts: list[object] = []
+        dispatch_calls: list[object] = []
+
+        async def stream(prompt: object, **_kwargs: object):
+            stream_prompts.append(prompt)
+            yield "回答"
+
+        async def scenario() -> None:
+            async with runtime(decisions) as (tools, source, _gate):
+                http_service = self._service(
+                    history_http, dependencies, tools=tools, settings=settings,
+                )
+                voice_service = self._service(
+                    history_voice, dependencies, tools=None, settings=settings,
+                )
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    with patch(
+                        _GENERATE_RESPONSE, return_value="回答"
+                    ) as generate:
+                        reply = await http_service.generate_reply_async(
+                            "miori", CONVERSATION_ID, "native-toolで取得して"
+                        )
+                        assert _assistant_content(reply) == "回答"
+                        http_prompts.append(generate.call_args.args[0])
+                    with patch.object(llm_router, "stream_response", stream):
+                        chunks = [
+                            chunk
+                            async for chunk in _stream_core_reply(
+                                voice_service,
+                                settings,
+                                "miori",
+                                history_voice,
+                                "native-toolで取得して",
+                                tools=tools,
+                                conversation_id=str(CONVERSATION_ID),
+                            )
+                        ]
+                        assert chunks == ["回答"]
+                dispatch_calls.extend(source.calls)
+
+        asyncio.run(scenario())
+
+        assert helper_calls == {"room": 2, "merge": 2}
+        assert len(dispatch_calls) == 2
+        assert [m.content for m in http_prompts[0].messages] == [
+            m.content for m in stream_prompts[0].messages
+        ]
+        assert history_http.complete_calls == [(history_http.started_turn, "回答")]
+        assert history_voice.complete_calls == []
+        assert history_voice.fail_calls == []
+
+    def test_tool_reply_marks_screen_lineage_and_skips_formation(
+        self,
+    ) -> None:
+        from app.tool_use.routing import ToolDecision
+        from tests.tool_use_test_support import Decisions, call, runtime
+
+        material = self._material(InferenceCancellationToken())
+        history = _RecordingHistorySession()
+        submitter = MagicMock()
+        dependencies = _runtime_dependencies(submitter)
+
+        async def scenario() -> chat_service.ChatReply:
+            async with runtime(
+                Decisions(call, ToolDecision("finish"))
+            ) as (tools, _source, _gate):
+                service = self._service(history, dependencies, tools=tools)
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    with patch(_GENERATE_RESPONSE, return_value="回答"):
+                        return await service.generate_reply_async(
+                            "miori", CONVERSATION_ID, "画面を見て", material,
+                        )
+
+        reply = asyncio.run(scenario())
+
+        assert _assistant_content(reply) == "回答"
+        assert history.screen_calls == [
+            (history.started_turn, material.lineages)
+        ]
+        assert history.complete_calls == [(history.started_turn, "回答")]
+        assert history.fail_calls == []
+        submitter.submit.assert_not_called()
+
+    def test_voice_stream_resumes_saved_confirmation_only_with_matching_control_request(
+        self, tmp_path: Path,
+    ) -> None:
+        """画面承認IDがcontrol request経由で届いた時だけ、音声streamが保留操作を再開する。"""
+        from app.addon_action.models import ApprovalChoice
+        from app.conversation_core.control_input import response_control_scope
+        from app.main import _stream_core_reply
+        from app.tool_use.routing import ToolDecision
+        from app.tool_use.service import CONFIRMATION_WAITING_MESSAGE
+        from tests.addon_action_test_support import policy
+        from tests.tool_use_test_support import Decisions, call, runtime
+
+        conversation = str(CONVERSATION_ID)
+        history = _RecordingHistorySession()
+        dependencies = _runtime_dependencies()
+        streamed: list[object] = []
+
+        async def stream(prompt: object, **_kwargs: object):
+            streamed.append(prompt)
+            yield "回答"
+
+        async def scenario() -> list[object]:
+            async with runtime(
+                Decisions(call, ToolDecision("finish"))
+            ) as (tools, source, gate):
+                gate.confirmations = p = policy(tmp_path)
+                await tools.run("miori", conversation, "実行して")
+                rid = tools.status("miori", conversation)["confirmation_id"]
+                p.store.answer(rid, ApprovalChoice.ONCE)
+                service = self._service(history, dependencies, tools=None)
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    with patch.object(llm_router, "stream_response", stream):
+                        waiting = [
+                            chunk
+                            async for chunk in _stream_core_reply(
+                                service,
+                                _PROMPT_CONFIG,
+                                "miori",
+                                history,
+                                "画面で一度承認しました",
+                                tools=tools,
+                                conversation_id=conversation,
+                            )
+                        ]
+                        assert waiting == [CONFIRMATION_WAITING_MESSAGE]
+                        assert not source.calls
+                        with response_control_scope(rid):
+                            chunks = [
+                                chunk
+                                async for chunk in _stream_core_reply(
+                                    service,
+                                    _PROMPT_CONFIG,
+                                    "miori",
+                                    history,
+                                    "画面で一度承認しました",
+                                    tools=tools,
+                                    conversation_id=conversation,
+                                )
+                            ]
+                        assert chunks == ["回答"]
+                return source.calls
+
+        calls = asyncio.run(scenario())
+
+        assert len(calls) == 1
+        assert len(streamed) == 1

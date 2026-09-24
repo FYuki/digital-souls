@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 
@@ -51,10 +53,37 @@ def test_formation_settings_resolve_every_override() -> None:
         "MEMORY_FORMATION_MAX_OUTPUT_TOKENS",
     ],
 )
-@pytest.mark.parametrize("value", ["", "0", "-1", "1.5", " 1", "invalid"])
+@pytest.mark.parametrize(
+    "value",
+    ["", "0", "-1", "01", "1.5", " 1", "1 ", "１２", "+1", "invalid"],
+)
 def test_formation_settings_reject_invalid_values_without_fallback(
     key: str,
     value: str,
 ) -> None:
     with pytest.raises(ValueError, match=key):
         _resolve({key: value})
+
+
+def test_formation_settings_reject_leading_zero_before_int_conversion() -> None:
+    raw = "0" + "9" * (sys.get_int_max_str_digits() + 1)
+
+    with pytest.raises(ValueError) as exc_info:
+        _resolve({"MEMORY_FORMATION_MAX_ATTEMPTS": raw})
+
+    assert str(exc_info.value) == (
+        "MEMORY_FORMATION_MAX_ATTEMPTS must be a positive integer"
+    )
+
+
+def test_formation_settings_propagate_standard_int_error_for_oversized_digits() -> (
+    None
+):
+    raw = "9" * (sys.get_int_max_str_digits() + 1)
+
+    with pytest.raises(ValueError) as direct_error:
+        int(raw)
+    with pytest.raises(ValueError) as settings_error:
+        _resolve({"MEMORY_FORMATION_MAX_ATTEMPTS": raw})
+
+    assert str(settings_error.value) == str(direct_error.value)

@@ -65,8 +65,8 @@ def test_sdk_user_token_has_fixed_ttl_and_least_privilege_grants() -> None:
 
 
 def test_sdk_character_token_has_fixed_ttl_and_microphone_publish_grant() -> None:
-    production = importlib.import_module("app.livekit_transport.production")
-    signer = production.ProductionTokenSigner(
+    production_sdk = importlib.import_module("app.livekit_transport.production_sdk")
+    signer = production_sdk.ProductionTokenSigner(
         "test-key", "LIVEKIT_SECRET_SENTINEL"
     )
 

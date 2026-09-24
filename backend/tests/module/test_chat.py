@@ -36,7 +36,7 @@ _COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
-_RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
+_RESOLVED_MEMORY_POLICY = "app.runtime.application.resolved_memory_policy"
 _BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
 _PROMPT_TURNS = (
     "app.conversation_history.service.ConversationHistorySession.prompt_turns"
@@ -707,7 +707,7 @@ class TestChatFlow:
         expected_reply = "前回は畑の話をしました。"
         policy = _rag_policy()
         with patch(
-            "app.main.resolved_memory_policy",
+            "app.runtime.application.resolved_memory_policy",
             return_value=policy,
         ) as mock_policy:
             with patch(

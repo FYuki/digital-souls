@@ -171,7 +171,7 @@ def test_preparation_cannot_bypass_target_authorization():
 
 @pytest.mark.parametrize("failure_stage", [None, "stt", "inference", "prompt", "cancel", "unsupported"])
 def test_core_factory_requires_stt_and_model_before_opening_history(monkeypatch, failure_stage):
-    from app.livekit_transport import production
+    from app.livekit_transport import core_factory
     from app.characters.loader import VoicevoxTtsConfig
     async def scenario():
         calls = []
@@ -197,8 +197,8 @@ def test_core_factory_requires_stt_and_model_before_opening_history(monkeypatch,
         def open_history(*_args):
             calls.append("history")
             return object()
-        monkeypatch.setattr(production, "load_tts_config", lambda _: VoicevoxTtsConfig(speaker_id=14))
-        factory = production.ProductionConversationCoreSessionFactory(
+        monkeypatch.setattr(core_factory, "load_tts_config", lambda _: VoicevoxTtsConfig(speaker_id=14))
+        factory = core_factory.ProductionConversationCoreSessionFactory(
             transcriber=SimpleNamespace(transcribe=transcribe), synthesizer=object(),
             history_service=SimpleNamespace(open_session=open_history),
             generate_reply=lambda *_: pytest.fail("準備では応答を生成しない"),

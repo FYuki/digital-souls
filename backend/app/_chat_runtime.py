@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import os
 import threading
@@ -152,6 +153,15 @@ class _ResolvedChatContext:
     occurred_timezone: str
 
 
+@dataclass(frozen=True)
+class PreparedReply:
+    """HTTP全量生成と音声streamのadapterが共有する、Tool込み応答準備の結果。"""
+
+    prompt: BuiltPrompt
+    max_output_tokens: int
+    direct_reply: str | None = None
+
+
 @dataclass
 class _ChatSession:
     character: str
@@ -244,11 +254,98 @@ class ChatService:
         screen: ScreenTurnMaterial | None = None,
         history_access: ScreenHistoryAccess | None = None,
     ) -> chat_service.ChatReply:
-        assert self.tools is not None
-        with self.tools.response_scope(character, str(conversation_id)):
+        tools = self.tools
+        scope = (
+            tools.response_scope(character, str(conversation_id))
+            if tools is not None
+            else contextlib.nullcontext()
+        )
+        with scope:
             return await self._generate_tool_reply(
                 character, conversation_id, message, screen, history_access
             )
+
+    async def prepare_reply(
+        self,
+        character: str,
+        message: str,
+        history_session: HistorySession,
+        *,
+        conversation: str | None = None,
+        screen: ScreenTurnMaterial | None = None,
+        history_access: ScreenHistoryAccess | None = None,
+        tools: ToolService | None = None,
+        base_prompt_observer: Callable[[BuiltPrompt], None] | None = None,
+        tool_scope: contextlib.AbstractContextManager[None] | None = None,
+        context: _ResolvedChatContext | None = None,
+    ) -> PreparedReply:
+        """HTTP全量生成と音声streamのadapterが共有する、Tool込みの応答準備。
+
+        履歴の開始・確定、推論本体、Memory Formationは各adapter側のownerに残す。
+        """
+        _require_current_screen_material(screen)
+        prompt, max_output_tokens = await run_sync(
+            self.prepare_unrecorded_generation,
+            character,
+            history_session,
+            message,
+            screen,
+            history_access,
+            False,  # Life Stateはツール結果の入力枠を確保してから追加する。
+            context,
+        )
+        if base_prompt_observer is not None:
+            base_prompt_observer(prompt)
+        if tools is None or conversation is None:
+            prompt = await run_sync(self.with_life_context, character, prompt)
+            _require_current_screen_material(screen)
+            _require_current_history_access(history_access, prompt.screen_lineages)
+            return PreparedReply(prompt, max_output_tokens)
+        input_limit = (
+            self._runtime_config.prompt_config.chat_context_tokens - max_output_tokens
+        )
+
+        async def before_execute() -> None:
+            _require_current_screen_material(screen)
+            _require_current_history_access(history_access, prompt.screen_lineages)
+            await run_sync(
+                require_tool_room,
+                prompt,
+                self._dependencies.input_token_counter,
+                input_limit,
+            )
+
+        scope = tool_scope if tool_scope is not None else contextlib.nullcontext()
+        with scope:
+            material = await tools.run(
+                character,
+                conversation,
+                message,
+                history=routing_history(prompt),
+                before_execute=before_execute,
+            )
+        if screen is not None and not screen.is_current:
+            tools.stop(character, conversation)
+            raise ScreenPerceptionError("request_cancelled", stage="chat")
+        if material.direct_text is not None:
+            if history_access is not None and not all(
+                history_access.allows(lineage) for lineage in prompt.screen_lineages
+            ):
+                tools.stop(character, conversation)
+                raise ScreenPerceptionError("request_cancelled", stage="chat")
+            # Tool直接返信では追加のInferenceもLife State追加も行わない。
+            return PreparedReply(prompt, max_output_tokens, material.direct_text)
+        prompt = await run_sync(
+            with_tool_material,
+            prompt,
+            material,
+            self._dependencies.input_token_counter,
+            input_limit,
+        )
+        prompt = await run_sync(self.with_life_context, character, prompt)
+        _require_current_screen_material(screen)
+        _require_current_history_access(history_access, prompt.screen_lineages)
+        return PreparedReply(prompt, max_output_tokens)
 
     async def _generate_tool_reply(
         self,
@@ -259,62 +356,36 @@ class ChatService:
         history_access: ScreenHistoryAccess | None,
     ) -> chat_service.ChatReply:
         """外部I/Oの停止をasync境界で扱い、既存の履歴・privacy契約へ返す。"""
-        assert self.tools is not None
         context = await run_sync(
             _resolve_chat_context, character, self._runtime_config, self._dependencies
         )
-        history_session = self._conversation_history_service.open_session(
-            character, conversation_id
+        history_session = await run_sync(
+            self._conversation_history_service.open_session,
+            character,
+            conversation_id,
         )
         started = await run_sync(history_session.start_turn, message)
         try:
-            _require_current_screen_material(screen)
-            prompt, output_limit = await run_sync(
-                self.prepare_unrecorded_generation,
+            prepared = await self.prepare_reply(
                 character,
+                message,
                 history_session,
-                message,
-                screen,
-                history_access,
-                False,  # Life Stateはツール結果の入力枠を確保してから追加する。
+                conversation=str(conversation_id),
+                screen=screen,
+                history_access=history_access,
+                tools=self.tools,
+                context=context,
             )
-
-            async def before_execute() -> None:
-                _require_current_screen_material(screen)
-                _require_current_history_access(history_access, prompt.screen_lineages)
-                await run_sync(
-                    require_tool_room,
-                    prompt,
-                    self._dependencies.input_token_counter,
-                    context.prompt_config.chat_context_tokens - output_limit,
-                )
-
-            material = await self.tools.run(
-                character,
-                str(conversation_id),
-                message,
-                history=routing_history(prompt),
-                before_execute=before_execute,
-            )
-            if material.direct_text is None:
-                prompt = await run_sync(
-                    with_tool_material,
-                    prompt,
-                    material,
-                    self._dependencies.input_token_counter,
-                    context.prompt_config.chat_context_tokens - output_limit,
-                )
-                prompt = await run_sync(
-                    self.with_life_context, character, prompt,
-                )
+            prompt = prepared.prompt
+            if prepared.direct_reply is None:
                 reply = await run_sync(
                     _call_llm,
                     prompt,
-                    output_limit,
+                    prepared.max_output_tokens,
                     self._dependencies.llm_response_generator,
                 )
             else:
-                reply = material.direct_text
+                reply = prepared.direct_reply
             _require_current_screen_material(screen)
             _require_current_history_access(history_access, prompt.screen_lineages)
             if prompt.screen_lineages:
@@ -324,10 +395,13 @@ class ChatService:
             await run_sync(_record_response_provenance, self._dependencies, started, prompt)
             persisted = await run_sync(history_session.complete_turn, started, reply)
         except BaseException:
-            try:
-                self.tools.stop(character, str(conversation_id))
-            except Exception as cleanup_error:
-                logger.warning("Tool cleanup failed: %s", type(cleanup_error).__name__)
+            if self.tools is not None:
+                try:
+                    self.tools.stop(character, str(conversation_id))
+                except Exception as cleanup_error:
+                    logger.warning(
+                        "Tool cleanup failed: %s", type(cleanup_error).__name__
+                    )
             cleanup = asyncio.create_task(run_sync(history_session.fail_turn, started))
             while True:
                 try:
@@ -516,23 +590,28 @@ class ChatService:
         screen: ScreenTurnMaterial | None = None,
         history_access: ScreenHistoryAccess | None = None,
         include_life_context: bool = True,
+        context: _ResolvedChatContext | None = None,
     ) -> tuple[BuiltPrompt, int]:
-        context = _resolve_chat_context(
-            character,
-            self._runtime_config,
-            self._dependencies,
+        resolved = (
+            context
+            if context is not None
+            else _resolve_chat_context(
+                character,
+                self._runtime_config,
+                self._dependencies,
+            )
         )
         prompt = _build_unrecorded_prompt(
             character,
             message,
-            context,
+            resolved,
             history_session,
             self._dependencies,
             screen=screen,
             history_access=history_access,
             include_life_context=include_life_context,
         )
-        return prompt, context.prompt_config.assistant_max_generation_tokens
+        return prompt, resolved.prompt_config.assistant_max_generation_tokens
 
     def with_life_context(self, character: str, prompt: BuiltPrompt) -> BuiltPrompt:
         return _with_life_context(character, prompt, self._dependencies)
@@ -591,7 +670,7 @@ async def generate_reply_with_tools(
 ) -> chat_service.ChatReply:
     """旧同期APIを維持しつつ、正式なHTTP入口で非同期Tool経路を使う。"""
     owner = getattr(operation, "__self__", None)
-    if isinstance(owner, ChatService) and owner.tools is not None:
+    if isinstance(owner, ChatService):
         # 各公開生成APIの引数はcharacter/conversation/messageと任意の画面context。
         return await owner.generate_reply_async(*args, **kwargs)  # type: ignore[arg-type]
     return await run_sync(operation, *args, **kwargs)
