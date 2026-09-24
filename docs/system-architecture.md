@@ -80,7 +80,7 @@ Ollama以外の未対応Providerへダミー会話やfallbackを送らない。�
 * `livekit_transport/playback_completion.py` — 残りPCMの送出後、応答ID・最終sequenceが一致するブラウザの全出力確認を待つ。Coreの生成pipelineは`ResponseCompletionPort`を介して完了を待ち、その間もcancelできる
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
-* `conversation_core/` — Speech/Text入力を共通の応答・中断・履歴処理へ接続する
+* `conversation_core/` — Speech/Text入力を共通の応答・中断・履歴処理へ接続する。`ConversationCoreSession`がresponse、input、lock、generation、状態遷移、first-terminalの決定を所有し、`pipeline.py`はLLM→有界queue→TTSの実行、`terminal_effects.py`は保存→配送→保留入力開始の終端副作用、`task_tracker.py`はstage/effect taskの登録・取消・drainを担当する。これらの内部moduleは状態を複製せず、公開Core APIへ追加しない
 * `routers/memory_management.py` — 長期記憶・暫定記録の閲覧、訂正、物理削除
 * `addon_action/` / `addon_admin/` — 操作承認・確認・結果回復と、接続・credential等の管理
 * `character_life/` — 会話外活動とLife State。関連する記憶・内省・人格等の正本との接続範囲は後述
