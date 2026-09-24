@@ -23,6 +23,7 @@ FE／BEはprotocol 2.0へ一組で更新する。残る品質・実接続・実�
 | 推論 | 用途別TargetをOllama／OpenAI API／Codex runtimeへ割り当てる共通境界。Provider・Model・上限は環境設定で解決し、暗黙のfallbackは行わない |
 | 画面知覚 | 利用者が選んだ単一のモニター／ウィンドウ／ブラウザタブを必要なturnだけ参照。Vision Targetは任意設定で、共有ONだけでは画像を送信しない |
 | 外部ツール・管理 | 登録済みMCPへの接続、会話からのTool／Resource利用、接続管理、操作承認・確認・結果回復。実行前の権限・引数・送信内容の検証を共通化 |
+| 通知 | Eventからmetadataを個別保存し、未読・フィルタ・通知元／種類別ON・OFF・明示的な内容取得を提供。初回保存から30日と件数上限で保持。会話への報告・要約連携は後続範囲。[通知runtime](docs/notification-runtime.md)を参照 |
 | Character Life | DBOSによる会話外活動、Life State、許可・実行履歴の基盤。**既定無効・dev/test対象**。SELF Episode、Reflection、人格適応、Skill等との全体接続は未完了 |
 
 既存の非同期形成経路の許可型は`EPISODIC_EVENT`、`USER_PREFERENCE`、`INTERACTION_PREFERENCE`です。複数Episodeからの意味抽象化、独立した内省記憶、経験に基づく人格適応は、既存の記憶統合と区別します。[用語集](docs/glossary.md)に、設計上の概念と現在の実装名の対応をまとめています。

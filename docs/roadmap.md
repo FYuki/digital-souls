@@ -109,6 +109,7 @@ TTS差し替えの拡張設計は[Irodori要件](irodori-tts-requirements.md)と
 #187のEpicではEventRuntime・有限永続buffer・別process MCP適合試験を実装した。
 設定と検証は[Event runtime](addon-event-runtime.md)、要求は[Event要件](epic-187-addon-event-requirements.md)、
 保持と欠落時の判断は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)を参照する。通知・会話consumerは後続である。
+後続#183の個別通知・保持・設定・再取得の合意は[通知要件](epic-183-notification-requirements.md)に整理した。通知機能の実装完了ではない。
 
 個別の業務addon、self-owned runtime、Desktop／Discord、Live2D／VRM等まで一括して実装済みとしない。
 

@@ -7,6 +7,8 @@
   import ChatWindow from './lib/ChatWindow.svelte'
   import { createVoiceHistoryController, visibleVoiceTurns } from './lib/voice-history/controller'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
+  import NotificationCenter from './lib/NotificationCenter.svelte'
+  import { createNotificationController } from './lib/notifications/client'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
   import AddonManagement from './lib/AddonManagement.svelte'
@@ -85,6 +87,9 @@
   let screenReferenceDecisionActive = false
   let applicationError: string | null = null
   const addonController = createAddonController()
+  const notificationController = createNotificationController()
+  let showingNotifications = false
+  let notificationReturnFocus: HTMLButtonElement | null = null
   let showingAddonManagement = false
   let addonReturnFocus: HTMLButtonElement | null = null
   async function closeAddonManagement() {
@@ -221,6 +226,7 @@
 
   onMount(() => {
     addonController.start()
+    notificationController.start()
     const refreshAddons = () => { void addonController.refresh() }
     window.addEventListener('focus', refreshAddons)
     const compactQuery = window.matchMedia?.('(max-width: 900px)')
@@ -245,6 +251,7 @@
     void sidebarController.initialize()
     return () => {
       addonController.destroy()
+      notificationController.destroy()
       window.removeEventListener('focus', refreshAddons)
       compactQuery?.removeEventListener('change', updateLayout)
       viewport?.removeEventListener('resize', updateViewport)
@@ -339,6 +346,7 @@
     if (interactionsDisabled) return
     showingMemoryManagement = false
     showingAddonManagement = false
+    showingNotifications = false
     if (character !== $conversationController.character) {
       await conversationController.loadCharacter(character)
     }
@@ -470,9 +478,11 @@
     onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
     onRemoved={handleRemovedConversation}
     onRenamed={() => undefined}
+    notificationCount={$notificationController.unread_count}
+    onOpenNotifications={(trigger) => { notificationReturnFocus = trigger; showingMemoryManagement = false; showingAddonManagement = false; showingNotifications = true; if (compactLayout) sidebarOpen = false }}
     addonBadge={aggregateBadge($addonController.items)}
-    onOpenAddons={(trigger) => { addonReturnFocus = trigger; showingMemoryManagement = false; showingAddonManagement = true; if (compactLayout) sidebarOpen = false }}
-    onOpenMemory={() => { showingAddonManagement = false; showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+    onOpenAddons={(trigger) => { addonReturnFocus = trigger; showingNotifications = false; showingMemoryManagement = false; showingAddonManagement = true; if (compactLayout) sidebarOpen = false }}
+    onOpenMemory={() => { showingNotifications = false; showingAddonManagement = false; showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
   >
     <ScreenCaptureControls
       slot="screen-controls"
@@ -487,7 +497,11 @@
   {#if !sidebarOpen}
     <button class="floating-menu" type="button" aria-label="サイドバーを開く" on:click={() => { sidebarOpen = true }}>☰</button>
   {/if}
-  {#if showingAddonManagement}
+  {#if showingNotifications}
+    <section class="content-panel memory-panel">
+      <NotificationCenter controller={notificationController} onClose={() => { showingNotifications = false; void tick().then(() => notificationReturnFocus?.focus()) }} />
+    </section>
+  {:else if showingAddonManagement}
     <section class="content-panel memory-panel">
       <AddonManagement controller={addonController} onContinued={handleAdminContinued} onClose={() => { void closeAddonManagement() }} />
     </section>
@@ -500,7 +514,7 @@
     </section>
   {/if}
   {#if !showingMemoryManagement}
-  <section class="chat-panel" class:management-hidden={showingAddonManagement} aria-hidden={showingAddonManagement} aria-label={`${currentCharacterEntry?.display_name ?? $conversationController.character}とのチャット`}>
+  <section class="chat-panel" class:management-hidden={showingAddonManagement || showingNotifications} aria-hidden={showingAddonManagement || showingNotifications} aria-label={`${currentCharacterEntry?.display_name ?? $conversationController.character}とのチャット`}>
     <header class="chat-header">
       <p class="eyebrow">digital-souls</p>
       <div class="current-thread">

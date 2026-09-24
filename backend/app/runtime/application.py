@@ -13,6 +13,8 @@ from uuid import UUID
 
 from app import _chat_runtime
 from app.character_life.runtime import Settings as LifeSettings
+from app.characters.catalog import CharacterCatalog
+from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.environment import iana_timezone_environment_value
 from app.inference import (
     InferenceTarget,
@@ -77,6 +79,10 @@ class LifespanWiring:
     ]
     validate_screen_context: Callable[[ApplicationRuntime, str, UUID], None]
     episodic_entity_labels: Callable[[str], Mapping[str, str]]
+
+
+class NotificationStartupFallback(Exception):
+    """必須推論先の接続失敗だけを通知限定起動へ伝える。"""
 
 
 class ApplicationRuntime:
@@ -163,7 +169,17 @@ class ApplicationRuntime:
             )
         self.inference = InferenceResources.create(environ)
         self.screen = ScreenResources.create(environ)
-        self.inference.probe()
+        try:
+            self.inference.probe()
+        except InferenceError as error:
+            if (
+                environ.get("DS_NOTIFICATION_CONFIG")
+                and error.category in {
+                    InferenceErrorCategory.UNAVAILABLE, InferenceErrorCategory.TIMEOUT
+                }
+            ):
+                raise NotificationStartupFallback() from None
+            raise
         initialize_runtime_data_root(self.runtime_paths, self.repository_root)
         self.audio = AudioResources.create_measurement(
             environ, self.runtime_paths, self.repository_root
@@ -273,11 +289,15 @@ class ApplicationRuntime:
         scanner = privacy.scanner
         consolidation_classifier = memory.consolidation_privacy_classifier
         assert scanner is not None and consolidation_classifier is not None
+        notification_catalog = CharacterCatalog(self.repository_root / "characters")
         self.tools.build(
             self.tool_settings,
             inference=inference,
             scanner=scanner,
             settings_path=paths.data_root / "addon-settings.json",
+            character_exists=lambda character: any(
+                entry.character_id == character for entry in notification_catalog.scan()
+            ),
             classifier=consolidation_classifier,
         )
         self.tools.publish_addons(app)
@@ -362,6 +382,9 @@ class ApplicationRuntime:
             del app.state.character_life_runtime
         if self.tools.runtime is not None:
             await run_cleanup(self.tools.runtime.close())
+        for state_name in ("addon_manager", "event_source", "notifications"):
+            if hasattr(app.state, state_name):
+                delattr(app.state, state_name)
         if hasattr(app.state, "tool_service"):
             del app.state.tool_service
         if hasattr(app.state, "action_policy"):

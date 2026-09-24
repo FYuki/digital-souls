@@ -23,6 +23,8 @@ class Delivery:
     snapshot: Json | None
     receipt: str
     recovery: Json | None = None
+    stream: str = ""
+    position: int = 0
 
 
 class EventRuntime:
@@ -247,7 +249,16 @@ class EventRuntime:
                                        position=pos, stream=stream, gaps=gaps, initial=bool(current["initial"]))
             if snapshot is not None and self.reader.sanitizer.text(encode(snapshot)) != encode(snapshot):
                 snapshot = {}
-            return Delivery(tuple(output), tuple(gaps), snapshot, receipt, recovery)
+            return Delivery(tuple(output), tuple(gaps), snapshot, receipt, recovery, digest([source.id, epoch]), pos)
+
+    async def received_checkpoint(self, source_id: str) -> tuple[str, int]:
+        """設定境界用。共有sourceが受信済みの位置をlock内で取得する。"""
+        source = self._source(source_id)
+        async with self._locks[source.id]:
+            state = self.store.state(source.id)
+            if state["epoch"] is None:
+                raise failure("event_baseline_pending")
+            return digest([source.id, state["epoch"]]), state["position"]
 
     async def acknowledge(
         self, source_id: str, consumer_id: str, receipt: str, context: ExecutionContext,
