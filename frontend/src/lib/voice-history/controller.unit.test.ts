@@ -725,6 +725,48 @@ describe('VoiceHistoryController', () => {
     expect(get(controller).live).toBeNull()
   })
 
+  test('discards only the matching utterance while another pending utterance remains', () => {
+    const { controller } = createHarness()
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '破棄する質問'), contextA, [])
+    controller.receive(utteranceFinalized(SECOND_UTTERANCE_ID, '残す質問'), contextA, [])
+
+    const first = controller.receive(utteranceDiscarded(UTTERANCE_ID), contextA, [])
+
+    expect(first).toEqual({ pendingInputAccepted: false, pendingInputResolved: false })
+    expect(get(controller).live).toMatchObject({
+      responseId: null,
+      sourceUtteranceIds: [SECOND_UTTERANCE_ID],
+      userContent: '残す質問',
+    })
+    expect(controller.receive(utteranceDiscarded(UTTERANCE_ID), contextA, []))
+      .toEqual({ pendingInputAccepted: false, pendingInputResolved: false })
+
+    const last = controller.receive(utteranceDiscarded(SECOND_UTTERANCE_ID), contextA, [])
+
+    expect(last).toEqual({ pendingInputAccepted: false, pendingInputResolved: true })
+    expect(get(controller).live).toBeNull()
+  })
+
+  test('preserves the earlier pending utterance when the later one is discarded', () => {
+    const { controller } = createHarness()
+    controller.receive(utteranceFinalized(UTTERANCE_ID, '残す質問'), contextA, [])
+    controller.receive(utteranceFinalized(SECOND_UTTERANCE_ID, '破棄する質問'), contextA, [])
+
+    expect(controller.receive(utteranceDiscarded(SECOND_UTTERANCE_ID), contextA, []))
+      .toEqual({ pendingInputAccepted: false, pendingInputResolved: false })
+    expect(get(controller).live).toMatchObject({
+      responseId: null,
+      sourceUtteranceIds: [UTTERANCE_ID],
+      userContent: '残す質問',
+    })
+
+    controller.receive(responseStarted(RESPONSE_ID, { speechSources: [UTTERANCE_ID] }), contextA, [])
+    expect(get(controller).live).toMatchObject({
+      responseId: RESPONSE_ID,
+      userContent: '残す質問',
+    })
+  })
+
   test('ignores a discarded utterance unrelated to the pending turn', () => {
     const { controller } = createHarness()
     controller.receive(utteranceFinalized(UTTERANCE_ID, '残す質問'), contextA, [])
