@@ -1,3 +1,5 @@
+import { requestHttp } from '../http-client'
+
 const API_PREFIX = '/api/characters'
 
 export type PersonaMemory = {
@@ -35,24 +37,28 @@ const basePath = (character: string): string => (
   `${API_PREFIX}/${encodeURIComponent(character)}`
 )
 
-const requestJson = async (url: string, init?: RequestInit): Promise<unknown> => {
-  const response = await fetch(url, init)
-  if (!response.ok) {
-    if (response.status === 422) {
-      const body: unknown = await response.json()
-      if (typeof body === 'object' && body !== null && 'reason_code' in body
-        && typeof body.reason_code === 'string') {
-        throw new MemoryCorrectionRejected(body.reason_code)
-      }
+const memoryRequestError = async (response: Response): Promise<Error> => {
+  if (response.status === 422) {
+    const body: unknown = await response.json()
+    if (typeof body === 'object' && body !== null && 'reason_code' in body
+      && typeof body.reason_code === 'string') {
+      return new MemoryCorrectionRejected(body.reason_code)
     }
-    throw new Error(`Memory request failed with status ${response.status}`)
   }
-  return response.json()
+  return new Error(`Memory request failed with status ${response.status}`)
 }
 
+const requestJson = (url: string, init?: RequestInit): Promise<unknown> => (
+  requestHttp(url, init, memoryRequestError, 'json')
+)
+
 const requestWithoutBody = async (url: string, init: RequestInit): Promise<void> => {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`Memory request failed with status ${response.status}`)
+  await requestHttp(
+    url,
+    init,
+    (response) => new Error(`Memory request failed with status ${response.status}`),
+    'none',
+  )
 }
 
 export const listPersonaMemories = async (character: string): Promise<PersonaMemory[]> => (

@@ -1,3 +1,4 @@
+import { requestHttp } from '../http-client'
 import type { CharacterCatalogEntry } from './types'
 
 const CATALOG_PATH = '/api/characters'
@@ -30,14 +31,14 @@ const parseEntry = (value: unknown): CharacterCatalogEntry => {
 }
 
 const requestCatalog = async (init?: RequestInit): Promise<CharacterCatalogEntry[]> => {
-  const response = await fetch(
+  const value = await requestHttp(
     init === undefined ? CATALOG_PATH : `${CATALOG_PATH}/rescan`,
     init,
+    (response) => new Error(
+      `Character catalog request failed with status ${response.status}`,
+    ),
+    'json',
   )
-  if (!response.ok) {
-    throw new Error(`Character catalog request failed with status ${response.status}`)
-  }
-  const value: unknown = await response.json()
   if (!Array.isArray(value)) {
     throw new Error('Character catalog response shape is invalid')
   }

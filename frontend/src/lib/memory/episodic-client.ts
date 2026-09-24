@@ -1,3 +1,5 @@
+import { requestHttp } from '../http-client'
+
 export type TimeParts = {
   year: number | null; month: number | null; day: number | null
   hour: number | null; minute: number | null; second: number | null
@@ -41,20 +43,20 @@ export class EpisodicRequestError extends Error {
   }
 }
 const collection = (character: string) => `/api/characters/${encodeURIComponent(character)}/episodic-memories`
-async function request(url: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(url, init)
-  if (!response.ok) {
-    let reason: string | null = null
-    if (response.status === 422) {
-      const body: unknown = await response.json().catch(() => null)
-      if (body && typeof body === 'object' && 'reason_code' in body && typeof body.reason_code === 'string') {
-        reason = body.reason_code
-      }
+const episodicRequestError = async (response: Response): Promise<Error> => {
+  let reason: string | null = null
+  if (response.status === 422) {
+    const body: unknown = await response.json().catch(() => null)
+    if (body && typeof body === 'object' && 'reason_code' in body && typeof body.reason_code === 'string') {
+      reason = body.reason_code
     }
-    throw new EpisodicRequestError(response.status, reason)
   }
-  return response.status === 204 ? null : response.json()
+  return new EpisodicRequestError(response.status, reason)
 }
+
+const request = (url: string, init?: RequestInit): Promise<unknown> => (
+  requestHttp(url, init, episodicRequestError, 'json-or-null')
+)
 export const listEpisodicMemories = (character: string) =>
   request(collection(character)) as Promise<EpisodicMemory[]>
 export const correctFact = (character: string, record: EpisodicMemory, value: FiveW, key: string) =>
