@@ -152,6 +152,7 @@ def _stub_tool_runtime(
             self._events = events
             self.management = object()
             self.events = None
+            self.notifications = object()
             self.action_policy = object()
             self.service = SimpleNamespace(
                 sanitizer=object(),
@@ -1220,6 +1221,8 @@ class TestCleanupFailureContinuation:
 
 
 _RUNNING_STATE_NAMES = {
+    "notifications",
+    "notification_only",
     "inference_router",
     "inference_health",
     "voice_measurement_kind",
@@ -1255,10 +1258,9 @@ class TestStatePublication:
             assert main.app.state.tool_service is None
             assert main.app.state.voice_measurement_kind == "automated_test"
             assert main.app.state.event_source is None
-        # addon_managerとevent_sourceは現行では停止後もstateに残る。
-        # それ以外の公開名はすべて回収される。
-        assert set(main.app.state._state) <= {"addon_manager", "event_source"}
-        for name in _RUNNING_STATE_NAMES - {"addon_manager", "event_source"}:
+        # mainの通知統合後は資源を回収し、縮退モードのfalseだけを保持する。
+        assert main.app.state._state == {"notification_only": False}
+        for name in _RUNNING_STATE_NAMES - {"notification_only"}:
             assert not hasattr(main.app.state, name)
 
 

@@ -6,10 +6,14 @@ Epic #187 / #155 / #190 の実装は `backend/app/addon_events/` に置く。
 `EventRuntime` は既存 `ExecutionGate` と同じ接続を共有し、`EventSourcePort` を実装する。
 `ToolRuntime` の開始・終了に連動し、FastAPIでは `app.state.event_source` からCore内のconsumerが利用する。
 LLM・会話・TTSはEventの取得・配信経路から呼び出さない。
+#183で登録済み参照専用の送信形状検査を共有Policyへ接続した。通常のTool送信判定は変更しない。
+固定引数も参照token・有限整数・booleanに限定し、本文・URL・ネストを拒否する。
+詳細は[通知runtime](notification-runtime.md)を参照する。
 
 [要件指示書](epic-187-addon-event-requirements.md)と
 [復旧ADR](decisions/addon-event-recovery-2026-09.md)の要求を具体化した運用契約である。
-通知保存・表示・集約は #158 / #191、会話への報告は #365 のconsumerが所有する。
+通知の個別保存・表示・設定は #158 / #191、会話への報告は #365 のconsumerが所有する。
+2026-09-16の[通知要件](epic-183-notification-requirements.md)により、通知レコードの集約は行わない。
 
 ## Sourceの登録
 

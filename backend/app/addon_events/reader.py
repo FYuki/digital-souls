@@ -56,7 +56,7 @@ class MCPEventReader:
         native = await self.gate.event_read(
             source.connection_id, operation.ref, operation.kind, operation.definition_digest,
             arguments, self.context(source, operation, context), guard=guard,
-            validate_only=validate_only, resource_page=cursor is not None, charge_validation=charge_validation,
+            registered_references=True, validate_only=validate_only, resource_page=cursor is not None, charge_validation=charge_validation,
         )
         if validate_only:
             return {}

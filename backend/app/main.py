@@ -19,6 +19,8 @@ from app.conversation_core.control_input import current_control_request
 from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.service import HistorySession
 from app.inference import InferenceCaller, InferenceTarget
+from app.inference.config import INFERENCE_TARGET_PREFIX, reject_legacy_inference_environment
+from app.notifications.startup import NotificationAvailabilityMiddleware, notification_lifespan
 from app.llm import router as llm_router
 from app.memory.formation.contracts import MemoryFormationJob
 from app.model_settings import ModelSettings
@@ -31,13 +33,14 @@ from app.routers.chat import router as chat_router
 from app.routers.conversations import router as conversations_router
 from app.routers.episodic_memories import router as episodic_memories_router
 from app.routers.livekit import router as livekit_router
+from app.routers.notifications import router as notifications_router
 from app.routers.memory_management import router as memory_management_router
 from app.routers.screen_perception import router as screen_perception_router
 from app.routers.semantic_memories import router as semantic_memories_router
 from app.routers.tool_use import router as tool_use_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.ws import router as ws_router
-from app.runtime.application import ApplicationRuntime, LifespanWiring
+from app.runtime.application import ApplicationRuntime, LifespanWiring, NotificationStartupFallback
 from app.screen_perception.detector import needs_reference_history
 from app.screen_perception.provenance import ScreenLineage
 from app.screen_perception.service import (
@@ -352,6 +355,24 @@ async def _stream_core_reply(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    reject_legacy_inference_environment(os.environ)
+    app.state.notification_only = False
+    configured = bool(os.environ.get("DS_NOTIFICATION_CONFIG"))
+    if configured and not any(key.startswith(INFERENCE_TARGET_PREFIX) for key in os.environ):
+        async with notification_lifespan(app):
+            yield
+        return
+    # yield後の例外で二度起動せず、必須推論先の起動probe失敗だけ縮退する。
+    try:
+        async with _conversation_lifespan(app):
+            yield
+    except NotificationStartupFallback:
+        async with notification_lifespan(app):
+            yield
+
+
+@asynccontextmanager
+async def _conversation_lifespan(app: FastAPI) -> AsyncIterator[None]:
     runtime = ApplicationRuntime(app, os.environ)
     try:
         runtime.prepare()
@@ -369,10 +390,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(NotificationAvailabilityMiddleware)
 app.include_router(tool_use_router)
 app.include_router(addon_actions_router)
 app.include_router(character_life_router)
 app.include_router(addon_admin_router)
+app.include_router(notifications_router)
 
 app.include_router(chat_router)
 app.include_router(character_catalog_router)
@@ -393,6 +416,8 @@ def health_check() -> dict[str, str]:
 
 @app.get("/health/ready")
 def inference_readiness() -> JSONResponse:
+    if getattr(app.state, "notification_only", False):
+        return JSONResponse({"status": "ready", "mode": "notifications_only"})
     health = getattr(app.state, "inference_health", None)
     ready = health is not None and health.is_ready()
     return JSONResponse(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from app.inference import InferenceTarget
@@ -31,6 +32,7 @@ class ToolResources:
         scanner: PrivacyScanner,
         settings_path: Path,
         classifier: SemanticPrivacyClassifier,
+        character_exists: Callable[[str], bool],
     ) -> None:
         self.runtime = ToolRuntime(
             settings,
@@ -38,12 +40,14 @@ class ToolResources:
             scanner,
             settings_path=settings_path,
             classifier=classifier,
+            character_exists=character_exists,
         )
 
     def publish_addons(self, app: FastAPI) -> None:
         assert self.runtime is not None
         app.state.addon_manager = self.runtime.management
         app.state.event_source = self.runtime.events
+        app.state.notifications = self.runtime.notifications
         app.state.action_policy = self.runtime.action_policy
 
     async def start(self) -> None:
