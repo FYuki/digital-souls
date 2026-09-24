@@ -806,13 +806,8 @@ class ExecutionGate:
                     )
                     dispatch_started = classification.dispatch_started
                     if classification.outcome == "input_required":
-                        request_state = payload.get("requestState")
-                        requests = payload.get("inputRequests") or {}
-                        if (
-                            request_state is not None
-                            and not isinstance(request_state, str)
-                        ) or not isinstance(requests, dict):
-                            raise MCPFailure("protocol", "invalid_input_required")
+                        # input_requiredの分類時に型検証済み。
+                        request_state = cast(str | None, payload.get("requestState"))
                         interaction_id = str(uuid4())
                         self._pending[interaction_id] = _Pending(
                             loop_id,
