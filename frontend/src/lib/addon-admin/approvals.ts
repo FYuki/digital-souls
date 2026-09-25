@@ -1,3 +1,5 @@
+import { requestHttp } from '../http-client'
+
 export type ApprovalChoice = 'always' | 'once' | 'reject'
 export type Permission = 'unapproved' | 'always' | 'denied'
 export type Scope = { connection_id: string; operation_group: 'normal' | 'high_impact'; scene: 'conversation' | 'autonomous' }
@@ -15,9 +17,12 @@ export const permissionLabel = (value: Permission) => ({ always: '常に承認',
 export const choiceLabel = (value: ApprovalChoice) => ({ always: '常に承認する', once: '一度承認する', reject: '拒否する' })[value]
 
 export async function approvalApi(path: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
-  const response = await fetch(`/api/addon-actions/admin/${path}`, { cache: 'no-store', ...init })
-  if (!response.ok) throw new Error('承認情報を取得・保存できませんでした。状態を再取得してください。')
-  const body: unknown = await response.json()
+  const body = await requestHttp(
+    `/api/addon-actions/admin/${path}`,
+    { cache: 'no-store', ...init },
+    () => new Error('承認情報を取得・保存できませんでした。状態を再取得してください。'),
+    'json',
+  )
   if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new Error('invalid approval response')
   return body as Record<string, unknown>
 }

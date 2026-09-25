@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from app import main
+from app.runtime import inference as runtime_inference
 from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.inference.runtime import InferenceRuntime
 
@@ -31,7 +32,7 @@ def test_unconfigured_llm_starts_actual_app_without_conversation_storage(
     notification_config, monkeypatch, runtime_paths,
 ):
     clear_inference(monkeypatch)
-    monkeypatch.setattr(main, "create_inference_runtime", lambda *_: pytest.fail("LLM must not be initialized"))
+    monkeypatch.setattr(runtime_inference, "create_inference_runtime", lambda *_: pytest.fail("LLM must not be initialized"))
     with TestClient(main.app) as client:
         assert client.get("/health/ready").json() == {"status": "ready", "mode": "notifications_only"}
         assert client.get("/health/inference").status_code == 503
@@ -107,3 +108,14 @@ def test_notification_only_still_blocks_incomplete_restore(notification_config, 
         with TestClient(main.app):
             pytest.fail("an incomplete restore must prevent startup")
     assert not hasattr(main.app.state, "notifications")
+
+
+def test_configured_conversation_runtime_publishes_notifications_and_cleans_up(notification_config):
+    with TestClient(main.app) as client:
+        assert main.app.state.notification_only is False
+        response = client.get("/notifications")
+        assert response.status_code == 200
+        assert response.json()["notification_only"] is False
+        assert client.get("/characters/miori/conversations").status_code == 200
+    for name in ("notifications", "addon_manager", "event_source"):
+        assert not hasattr(main.app.state, name)

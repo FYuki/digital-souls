@@ -1,3 +1,4 @@
+import { requestHttp } from '../http-client'
 import type { Conversation, ConversationTurn } from './types'
 import { parsePersistedTurn } from './turn-parser'
 
@@ -8,15 +9,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null
 )
 
-const requestJson = async (url: string, init?: RequestInit): Promise<unknown> => {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`Conversation request failed with status ${response.status}`)
-  return response.status === 204 ? null : response.json()
-}
+const conversationRequestError = (response: Response): Error => (
+  new Error(`Conversation request failed with status ${response.status}`)
+)
+
+const requestJson = (url: string, init?: RequestInit): Promise<unknown> => (
+  requestHttp(url, init, conversationRequestError, 'json-or-null')
+)
 
 const requestWithoutBody = async (url: string, init: RequestInit): Promise<void> => {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(`Conversation request failed with status ${response.status}`)
+  await requestHttp(url, init, conversationRequestError, 'none')
 }
 
 const basePath = (character: string): string => (

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   archiveConversation,
   createConversation,
+  hardDeleteConversation,
   listActiveConversations,
   listArchivedConversations,
   renameConversation,
@@ -26,10 +27,10 @@ const conversation = (
   title: '新しい会話',
 })
 
-const respondWith = (body: unknown): void => {
+const respondWith = (body: unknown, status = 200): void => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(
     JSON.stringify(body),
-    { status: 200 },
+    { status },
   )))
 }
 
@@ -140,6 +141,42 @@ describe('conversation lifecycle client response boundary', () => {
     const request = unarchiveConversation(CHARACTER, CONVERSATION_ID)
 
     await expect(request).rejects.toThrow()
+  })
+
+  test('should reject a failed list response with the request status', async () => {
+    respondWith({ detail: 'unavailable' }, 503)
+
+    await expect(listActiveConversations(CHARACTER)).rejects.toThrow('status 503')
+  })
+
+  test('should reject a 204 list response that carries no conversation array', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
+
+    await expect(listActiveConversations(CHARACTER)).rejects.toThrow('shape')
+  })
+
+  test('should issue a hard delete without reading the response body', async () => {
+    const response = new Response(null, { status: 204 })
+    const readJson = vi.spyOn(response, 'json')
+    vi.stubGlobal('fetch', vi.fn(async () => response))
+
+    await expect(
+      hardDeleteConversation(CHARACTER, CONVERSATION_ID),
+    ).resolves.toBeUndefined()
+
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/characters/${CHARACTER}/conversations/${CONVERSATION_ID}`,
+      { method: 'DELETE' },
+    )
+    expect(readJson).not.toHaveBeenCalled()
+  })
+
+  test('should reject a failed hard delete with the request status', async () => {
+    respondWith({ detail: 'unavailable' }, 500)
+
+    await expect(
+      hardDeleteConversation(CHARACTER, CONVERSATION_ID),
+    ).rejects.toThrow('status 500')
   })
 
   test('should send a conversation title change through PATCH', async () => {

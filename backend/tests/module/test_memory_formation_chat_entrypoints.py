@@ -209,9 +209,11 @@ def _character_card() -> MagicMock:
 def test_http_and_websocket_share_the_same_identifier_only_job_entrypoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import app.runtime.memory as memory_runtime
+
     scheduler = RecordingFormationScheduler()
     monkeypatch.setattr(
-        main,
+        memory_runtime,
         "MemoryFormationScheduler",
         lambda *args, **kwargs: scheduler,
         raising=False,
@@ -261,10 +263,12 @@ def test_runtime_passes_configured_queue_age_to_the_job_scheduler(
         schedulers.append(scheduler)
         return scheduler
 
+    import app.runtime.memory as memory_runtime
+
     monkeypatch.setenv("MEMORY_FORMATION_MAX_QUEUE_AGE_SECONDS", "45")
     monkeypatch.setenv("MEMORY_FORMATION_QUEUE_MAXSIZE", "25")
     monkeypatch.setattr(
-        main,
+        memory_runtime,
         "MemoryFormationScheduler",
         scheduler_factory,
         raising=False,
@@ -513,15 +517,19 @@ def test_noop_domain_dispatch_preserves_automatic_persona_admission(
     monkeypatch: pytest.MonkeyPatch,
     runtime_paths,
 ) -> None:
+    import app.runtime.memory as memory_runtime
+
     router = RecordingNoOpDomainRouter()
-    worker_class = getattr(main, "MemoryFormationWorker", None)
+    worker_class = getattr(memory_runtime, "MemoryFormationWorker", None)
 
     def worker_factory(*args, **kwargs):
         del args
         assert worker_class is not None
         return worker_class(**{**kwargs, "domain_router": router})
 
-    monkeypatch.setattr(main, "MemoryFormationWorker", worker_factory, raising=False)
+    monkeypatch.setattr(
+        memory_runtime, "MemoryFormationWorker", worker_factory, raising=False
+    )
     extractor_response = _valid_preference_response()
     privacy_response = json.dumps(
         {
@@ -866,13 +874,15 @@ def test_controlled_measurement_preserves_history_without_formation_or_consolida
     monkeypatch.setenv("VOICE_MEASUREMENT_KIND", "controlled_baseline")
     monkeypatch.setenv("VOICE_CONTROLLED_TRACE_PATH", str(runtime_paths.data_root / "controlled.jsonl"))
     monkeypatch.setenv("RAG_ENABLED", "false")
+    import app.runtime.memory as memory_runtime
+
     for name in ("MemoryFormationScheduler", "CombinedFormationScheduler",
                  "build_semantic_scheduler", "build_episodic_scheduler"):
-        monkeypatch.setattr(main, name, MagicMock(side_effect=AssertionError("formation must not be built")))
+        monkeypatch.setattr(memory_runtime, name, MagicMock(side_effect=AssertionError("formation must not be built")))
     consolidation_start = AsyncMock()
     consolidation_stop = AsyncMock()
-    monkeypatch.setattr(main.MemoryConsolidationScheduler, "start", consolidation_start)
-    monkeypatch.setattr(main.MemoryConsolidationScheduler, "stop", consolidation_stop)
+    monkeypatch.setattr(memory_runtime.MemoryConsolidationScheduler, "start", consolidation_start)
+    monkeypatch.setattr(memory_runtime.MemoryConsolidationScheduler, "stop", consolidation_stop)
     with patch("app.main.load_character_card", return_value=_character_card()):
         with patch("app.llm.router.generate_response", return_value="synthetic reply"):
             with TestClient(main.app) as client:

@@ -38,7 +38,7 @@ def capture_harness():
     """推論・配信を行わず、captureの所有権とSTT直列queueを検証する。"""
     import asyncio
     from types import SimpleNamespace
-    from app.livekit_transport.production import _ConversationCoreBridge
+    from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 
     requests, tasks = [], set()
 

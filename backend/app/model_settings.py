@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from app.config_values import parse_positive_integer
+
 WHISPER_MODEL_ENV = "WHISPER_MODEL"
 MAX_COMPLETED_TURNS_ENV = "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS"
 HISTORY_TOKEN_LIMIT_ENV = "CONVERSATION_HISTORY_TOKEN_LIMIT"
@@ -97,12 +99,7 @@ def _positive_integer(
     raw_value = environment.get(key)
     if raw_value is None:
         return default
-    if not raw_value.isascii() or not raw_value.isdecimal():
-        raise ValueError(f"{key} must be a positive integer")
-    value = int(raw_value)
-    if value < 1 or str(value) != raw_value:
-        raise ValueError(f"{key} must be a positive integer")
-    return value
+    return parse_positive_integer(raw_value, key)
 
 
 def _validate_token_relationships(settings: ModelSettings) -> None:

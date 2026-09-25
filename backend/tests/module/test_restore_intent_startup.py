@@ -68,14 +68,28 @@ async def test_restore_startup_block_01_stops_before_any_sqlite_open_when_intent
     sqlite_connect = Mock(side_effect=AssertionError("SQLite must stay closed"))
     create_repository = Mock(side_effect=AssertionError("repository must not start"))
     create_wal_cleanup = Mock(side_effect=AssertionError("WAL cleanup must not start"))
-    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
-    monkeypatch.setattr(main, "inspect_conversation_history_schema", inspect_schema)
+    import sqlite3
+    import app.runtime.application as application_runtime
+    import app.runtime.history as history_runtime
+
     monkeypatch.setattr(
-        main, "initialize_conversation_history_schema", initialize_schema
+        application_runtime, "resolve_runtime_paths", lambda *_args: paths
     )
-    monkeypatch.setattr(main.sqlite3, "connect", sqlite_connect)
-    monkeypatch.setattr(main, "ConversationHistoryRepository", create_repository)
-    monkeypatch.setattr(main, "ConversationWalCleanup", create_wal_cleanup)
+    monkeypatch.setattr(
+        history_runtime, "inspect_conversation_history_schema", inspect_schema
+    )
+    monkeypatch.setattr(
+        history_runtime,
+        "initialize_conversation_history_schema",
+        initialize_schema,
+    )
+    monkeypatch.setattr(sqlite3, "connect", sqlite_connect)
+    monkeypatch.setattr(
+        history_runtime, "ConversationHistoryRepository", create_repository
+    )
+    monkeypatch.setattr(
+        history_runtime, "ConversationWalCleanup", create_wal_cleanup
+    )
 
     with pytest.raises(_recovery_error_type(), match=RESTORE_RECOVERY_MESSAGE):
         async with main.lifespan(FastAPI()):

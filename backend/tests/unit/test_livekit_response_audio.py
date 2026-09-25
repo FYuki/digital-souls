@@ -374,7 +374,8 @@ def test_livekit_ack_completes_core_cancellation_while_control_queue_is_waiting(
     import json
     from app.conversation_core import ConversationCoreSession, ResponseState
     from app.livekit_transport import coordinator as module
-    from app.livekit_transport.production import _ConversationCoreBridge, _ConversationCoreDelivery
+    from app.livekit_transport.core_delivery import _ConversationCoreDelivery
+    from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
     from tests.unit.test_livekit_delivery_and_lifecycle import _coordinator
     from tests.conversation_core_test_support import BlockingLlm, RecordingPersistence, RecordingObservation, RecordingStt, RecordingTts
     output, _, _, _, _ = rig

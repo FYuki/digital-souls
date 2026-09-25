@@ -1,7 +1,9 @@
 """中断・失敗の後始末で元の制御フローを壊さない回帰。"""
 
 import asyncio
+import contextlib
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -10,36 +12,66 @@ import pytest
 from app import _chat_runtime
 from app.chat_service import ChatBackendError, ChatTimeoutError
 from app.external_mcp.models import MCPFailure
+from app.model_settings import resolve_model_settings
+from app.prompting import (
+    BuiltPrompt,
+    CharacterPrompt,
+    PromptMessage,
+    PromptRole,
+    PromptUsage,
+)
 from app.routers import chat as route
 from app.tool_use.routing import parse_object
 from tests.tool_use_test_support import Decisions, runtime
 from tests.unit.test_conversation_core_lifecycle import _session, UTTERANCE_1
 
 
-def _failing_chat(monkeypatch, error, fail_turn):
-    service = object.__new__(_chat_runtime.ChatService)
-    service._runtime_config = None
-    service._dependencies = None
-    service.tools = SimpleNamespace(stop=lambda *_: None)
-    history = SimpleNamespace(start_turn=lambda *_: "started", fail_turn=fail_turn)
-    service._conversation_history_service = SimpleNamespace(
-        open_session=lambda *_: history
+def _tool_chat_service(history, tools, *, prompt_builder):
+    return _chat_runtime.ChatService(
+        _chat_runtime.ChatRuntimeConfig(
+            rag_enabled=False,
+            memory_policy=None,
+            prompt_config=resolve_model_settings({}),
+            chroma_path=Path("/test/runtime-data/chroma"),
+        ),
+        SimpleNamespace(open_session=lambda *_: history),
+        _chat_runtime.ChatRuntimeDependencies(
+            character_definition_loader=lambda _c: _chat_runtime.CharacterRuntimeDefinition(
+                prompt=CharacterPrompt("", "", "", "", "", ""),
+                character_book=None,
+            ),
+            prompt_builder=prompt_builder,
+            llm_response_generator=lambda *_a, **_k: "unused",
+            input_token_counter=lambda messages: len(messages),
+            privacy_scanner=SimpleNamespace(),
+            semantic_classifier=SimpleNamespace(),
+            approved_memory_repository=SimpleNamespace(),
+            memory_embedder=lambda _text: [0.1],
+            memory_formation_submitter=SimpleNamespace(submit=lambda _job: None),
+            tools=tools,
+        ),
     )
-    monkeypatch.setattr(_chat_runtime, "_resolve_chat_context", lambda *_: None)
 
-    def fail(*_):
+
+def _failing_chat(error, fail_turn):
+    history = SimpleNamespace(start_turn=lambda *_: "started", fail_turn=fail_turn)
+
+    def fail_prompt(**_kwargs):
         raise error
 
-    service.prepare_unrecorded_generation = fail
-    return service
+    tools = SimpleNamespace(
+        response_scope=lambda *_a, **_k: contextlib.nullcontext(),
+        stop=lambda *_a, **_k: None,
+    )
+    return _tool_chat_service(history, tools, prompt_builder=fail_prompt)
 
 
 @pytest.mark.parametrize("error", [ChatBackendError(), ChatTimeoutError()])
-def test_failed_history_cleanup_preserves_original_chat_error(monkeypatch, error):
+def test_failed_history_cleanup_preserves_original_chat_error(error):
     def cleanup(_):
         raise RuntimeError("履歴保存の失敗")
 
-    service = _failing_chat(monkeypatch, error, cleanup)
+    service = _failing_chat(error, cleanup)
     with pytest.raises(type(error)) as raised:
         asyncio.run(service._generate_tool_reply("miori", uuid4(), "入力", None, None))
     assert raised.value is error
@@ -49,7 +81,7 @@ def test_additional_cancellation_waits_for_history_cleanup(monkeypatch):
     async def exercise():
         cleanup_started, release = asyncio.Event(), asyncio.Event()
         original = asyncio.CancelledError("original")
-        service = _failing_chat(monkeypatch, original, lambda _: None)
+        service = _failing_chat(original, lambda _: None)
         original_run_sync = _chat_runtime.run_sync
         finished = []
 
@@ -77,6 +109,48 @@ def test_additional_cancellation_waits_for_history_cleanup(monkeypatch):
             await task
         assert raised.value is original
         assert finished == [True]
+
+    asyncio.run(exercise())
+
+
+def test_cancelling_tool_run_stops_tools_and_fails_history_once():
+    """Tool実行中のHTTP取消はTool停止と履歴failを一度だけ行う。"""
+
+    async def exercise():
+        run_started = asyncio.Event()
+        stops, fails = [], []
+        conversation_id = uuid4()
+
+        async def run(*_args, **_kwargs):
+            run_started.set()
+            await asyncio.Event().wait()
+
+        tools = SimpleNamespace(
+            response_scope=lambda *_a, **_k: contextlib.nullcontext(),
+            stop=lambda *a: stops.append(a),
+            run=run,
+        )
+        history = SimpleNamespace(
+            start_turn=lambda *_: "started",
+            fail_turn=lambda turn: fails.append(turn),
+        )
+        prompt = BuiltPrompt(
+            (PromptMessage(PromptRole.USER, "入力"),),
+            PromptUsage(*([0] * 10)),
+            (),
+        )
+        service = _tool_chat_service(
+            history, tools, prompt_builder=lambda **_k: prompt
+        )
+        task = asyncio.create_task(
+            service.generate_reply_async("miori", conversation_id, "入力")
+        )
+        await asyncio.wait_for(run_started.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert stops == [("miori", str(conversation_id))]
+        assert fails == ["started"]
 
     asyncio.run(exercise())
 
