@@ -40,12 +40,12 @@ from tests.ws_test_support import (
     _BUILD_PROMPT,
     _PERSONALITY,
     _LLM_REPLY,
-    _formal_token_counter,
+    _formal_token_counter,  # noqa: F401 - autouse fixtureを登録する
     _PCM_AUDIO,
     _ODD_LENGTH_PCM_AUDIO,
     _TTS_CONFIG_MISSING_MESSAGE,
     _WS_URL,
-    pytestmark,
+    pytestmark as _ws_pytestmark,
     _StubDeliverySession,
     _character_card,
     _generated_contents,
@@ -58,6 +58,9 @@ from tests.ws_test_support import (
     _write_character,
     _wait_until,
 )
+
+pytestmark = _ws_pytestmark
+
 
 class TestWebSocketEndpoint:
     def test_correlates_audio_metadata_with_the_following_binary_response(

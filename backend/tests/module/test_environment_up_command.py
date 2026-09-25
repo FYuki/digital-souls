@@ -104,13 +104,11 @@ def test_should_return_after_child_orchestrator_is_ready_and_leave_down_cleanup_
     environments = ROOT_DIR / "environments"
     report_path = runtime_paths.runtime_report_dir / "detached" / "environment-run.json"
 
-    def unused_loopback_origin() -> str:
-        with socket.socket() as probe:
-            probe.bind(("127.0.0.1", 0))
-            return f"http://127.0.0.1:{probe.getsockname()[1]}"
-
-    frontend_origin = unused_loopback_origin()
-    ready_gate_origin = unused_loopback_origin()
+    with socket.socket() as frontend_probe, socket.socket() as ready_gate_probe:
+        frontend_probe.bind(("127.0.0.1", 0))
+        ready_gate_probe.bind(("127.0.0.1", 0))
+        frontend_origin = f"http://127.0.0.1:{frontend_probe.getsockname()[1]}"
+        ready_gate_origin = f"http://127.0.0.1:{ready_gate_probe.getsockname()[1]}"
     assert frontend_origin != ready_gate_origin
     env = {
         **os.environ,

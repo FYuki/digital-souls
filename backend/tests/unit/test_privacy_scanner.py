@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import builtins
+import io
 from pathlib import Path
 from statistics import median
 from time import perf_counter
@@ -628,8 +630,14 @@ def test_scanner_uses_supplied_policy_without_reading_files(
     from app.privacy.scanner import create_privacy_scanner
 
     policy = resolved_memory_policy().privacy
+
+    def fail_read(*_args, **_kwargs):
+        pytest.fail("scanner read a file")
+
     with monkeypatch.context() as patch:
-        patch.setattr(Path, "open", lambda *_args, **_kwargs: pytest.fail("scanner read a file"))
+        patch.setattr(Path, "open", fail_read)
+        patch.setattr(builtins, "open", fail_read)
+        patch.setattr(io, "open", fail_read)
         scanner = create_privacy_scanner(policy)
         result = scanner.scan("合成入力")
     from app.privacy.contracts import ScanSuccess

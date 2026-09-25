@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -1034,7 +1035,7 @@ def test_should_publish_revision_only_after_the_complete_sha_is_ready(
         '  *) /usr/bin/install "${arguments[@]}" ;;\n'
         'esac\n'
         'touch "$ATOMIC_INSTALL_READY"\n'
-        'while [ ! -e "$ATOMIC_INSTALL_RELEASE" ]; do :; done\n'
+        'while [ ! -e "$ATOMIC_INSTALL_RELEASE" ]; do sleep 0.01; done\n'
         'case "$destination" in */dogfood.revision) tail -c +6 "$source_path" >> "$destination" ;; esac\n',
     )
     process = subprocess.Popen(
@@ -1054,6 +1055,7 @@ def test_should_publish_revision_only_after_the_complete_sha_is_ready(
             "ATOMIC_INSTALL_READY": str(install_ready),
             "ATOMIC_INSTALL_RELEASE": str(install_release),
         },
+        start_new_session=True,
     )
     try:
         deadline = time.monotonic() + 10
@@ -1065,8 +1067,11 @@ def test_should_publish_revision_only_after_the_complete_sha_is_ready(
         assert process.wait(timeout=10) == 0
         observed.add(revision.read_text(encoding="utf-8"))
     finally:
-        if process.poll() is None:
-            process.kill()
+        install_release.touch()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=10)
 
     assert observed <= {f"{TEST_REVISION}\n", f"{NEXT_REVISION}\n"}

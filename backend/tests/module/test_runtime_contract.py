@@ -434,7 +434,13 @@ class TestRuntimeConfiguration:
     def test_audio_pipeline_does_not_own_httpx_transport(self):
         import app.audio_pipeline as audio_pipeline
 
-        assert not hasattr(audio_pipeline, "httpx")
+        imported_httpx_objects = [
+            name
+            for name, value in vars(audio_pipeline).items()
+            if getattr(value, "__name__", "") == "httpx"
+            or str(getattr(value, "__module__", "")).startswith("httpx")
+        ]
+        assert imported_httpx_objects == []
 
     def test_main_lifespan_owns_audio_pipeline_service_state(self):
         import app.main as main
