@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 from app.livekit_transport.delivery import CoreEventDelivery
-from app.livekit_transport.production import _ConversationCoreBridge
+from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 from app.livekit_transport.text_input import TextInputReceiver
 
 

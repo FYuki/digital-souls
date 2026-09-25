@@ -41,7 +41,7 @@ Epic `4e00405a017e959300fe89942c0e3d5a24d46a76`との差は文書のみ。
 設定の出典は[FE区間検出](../frontend/src/lib/audio/utterance-detector.ts)、
 [補助判定](../frontend/src/lib/audio/short-speech-evidence.ts)、
 [idle reset](../frontend/src/lib/audio/idle-vad-reset.ts)、
-[BE capture](../backend/app/livekit_transport/production.py)。
+[BE capture](../backend/app/livekit_transport/microphone_bridge.py)。
 M1では既存4ファイルのunit testが成功し、CPU ONNX Runtime 1.27.0とWasmtime 36.0.0で同じ資産の初期化・無音frame処理を確認した。
 これはモデルの移設可能性の確認であり、音声品質比較の代用ではない。
 

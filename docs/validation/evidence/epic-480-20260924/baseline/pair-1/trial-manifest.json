@@ -1,0 +1,196 @@
+{
+  "diagnostics": {
+    "cpu_percent": 3.8128542470220155,
+    "maximum_resident_set_bytes": 214188032
+  },
+  "expected_measured": 1,
+  "expected_warmup": 0,
+  "fixture": {
+    "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+    "fixture_version": "speech-v2",
+    "sample_rate_hz": 48000,
+    "speech_end_sample": 45120,
+    "speech_start_sample": 15840
+  },
+  "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+  "measurement_revision": "64a9d60c4d03eff73ec1f9708852fbb111bb5628",
+  "measurement_scope": "isolated_normal_trial",
+  "playback_supply_observation_enabled": false,
+  "stt_pcm_observation_enabled": false,
+  "trials": [
+    {
+      "audioDecodeAt": 11435.099999997019,
+      "audioReceivedAt": 11434.099999997019,
+      "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+      "first_playback_method": "audio_worklet_output_timestamp",
+      "fixtureStartedAt": 7520.29999999702,
+      "fixture_clock_bounds": {
+        "sourceStart": {
+          "lowerMs": 7520.29999999702,
+          "sourceSample": 0,
+          "upperMs": 7522
+        },
+        "speechEnd": {
+          "lowerMs": 8452.29999999702,
+          "sourceSample": 45120,
+          "upperMs": 8453.79999999702
+        },
+        "speechStart": {
+          "lowerMs": 7840.399999991059,
+          "sourceSample": 15840,
+          "upperMs": 7843.0999999940395
+        }
+      },
+      "fixture_clock_maximum_uncertainty_ms": 20,
+      "fixture_clock_method": "audio_worklet_pcm_causal_bounds",
+      "fixture_speech_end_client_ms": 8452.29999999702,
+      "fixture_version": "speech-v2",
+      "initial_state_evidence": {
+        "configuration_sha256": {
+          "backend/app/memory/memory_policy.json": "d85ee4297f317a2f335e8e61875043cb99eaa68f83f8f13bdb8156f0b11fe2cf",
+          "characters/miori/miori.card.json": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444"
+        },
+        "memory_scheduler_policy": {
+          "consolidation_disabled": false,
+          "formation_disabled": false,
+          "method": "controlled_memory_schedulers_v1"
+        },
+        "method": "sqlite_empty_state_and_configuration_v1",
+        "rag_enabled": false,
+        "row_counts": {
+          "approved_memories": 0,
+          "conversation_turns": 0,
+          "episodic_invalid_sources": 0,
+          "episodic_links": 0,
+          "episodic_merges": 0,
+          "episodic_processed_spans": 0,
+          "episodic_receipts": 0,
+          "episodic_records": 0,
+          "episodic_versions": 0,
+          "memory_index_outbox": 0,
+          "memory_lineage": 0,
+          "memory_response_dependencies": 0,
+          "memory_response_origins": 0,
+          "memory_sources": 0,
+          "memory_write_receipts": 0,
+          "screen_turn_provenance": 0,
+          "semantic_deletion_masks": 0,
+          "semantic_processed_sources": 0,
+          "semantic_reassessment": 0,
+          "semantic_receipts": 0,
+          "semantic_records": 0,
+          "semantic_relations": 0,
+          "semantic_versions": 0,
+          "temporary_provider_records": 0
+        },
+        "schema_versions": {
+          "history": 9,
+          "memory": 6
+        }
+      },
+      "initial_state_hash": "a93a79d258f36a64ca376e47ee37100756b903b22de44dd083fa0740f4519117",
+      "latencyMs": 2118.3323333333337,
+      "media_observation_method": "response_track_stateful_opus_worklet_output",
+      "network_measurement_method": "native_observation_summary_v1",
+      "network_observation": {
+        "downlink": {
+          "bytes": 44246,
+          "lostPackets": 0,
+          "packets": 203,
+          "status": "measured"
+        },
+        "method": "browser_audio_rtp_counters_v1",
+        "uplink": {
+          "bytes": 13496,
+          "packets": 107,
+          "status": "measured"
+        }
+      },
+      "outcome": "success",
+      "packet_playback_observation": {
+        "confirmationObservedAtMs": 11482.09999999404,
+        "decodedAtMs": 11435.099999997019,
+        "firstOutputAtMs": 11477.732333324393,
+        "firstOutputEndFrame": 99456,
+        "firstOutputFrame": 99328,
+        "outputClockContextTime": 2.072001,
+        "outputClockPassed": true,
+        "outputClockPerformanceTime": 11480.39999999106,
+        "packetIndex": 0,
+        "receivedAtMs": 11434.099999997019,
+        "renderClockConfirmationFrame": 99328,
+        "renderClockMethod": "quantum_count_reconciled_with_global_frame",
+        "renderQuantumStartFrame": 99328,
+        "sampleRate": 48000,
+        "sourcePcmOffsetVerified": false
+      },
+      "phase": "measured",
+      "playback_completion": {
+        "confirmationObservedAtMs": 15542.5,
+        "expectedSamples": 194880,
+        "firstOutputFrame": 99328,
+        "firstRtpTimestamp": 4036986323,
+        "gapCount": 0,
+        "gapSamples": 0,
+        "inputSamples": 193920,
+        "lastOutputEndFrame": 294208,
+        "lastRtpTimestamp": 4037180243,
+        "maximumGapSamples": 0,
+        "outputClockContextTime": 6.133334333333334,
+        "outputClockPerformanceTime": 15541.89999999106,
+        "packetCount": 203,
+        "paddingSamples": 960,
+        "renderedSamples": 194880,
+        "sampleRate": 48000
+      },
+      "preparation_observation": {
+        "attempt_count": 1,
+        "clock_domain": "browser_performance",
+        "duration_ms": 5959.0999999940395,
+        "method": "browser_click_to_microphone_standby_dom_v1",
+        "ready_client_ms": 7494.79999999702,
+        "started_client_ms": 1535.7000000029802
+      },
+      "receivedBytes": null,
+      "sendAt": 9359.39999999106,
+      "sentBytes": null,
+      "session_end_confirmed": true,
+      "startedAt": 11477.732333324393,
+      "trackReceivedAt": 9403,
+      "track_media_observation": {
+        "firstEncodedFrameAtBoundsMs": {
+          "lowerMs": 11434.50000000298,
+          "upperMs": 11434.900000002981
+        },
+        "firstEncodedFrameAtMs": 11434.50000000298,
+        "firstNonzeroDecodedFrameAtMs": 11445.29999999702,
+        "firstPacketDecodedAtBoundsMs": {
+          "lowerMs": 11435.099999997019,
+          "upperMs": 11435.49999999702
+        },
+        "firstPacketDecodedAtMs": 11435.099999997019,
+        "firstPacketDecodedSamples": 960,
+        "firstPacketDeliveredAtMs": 11445,
+        "firstPacketReceivedAtBoundsMs": {
+          "lowerMs": 11434.099999997019,
+          "upperMs": 11434.49999999702
+        },
+        "firstPacketReceivedAtMs": 11434.099999997019,
+        "trackReceivedAtMs": 9403,
+        "workerClockMethod": "causal_message_bounds",
+        "workerClockOffsetBoundsMs": {
+          "lowerMs": 9405.50000000298,
+          "upperMs": 9405.900000002981
+        }
+      },
+      "track_response_matches": true,
+      "transcript_matches": true,
+      "user_control_observation": {
+        "activationTimesMs": [],
+        "method": "document_activation_clicks_v1",
+        "observedAtMs": 15588.39999999106,
+        "startedAtMs": 7501.899999991059
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { requestHttp } from '../http-client'
 import type { MemoryTime } from './episodic-client'
 
 export type SemanticSource = {
@@ -19,14 +20,15 @@ export type SemanticMemory = {
     relation: string; created_at: string }[]
 }
 const collection = (character: string) => `/api/characters/${encodeURIComponent(character)}/semantic-memories`
-async function request(url: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(url, init)
-  if (!response.ok) throw new Error(response.status === 409
+const semanticRequestError = (response: Response): Error => new Error(
+  response.status === 409
     ? '記憶が変更されています。再読み込みしてください。'
     : response.status === 422 ? '訂正可能な内容と保存条件を確認してください。'
     : '記憶の操作に失敗しました。再試行できます。')
-  return response.status === 204 ? null : response.json()
-}
+
+const request = (url: string, init?: RequestInit): Promise<unknown> => (
+  requestHttp(url, init, semanticRequestError, 'json-or-null')
+)
 export const listSemanticMemories = (character: string) =>
   request(collection(character)) as Promise<SemanticMemory[]>
 export const correctSemanticMemory = (character: string, record: SemanticMemory, value: string, key: string) =>

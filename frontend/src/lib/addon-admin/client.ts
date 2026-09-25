@@ -1,3 +1,5 @@
+import { requestHttp } from '../http-client'
+
 export type Availability = 'unknown' | 'available' | 'degraded' | 'unavailable'
 export type EffectiveState = Availability | 'disabled'
 export type ErrorCode = 'connection_failed' | 'authentication_failed' | 'protocol_error' | 'health_check_failed' | 'partial_failure'
@@ -92,16 +94,24 @@ export function confirmationMessage(item: AddonStatus): string {
 }
 
 const base = '/api/addon-admin/connections'
-async function request(url: string, signal: AbortSignal, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(url, { ...init, signal, cache: 'no-store' })
-  if (!response.ok) {
-    const body = await response.json().catch(() => null)
-    if (response.status === 503 && body?.detail === 'settings_durability_uncertain') {
-      throw new SettingsDurabilityError('settings_durability_uncertain')
-    }
-    throw new ManagementError(typeof body?.detail === 'string' ? body.detail : 'management_request_failed')
+
+const managementRequestError = async (response: Response): Promise<Error> => {
+  const body = await response.json().catch(() => null)
+  if (response.status === 503 && body?.detail === 'settings_durability_uncertain') {
+    return new SettingsDurabilityError('settings_durability_uncertain')
   }
-  return response.status === 204 ? null : response.json()
+  return new ManagementError(
+    typeof body?.detail === 'string' ? body.detail : 'management_request_failed',
+  )
+}
+
+async function request(url: string, signal: AbortSignal, init?: RequestInit): Promise<unknown> {
+  return requestHttp(
+    url,
+    { ...init, signal, cache: 'no-store' },
+    managementRequestError,
+    'json-or-null',
+  )
 }
 
 export async function listAddons(signal: AbortSignal): Promise<AddonStatus[]> {

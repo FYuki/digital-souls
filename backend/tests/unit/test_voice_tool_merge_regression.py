@@ -2,14 +2,23 @@
 
 import asyncio
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
-from app import main
+from app import _chat_runtime, main
 from app.conversation_core import ResponseState
 from app.inference.diagnostics import collect_diagnostics
-from app.prompting import BuiltPrompt, PromptMessage, PromptRole, PromptUsage
+from app.model_settings import resolve_model_settings
+from app.prompting import (
+    BuiltPrompt,
+    CharacterPrompt,
+    PromptMessage,
+    PromptRole,
+    PromptUsage,
+)
 from app.tool_use.service import ToolMaterial
 from tests.unit.test_conversation_core_stop_confirmation import HeldStop, make_session, start, tick
 
@@ -64,25 +73,59 @@ def test_voice_diagnostics_describe_final_tool_and_life_prompt(monkeypatch):
         )
 
     class Tools:
-        async def run(self, *_args, **_kwargs):
+        async def run(self, *_args, before_execute=None, **_kwargs):
+            if before_execute is not None:
+                await before_execute()
             return ToolMaterial(results=({"outcome": "succeeded", "text": "資料"},))
 
     async def stream(prompt, **_kwargs):
         seen.append(prompt)
         yield "応答"
 
+    settings = resolve_model_settings(
+        {}, chat_context_tokens=4000, assistant_max_generation_tokens=100
+    )
+    service = _chat_runtime.ChatService(
+        _chat_runtime.ChatRuntimeConfig(
+            rag_enabled=False,
+            memory_policy=None,
+            prompt_config=settings,
+            chroma_path=Path("/test/runtime-data/chroma"),
+        ),
+        SimpleNamespace(open_session=lambda *_: SimpleNamespace()),
+        _chat_runtime.ChatRuntimeDependencies(
+            character_definition_loader=(
+                lambda _c: _chat_runtime.CharacterRuntimeDefinition(
+                    prompt=CharacterPrompt("", "", "", "", "", ""),
+                    character_book=None,
+                )
+            ),
+            prompt_builder=lambda **_kwargs: initial,
+            llm_response_generator=lambda *_a, **_k: "unused",
+            input_token_counter=lambda messages: sum(
+                len(message.content) for message in messages
+            ),
+            privacy_scanner=MagicMock(),
+            semantic_classifier=MagicMock(),
+            approved_memory_repository=MagicMock(),
+            memory_embedder=lambda _text: [0.1],
+            memory_formation_submitter=MagicMock(),
+            life_context=life_context,
+        ),
+    )
+
     monkeypatch.setattr(main.llm_router, "stream_response", stream)
-    monkeypatch.setattr(main.llm_router, "count_input_tokens", lambda messages, **_: sum(len(m.content) for m in messages))
-    service = SimpleNamespace(
-        prepare_unrecorded_generation=lambda *_: (initial, 100),
-        with_life_context=life_context,
-        record_successful_prompt_references=lambda _: None,
+    # 旧経路はrouterの計測を直接呼ぶ。共通準備は注入済みcounterを使う。
+    monkeypatch.setattr(
+        main.llm_router,
+        "count_input_tokens",
+        lambda messages, **_: sum(len(m.content) for m in messages),
     )
 
     async def exercise():
         with collect_diagnostics() as collector:
             chunks = [chunk async for chunk in main._stream_core_reply(
-                service, SimpleNamespace(chat_context_tokens=4000), "miori", None,
+                service, settings, "miori", None,
                 "質問", tools=Tools(), conversation_id="conversation",
                 prompt_observer=captured.append,
             )]

@@ -38,7 +38,7 @@ def test_rollback_dual_01_keeps_both_failures_without_rendering_secrets(
     capsys: pytest.CaptureFixture[str],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from app import main
+    import app.runtime.history as history_runtime
 
     debug_capture_probe = "rollback-debug-capture-probe"
     repository_root = tmp_path / "repository"
@@ -50,24 +50,24 @@ def test_rollback_dual_01_keeps_both_failures_without_rendering_secrets(
     compensation_secret = "backup-authentication-key-secondary-secret"
     migration_error = RuntimeError(migration_secret)
     compensation_error = RuntimeError(compensation_secret)
-    rollback = main._SchemaRollbackContext(
+    rollback = history_runtime._SchemaRollbackContext(
         tmp_path / "generation", TEST_AUTHENTICATION_KEY
     )
     monkeypatch.setattr(
-        main,
+        history_runtime,
         "initialize_conversation_history_schema",
         Mock(side_effect=migration_error),
     )
     monkeypatch.setattr(
-        main,
+        history_runtime,
         "restore_backup",
         Mock(side_effect=compensation_error),
     )
 
     with caplog.at_level(logging.DEBUG):
-        logging.getLogger(main.__name__).debug(debug_capture_probe)
+        logging.getLogger(history_runtime.__name__).debug(debug_capture_probe)
         with pytest.raises(RuntimeError) as captured:
-            main._initialize_schema_with_rollback(
+            history_runtime._initialize_schema_with_rollback(
                 database_path=paths.sqlite_path,
                 runtime_paths=paths,
                 repository_root=repository_root,

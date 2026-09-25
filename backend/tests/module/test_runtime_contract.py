@@ -97,16 +97,19 @@ class TestRuntimeConfiguration:
         import app.memory.rag_service as rag_service
         import app.chat_service as chat_service
         import app.main as main
+        import app.runtime.application as application_runtime
 
         rag_source = inspect.getsource(rag_service)
         chat_runtime_source = inspect.getsource(chat_runtime)
         chat_service_source = inspect.getsource(chat_service)
         main_source = inspect.getsource(main)
+        application_source = inspect.getsource(application_runtime)
 
         assert "resolved_memory_policy" not in rag_source
         assert "resolved_memory_policy" not in chat_service_source
         assert "resolved_memory_policy" not in chat_runtime_source
-        assert "resolved_memory_policy" in main_source
+        assert "resolved_memory_policy" not in main_source
+        assert "resolved_memory_policy" in application_source
         assert "resolve_chat_runtime_config" in main_source
 
     def test_chat_service_public_api_exposes_only_chat_entrypoints_without_rag_queue(self):
@@ -491,8 +494,10 @@ class TestRuntimeConfiguration:
         def create_audio_pipeline_service_stub(_runtime_config):
             return audio_service
 
+        import app.runtime.audio as audio_runtime
+
         monkeypatch.setattr(
-            main,
+            audio_runtime,
             "create_audio_pipeline_service",
             create_audio_pipeline_service_stub,
         )
@@ -514,8 +519,10 @@ class TestRuntimeConfiguration:
             def close(self) -> None:
                 raise RuntimeError("audio close failed")
 
+        import app.runtime.audio as audio_runtime
+
         monkeypatch.setattr(
-            main,
+            audio_runtime,
             "create_audio_pipeline_service",
             lambda _runtime_config: FailingAudioPipelineService(),
         )

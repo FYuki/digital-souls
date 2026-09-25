@@ -343,7 +343,8 @@ def test_session_end_retries_failed_room_cleanup_before_returning_ended(
         ProductionSessionCoordinator,
         SessionCoordinatorDependencies,
     )
-    from app.livekit_transport.production import ProductionRuntimeManager
+    from app.livekit_transport.session_runtime import ProductionRuntimeManager
+    from tests.livekit_session_test_support import session_owner
 
     session_id = "20000000-0000-4000-8000-000000000001"
     room_name = f"voice-{session_id}"
@@ -408,11 +409,14 @@ def test_session_end_retries_failed_room_cleanup_before_returning_ended(
             ),
             core_port=CorePort(),
         )
-        runtime._rooms[owned_session_id] = ConnectedRoom()
-        runtime._coordinators[owned_session_id] = coordinator
-        runtime._session_tasks[owned_session_id] = set()
-        runtime._ready[owned_session_id] = asyncio.Event()
-        runtime._ready[owned_session_id].set()
+        owner = session_owner(
+            owned_session_id,
+            room=ConnectedRoom(),
+            coordinator=coordinator,
+            tasks=set(),
+        )
+        owner.ready.set()
+        runtime._owners[owned_session_id] = owner
 
     runtime.connect = connect
     service = BootstrapService(
@@ -483,7 +487,7 @@ def test_session_end_retries_failed_room_cleanup_before_returning_ended(
     assert coordinator_cleanup_calls == ["explicit"]
     assert disconnect_calls == [session_id]
     assert recording_sessions.contains(session_id) is False
-    assert session_id not in runtime._rooms
+    assert session_id not in runtime._owners
     assert rooms.delete_calls == 2
     assert rooms.active_rooms == set()
 
@@ -496,7 +500,8 @@ def test_concurrent_session_end_shares_local_cleanup_result_and_allows_retry(
         BootstrapService,
         InMemorySessionBindingRepository,
     )
-    from app.livekit_transport.production import ProductionRuntimeManager
+    from app.livekit_transport.session_runtime import ProductionRuntimeManager
+    from tests.livekit_session_test_support import session_owner
 
     session_id = "20000000-0000-4000-8000-000000000001"
     room_name = f"voice-{session_id}"
@@ -543,10 +548,11 @@ def test_concurrent_session_end_shares_local_cleanup_result_and_allows_retry(
     )
 
     async def connect(owned_session_id: str) -> None:
-        runtime._rooms[owned_session_id] = ConnectedRoom()
-        runtime._session_tasks[owned_session_id] = set()
-        runtime._ready[owned_session_id] = asyncio.Event()
-        runtime._ready[owned_session_id].set()
+        owner = session_owner(
+            owned_session_id, room=ConnectedRoom(), tasks=set()
+        )
+        owner.ready.set()
+        runtime._owners[owned_session_id] = owner
 
     runtime.connect = connect
     service = BootstrapService(
@@ -841,6 +847,97 @@ def test_preparation_poll_returns_pending_then_token_and_supports_cancellation(c
     cancelled = client.post("/voice/livekit/preparation/cancel", json=body)
     assert cancelled.status_code == 204
     assert not resources.session_repository.contains(response.json()["session_id"])
+
+
+def test_preparation_cancel_while_pending_releases_started_resources(
+    client, monkeypatch
+):
+    from threading import Event
+
+    class ActiveRoomManager(RecordingRoomManager):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active_rooms: set[str] = set()
+            self.delete_calls: list[str] = []
+
+        async def create(self, room_name: str) -> None:
+            await super().create(room_name)
+            self.active_rooms.add(room_name)
+
+        async def delete(self, room_name: str) -> None:
+            self.delete_calls.append(room_name)
+            self.active_rooms.remove(room_name)
+
+    class ActiveRuntimeManager(RecordingRuntimeManager):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active_sessions: set[str] = set()
+            self.stop_calls: list[str] = []
+
+        async def connect(self, session_id: str) -> None:
+            await super().connect(session_id)
+            self.active_sessions.add(session_id)
+
+        async def wait_until_ready(self, session_id: str) -> None:
+            assert session_id in self.active_sessions
+            readiness_started.set()
+            while not release.is_set():
+                await asyncio.sleep(0.001)
+
+        async def stop(self, session_id: str) -> None:
+            self.stop_calls.append(session_id)
+            self.active_sessions.remove(session_id)
+
+    from app.livekit_transport.bootstrap import (
+        BootstrapService,
+        InMemorySessionBindingRepository,
+    )
+
+    readiness_started = Event()
+    release = Event()
+    session_id = "20000000-0000-4000-8000-000000000001"
+    rooms = ActiveRoomManager()
+    runtime = ActiveRuntimeManager()
+    sessions = RecordingSessionRepository(
+        InMemorySessionBindingRepository(session_id_factory=lambda: session_id)
+    )
+    signer = RecordingTokenSigner()
+    service = BootstrapService(
+        session_repository=sessions,
+        room_manager=rooms,
+        runtime_manager=runtime,
+        token_signer=signer,
+        timeout_seconds=10,
+    )
+    monkeypatch.setattr(client.app.state, "livekit_bootstrap_service", service, raising=False)
+    monkeypatch.setattr(client.app.state, "livekit_url", "ws://127.0.0.1:7880", raising=False)
+
+    body = {**_bootstrap_request(), "wait_for_ready": False}
+    pending = client.post("/voice/livekit/token", json=body)
+
+    assert pending.status_code == 202
+    assert pending.json() == {"status": "preparing", "request_id": body["request_id"]}
+    assert readiness_started.wait(timeout=1)
+    preparation = service._preparations[body["request_id"]]
+    preparation_task = preparation.task
+    assert not preparation_task.done()
+    assert sessions.contains(session_id)
+    assert rooms.active_rooms == {f"voice-{session_id}"}
+    assert runtime.active_sessions == {session_id}
+    assert signer.token_issues == []
+
+    cancelled = client.post("/voice/livekit/preparation/cancel", json=body)
+
+    assert cancelled.status_code == 204
+    assert preparation_task.done()
+    assert preparation_task.cancelled()
+    assert body["request_id"] not in service._preparations
+    assert not sessions.contains(session_id)
+    assert runtime.stop_calls == [session_id]
+    assert runtime.active_sessions == set()
+    assert rooms.delete_calls == [f"voice-{session_id}"]
+    assert rooms.active_rooms == set()
+    assert signer.token_issues == []
 
 
 @pytest.mark.parametrize("stage,code", [

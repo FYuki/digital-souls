@@ -10,6 +10,9 @@ from tests.voice_capture_test_support import begin_capture, finish_capture
 
 from app.livekit_transport.stt_audio import PcmCaptureSpan, stt_preparation_statistics
 
+# microphone prerollは16kHz・16bit monoの2秒分。維持対象の契約値として固定する。
+STT_MICROPHONE_PREROLL_BYTES = 16_000 * 2 * 2
+
 
 def test_capture_span_keeps_received_offsets_without_pcm_or_clock():
     span=PcmCaptureSpan()
@@ -46,7 +49,7 @@ def test_suffix_check_detects_equal_length_replacement_and_tail_truncation():
 
 
 def test_bridge_preroll_queue_and_final_stt_preserve_the_exact_received_suffix():
-    from app.livekit_transport.production import _ConversationCoreBridge, STT_MICROPHONE_PREROLL_BYTES
+    from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
     observed=[];requests=[];tasks=[]
     measurement=SimpleNamespace(record_utterance_event=lambda **row:observed.append(row))
     class Core:
@@ -89,7 +92,7 @@ def test_bridge_preroll_queue_and_final_stt_preserve_the_exact_received_suffix()
 
 
 def test_gap_between_two_received_pieces_is_not_hidden_by_equal_capture_length():
-    from app.livekit_transport.production import _ConversationCoreBridge
+    from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
     observed=[];tasks=[]
     class Core:
         accepting_input=True
@@ -114,7 +117,7 @@ def test_gap_between_two_received_pieces_is_not_hidden_by_equal_capture_length()
 @pytest.mark.parametrize("end_shift", [0, 1])
 def test_formal_vad_anchors_map_preroll_and_trimmed_capture_to_track_samples(media_end, end_shift):
     from unittest.mock import AsyncMock
-    from app.livekit_transport.production import _ConversationCoreBridge
+    from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
     from app.voice_input.detector import Detection
     from app.voice_input.session import InputGrant, SpeechBoundary
     async def scenario():

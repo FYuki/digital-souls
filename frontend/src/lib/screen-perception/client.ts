@@ -1,3 +1,4 @@
+import { requestHttp } from '../http-client'
 import { parseChatResponseBody, type ChatResponse } from '../chat/client'
 import type {
   ActualSurface,
@@ -14,15 +15,21 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null
 )
 
-const parseEventResponse = async (response: Response) => {
-  if (!response.ok) throw new Error(`Screen perception request failed with status ${response.status}`)
-  return parseScreenPerceptionEvent(await response.json())
-}
+const requestEvent = async (url: string, init?: RequestInit) => (
+  parseScreenPerceptionEvent(await requestHttp(
+    url,
+    init,
+    (response) => new Error(
+      `Screen perception request failed with status ${response.status}`,
+    ),
+    'json',
+  ))
+)
 
 export const fetchScreenRouting = async (): Promise<RoutingDisclosure> => {
-  const event = await parseEventResponse(await fetch(`${ROOT}/routing`, {
+  const event = await requestEvent(`${ROOT}/routing`, {
     credentials: 'same-origin',
-  }))
+  })
   if (event.type !== 'screen_routing_disclosed') throw new Error('Screen routing response is invalid')
   return event
 }
@@ -37,7 +44,7 @@ export const startScreenSession = async (input: {
   cloudVisionConsent: boolean
   cloudDerivedChatConsent: boolean
 }): Promise<SessionStarted> => {
-  const event = await parseEventResponse(await fetch(`${ROOT}/sessions`, {
+  const event = await requestEvent(`${ROOT}/sessions`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
@@ -57,7 +64,7 @@ export const startScreenSession = async (input: {
         cloud_derived_chat: input.cloudDerivedChatConsent,
       },
     }),
-  }))
+  })
   if (event.type !== 'screen_session_started') throw new Error('Screen session response is invalid')
   return event
 }
@@ -65,7 +72,7 @@ export const startScreenSession = async (input: {
 export const heartbeatScreenSession = async (
   session: SessionStarted,
 ): Promise<void> => {
-  const event = await parseEventResponse(await fetch(
+  const event = await requestEvent(
     `${ROOT}/sessions/${encodeURIComponent(session.screen_session_id)}/heartbeat`,
     {
       method: 'POST',
@@ -80,7 +87,7 @@ export const heartbeatScreenSession = async (
         generation: session.generation,
       }),
     },
-  ))
+  )
   if (event.type !== 'screen_session_heartbeat_accepted') {
     throw new Error('Screen heartbeat response is invalid')
   }
@@ -91,7 +98,7 @@ export const revokeScreenSession = async (
   reason: 'user_off' | 'target_change' | 'conversation_change' | 'character_change'
     | 'consent_revoked' | 'capture_ended' | 'pagehide' | 'backend_disconnect',
 ): Promise<void> => {
-  const event = await parseEventResponse(await fetch(
+  const event = await requestEvent(
     `${ROOT}/sessions/${encodeURIComponent(session.screen_session_id)}`,
     {
       method: 'DELETE',
@@ -108,7 +115,7 @@ export const revokeScreenSession = async (
       }),
       keepalive: reason === 'pagehide',
     },
-  ))
+  )
   if (event.type !== 'screen_session_revoked') throw new Error('Screen revoke response is invalid')
 }
 
@@ -122,7 +129,7 @@ export const uploadScreenSnapshot = async (
   expectedCharacter: string,
 ): Promise<ScreenUploadResult> => {
   const metadata = snapshot.metadata
-  const response = await fetch(
+  const body = await requestHttp(
     `${ROOT}/requests/${encodeURIComponent(metadata.request_id)}/image`,
     {
       method: 'PUT',
@@ -143,9 +150,11 @@ export const uploadScreenSnapshot = async (
       },
       body: snapshot.blob,
     },
+    (response) => new Error(
+      `Screen upload failed with status ${response.status}`,
+    ),
+    'json',
   )
-  if (!response.ok) throw new Error(`Screen upload failed with status ${response.status}`)
-  const body: unknown = await response.json()
   if (isRecord(body) && 'upload' in body) {
     const accepted = parseScreenPerceptionEvent(body.upload)
     if (accepted.type !== 'screen_snapshot_upload_accepted') {
@@ -181,7 +190,7 @@ export const reportScreenCaptureFailure = async (
     recoverable: true,
   }
   parseScreenPerceptionEvent(event)
-  const response = await fetch(
+  const body = await requestHttp(
     `${ROOT}/requests/${encodeURIComponent(request.request_id)}/failure`,
     {
       method: 'POST',
@@ -189,9 +198,11 @@ export const reportScreenCaptureFailure = async (
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(event),
     },
+    (response) => new Error(
+      `Screen failure report failed with status ${response.status}`,
+    ),
+    'json',
   )
-  if (!response.ok) throw new Error(`Screen failure report failed with status ${response.status}`)
-  const body: unknown = await response.json()
   if (isRecord(body) && 'error' in body) {
     const returned = parseScreenPerceptionEvent(body.error)
     if (returned.type !== 'screen_error') throw new Error('Screen failure response is invalid')

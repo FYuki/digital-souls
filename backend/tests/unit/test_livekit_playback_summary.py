@@ -5,7 +5,7 @@ import pytest
 
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.playback_completion import PlaybackCompletionGate
-from app.livekit_transport.production import _ConversationCoreBridge
+from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 from app.voice_session.validation import parse_voice_session_event
 from app.voice_session_metrics import SessionMetrics
 
