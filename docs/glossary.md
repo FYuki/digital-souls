@@ -160,6 +160,18 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | dogfood | 継続利用する運用相当環境。dev/testのデータ破棄・fixture・cleanupを適用しない | 運用契約：[dogfood手順](../infra/dogfood/README.md) |
 | ADR / `ACTIVE` / `ARCHIVED` | 判断履歴／有効な設計判断／全面失効・統合済みの履歴。ACTIVEを機能の完成・有効化状態として使わない | 文書契約：[ADR案内](decisions/README.md) |
 
+## 複数入口・公開範囲（設計）
+
+2026-09-26に#3で合意した要件の用語であり、いずれも設計段階で実装はない。正本は[複数入口ADR](decisions/multi-entry-character-core-2026-09.md)。
+
+| 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
+|---|---|---|
+| 共通Core / 人格コア | 全入口が共有する人格・記憶・履歴・判断・権限の呼出境界。「キャラクター・人格定義」の`Character Core`（Cardから組み立てるprompt領域）とは別 | 設計：#3、[複数入口ADR](decisions/multi-entry-character-core-2026-09.md) |
+| 入口 / 入口Adapter | Web・Discord・スマホ・CLI・SNS等の利用経路と、その認証・呼出主体の同定・会話対応・能力宣言を担う層。人格・記憶・権限を持たない | 設計：#516 |
+| 対話型入口 / 活動型入口 | 相手の入力に応答する入口／Character Lifeが起点となり外部へ作用する入口。活動型の作用はExecution Gateを通す | 設計：#516、#517 |
+| 呼出主体 / Actor（`owner / other / self`） | Coreを呼ぶ主体。`owner`は認証済みユーザー、`other`は非信頼の他者、`self`は活動型のキャラクター自身。将来`platform`と`external_id`で個別識別する | 設計：#516 |
+| 公開範囲 / Visibility（`public / private`） | 記憶・履歴の公開区分と、出力先の公開区分。現行記憶は機微情報マスク済みのため全て`public`扱い | 設計・優先度低：#518 |
+
 ## 更新時の扱い
 
 新しい概念、公開API・schema上の用語、既存語の意味・責務境界を変更するPRでは、本書の対応行と参照先を更新します。設計時に追加した「設計」項目も、mainへの実装・接続時に状態を見直します。新しい仕様判断はADRへ、未実装の作業はIssueへ残し、用語集だけで決定しません。
