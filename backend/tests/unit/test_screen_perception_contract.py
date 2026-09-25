@@ -241,6 +241,7 @@ def test_grounding_observation_fixtures_enforce_candidates_evidence_and_core_own
     }
 
 
+@pytest.mark.cross_language
 def test_codegen_command_reproduces_committed_screen_types(tmp_path: Path) -> None:
     frontend_modules = REPOSITORY_ROOT / "frontend" / "node_modules"
     if not frontend_modules.is_dir():

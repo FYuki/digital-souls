@@ -10,9 +10,9 @@ import pytest
 _DIGEST_HEX = "d" * 64
 
 
+@pytest.mark.semantic_digest_http
 def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     monkeypatch: pytest.MonkeyPatch,
-    semantic_model_digest_http: None,
 ) -> None:
     import app.main as main
     from app.privacy.semantic.contracts import QUERY_GATE

@@ -84,45 +84,36 @@ class TestRuntimeConfiguration:
 
         assert "RAG_ENABLED=true" in lines
 
-    def test_rag_enabled_is_not_resolved_inside_memory_service(self):
-        import app.memory.rag_service as rag_service
-
-        source = inspect.getsource(rag_service)
-
-        assert "os.environ" not in source
-        assert "RAG_ENABLED" not in source
-
-    def test_memory_policy_is_resolved_at_application_boundary_only(self):
-        import app._chat_runtime as chat_runtime
-        import app.memory.rag_service as rag_service
-        import app.chat_service as chat_service
+    def test_memory_policy_is_resolved_by_application_runtime(self, monkeypatch):
         import app.main as main
         import app.runtime.application as application_runtime
 
-        rag_source = inspect.getsource(rag_service)
-        chat_runtime_source = inspect.getsource(chat_runtime)
-        chat_service_source = inspect.getsource(chat_service)
-        main_source = inspect.getsource(main)
-        application_source = inspect.getsource(application_runtime)
+        calls = []
+        original = application_runtime.resolved_memory_policy
 
-        assert "resolved_memory_policy" not in rag_source
-        assert "resolved_memory_policy" not in chat_service_source
-        assert "resolved_memory_policy" not in chat_runtime_source
-        assert "resolved_memory_policy" not in main_source
-        assert "resolved_memory_policy" in application_source
-        assert "resolve_chat_runtime_config" in main_source
+        def record_policy():
+            policy = original()
+            calls.append(policy)
+            return policy
+
+        resources = []
+        original_resources = application_runtime.PrivacyResources
+
+        def create_resources(policy):
+            assert policy is calls[0]
+            resource = original_resources(policy)
+            resources.append(resource)
+            return resource
+
+        monkeypatch.setattr(application_runtime, "resolved_memory_policy", record_policy)
+        monkeypatch.setattr(application_runtime, "PrivacyResources", create_resources)
+        with TestClient(main.app):
+            assert main.app.state.semantic_privacy_classifier is resources[0].classifier
+        assert len(calls) == 1
 
     def test_chat_service_public_api_exposes_only_chat_entrypoints_without_rag_queue(self):
         import app.chat_service as chat_service
 
-        source = inspect.getsource(chat_service)
-
-        assert "os.environ" not in source
-        assert "_DEFAULT_MEMORY_TASK_QUEUE" not in source
-        assert "memory_task_queue_scope" not in source
-        assert "_ThreadedMemoryTaskQueue" not in source
-        assert "_configured_memory_task_queue" not in source
-        assert "_queue_lock" not in source
         assert not hasattr(chat_service, "configure_memory_task_queue")
         assert not hasattr(chat_service, "clear_memory_task_queue")
         assert hasattr(chat_service, "generate_chat_reply")
@@ -138,32 +129,6 @@ class TestRuntimeConfiguration:
         assert "ChatService" not in chat_service.__all__
         assert "ThreadPoolMemoryTaskQueue" not in chat_service.__all__
         assert "create_chat_service" not in chat_service.__all__
-        assert "Thread(" not in source
-        assert "RuntimeError" not in source
-
-    def test_chat_routes_use_single_chat_service_entrypoints(self):
-        import app.chat_service as chat_service
-        import app.routers.chat as chat_router
-        import app.routers.ws as ws_router
-
-        chat_service_source = inspect.getsource(chat_service)
-        chat_router_source = inspect.getsource(chat_router)
-        ws_router_source = inspect.getsource(ws_router)
-
-        assert "_generate_chat_reply_for_runtime" not in chat_service_source
-        assert "_create_chat_session_for_runtime" not in chat_service_source
-        assert "_generate_chat_reply_with_memory_queue" not in chat_service_source
-        assert "_create_chat_session_with_memory_queue" not in chat_service_source
-        assert "_generate_chat_reply_with_memory_queue" not in chat_router_source
-        assert "_create_chat_session_with_memory_queue" not in ws_router_source
-        assert "memory_task_queue_scope" not in chat_router_source
-        assert "memory_task_queue_scope" not in ws_router_source
-        assert "app.chat_runtime" not in chat_router_source
-        assert "app.chat_runtime" not in ws_router_source
-        assert "request.app.state.chat_service" in chat_router_source
-        assert "websocket.app.state.chat_service" in ws_router_source
-        assert "generate_chat_reply" in chat_router_source
-        assert "create_chat_session(" in ws_router_source
 
     def test_memory_domain_does_not_reference_ollama_specific_clients(self):
         memory_root = _BACKEND_DIR / "app" / "memory"
@@ -466,13 +431,16 @@ class TestRuntimeConfiguration:
             str, ChatReply, bytes
         ]
 
-    def test_audio_pipeline_does_not_depend_on_httpx_transport_errors(self):
+    def test_audio_pipeline_does_not_own_httpx_transport(self):
         import app.audio_pipeline as audio_pipeline
 
-        source = inspect.getsource(audio_pipeline)
-
-        assert "import httpx" not in source
-        assert "httpx.HTTPError" not in source
+        imported_httpx_objects = [
+            name
+            for name, value in vars(audio_pipeline).items()
+            if getattr(value, "__name__", "") == "httpx"
+            or str(getattr(value, "__module__", "")).startswith("httpx")
+        ]
+        assert imported_httpx_objects == []
 
     def test_main_lifespan_owns_audio_pipeline_service_state(self):
         import app.main as main

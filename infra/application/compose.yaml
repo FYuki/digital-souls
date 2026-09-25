@@ -1,4 +1,4 @@
-name: digital-souls-${DS_ENVIRONMENT_ID:?DS_ENVIRONMENT_ID is required}
+name: digital-souls-${DS_CONTAINER_NAMESPACE:-${DS_ENVIRONMENT_ID:?DS_ENVIRONMENT_ID is required}}
 
 services:
   backend:
@@ -6,7 +6,7 @@ services:
     build:
       context: ../..
       dockerfile: backend/Dockerfile
-    container_name: digital-souls-${DS_ENVIRONMENT_ID}-backend
+    container_name: digital-souls-${DS_CONTAINER_NAMESPACE:-${DS_ENVIRONMENT_ID:?DS_ENVIRONMENT_ID is required}}-backend
     network_mode: host
     user: "${DS_RUNTIME_UID:?DS_RUNTIME_UID is required}:${DS_RUNTIME_GID:?DS_RUNTIME_GID is required}"
     env_file:
@@ -27,7 +27,7 @@ services:
     build:
       context: ../..
       dockerfile: frontend/Dockerfile
-    container_name: digital-souls-${DS_ENVIRONMENT_ID}-frontend
+    container_name: digital-souls-${DS_CONTAINER_NAMESPACE:-${DS_ENVIRONMENT_ID:?DS_ENVIRONMENT_ID is required}}-frontend
     network_mode: host
     user: "${DS_RUNTIME_UID:?DS_RUNTIME_UID is required}:${DS_RUNTIME_GID:?DS_RUNTIME_GID is required}"
     env_file:

@@ -1,5 +1,7 @@
+import ipaddress
 import json
 import os
+import socket
 import sys
 from pathlib import Path
 
@@ -36,6 +38,43 @@ def _refuse_protected_runtime_data(repository_root: Path) -> None:
         validate_existing_runtime_data_root(input_paths, repository_root)
     except ValueError as error:
         raise pytest.UsageError("pytest fixture refuses protected runtime data") from error
+
+
+@pytest.fixture(autouse=True)
+def refuse_external_network_in_local_tests(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """unit/module内の予期しない外向き通信を拒み、test-owned loopbackは許す。"""
+    if not {"unit", "module"}.intersection(request.node.path.parts):
+        return
+    original_connect = socket.socket.connect
+    original_connect_ex = socket.socket.connect_ex
+
+    def local_only(address: object) -> None:
+        if not isinstance(address, tuple) or not address:
+            return
+        host = address[0]
+        if not isinstance(host, str):
+            raise AssertionError("test network destination must be a host")
+        if host == "localhost":
+            return
+        try:
+            loopback = ipaddress.ip_address(host.split("%", 1)[0]).is_loopback
+        except ValueError:
+            loopback = False
+        if not loopback:
+            raise AssertionError(f"unit/module test attempted external network: {host}")
+
+    def guarded_connect(sock: socket.socket, address: object) -> None:
+        local_only(address)
+        return original_connect(sock, address)
+
+    def guarded_connect_ex(sock: socket.socket, address: object) -> int:
+        local_only(address)
+        return original_connect_ex(sock, address)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", guarded_connect_ex)
 
 
 @pytest.fixture(autouse=True)

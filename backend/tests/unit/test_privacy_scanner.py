@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import builtins
+import io
 from pathlib import Path
 from statistics import median
 from time import perf_counter
@@ -621,12 +623,23 @@ def test_should_reject_invalid_recognizer_version_during_construction(
         )
 
 
-def test_should_not_load_policy_file_from_scanner_module() -> None:
-    import inspect
+def test_scanner_uses_supplied_policy_without_reading_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.memory.memory_policy import resolved_memory_policy
+    from app.privacy.scanner import create_privacy_scanner
 
-    from app.privacy import scanner
+    policy = resolved_memory_policy().privacy
 
-    source = inspect.getsource(scanner)
-    assert "MEMORY_POLICY_CONFIG_PATH" not in source
-    assert "resolved_memory_policy" not in source
-    assert ".open(" not in source
+    def fail_read(*_args, **_kwargs):
+        pytest.fail("scanner read a file")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", fail_read)
+        patch.setattr(builtins, "open", fail_read)
+        patch.setattr(io, "open", fail_read)
+        scanner = create_privacy_scanner(policy)
+        result = scanner.scan("合成入力")
+    from app.privacy.contracts import ScanSuccess
+
+    assert isinstance(result, ScanSuccess)

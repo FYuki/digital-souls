@@ -75,6 +75,15 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
         self.runtime_paths = runtime_paths
         self.runner = runner if runner is not None else SubprocessRunner()
         self.effective_profile = effective_profile
+        namespace = os.environ.get("DS_TEST_RUN_NAMESPACE")
+        if namespace is not None:
+            if runtime_paths.environment_id != "test" or re.fullmatch(
+                r"[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?", namespace
+            ) is None:
+                raise AdapterOperationError("profile", "invalid test run namespace")
+        self._container_namespace = (
+            f"test-{namespace}" if namespace else runtime_paths.environment_id
+        )
         self._prepared_environment: dict[str, str] | None = None
 
     def compose_verification(self) -> VerificationResult:
@@ -200,6 +209,7 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
                 if key in FRONTEND_ENV_KEYS or key in {"HOME", "TZ"}
             }
         values.update(
+            DS_CONTAINER_NAMESPACE=self._container_namespace,
             DS_REPOSITORY_ROOT=str(self.root_dir),
             DS_DATA_DIR=str(self.runtime_paths.data_root),
             DS_RUNTIME_UID=runtime_uid or str(os.getuid()),
@@ -304,7 +314,7 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
         return tuple(command)
 
     def _container_name(self) -> str:
-        return f"digital-souls-{self.runtime_paths.environment_id}-{self.label}"
+        return f"digital-souls-{self._container_namespace}-{self.label}"
 
     def _inspect(self) -> tuple[dict[str, str], bool]:
         result = self.runner.run(

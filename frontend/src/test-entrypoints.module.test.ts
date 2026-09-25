@@ -39,11 +39,11 @@ describe('test execution entrypoints', () => {
     expect(manifest.scripts).not.toHaveProperty('test:e2e')
   })
 
-  test('Vitest excludes both kinds of Playwright tests', async () => {
+  test('Vitest selects only unit and module tests', async () => {
     const source = await readFile(join(process.cwd(), 'vite.config.ts'), 'utf-8')
 
-    expect(source).toContain("'./e2e/**'")
-    expect(source).toContain("'./integration/**'")
+    expect(source).toContain("'**/*.unit.test.ts'")
+    expect(source).toContain("'**/*.module.test.ts'")
   })
 
   test('CI runs local suites but never starts real-service integration suites', async () => {

@@ -10,6 +10,8 @@ import pytest
 from app.voice_input.pipeline import VoiceInputPipeline
 from app.voice_input.models import FRAME_SAMPLES
 
+pytestmark = pytest.mark.cross_language
+
 ROOT = Path(__file__).resolve().parents[3]
 
 

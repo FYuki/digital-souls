@@ -301,6 +301,7 @@ def test_should_verify_frontend_through_docker_compose(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.cross_language
 def test_should_serve_built_frontend_without_writing_to_read_only_clone(
     tmp_path: Path,
 ) -> None:
@@ -1495,3 +1496,16 @@ def test_backend_container_receives_only_named_voice_measurement_settings(tmp_pa
     assert values["VOICE_MEASUREMENT_KIND"] == "controlled_baseline"
     assert values["VOICE_CONTROLLED_TRACE_PATH"] == trace_path
     assert "VOICE_UNRELATED_SECRET" not in values
+
+
+def test_test_run_namespace_changes_only_test_container_name(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from adapters.frontend import FrontendAdapter
+
+    monkeypatch.setenv("DS_TEST_RUN_NAMESPACE", "run123")
+    adapter = FrontendAdapter(tmp_path, resolved_runtime_paths(tmp_path), RecordingRunner())
+    assert adapter._container_name() == "digital-souls-test-run123-frontend"
+    monkeypatch.setenv("DS_TEST_RUN_NAMESPACE", "../other")
+    with pytest.raises(AdapterOperationError, match="invalid test run namespace"):
+        FrontendAdapter(tmp_path, resolved_runtime_paths(tmp_path), RecordingRunner())

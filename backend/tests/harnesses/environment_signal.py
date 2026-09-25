@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
 import sys
 import time
 from pathlib import Path
@@ -90,6 +91,15 @@ runtime_paths = resolve_runtime_paths(dict(os.environ), root)
 profile = dict(
     resolve_profile({**dict(os.environ), "DS_PROFILE": "test-mocked"}, None, runtime_paths)
 )
+# このsubprocessが所有するready gateだけに空きportを割り当てる。
+with socket.socket() as port_probe:
+    port_probe.bind(("127.0.0.1", 0))
+    ready_gate_port = port_probe.getsockname()[1]
+profile["readyGate"] = {
+    "baseUrl": f"http://127.0.0.1:{ready_gate_port}",
+    "host": "127.0.0.1",
+    "port": ready_gate_port,
+}
 profile["dependencies"] = {
     **profile["dependencies"],
     "backend": {

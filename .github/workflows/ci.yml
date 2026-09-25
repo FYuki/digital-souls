@@ -17,7 +17,7 @@ concurrency:
 jobs:
   container-contracts:
     name: container-contracts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -38,21 +38,11 @@ jobs:
 
   backend:
     name: backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # 全unit/module検証を維持する。2026-09-19のrun 35375693008は15分でmodule 93%時点に時間切れ。
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
-        with:
-          # 音声品質artifactの計測境界を過去commitのソースと照合する。
-          fetch-depth: 0
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install voice quality replay dependencies
-        run: npm ci --prefix frontend
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -60,18 +50,84 @@ jobs:
           cache-dependency-path: |
             backend/requirements.txt
             backend/requirements-dev.txt
+            backend/constraints-linux-py312.txt
       - name: Install dependencies
-        run: python3 -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+        run: python3 -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt -c backend/constraints-linux-py312.txt
+      - name: Record Python and runner versions
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          { python3 --version; cat /etc/os-release; python3 -m pip freeze; } > "$RUNNER_TEMP/test-results/versions.txt"
       - name: Static checks
         run: python3 -m mypy --config-file backend/mypy.ini backend/app environments whisper_service irodori_service
       - name: Unit tests
-        run: python3 -m pytest backend/tests/unit
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          python3 -m pytest backend/tests/unit -m "not cross_language" --durations=25 --junitxml="$RUNNER_TEMP/test-results/backend-unit.xml"
       - name: Module tests
-        run: python3 -m pytest backend/tests/module
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          python3 -m pytest backend/tests/module -m "not cross_language" --durations=25 --junitxml="$RUNNER_TEMP/test-results/backend-module.xml"
+      - name: Save Backend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            ${{ runner.temp }}/test-results/*.xml
+            ${{ runner.temp }}/test-results/*.txt
+          if-no-files-found: warn
+
+  backend-cross-language:
+    name: backend-cross-language
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # 保存済み音声品質artifactの過去commitと現在の測定境界を照合する。
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install replay and codegen dependencies
+        run: npm ci --prefix frontend
+      - name: Record Node and Frontend dependency versions
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          { node --version; npm --version; npm ls --depth=0 --prefix frontend; } > "$RUNNER_TEMP/test-results/frontend-versions.txt"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+            backend/constraints-linux-py312.txt
+      - name: Install dependencies
+        run: python3 -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt -c backend/constraints-linux-py312.txt
+      - name: Record Python and runner versions
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          { python3 --version; cat /etc/os-release; python3 -m pip freeze; } > "$RUNNER_TEMP/test-results/versions.txt"
+      - name: Run cross-language and artifact tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          python3 -m pytest backend/tests/unit backend/tests/module -m cross_language --durations=25 --junitxml="$RUNNER_TEMP/test-results/backend-cross-language.xml"
+      - name: Save cross-language test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-cross-language-results
+          path: |
+            ${{ runner.temp }}/test-results/*.xml
+            ${{ runner.temp }}/test-results/*.txt
+          if-no-files-found: warn
 
   frontend:
     name: frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -82,6 +138,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci --prefix frontend
+      - name: Record Node and runner versions
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          { node --version; npm --version; cat /etc/os-release; npm ls --depth=0 --prefix frontend; } > "$RUNNER_TEMP/test-results/versions.txt"
       - name: Verify generated voice-session contracts
         run: npm run check:voice-session-generated
       - name: Static checks
@@ -89,13 +149,26 @@ jobs:
       - name: Build
         run: npm --prefix frontend run build
       - name: Unit tests
-        run: npm --prefix frontend run test:unit
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          npm --prefix frontend run test:unit -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/test-results/frontend-unit.xml"
       - name: Module tests
-        run: npm --prefix frontend run test:module
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-results"
+          npm --prefix frontend run test:module -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/test-results/frontend-module.xml"
+      - name: Save Frontend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: |
+            ${{ runner.temp }}/test-results/*.xml
+            ${{ runner.temp }}/test-results/*.txt
+          if-no-files-found: warn
 
   mocked-e2e:
     name: mocked-e2e
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -110,6 +183,17 @@ jobs:
         run: npm --prefix frontend run install:browser
       - name: Mocked E2E tests
         run: npm run test:e2e:mocked
+      - name: Save mocked E2E failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mocked-e2e-results
+          path: |
+            frontend/test-results/mocked-e2e/
+            frontend/test-results/playwright-artifacts/mocked-e2e/
+            frontend/test-results/runtime-data/mocked-e2e/runtime/standalone/environment-run.json
+            frontend/test-results/runtime-data/mocked-e2e/runtime/standalone/resolved-profile.json
+          if-no-files-found: warn
       - name: Record integration test policy
         if: always()
         run: |

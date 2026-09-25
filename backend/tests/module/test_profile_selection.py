@@ -227,3 +227,43 @@ def test_should_reject_unknown_legacy_selector_value(tmp_path: Path):
     assert result.returncode != 0
     assert "VOICE_CHAT_E2E_BACKEND" in result.stderr
     assert "auto" in result.stderr
+
+
+def test_test_mocked_run_origins_are_isolated_and_keep_resolved_ports(tmp_path: Path) -> None:
+    from profile_resolution import resolve_profile
+    from tests.environment_test_support import resolved_runtime_paths
+
+    report = resolve_profile(
+        {
+            "DS_PROFILE": "test-mocked",
+            "DS_TEST_FRONTEND_ORIGIN": "http://127.0.0.1:43801",
+            "DS_TEST_READY_GATE_ORIGIN": "http://127.0.0.1:43802",
+        },
+        None,
+        resolved_runtime_paths(tmp_path),
+    )
+    assert report["dependencies"]["frontend"]["port"] == 43801
+    assert report["readyGate"]["port"] == 43802
+    assert report["derivedEnvironment"]["SCREEN_ALLOWED_ORIGIN"] == "http://127.0.0.1:43801"
+
+
+@pytest.mark.parametrize(
+    "profile_name,frontend_origin",
+    [
+        ("dev", "http://127.0.0.1:43801"),
+        ("test-mocked", "http://example.invalid:43801"),
+    ],
+)
+def test_test_run_origin_override_rejects_other_profiles_or_non_loopback(
+    profile_name: str, frontend_origin: str, tmp_path: Path
+) -> None:
+    from profile_resolution import resolve_profile
+    from profile_types import ProfileError
+    from tests.environment_test_support import resolved_runtime_paths
+
+    with pytest.raises(ProfileError):
+        resolve_profile(
+            {"DS_PROFILE": profile_name, "DS_TEST_FRONTEND_ORIGIN": frontend_origin},
+            None,
+            resolved_runtime_paths(tmp_path),
+        )

@@ -75,4 +75,11 @@ def wait_for_report_phase(path: Path, phase: str, timeout: float = 10.0) -> None
         if report["phase"] == phase:
             return
         time.sleep(0.01)
-    pytest.fail(f"run report did not reach phase {phase}")
+    failure = None
+    if path.is_file():
+        try:
+            report = json.loads(path.read_text(encoding="utf-8"))
+            failure = report.get("failure")
+        except json.JSONDecodeError:
+            pass
+    pytest.fail(f"run report did not reach phase {phase}: {failure}")

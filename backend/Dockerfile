@@ -20,8 +20,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/backend
 
 WORKDIR /app
-COPY backend/requirements.txt /tmp/backend-requirements.txt
-RUN python -m pip install --no-cache-dir --requirement /tmp/backend-requirements.txt
+COPY backend/requirements.txt backend/constraints-linux-py312.txt /tmp/
+RUN python -m pip install --no-cache-dir --requirement /tmp/requirements.txt --constraint /tmp/constraints-linux-py312.txt
 COPY --from=sdk-build /native-livekit /opt/digital-souls/livekit
 ENV LIVEKIT_LIB_PATH=/opt/digital-souls/livekit/liblivekit_ffi.so
 # ビルド専用processで検証し、固定SDKのcallbackとPython終了処理の競合を避ける。

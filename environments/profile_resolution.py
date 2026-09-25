@@ -249,13 +249,47 @@ def measurement_environment(env: Mapping[str, object], environment_id: str) -> d
     return {key: value}
 
 
+def _test_run_profile_overrides(
+    profile: Profile, env: dict[str, str], environment_id: str
+) -> Profile:
+    frontend_key = "DS_TEST_FRONTEND_ORIGIN"
+    gate_key = "DS_TEST_READY_GATE_ORIGIN"
+    if frontend_key not in env and gate_key not in env:
+        return profile
+    if environment_id != "test" or profile["name"] != "test-mocked":
+        raise ProfileError("test run origins require test-mocked profile and test data root")
+
+    def loopback_origin(key: str) -> str:
+        endpoint = resolve_managed_http_origin(env[key], key)
+        if endpoint.host not in {"127.0.0.1", "localhost"}:
+            raise ProfileError(f"{key} must use loopback")
+        return endpoint.base_url
+
+    dependencies = cast(dict[str, Dependency], profile["dependencies"])
+    updated_dependencies = dict(dependencies)
+    if frontend_key in env:
+        updated_dependencies["frontend"] = cast(Dependency, {
+            **dependencies["frontend"], "baseUrl": loopback_origin(frontend_key),
+        })
+    return cast(Profile, {
+        **profile,
+        "dependencies": updated_dependencies,
+        "readyGate": {
+            "baseUrl": loopback_origin(gate_key)
+            if gate_key in env else profile["readyGate"]["baseUrl"],
+        },
+    })
+
+
 def resolve_profile(
     env: dict[str, str],
     default_profile: str | None,
     runtime_paths: RuntimePaths,
 ) -> ResolvedReport:
     selected, source, used_legacy = _select_profile(env, default_profile)
-    profile = load_profile(selected)
+    profile = _test_run_profile_overrides(
+        load_profile(selected), env, runtime_paths.environment_id
+    )
     dependencies, used_override = _apply_backend_override(profile, env)
     resolved_dependencies = resolve_dependencies(dependencies)
     ready_gate = resolve_managed_http_origin(
