@@ -167,10 +167,10 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
 |---|---|---|
 | 共通Core / 人格コア | 全入口が共有する人格・記憶・履歴・判断・権限の呼出境界。「キャラクター・人格定義」の`Character Core`（Cardから組み立てるprompt領域）とは別 | 設計：#3、[複数入口ADR](decisions/multi-entry-character-core-2026-09.md) |
-| 入口 / 入口Adapter | Web・Discord・スマホ・CLI・SNS等の利用経路と、その認証・呼出主体の同定・会話対応・能力宣言を担う層。人格・記憶・権限を持たない | 設計：#516 |
+| 入口 / 入口Adapter | Web・Discord・スマホ・CLI・SNS等の利用経路と、その認証・呼出主体の同定・会話対応・能力宣言を担う層。人格・記憶・権限を持たない。MVPはBackendと同一プロセスに置く | 設計：#516 |
 | 対話型入口 / 活動型入口 | 相手の入力に応答する入口／Character Lifeが起点となり外部へ作用する入口。活動型の作用はExecution Gateを通す | 設計：#516、#517 |
-| 呼出主体 / Actor（`owner / other / self`） | Coreを呼ぶ主体。`owner`は認証済みユーザー、`other`は非信頼の他者、`self`は活動型のキャラクター自身。将来`platform`と`external_id`で個別識別する | 設計：#516 |
-| 公開範囲 / Visibility（`public / private`） | 記憶・履歴の公開区分と、出力先の公開区分。現行記憶は機微情報マスク済みのため全て`public`扱い | 設計・優先度低：#518 |
+| 呼出主体 / Actor（`owner / other / self`） | Coreを呼ぶ主体。`owner`はオーナー（Webはtailnet到達者）、`other`は非信頼の他者（エピソード記憶だけを形成）、`self`は活動型のキャラクター自身。将来`platform`と`external_id`で個別識別する | 設計：#516 |
+| 公開範囲 / Visibility（`public / private`） | 記憶・履歴の公開区分と、出力先の公開区分。#518の実装まで既存記憶は全て`public`とみなし、公開の場への自律出力は有効化しない | 設計：#518（#517より前） |
 
 ## 更新時の扱い
 

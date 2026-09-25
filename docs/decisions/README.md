@@ -18,7 +18,7 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
-- [`multi-entry-character-core-2026-09.md`](multi-entry-character-core-2026-09.md)は、#3で合意した複数入口（Web・Discord・スマホ・CLI・SNS）から同じ人格コアを使う要件、最終構成、呼出主体、公開範囲、自律SNS参加の制御を定める。自律活動・外部送信・高影響操作はCharacter Life共通契約を再利用し、緩和しない。採用済みの要件であり、実装は#3／#516／#517／#518で追跡する。
+- [`multi-entry-character-core-2026-09.md`](multi-entry-character-core-2026-09.md)は、#3で合意した複数入口（Web・Discord・スマホ・CLI・SNS）から同じ人格コアを使う要件、最終構成、入口ごとの会話と認証、呼出主体、公開範囲、自律SNS参加の制御、実施順を定める。自律活動・外部送信・高影響操作はCharacter Life共通契約を再利用し、緩和しない。採用済みの要件であり、実装は#3／#516／#517／#518で追跡する。
 
 - [音声Session開始準備](voice-session-preparation-2026-09.md)は、#350/#423/#424の開始準備、全体の固定時間上限なし、処理側の失敗検出、手動再試行を定める。既存の個別要求・worker・入力ACK等の期限や通信再接続は維持する。採用済みの要件であり、実装・受入完了ではない。[共通指示書](../voice-quality-350-423-424-requirements.md)を参照する。
 
