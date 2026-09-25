@@ -20,6 +20,6 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
-    exclude: ['**/node_modules/**', './e2e/**', './integration/**'],
+    include: ['**/*.unit.test.ts', '**/*.module.test.ts'],
   },
 }))

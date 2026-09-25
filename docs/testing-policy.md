@@ -13,6 +13,8 @@
 
 「結合テスト」はアプリ内のモジュール横断を検証する。「インテグレーションテスト」は Ollama、ChromaDB、VOICEVOX、Whisper などの外部サービスへ実接続するテストだけを指す。Backend では ChromaDB と Ollama の実埋め込み API を使う RAG runtime evidence テストをインテグレーションテストとして実行する。
 
+Frontend の Vitest は `*.unit.test.ts` と `*.module.test.ts` だけを収集する。Playwright の spec と補助ファイルは Vitest の対象にしない。Backend の unit/module は、予期しない外向き通信を fixture で拒否し、テストが所有する loopback 通信だけを許す。module 内の合成 HTTP など例外的な境界は明示 marker で管理する。`cross_language` marker のテストは Node.js や Git 履歴を要する専用 CI job で実行する。
+
 モックを使用する単体・結合・E2Eテストの結果は、外部サービスとの実接続に成功した一次証跡として扱わない。
 
 画面知覚では、unit／moduleで参照3分岐、session・generation・同意、画像上限、Vision観測、
@@ -93,8 +95,11 @@ npm run build
 
 CI は単体テスト、結合テスト、モックE2E、型チェック、Frontend build、Compose契約検証、Backend／Frontend image buildを実行する。別workflowはmainと`epic/**`へのpushでBackend／Frontend／Whisper imageをGHCRへcommit SHA tagで公開しdigestを記録する。実GPU・実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
 
-Backendの音声品質テストは、保存済みartifactの測定版を`git show`で照合し、Python CLIからTypeScriptの音声観測replayを実行する。
-そのためBackend CIもGit履歴全体を取得し、Node.js 22と`npm ci --prefix frontend`で固定されたreplay依存を準備する。履歴・依存の不足をテストのskipや監査省略で回避しない。
+Backend の通常 job は Python だけで unit/module を実行する。保存済み音声品質 artifact の `git show` 照合、TypeScript の音声観測 replay、共有契約の codegen 検証は `backend-cross-language` job に分ける。この job は Git 履歴全体、Node.js 22、Frontend の `npm ci` を用意し、`cross_language` marker のテストを実行する。履歴・依存の不足を skip や監査省略で回避しない。
+
+CI の Python 環境と Backend image は Python 3.12／Linux 向けの `backend/constraints-linux-py312.txt` を共用する。依存を更新するときは requirements と constraints を同時に見直し、clean 環境で解決・実行を確認する。CI runner は `ubuntu-24.04` に固定する。pytest と Vitest は JUnit XML と遅いテストの一覧を出力し、失敗時も CI artifact に保存する。Playwright は失敗したテストの trace と screenshot を成果物へ保存する。テスト実行の遅延・失敗はこの証跡から切り分ける。
+
+環境 CLI の起動・停止テストは run ごとに空き port と container namespace を割り当て、所有した資源だけを cleanup する。`DS_TEST_FRONTEND_ORIGIN` と `DS_TEST_READY_GATE_ORIGIN` は `test-mocked` Profile の test data root でのみ利用し、loopback URL に限る。`DS_TEST_RUN_NAMESPACE` も test 環境 ID の container 名を分離するためだけに利用する。
 
 Issue #135 Goal 1ではremote client、single-flight、capacity超過、timeout、worker再生成、Profile、Compose、deploy／rollbackをfakeまたはCPU不要の自動テストで検証する。RTX 4070 Ti SUPER上のCUDA／VRAM証跡、dev・dogfood同時会話、連続会話品質、WSL再起動復旧はGoal 2の手動受入とし、Goal 1の成功を実GPU受入済みとは扱わない。
 

@@ -16,7 +16,10 @@ from app.memory.episodic.extraction_contracts import GroundedContent
 from tests.conversation_history_test_support import CONVERSATION_ID, create_repository
 from tests.module.test_memory_formation_chat_entrypoints import _character_card
 
-pytestmark = pytest.mark.usefixtures("existing_chat_conversations", "episodic_model_output")
+pytestmark = [
+    pytest.mark.usefixtures("existing_chat_conversations"),
+    pytest.mark.episodic_model_output,
+]
 
 
 class Model:

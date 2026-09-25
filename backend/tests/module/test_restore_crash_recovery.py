@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import multiprocessing
 import os
 import sqlite3
 from pathlib import Path
@@ -90,21 +91,34 @@ def _create_later_generation(
     )
 
 
-def _wait_for_child(process_id: int) -> int:
-    waited_process_id, status = os.waitpid(process_id, 0)
-    assert waited_process_id == process_id
-    assert os.WIFEXITED(status)
-    return os.WEXITSTATUS(status)
+def _run_crash_child(target, *arguments) -> int:
+    child = multiprocessing.get_context("spawn").Process(
+        target=target, args=(*arguments, True)
+    )
+    child.start()
+    try:
+        child.join(timeout=20)
+        if child.is_alive():
+            pytest.fail(f"restore child {child.pid} did not exit before deadline")
+        assert child.exitcode is not None
+        return child.exitcode
+    finally:
+        if child.is_alive():
+            child.kill()
+            child.join(timeout=5)
+
 
 
 def _exit_restore_immediately_before_replace(
     destination: RuntimePaths,
     repository_root: Path,
     generation: Path,
+    _child: bool = False,
 ) -> int:
-    process_id = os.fork()
-    if process_id != 0:
-        return _wait_for_child(process_id)
+    if not _child:
+        return _run_crash_child(
+            _exit_restore_immediately_before_replace, destination, repository_root, generation
+        )
 
     from app.backup_restore import restore_backup
     from app.backup_restore import service
@@ -131,10 +145,12 @@ def _exit_restore_immediately_after_replace(
     destination: RuntimePaths,
     repository_root: Path,
     generation: Path,
+    _child: bool = False,
 ) -> int:
-    process_id = os.fork()
-    if process_id != 0:
-        return _wait_for_child(process_id)
+    if not _child:
+        return _run_crash_child(
+            _exit_restore_immediately_after_replace, destination, repository_root, generation
+        )
 
     from app.backup_restore import restore_backup
     from app.backup_restore import service
@@ -166,10 +182,13 @@ def _exit_restore_immediately_after_sidecar_unlink(
     generation: Path,
     target_suffix: str,
     expected_exit_code: int,
+    _child: bool = False,
 ) -> int:
-    process_id = os.fork()
-    if process_id != 0:
-        return _wait_for_child(process_id)
+    if not _child:
+        return _run_crash_child(
+            _exit_restore_immediately_after_sidecar_unlink,
+            destination, repository_root, generation, target_suffix, expected_exit_code,
+        )
 
     from app.backup_restore import restore_backup
     from app.backup_restore import service
@@ -215,10 +234,9 @@ def _exit_restore_immediately_after_sidecar_unlink(
     os._exit(EXIT_UNEXPECTED_FAILURE)
 
 
-def _leave_second_conversation_in_wal(database: Path) -> None:
-    process_id = os.fork()
-    if process_id != 0:
-        assert _wait_for_child(process_id) == 0
+def _leave_second_conversation_in_wal(database: Path, _child: bool = False) -> None:
+    if not _child:
+        assert _run_crash_child(_leave_second_conversation_in_wal, database) == 0
         return
 
     connection = sqlite3.connect(database)

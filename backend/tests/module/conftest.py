@@ -27,17 +27,12 @@ def successful_inference_startup_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(InferenceRuntime, "probe_startup", probe)
 
 
-@pytest.fixture
-def semantic_model_digest_http() -> None:
-    return None
-
-
 @pytest.fixture(autouse=True)
 def isolate_semantic_model_digest(
     monkeypatch: pytest.MonkeyPatch,
     request: pytest.FixtureRequest,
 ) -> None:
-    if "semantic_model_digest_http" in request.fixturenames:
+    if request.node.get_closest_marker("semantic_digest_http") is not None:
         return
     monkeypatch.setattr(
         InferenceSemanticClassifierClient,
@@ -86,12 +81,6 @@ def unknown_chat_conversation(
         )
 
 
-@pytest.fixture
-def episodic_model_output() -> None:
-    """このfixtureを指定したテストはEpisodeの構造化推論境界も自身で検証する。"""
-    return None
-
-
 @pytest.fixture(autouse=True)
 def isolate_episodic_inference(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
     from app.memory.episodic.contracts import ExtractionIdentity
@@ -102,7 +91,7 @@ def isolate_episodic_inference(monkeypatch: pytest.MonkeyPatch, request: pytest.
         provider_id="ollama", model_id="gemma4:e4b", model_digest=_MODEL_DIGEST,
         prompt_version=COMPACT_EXTRACTOR_VERSION,
     ))
-    if "episodic_model_output" not in request.fixturenames:
+    if request.node.get_closest_marker("episodic_model_output") is None:
         import app.runtime.memory as memory_runtime
 
         class EmptyEpisodeClient:

@@ -197,19 +197,18 @@ def test_should_treat_unreaped_zombie_as_not_running(
     import process_control
     from process_control import request_process_stop
 
-    read_fd, write_fd = os.pipe()
-    child_pid = os.fork()
-    if child_pid == 0:
-        os.close(write_fd)
-        os.read(read_fd, 1)
-        os.close(read_fd)
-        os._exit(0)
-
-    os.close(read_fd)
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.buffer.read(1)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    assert child.stdin is not None
+    child_pid = child.pid
     sent: list[tuple[int, signal.Signals]] = []
     try:
         identity = process_control._read_identity(child_pid)
-        os.close(write_fd)
+        child.stdin.close()
         deadline = time.monotonic() + 5
         while process_control._process_stat(child_pid)[0] != "Z":
             if time.monotonic() >= deadline:
@@ -223,11 +222,13 @@ def test_should_treat_unreaped_zombie_as_not_running(
 
         result = request_process_stop(identity)
     finally:
+        if not child.stdin.closed:
+            child.stdin.close()
         try:
-            os.close(write_fd)
-        except OSError:
-            pass
-        os.waitpid(child_pid, 0)
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=5)
 
     assert result.result == "not_running"
     assert sent == []

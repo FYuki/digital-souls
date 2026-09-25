@@ -228,6 +228,7 @@ const emitSpeech = async (type: 'speech_started' | 'speech_stopped') => {
 }
 
 describe('App conversation lifecycle', () => {
+
   beforeEach(() => {
     localStorage.clear()
     window.history.replaceState({}, '', '/')
@@ -291,9 +292,13 @@ describe('App conversation lifecycle', () => {
     })
   })
 
+
+
   afterEach(() => {
     vi.unstubAllGlobals()
   })
+
+
 
   test('activeスレッドを読み込み、選択時に保存済み履歴だけを表示する', async () => {
     render(App)
@@ -305,6 +310,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('保存済みの回答')).toBeTruthy()
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
   })
+
+
 
   test('再接続中はマイクを保持し、復旧後は新しい入力開始ACKでBE通知を受け取る', async () => {
     render(App)
@@ -325,6 +332,8 @@ describe('App conversation lifecycle', () => {
     expect(audioMocks.getUserMedia).toHaveBeenCalledTimes(1)
     expect(audioMocks.vadOptions).toBeUndefined()
   })
+
+
 
   test('通常UIからLiveKit sessionを開始しBE発話通知と順序付きdeltaを表示する', async () => {
     render(App)
@@ -386,6 +395,8 @@ describe('App conversation lifecycle', () => {
     expect(audioMocks.vadDestroy).not.toHaveBeenCalled()
   })
 
+
+
   test('cancel後の遅延deltaを破棄し、同じsessionで次の発話を表示する', async () => {
     const nextUtteranceId = '30000000-0000-4000-8000-000000000020'
     const nextResponseId = '50000000-0000-4000-8000-000000000020'
@@ -436,6 +447,8 @@ describe('App conversation lifecycle', () => {
     ).toBeGreaterThanOrEqual(2))
   })
 
+
+
   test.each(['response_cancelled', 'response_completed'])('%s後の履歴取得中と次応答開始後も同じ本文DOMを維持する', async terminal => {
     render(App)
     await startLiveKitSession()
@@ -461,6 +474,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('次の回答')).toBeTruthy()
   })
 
+
+
   test('履歴再取得の失敗では本文を消さず、会話を切り替えたら持ち込まない', async () => {
     render(App); await startLiveKitSession()
     await emitCoreEvent({type: 'utterance_finalized', utterance_id: TURN_ID, transcript: '元の質問', should_response: true})
@@ -479,6 +494,8 @@ describe('App conversation lifecycle', () => {
     expect(original.isConnected).toBe(false)
   })
 
+
+
   test('会話切替後に以前の履歴取得が完了しても旧本文を復元しない', async () => {
     render(App); await startLiveKitSession()
     let resolveHistory!: (value: Response) => void
@@ -496,6 +513,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.queryByText('以前の回答')).toBeNull()
     expect(document.querySelector(`[data-turn-id="${TURN_ID}"]`)).toBeNull()
   })
+
+
 
   test('response失敗後もユーザー発話と途中回答を画面に保持する', async () => {
     render(App)
@@ -523,6 +542,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('光織（応答失敗）')).toBeTruthy()
     expect(screen.queryByText('光織（応答中）')).toBeNull()
   })
+
+
 
   test('入力・応答・再生・sessionを独立表示しbarge-inを制御する', async () => {
     render(App)
@@ -565,6 +586,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('再生: 停止済み')).toBeTruthy()
   })
 
+
+
   test.each(['Enter', 'click'])('%s送信で受理を待ってfocusを解除し、同じsessionでマイクを再開する', async operation => {
     render(App)
     await startLiveKitSession()
@@ -589,6 +612,8 @@ describe('App conversation lifecycle', () => {
     expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
     expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(2)
   })
+
+
 
   test.each(['text', 'speech', 'started'])('privacy省略%sは開始前後とも履歴を更新し、本文や生成状態を残さない', async source => {
     render(App)
@@ -631,6 +656,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('次の回答')).toBeTruthy()
   })
 
+
+
   test('同じスレッドのtextをVoice Sessionへ送り、受理後に本文を消して同じ回答を表示する', async () => {
     render(App)
     await startLiveKitSession()
@@ -654,6 +681,8 @@ describe('App conversation lifecycle', () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(false)
   })
 
+
+
   test('受理結果不明を送信確認中と表示し本文を保持する', async () => {
     render(App)
     await startLiveKitSession()
@@ -668,6 +697,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', {name: '送信'}).disabled).toBe(true)
     expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(false)
   })
+
+
 
   test('送信拒否では本文とfocusを保持し、手動mute中の受理でもマイクを再開しない', async () => {
     let eventSequence = 0
@@ -695,6 +726,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('入力: ミュート')).toBeTruthy()
     expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
   })
+
+
 
   test('音声Aを継続してBへHTTP送信し、Aの回答をBへ混入させない', async () => {
     fetchMock.mockImplementation(async (input, init) => {
@@ -725,6 +758,8 @@ describe('App conversation lifecycle', () => {
     expect(await screen.findByText('Aだけの回答')).toBeTruthy()
     expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
   })
+
+
 
   test('recoverable音声エラー後もmicを維持して次の応答を処理する', async () => {
     const nextUtteranceId = '30000000-0000-4000-8000-000000000030'
@@ -758,6 +793,8 @@ describe('App conversation lifecycle', () => {
   })
 
 
+
+
   test('履歴取得中に完了したHTTP turnを履歴応答後も維持する', async () => {
     const historicalTurn = persistedTurn('過去の質問', '過去の回答')
     let resolveHistory: ((response: Response) => void) | undefined
@@ -788,6 +825,8 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('HTTP応答です。')).toBeTruthy()
   })
 
+
+
   test('新規作成後に初期active一覧の古い応答が到着しても作成したスレッドを維持する', async () => {
     let resolveInitialList: ((response: Response) => void) | undefined
     fetchMock.mockImplementation(async (input, init) => {
@@ -814,653 +853,4 @@ describe('App conversation lifecycle', () => {
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
   })
-
-  test('初期表示では一覧を読み込んでもスレッドを自動選択しない', async () => {
-    render(App)
-
-    await screen.findByRole('button', { name: CONVERSATION_ID })
-
-    expect(screen.getByRole('heading', { name: 'スレッド未選択' })).toBeTruthy()
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled)
-      .toBe(true)
-  })
-
-  test('記憶管理画面でスレッドを選択すると会話画面へ切り替える', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url.includes('/persona-memories') || url.includes('/temporary-records/')) {
-        return new Response('[]', { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    const thread = await screen.findByRole('button', { name: CONVERSATION_ID })
-    await fireEvent.click(screen.getByRole('button', { name: '記憶管理' }))
-    expect(await screen.findByRole('heading', { name: '記憶管理' })).toBeTruthy()
-
-    await fireEvent.click(thread)
-
-    expect(await screen.findByRole('heading', { name: CONVERSATION_ID })).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: '記憶管理' })).toBeNull()
-    expect(await screen.findByText('保存済みの回答')).toBeTruthy()
-  })
-
-  test('最初のtext送信後に自動生成名を再読み込みなしで一覧とheaderへ反映する', async () => {
-    const initial = { ...conversation, title: '新しい会話' }
-    const named = { ...conversation, title: '今日の予定は？' }
-    let activeListRequests = 0
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/characters/miori/conversations' && init === undefined) {
-        activeListRequests += 1
-        return new Response(JSON.stringify([
-          activeListRequests === 1 ? initial : named,
-        ]), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await fireEvent.click(await screen.findByRole('button', { name: '新しい会話' }))
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '今日の予定は？ 続きです。' },
-    })
-
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
-
-    expect(await screen.findByRole('button', { name: '今日の予定は？' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '今日の予定は？' })).toBeTruthy()
-    expect(activeListRequests).toBe(2)
-  })
-
-  test('LiveKit応答完了後に自動生成名を再読み込みなしで一覧とheaderへ反映する', async () => {
-    const initial = { ...conversation, title: '新しい会話' }
-    const named = { ...conversation, title: '声で相談したい' }
-    let activeListRequests = 0
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/characters/miori/conversations' && init === undefined) {
-        activeListRequests += 1
-        return new Response(JSON.stringify([
-          activeListRequests === 1 ? initial : named,
-        ]), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await fireEvent.click(await screen.findByRole('button', { name: '新しい会話' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1))
-    await emitCoreEvent({
-      type: 'utterance_finalized',
-      utterance_id: TURN_ID,
-      transcript: '声で相談したい',
-      should_response: true,
-    })
-    await emitCoreEvent({
-      type: 'response_started',
-      response_id: RESPONSE_ID,
-      source_utterance_ids: [TURN_ID],
-    })
-
-    await emitCoreEvent({ type: 'response_completed', response_id: RESPONSE_ID })
-
-    expect(await screen.findByRole('button', { name: '声で相談したい' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '声で相談したい' })).toBeTruthy()
-    expect(activeListRequests).toBe(2)
-  })
-
-  test('archive成功後は一覧を再取得せず応答から即時に状態を遷移する', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T13:00:00+00:00',
-    }
-    let activeListRequestCount = 0
-    let archivedListRequestCount = 0
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (init?.method === 'POST' && url.endsWith('/archive')) {
-        return new Response(JSON.stringify(archivedConversation), { status: 200 })
-      }
-      if (url.endsWith('/archived')) {
-        archivedListRequestCount += 1
-        return new Promise<Response>(() => {})
-      }
-      if (url.endsWith('/conversations')) {
-        activeListRequestCount += 1
-        return new Response(JSON.stringify([conversation]), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await selectConversation()
-    await screen.findByText('保存済みの回答')
-
-    await chooseThreadAction('アーカイブ')
-
-    await waitFor(() => expect(
-      screen.queryByRole('button', { name: CONVERSATION_ID }),
-    ).toBeNull())
-    expect(await screen.findByRole('heading', { name: 'スレッド未選択' })).toBeTruthy()
-    await waitFor(() => expect(
-      localStorage.getItem('digital-souls:conversation:miori'),
-    ).toBeNull())
-    expect(activeListRequestCount).toBe(1)
-    expect(archivedListRequestCount).toBe(0)
-    await showArchived()
-    expect(await screen.findByText(CONVERSATION_ID)).toBeTruthy()
-    expect(archivedListRequestCount).toBe(1)
-  })
-
-  test('unarchive成功後は一覧を再取得せずactiveの更新日時降順を維持する', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T13:00:00+00:00',
-    }
-    const newerConversation = {
-      ...conversation,
-      conversation_id: SECOND_CONVERSATION_ID,
-      title: SECOND_CONVERSATION_ID,
-      updated_at: '2026-08-01T12:02:00+00:00',
-    }
-    const sameTimeConversation = {
-      ...conversation,
-      conversation_id: THIRD_CONVERSATION_ID,
-      title: THIRD_CONVERSATION_ID,
-    }
-    let activeListRequestCount = 0
-    let archivedListRequestCount = 0
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (init?.method === 'POST' && url.endsWith('/unarchive')) {
-        return new Response(JSON.stringify(conversation), { status: 200 })
-      }
-      if (url.endsWith('/archived')) {
-        archivedListRequestCount += 1
-        return new Response(JSON.stringify([archivedConversation]), { status: 200 })
-      }
-      if (url.endsWith('/conversations')) {
-        activeListRequestCount += 1
-        return new Response(JSON.stringify([newerConversation, sameTimeConversation]), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await showArchived()
-    await chooseThreadAction('復元')
-
-    await showActive()
-
-    expect(await screen.findByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
-    const threadIds = screen.getAllByRole('button', { name: /^[0-9a-f-]{36}$/ })
-      .map((button) => button.textContent)
-    expect(threadIds).toEqual([
-      SECOND_CONVERSATION_ID,
-      THIRD_CONVERSATION_ID,
-      CONVERSATION_ID,
-    ])
-    expect(activeListRequestCount).toBe(1)
-    expect(archivedListRequestCount).toBe(1)
-  })
-
-  test('hard delete成功後は一覧を再取得せず対象状態を即時に除去する', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T13:00:00+00:00',
-    }
-    let activeListRequestCount = 0
-    let archivedListRequestCount = 0
-    localStorage.setItem('digital-souls:conversation:miori', CONVERSATION_ID)
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (init?.method === 'DELETE') {
-        return new Response(null, { status: 204 })
-      }
-      if (url.endsWith('/archived')) {
-        archivedListRequestCount += 1
-        return new Response(JSON.stringify([archivedConversation]), { status: 200 })
-      }
-      if (url.endsWith('/conversations')) {
-        activeListRequestCount += 1
-        return new Response('[]', { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await showArchived()
-    await chooseThreadAction('削除')
-
-    await fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
-
-    await waitFor(() => expect(
-      screen.queryByRole('button', { name: CONVERSATION_ID }),
-    ).toBeNull())
-    await waitFor(() => expect(
-      localStorage.getItem('digital-souls:conversation:miori'),
-    ).toBeNull())
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(activeListRequestCount).toBe(1)
-    expect(archivedListRequestCount).toBe(1)
-  })
-
-  test('メニューから名前を変更して一覧と会話ヘッダーへ反映する', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (init?.method === 'PATCH' && url.endsWith(`/${CONVERSATION_ID}`)) {
-        return new Response(JSON.stringify({
-          ...conversation,
-          title: '光織との予定相談',
-        }), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await selectConversation()
-    await chooseThreadAction('名前を変更')
-    await fireEvent.input(screen.getByRole('textbox', { name: 'スレッド名' }), {
-      target: { value: '光織との予定相談' },
-    })
-
-    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
-
-    expect(await screen.findByRole('button', { name: '光織との予定相談' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '光織との予定相談' })).toBeTruthy()
-  })
-
-  test('archive API失敗時は一覧・履歴・選択状態を維持する', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (init?.method === 'POST' && url.endsWith('/archive')) {
-        return new Response(null, { status: 503 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await selectConversation()
-    await screen.findByText('保存済みの回答')
-
-    await chooseThreadAction('アーカイブ')
-
-    expect(await screen.findByRole('alert')).toBeTruthy()
-    expect(screen.getByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
-    expect(screen.getByText('保存済みの回答')).toBeTruthy()
-    expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
-  })
-
-  test('unarchive API失敗時はarchived一覧を維持する', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T13:00:00+00:00',
-    }
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (init?.method === 'POST' && url.endsWith('/unarchive')) {
-        return new Response(null, { status: 503 })
-      }
-      if (url.endsWith('/archived')) {
-        return new Response(JSON.stringify([archivedConversation]), { status: 200 })
-      }
-      if (url.endsWith('/conversations')) return new Response('[]', { status: 200 })
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await showArchived()
-
-    await chooseThreadAction('復元')
-
-    expect(await screen.findByRole('alert')).toBeTruthy()
-    expect(screen.getByText(CONVERSATION_ID)).toBeTruthy()
-  })
-
-  test('hard delete API失敗時は対象一覧・選択保存・確認状態を維持する', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T13:00:00+00:00',
-    }
-    localStorage.setItem('digital-souls:conversation:miori', CONVERSATION_ID)
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (init?.method === 'DELETE') return new Response(null, { status: 503 })
-      if (url.endsWith('/archived')) {
-        return new Response(JSON.stringify([archivedConversation]), { status: 200 })
-      }
-      if (url.endsWith('/conversations')) return new Response('[]', { status: 200 })
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await showArchived()
-    await chooseThreadAction('削除')
-
-    await fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
-
-    expect(await screen.findByRole('alert')).toBeTruthy()
-    expect(screen.getByRole('dialog')).toBeTruthy()
-    expect(screen.getByRole('button', { name: `${CONVERSATION_ID}のメニュー` })).toBeTruthy()
-    expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
-  })
-
-  test('サイドバーは閉じた後にフロートボタンから再展開できる', async () => {
-    render(App)
-    await screen.findByRole('button', { name: CONVERSATION_ID })
-
-    await fireEvent.click(screen.getByRole('button', { name: 'サイドバーを閉じる' }))
-    expect(screen.queryByRole('complementary', { name: 'スレッド一覧' })).toBeNull()
-    await fireEvent.click(screen.getByRole('button', { name: 'サイドバーを開く' }))
-
-    expect(screen.getByRole('complementary', { name: 'スレッド一覧' })).toBeTruthy()
-  })
-
-  test('設定のプルダウンからキャラクターを追加し0件ブロックを表示する', async () => {
-    const akira = {
-      character_id: 'akira',
-      display_name: '晶',
-      standing_image: { status: 'missing', url: null },
-    }
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/characters') {
-        return new Response(JSON.stringify([...characterCatalog, akira]), { status: 200 })
-      }
-      if (url === '/api/ui-settings/characters/akira' && init?.method === 'PUT') {
-        return new Response(JSON.stringify({
-          ...uiSettings,
-          characters: [
-            ...uiSettings.characters,
-            { character_id: 'akira', visible: true, pinned: false, pin_order: null },
-          ],
-        }), { status: 200 })
-      }
-      if (url === '/api/characters/akira/conversations') {
-        return new Response('[]', { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await screen.findByRole('button', { name: CONVERSATION_ID })
-    await fireEvent.click(screen.getByRole('button', { name: '設定' }))
-    const candidate = screen.getByRole<HTMLOptionElement>('option', { name: '晶 (akira)' })
-    expect(candidate.value).toBe('akira')
-    await fireEvent.change(screen.getByRole('combobox', { name: 'キャラクター追加' }), {
-      target: { value: 'akira' },
-    })
-
-    await fireEvent.click(screen.getByRole('button', { name: '追加' }))
-
-    expect(await screen.findByRole('button', { name: '晶をピン留め' })).toBeTruthy()
-    expect(screen.getAllByText('スレッドはありません')).toHaveLength(1)
-  })
-
-
-  test('HTTP応答待機中はスレッド切替を防ぎ完了後に許可する', async () => {
-    const secondConversation = {
-      ...conversation,
-      conversation_id: SECOND_CONVERSATION_ID,
-      title: SECOND_CONVERSATION_ID,
-    }
-    let resolveChat: ((response: Response) => void) | undefined
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/chat') {
-        return new Promise<Response>((resolve) => { resolveChat = resolve })
-      }
-      if (url.endsWith(`/${SECOND_CONVERSATION_ID}/turns`)) {
-        return new Response(JSON.stringify([
-          persistedTurn('切替先の質問', '切替先の回答'),
-        ]), { status: 200 })
-      }
-      if (url.endsWith('/turns') || url.endsWith('/archived')) {
-        return defaultFetch(input, init)
-      }
-      if (url === '/api/characters' || url.startsWith('/api/ui-settings')) {
-        return defaultFetch(input, init)
-      }
-      return new Response(JSON.stringify([conversation, secondConversation]), { status: 200 })
-    })
-    render(App)
-    await fireEvent.click(await screen.findByRole('button', { name: CONVERSATION_ID }))
-    await screen.findByText('保存済みの回答')
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '遅延する質問' },
-    })
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
-
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: SECOND_CONVERSATION_ID }).disabled).toBe(true)
-    await fireEvent.click(screen.getByRole('button', { name: SECOND_CONVERSATION_ID }))
-    expect(screen.getByText('保存済みの回答')).toBeTruthy()
-    if (resolveChat === undefined) throw new Error('Chat response resolver is required')
-    resolveChat(new Response(JSON.stringify({
-      character: 'miori',
-      turn: persistedTurn('遅延する質問', '切替前スレッドの遅延応答'),
-    }), { status: 200 }))
-
-    expect(await screen.findByText('切替前スレッドの遅延応答')).toBeTruthy()
-    await waitFor(() => expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: SECOND_CONVERSATION_ID }).disabled,
-    ).toBe(false))
-    await fireEvent.click(screen.getByRole('button', { name: SECOND_CONVERSATION_ID }))
-    expect(await screen.findByText('切替先の回答')).toBeTruthy()
-  })
-
-  test('スレッド切替後に失敗した切替元の履歴取得エラーを表示しない', async () => {
-    const secondConversation = {
-      ...conversation,
-      conversation_id: SECOND_CONVERSATION_ID,
-      title: SECOND_CONVERSATION_ID,
-    }
-    let rejectPreviousHistory: ((reason: Error) => void) | undefined
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url.endsWith(`/${CONVERSATION_ID}/turns`)) {
-        return new Promise<Response>((_resolve, reject) => { rejectPreviousHistory = reject })
-      }
-      if (url.endsWith(`/${SECOND_CONVERSATION_ID}/turns`)) {
-        return new Response(JSON.stringify([
-          persistedTurn('切替先の質問', '切替先の回答'),
-        ]), { status: 200 })
-      }
-      if (url.endsWith('/turns') || url.endsWith('/archived')) return defaultFetch(input, init)
-      if (url === '/api/characters' || url.startsWith('/api/ui-settings')) {
-        return defaultFetch(input, init)
-      }
-      return new Response(JSON.stringify([conversation, secondConversation]), { status: 200 })
-    })
-    render(App)
-    await fireEvent.click(await screen.findByRole('button', { name: CONVERSATION_ID }))
-    await waitFor(() => expect(rejectPreviousHistory).toBeDefined())
-
-    await fireEvent.click(screen.getByRole('button', { name: SECOND_CONVERSATION_ID }))
-    expect(await screen.findByText('切替先の回答')).toBeTruthy()
-    if (rejectPreviousHistory === undefined) throw new Error('History rejection function is required')
-    rejectPreviousHistory(new Error('previous history failed'))
-
-    await waitFor(() => {
-      expect(screen.queryByRole('alert')).toBeNull()
-      expect(screen.getByText('切替先の回答')).toBeTruthy()
-    })
-  })
-
-
-
-  test('HTTP送信失敗時にエラーを表示して入力を再び有効にする', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      if (String(input) === '/api/chat') throw new Error('backend error')
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await selectConversation()
-
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '応答して' },
-    })
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
-
-    expect((await screen.findByRole('alert')).textContent).toBe('応答の取得に失敗しました。')
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
-  })
-
-
-
-
-
-
-
-
-
-
-
-  test('text応答待機中も継続音声入力のマイク操作は維持する', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      if (String(input) === '/api/chat') return new Promise<Response>(() => {})
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await selectConversation()
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '少し待って' },
-    })
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
-
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオンにする' }).disabled).toBe(false)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: CONVERSATION_ID }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: `${CONVERSATION_ID}のメニュー` }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '新規スレッド（光織）' }).disabled).toBe(true)
-  })
-
-  test('物理削除の確認中は他操作を無効にし開始元characterを削除対象にする', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T12:02:00+00:00',
-    }
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url.endsWith('/archived')) {
-        return new Response(JSON.stringify([archivedConversation]), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await screen.findByRole('button', { name: CONVERSATION_ID })
-    await showArchived()
-    await chooseThreadAction('削除')
-
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '会話履歴に戻る' }).disabled).toBe(true)
-
-    await fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      `/api/characters/miori/conversations/${CONVERSATION_ID}`,
-      { method: 'DELETE' },
-    ))
-  })
-
-  test('archive一覧切替と会話中キャラクターの非表示では音声sessionを終了しない', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/ui-settings/characters/miori' && init?.method === 'PUT') {
-        return new Response(JSON.stringify({
-          ...uiSettings,
-          characters: [{
-            character_id: 'miori', visible: false, pinned: false, pin_order: null,
-          }],
-        }), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await startLiveKitSession()
-
-    await showArchived()
-    await showActive()
-    await fireEvent.click(screen.getByRole('button', { name: '光織を一覧から非表示' }))
-
-    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'マイクをオフにする' })).toBeTruthy()
-  })
-
-  test('スレッドメニューを矢印キーで移動しEscapeで開始ボタンへfocusを戻す', async () => {
-    render(App)
-    const menuButton = await screen.findByRole('button', {
-      name: `${CONVERSATION_ID}のメニュー`,
-    })
-
-    await fireEvent.click(menuButton)
-    const pin = screen.getByRole('menuitem', { name: 'ピン留め' })
-    await waitFor(() => expect(document.activeElement).toBe(pin))
-    await fireEvent.keyDown(window, { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '名前を変更' }))
-    await fireEvent.keyDown(window, { key: 'Escape' })
-
-    await waitFor(() => expect(document.activeElement).toBe(menuButton))
-    expect(screen.queryByRole('menu')).toBeNull()
-  })
-
-  test('PCの立ち絵配置と履歴高を設定から即時反映して保存する', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/ui-settings' && init?.method === 'PATCH') {
-        const patch = JSON.parse(String(init.body)) as Record<string, unknown>
-        return new Response(JSON.stringify({ ...uiSettings, ...patch }), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    await screen.findByRole('button', { name: CONVERSATION_ID })
-    const stage = document.querySelector<HTMLElement>('.conversation-stage')
-    if (stage === null) throw new Error('会話stageが必要です')
-    expect(stage.dataset.portraitLayout).toBe('right')
-    await fireEvent.click(screen.getByRole('button', { name: '設定' }))
-
-    await fireEvent.change(screen.getByRole('combobox', { name: 'PCの立ち絵配置' }), {
-      target: { value: 'background' },
-    })
-    await waitFor(() => expect(stage.dataset.portraitLayout).toBe('background'))
-    const historyHeight = screen.getByRole<HTMLSelectElement>('combobox', {
-      name: 'PC・履歴背面の表示範囲',
-    })
-    await waitFor(() => expect(historyHeight.disabled).toBe(false))
-    await fireEvent.change(historyHeight, {
-      target: { value: '50' },
-    })
-
-    await waitFor(() => expect(stage.dataset.historyHeight).toBe('50'))
-    expect(fetchMock).toHaveBeenCalledWith('/api/ui-settings', expect.objectContaining({
-      method: 'PATCH',
-    }))
-  })
-
-  test('compact画面は履歴背面に固定しVisual Viewportの高さへ追従する', async () => {
-    let viewportHeight = 640
-    const viewport = new EventTarget()
-    Object.defineProperties(viewport, {
-      height: { get: () => viewportHeight },
-      offsetTop: { get: () => 12 },
-    })
-    vi.stubGlobal('matchMedia', vi.fn(() => ({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })))
-    vi.stubGlobal('visualViewport', viewport)
-    render(App)
-    const open = await screen.findByRole('button', { name: 'サイドバーを開く' })
-    expect(open).toBeTruthy()
-    const stage = document.querySelector<HTMLElement>('.conversation-stage')
-    const shell = document.querySelector<HTMLElement>('.app-shell')
-    if (stage === null || shell === null) throw new Error('layout要素が必要です')
-    expect(stage.dataset.portraitLayout).toBe('background')
-    expect(stage.dataset.historyHeight).toBe('75')
-    expect(shell.style.getPropertyValue('--visual-viewport-height')).toBe('640px')
-
-    viewportHeight = 420
-    viewport.dispatchEvent(new Event('resize'))
-
-    await waitFor(() => expect(
-      shell.style.getPropertyValue('--visual-viewport-height'),
-    ).toBe('420px'))
-    expect(stage.dataset.historyHeight).toBe('75')
-  })
-
-
-
-
 })

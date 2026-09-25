@@ -419,6 +419,7 @@ def test_unsafe_integer_is_rejected_at_parser_boundary() -> None:
         parser.parse_voice_session_event(fixture["event"])
 
 
+@pytest.mark.cross_language
 def test_standard_codegen_command_reproduces_both_committed_generated_files(
     tmp_path: Path,
 ) -> None:

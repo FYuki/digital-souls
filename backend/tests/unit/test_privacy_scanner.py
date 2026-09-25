@@ -621,12 +621,17 @@ def test_should_reject_invalid_recognizer_version_during_construction(
         )
 
 
-def test_should_not_load_policy_file_from_scanner_module() -> None:
-    import inspect
+def test_scanner_uses_supplied_policy_without_reading_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.memory.memory_policy import resolved_memory_policy
+    from app.privacy.scanner import create_privacy_scanner
 
-    from app.privacy import scanner
+    policy = resolved_memory_policy().privacy
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", lambda *_args, **_kwargs: pytest.fail("scanner read a file"))
+        scanner = create_privacy_scanner(policy)
+        result = scanner.scan("合成入力")
+    from app.privacy.contracts import ScanSuccess
 
-    source = inspect.getsource(scanner)
-    assert "MEMORY_POLICY_CONFIG_PATH" not in source
-    assert "resolved_memory_policy" not in source
-    assert ".open(" not in source
+    assert isinstance(result, ScanSuccess)

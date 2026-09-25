@@ -223,13 +223,14 @@ def test_core_process_crash_before_checkpoint_recovers_only_stored_result(tmp_pa
     assert external_state(tmp_path)["domain"] == (7, 1)
 
 
-def test_real_sixty_second_wait_keeps_queue_and_late_once_only_dispatches_future(
+def test_autonomous_wait_expiry_keeps_queue_and_late_once_only_dispatches_future(
     tmp_path,
 ):
     async def run():
         config = await configuration(tmp_path)
         async with runtime(tmp_path, config) as (c, gate, p, recovery):
             assert p.autonomous_wait_seconds == 60
+            p.autonomous_wait_seconds = 0.02
             context = replace(CONTEXT, scene=ExecutionScene.AUTONOMOUS)
             old_loop = gate.begin_loop(context)
             started = time.monotonic()
@@ -238,7 +239,7 @@ def test_real_sixty_second_wait_keeps_queue_and_late_once_only_dispatches_future
             )
             elapsed = time.monotonic() - started
             assert result["outcome"] == "deferred", result
-            assert 60 <= elapsed < 70
+            assert 0.02 <= elapsed < 1
             request = p.store.requests()[0]
             assert not request.waiting and request.choice is None
             assert external_state(tmp_path)["calls"] == []

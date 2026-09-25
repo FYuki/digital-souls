@@ -1,0 +1,1049 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+
+const livekitMocks = vi.hoisted(() => {
+  class FakeRoom {
+    readonly handlers = new Map<string, Array<(...args: unknown[]) => void>>()
+    readonly localParticipant = {
+      publishData: vi.fn(async (_payload: Uint8Array, _options: unknown) => undefined),
+      publishTrack: vi.fn(async () => ({trackSid: 'TR_microphone'})),
+      unpublishTrack: vi.fn(async () => ({trackSid: 'TR_microphone'})),
+      getTrackPublication: vi.fn(
+        (_source: unknown): { track?: unknown } | undefined => undefined,
+      ),
+      setMicrophoneEnabled: vi.fn(async () => ({trackSid: 'TR_microphone'})),
+    }
+
+    on(event: string, callback: (...args: unknown[]) => void): this {
+      const handlers = this.handlers.get(event) ?? []
+      handlers.push(callback)
+      this.handlers.set(event, handlers)
+      return this
+    }
+
+    emit(event: string, ...args: unknown[]): void {
+      for (const callback of this.handlers.get(event) ?? []) callback(...args)
+    }
+
+    async connect(): Promise<void> {}
+
+    disconnect(): void {
+      this.emit('disconnected')
+    }
+  }
+
+  return { FakeRoom, rooms: [] as FakeRoom[] }
+})
+
+vi.mock('livekit-client', () => ({
+  Room: class extends livekitMocks.FakeRoom {
+    constructor() {
+      super()
+      livekitMocks.rooms.push(this)
+    }
+  },
+  RoomEvent: {
+    SignalReconnecting: 'signalReconnecting',
+    SignalConnected: 'signalConnected',
+    Reconnecting: 'reconnecting',
+    Reconnected: 'reconnected',
+    DataReceived: 'dataReceived',
+    TrackPublished: 'trackPublished',
+    TrackSubscribed: 'trackSubscribed',
+    TrackUnsubscribed: 'trackUnsubscribed',
+    Disconnected: 'disconnected',
+  },
+  Track: {
+    Kind: { Audio: 'audio' },
+    Source: { Microphone: 'microphone' },
+  },
+}))
+
+const mediaMocks = vi.hoisted(() => ({observers: [] as Array<{
+  playback?: {packet: (packet: unknown) => void; failed: () => void; interrupted?: () => void}
+  report: (value: unknown) => void
+}>}))
+vi.mock('./livekit/media-observer', () => ({
+  RemoteMediaObserver: class {
+    constructor(_receiver: unknown, _track: unknown, public report: (value: unknown) => void,
+      public playback?: {packet: (packet: unknown) => void; failed: () => void; interrupted?: () => void}) {mediaMocks.observers.push(this); report({trackReceivedAtMs: performance.now()})}
+    ready = async () => undefined
+    close = vi.fn()
+  },
+}))
+
+import { LiveKitRoomClient, type RoomObservation } from './livekit/room'
+
+type Deferred = Readonly<{
+  promise: Promise<void>
+  resolve: () => void
+}>
+
+const deferred = (): Deferred => {
+  let resolvePromise: (() => void) | undefined
+  const promise = new Promise<void>((resolve) => {
+    resolvePromise = resolve
+  })
+  return {
+    promise,
+    resolve: () => resolvePromise?.(),
+  }
+}
+
+const audioContexts: FakeAudioContext[] = []
+const closeBlockers: Deferred[] = []
+const workletFailures: Error[] = []
+const workletBlockers: Deferred[] = []
+
+class FakeAudioWorkletNode {
+  readonly port = {onmessage: null as ((event: MessageEvent) => void) | null, postMessage: vi.fn(), close: vi.fn()}
+  disconnect = vi.fn()
+  connect = vi.fn((destination: unknown) => destination)
+  autoFinish = true
+  constructor(context: FakeAudioContext, readonly processorName: string) {
+    context.worklets.push(this)
+    this.port.postMessage.mockImplementation((message: {kind: string}) => {
+      if (processorName === 'post-gain-audit' && message.kind === 'finish' && this.autoFinish) {
+        // 実workletを動かさない既存単体テストでは、出力欠測として終了させる。
+        // 停止確認の成功は生成しない。時計・停止検証では明示的なmessageを投入する。
+        queueMicrotask(() => this.port.onmessage?.({data: {kind: 'missing', reason: 'audit_output_unavailable'}} as MessageEvent))
+      }
+    })
+  }
+}
+
+class FakeGainNode {
+  readonly gain = { value: 1 }
+  disconnect = vi.fn()
+
+  connect = vi.fn((destination: unknown): unknown => destination)
+}
+
+class FakeAudioContext {
+  readonly destination = {}
+  readonly sampleRate = 48_000
+  readonly currentTime = 0
+  readonly audioWorklet = { addModule: vi.fn(async () => {
+    const failure = workletFailures.shift()
+    if (failure !== undefined) throw failure
+    await workletBlockers.shift()?.promise
+  }) }
+  readonly worklets: FakeAudioWorkletNode[] = []
+  get renderWorklets(): FakeAudioWorkletNode[] {return this.worklets.filter(node => node.processorName !== 'post-gain-audit')}
+  readonly gains: FakeGainNode[] = []
+
+  constructor(readonly options?: AudioContextOptions) {
+    audioContexts.push(this)
+  }
+
+  getOutputTimestamp(): AudioTimestamp { return { contextTime: 1, performanceTime: 1000 } }
+
+  async resume(): Promise<void> {}
+
+  readonly close = vi.fn((): Promise<void> => {
+    return closeBlockers.shift()?.promise ?? Promise.resolve()
+  })
+
+  createMediaStreamSource(): never {throw new Error('native PCM source must not be connected')}
+
+  createGain(): FakeGainNode {
+    const gain = new FakeGainNode()
+    this.gains.push(gain)
+    return gain
+  }
+}
+
+const authoritativeState = (
+  generation: number,
+  terminalOutcomes: ReadonlyArray<Record<string, unknown>> = [],
+): Uint8Array => new TextEncoder().encode(JSON.stringify({
+  protocol_version: '2.0',
+  type: 'authoritative_state',
+  generation,
+  session_phase: 'available',
+  terminal_outcomes: terminalOutcomes,
+}))
+
+const latestRoom = (): InstanceType<typeof livekitMocks.FakeRoom> => {
+  const room = livekitMocks.rooms.at(-1)
+  if (room === undefined) throw new Error('LiveKit Room is required')
+  return room
+}
+
+const emitPrivateFrame = (room: InstanceType<typeof livekitMocks.FakeRoom>, payload: Uint8Array) => {
+  room.emit('dataReceived', payload, undefined, undefined, 'digital-souls.livekit-transport.v2')
+}
+
+const recoveryRequests = (room: InstanceType<typeof livekitMocks.FakeRoom>) =>
+  room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    .filter(p => p.type === 'control_probe')
+
+const acknowledgeRecovery = async (room: InstanceType<typeof livekitMocks.FakeRoom>, generation: number,
+  sessionId = '20000000-0000-4000-8000-000000000001') => {
+  await Promise.resolve()
+  const request = recoveryRequests(room).at(-1)
+  expect(request).toMatchObject({generation})
+  room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({...request, type: 'control_probe_ack'})),
+    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v2')
+}
+
+const emitCoreEvent = (
+  room: InstanceType<typeof livekitMocks.FakeRoom>,
+  event: Record<string, unknown>,
+) => {
+  room.emit(
+    'dataReceived',
+    new TextEncoder().encode(JSON.stringify(event)),
+    undefined,
+    undefined,
+    'digital-souls.core.v1',
+  )
+}
+
+const emitScreenEvent = (
+  room: InstanceType<typeof livekitMocks.FakeRoom>,
+  event: Record<string, unknown>,
+) => {
+  room.emit(
+    'dataReceived',
+    new TextEncoder().encode(JSON.stringify(event)),
+    undefined,
+    undefined,
+    'digital-souls.screen-perception.v1',
+  )
+}
+
+describe("LiveKit Room audio and recovery", () => {
+
+  beforeEach(() => {
+    livekitMocks.rooms.length = 0
+    audioContexts.length = 0
+    closeBlockers.length = 0
+    mediaMocks.observers.length = 0
+    workletFailures.length = 0
+    workletBlockers.length = 0
+    vi.stubGlobal('AudioContext', FakeAudioContext)
+    vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode)
+    vi.stubGlobal('MediaStream', class {
+      constructor(_tracks: unknown[]) {}
+    })
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:livekit-worklet'),
+      revokeObjectURL: vi.fn(),
+    })
+  })
+
+
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+
+
+
+test('復号PCMは一つのworkletへ渡し、停止後の旧PCMを再投入しない', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+    {trackSid: 'TR_packet', trackName: `ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const worklet = audioContexts.at(-1)!.renderWorklets[0]
+  const observer = mediaMocks.observers.at(-1)!
+  const pcm = new Float32Array(960).fill(.25)
+  observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100, decodedAtMs: 101, pcm})
+  expect(worklet.port.postMessage).toHaveBeenCalledWith(
+    {kind: 'pcm', packetIndex: 0, rtpTimestamp: 99, samples: pcm}, [pcm.buffer])
+  client.stopPlayback(responseId)
+  expect(worklet.port.postMessage).toHaveBeenCalledWith({kind: 'stop'})
+  observer.playback!.packet({packetIndex: 1, rtpTimestamp: 1059, receivedAtMs: 120, decodedAtMs: 121, pcm})
+  expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
+  client.disconnect()
+})
+
+
+
+
+test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力した応答packetだけをmedia traceへ相関する（%s）', async mode => {
+  const observations: RoomObservation[] = []
+  const packetOutputs: Array<{status: string}> = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  client.setPacketOutputObserver(row => packetOutputs.push(row))
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const track = {kind: 'audio', mediaStreamTrack: {}}
+  const publication = {trackSid: 'TR_correlated', trackName: `ds-response-v1:${responseId}`}
+  room.emit('trackSubscribed', track, publication)
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const observer = mediaMocks.observers.at(-1)!
+  const worklet = audioContexts.at(-1)!.renderWorklets[0]
+  const measurements = () => room.localParticipant.publishData.mock.calls
+    .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
+    .filter(row => ['client_track_received', 'client_encoded_received', 'client_audio_decoded'].includes(row.measurement))
+  try {
+    observer.report({trackReceivedAtMs: 50, firstPacketReceivedAtMs: 100,
+      firstPacketDecodedAtMs: mode === 'mismatched_decode' ? 102 : 101,
+      firstPacketDecodedSamples: 960, firstPacketDeliveredAtMs: 150})
+    observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100,
+      decodedAtMs: 101, receivedAtBoundsMs: {lowerMs: 100, upperMs: 100.2},
+      decodedAtBoundsMs: {lowerMs: 101, upperMs: 101.2}, source: 7, pcm: new Float32Array(960).fill(.25)})
+    expect(measurements()).toHaveLength(0)
+    expect(observations.some(row => row.mediaResponseId)).toBe(false)
+    if (mode === 'stopped') client.stopPlayback(responseId)
+    if (mode === 'unsubscribed') room.emit('trackUnsubscribed', track, publication)
+    worklet.port.onmessage?.({data: {kind: 'rendered', packetIndex: 0, rtpTimestamp: 99,
+      packetSampleOffset: 0, startFrame: 24000, endFrame: 24128, energy: .25,
+      renderQuantumStartFrame: 24000, renderClockConfirmationFrame: 24000}} as MessageEvent)
+    if (mode === 'valid') {
+      await vi.waitFor(() => expect(measurements()).toHaveLength(3))
+      expect(measurements().map(row => [row.measurement, row.timestamp, row.response_id])).toEqual([
+        ['client_track_received', 50, responseId], ['client_encoded_received', 100, responseId],
+        ['client_audio_decoded', 101, responseId],
+      ])
+      const correlated = observations.find(row => row.mediaResponseId === responseId)
+      expect(correlated?.packetPlaybackObservation?.firstOutputAtMs).toBe(500)
+      expect(correlated?.packetPlaybackObservation?.decodedAtMs).toBe(101)
+      expect(packetOutputs).toHaveLength(1)
+      expect(packetOutputs[0].status).toBe('captured')
+    } else {
+      if (mode === 'mismatched_decode') await vi.waitFor(() => expect(observations.some(row => row.failureStage)).toBe(true))
+      else await new Promise(resolve => setTimeout(resolve, 20))
+      expect(measurements()).toHaveLength(0)
+      expect(observations.some(row => row.mediaResponseId)).toBe(false)
+    }
+  } finally {client.disconnect()}
+})
+
+
+
+
+test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続では未出力のPCMを止め、Coreの応答だけを中断して制御接続を維持する: %s', async mode => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+    {trackSid: 'TR_loss', trackName: `ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const observer = mediaMocks.observers.at(-1)!, worklet = audioContexts.at(-1)!.renderWorklets[0]
+  const frame = {receivedAtMs: 100, decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)}
+  try {
+    observer.playback!.packet({...frame, packetIndex: 0, rtpTimestamp: 99})
+    const observationsBeforeFault = observations.length
+    if (mode === 'gap_during_resume') room.emit('signalReconnecting')
+    if (mode === 'overlap') {observer.playback!.interrupted!(); observer.playback!.interrupted!()}
+    else observer.playback!.packet({...frame, packetIndex: 1, rtpTimestamp: mode === 'ragged_gap' ? 2021 : 2019})
+    observer.playback!.packet({...frame, packetIndex: 2, rtpTimestamp: 2979})
+    const messages = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    if (mode === 'gap_during_resume') {
+      await vi.waitFor(() => expect(messages().filter(p => p.type === 'response_cancel_requested')).toHaveLength(1))
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(messages().filter(p => p.type === 'state_sync_request')).toHaveLength(1)
+      expect(client.isAudioProbeReady()).toBe(false)
+      room.emit('reconnected')
+    }
+    await vi.waitFor(() => expect(messages().some(p => p.type === 'state_sync_request')).toBe(true))
+    expect(messages().filter(p => ['playback_stopped', 'response_cancel_requested'].includes(p.type)))
+      .toMatchObject([{type: 'playback_stopped', session_id: sessionId, response_id: responseId,
+        reason: 'disconnect', last_played_audio_sequence: 0},
+      {type: 'response_cancel_requested', session_id: sessionId, response_id: responseId, reason: 'disconnect'}])
+    // Session世代を更新する前に、入力所有側へ再認可が必要な状態を通知する。
+    expect(observations.slice(observationsBeforeFault).some(row => row.transport === 'unavailable')).toBe(true)
+    expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
+    expect(worklet.port.postMessage).toHaveBeenCalledWith({kind: 'stop'})
+    if (mode === 'gap' || mode === 'gap_during_resume') {
+      expect(observations.find(row => row.mediaPacketLoss)?.mediaPacketLoss)
+        .toMatchObject({responseId, expectedTimestamp: 1059, receivedTimestamp: 2019, missingPacketCount: 1})
+      expect(observations.filter(row => row.mediaPacketLoss)).toHaveLength(1)
+    } else {
+      expect(observations.filter(row => row.mediaTimelineInterruption)).toHaveLength(1)
+      expect(observations.find(row => row.mediaTimelineInterruption)?.mediaTimelineInterruption)
+        .toMatchObject({responseId, reason: mode === 'ragged_gap' ? 'timestamp_discontinuity' : 'timestamp_overlap'})
+    }
+    expect(observations.some(row => row.failureStage)).toBe(false)
+    expect(disconnected).not.toHaveBeenCalled()
+    expect(messages().filter(p => ['playback_stopped', 'response_cancel_requested', 'state_sync_request'].includes(p.type))
+      .map(p => p.type)).toEqual(mode === 'gap_during_resume'
+        ? ['playback_stopped', 'state_sync_request', 'response_cancel_requested']
+        : ['playback_stopped', 'response_cancel_requested', 'state_sync_request'])
+    emitPrivateFrame(room, authoritativeState(1, [{type: 'response_interrupted', session_id: sessionId,
+      response_id: responseId, confirmed_audio_sequence: 0}]))
+    await vi.waitFor(() => expect(audioContexts[0].close).toHaveBeenCalled())
+    expect(audioContexts.flatMap(context => context.renderWorklets)).toHaveLength(1)
+    // ローカル再同期はSDKのreconnectedを待たず、制御往復で復帰できる。
+    await vi.waitFor(() => expect(messages().some(row => row.type === 'control_probe' && row.generation === 1)).toBe(true))
+    await acknowledgeRecovery(room, 1)
+    expect(client.isAudioProbeReady()).toBe(true)
+    const probe = client.probeControl()
+    const sent = messages().filter(row => row.type === 'control_probe').at(-1)
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...sent, type: 'control_probe_ack'})))
+    expect(await probe).toMatchObject({status: 'received', generation: 1})
+  } finally {client.disconnect()}
+})
+
+
+
+
+const probeSession = '20000000-0000-4000-8000-000000000001'
+
+
+const probePublisher = {identity: 'character-miori-' + probeSession, sid: 'PA_backend'}
+
+
+const probeMessages = (room: InstanceType<typeof livekitMocks.FakeRoom>) => room.localParticipant.publishData.mock.calls
+  .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
+
+
+const finishAudioProbe = (room: InstanceType<typeof livekitMocks.FakeRoom>, nonce: string, extra = {}, publisher = probePublisher) => {
+  room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '2.0', type: 'audio_probe_finished',
+    generation: 0, probe_id: nonce, track_sid: 'TR_probe', input_sample_count: 9600,
+    captured_sample_count: 10560, padding_sample_count: 960, ...extra})), publisher, undefined, 'digital-souls.livekit-transport.v2')
+}
+
+
+
+test('診断音は全packetの実出力時計を待ち、会話の再生・Core測定を変更しない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']})
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  try {
+    await client.connect('ws://test', 'token', probeSession)
+    const room = latestRoom(), pending = client.probeAudio()
+    const request = probeMessages(room).find(row => row.type === 'audio_probe_request')
+    const publication = {trackSid: 'TR_probe', trackName: 'ds-audio-probe-v1:' + request.probe_id}
+    const track = {kind: 'audio', mediaStreamTrack: {}}
+    room.emit('trackSubscribed', track, {...publication, trackName: 'ds-audio-probe-v1:other'}, probePublisher)
+    room.emit('trackSubscribed', track, publication, {...probePublisher, identity: 'user-' + probeSession})
+    expect(audioContexts).toHaveLength(0)
+    room.emit('trackSubscribed', track, publication, probePublisher)
+    await vi.advanceTimersByTimeAsync(1)
+    const context = audioContexts[0], worklet = context.renderWorklets[0], observer = mediaMocks.observers[0]
+    expect(probeMessages(room).filter(row => row.type === 'audio_probe_ready')).toHaveLength(1)
+    let passed = false, resolved = false
+    void pending.then(() => {resolved = true})
+    vi.spyOn(context, 'getOutputTimestamp').mockImplementation(() => ({contextTime: passed ? 1 : .05, performanceTime: passed ? 1000 : 50}))
+    for (let index = 0; index < 11; index++) {
+      observer.playback!.packet({packetIndex: index, rtpTimestamp: 99 + index * 960, source: 7,
+        receivedAtMs: 10 + index * 20, decodedAtMs: 11 + index * 20,
+        receivedAtBoundsMs: {lowerMs: 10 + index * 20, upperMs: 10.2 + index * 20},
+        decodedAtBoundsMs: {lowerMs: 11 + index * 20, upperMs: 11.2 + index * 20}, pcm: new Float32Array(960).fill(.25)})
+      worklet.port.onmessage?.({data: {kind: 'rendered', packetIndex: index, rtpTimestamp: 99 + index * 960,
+        packetSampleOffset: 0, startFrame: 4800 + index * 960, endFrame: 5760 + index * 960,
+        energy: .25, firstAudibleFrame: 4800 + index * 960}} as MessageEvent)
+    }
+    finishAudioProbe(room, request.probe_id, {generation: 1})
+    finishAudioProbe(room, request.probe_id, {track_sid: 'TR_other'})
+    finishAudioProbe(room, request.probe_id, {}, {...probePublisher, sid: 'PA_old'})
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(resolved).toBe(false)
+    passed = true
+    await vi.advanceTimersByTimeAsync(5)
+    expect(resolved).toBe(false) // 不一致の完了通知では出力済みでも完了しない。
+    finishAudioProbe(room, request.probe_id)
+    const result = await pending
+    expect(result).toMatchObject({scope: 'rtc_audio_probe', status: 'captured', cleanupCompleted: true,
+      completion: {renderedSamples: 10560, packetCount: 11, gapSamples: 0}})
+    expect(result.packetOutputs).toHaveLength(11)
+    expect(result.trackEvents.map(row => [row.nameMatches, row.publisherMatches])).toEqual([[false, true], [true, false], [true, true]])
+    expect(JSON.stringify(result.packetOutputs)).not.toContain('"pcm"')
+    expect(context.close).toHaveBeenCalledOnce()
+    expect(worklet.disconnect).toHaveBeenCalledOnce()
+    expect(document.querySelector('audio')).toBeNull()
+    expect(probeMessages(room).map(row => row.type)).toEqual(['audio_probe_request', 'audio_probe_ready', 'audio_probe_complete'])
+    expect(observations.some(row => row.playbackCompletedResponseId || row.mediaResponseId)).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+
+test.each(['reconnecting', 'disconnected', 'generation', 'unsubscribed', 'timeout', 'decoder'])('音声診断の失敗を保持してgraphを閉じる: %s', async mode => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']})
+  const client = new LiveKitRoomClient(() => undefined)
+  try {
+    await client.connect('ws://test', 'token', probeSession)
+    const room = latestRoom(), pending = client.probeAudio()
+    const request = probeMessages(room).find(row => row.type === 'audio_probe_request')
+    const publication = {trackSid: 'TR_probe', trackName: 'ds-audio-probe-v1:' + request.probe_id}
+    room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}}, publication, probePublisher)
+    await vi.advanceTimersByTimeAsync(1)
+    if (mode === 'generation') emitPrivateFrame(room, authoritativeState(1))
+    else if (mode === 'unsubscribed') room.emit('trackUnsubscribed', {}, publication)
+    else if (mode === 'decoder') mediaMocks.observers.at(-1)!.playback!.failed()
+    else if (mode === 'timeout') await vi.advanceTimersByTimeAsync(10000)
+    else room.emit(mode)
+    expect(await pending).toMatchObject({status: 'failed', cleanupCompleted: true,
+      reason: mode === 'unsubscribed' ? 'track_unsubscribed' : mode === 'decoder' ? 'media_decoder'
+        : mode === 'timeout' ? 'timeout' : 'connection_changed'})
+    expect(audioContexts[0].close).toHaveBeenCalledOnce()
+    expect(document.querySelector('audio')).toBeNull()
+    expect(probeMessages(room).some(row => row.type === 'audio_probe_complete')).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+
+test('音声診断は未接続・同時要求を失敗として返し、余分なtrackを要求しない', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  expect(await client.probeAudio()).toMatchObject({status: 'failed', reason: 'unavailable'})
+  await client.connect('ws://test', 'token', probeSession)
+  const pending = client.probeAudio()
+  expect(await client.probeAudio()).toMatchObject({status: 'failed', reason: 'busy'})
+  expect(probeMessages(latestRoom()).filter(row => row.type === 'audio_probe_request')).toHaveLength(1)
+  client.disconnect()
+  expect(await pending).toMatchObject({status: 'failed', reason: 'connection_changed'})
+})
+
+
+
+test.each([false, true])('全PCMの出力時計通過後の旧RTP異常だけが次応答を中断しない: %s', async outputComplete => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  const nextResponse = '33333333-3333-3333-3333-333333333333'
+  const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  const frames = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+  room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+    {trackSid: 'TR_complete', trackName: `ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const context = audioContexts.at(-1)!, worklet = context.renderWorklets[0]
+  const observer = mediaMocks.observers.at(-1)!
+  vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: outputComplete ? 1 : .51, performanceTime: outputComplete ? 1000 : 510})
+  const privateEvent = (value: Record<string, unknown>) => emitPrivateFrame(room,
+    new TextEncoder().encode(JSON.stringify({protocol_version: '2.0', generation: 0, response_id: responseId, ...value})))
+  try {
+    privateEvent({type: 'logical_audio_segment', audio_sequence: 0, pcm_sample_count: 960})
+    observer.report({trackReceivedAtMs: 50, firstPacketReceivedAtMs: 100, firstPacketDecodedAtMs: 101, firstPacketDecodedSamples: 960})
+    observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100, decodedAtMs: 101,
+      receivedAtBoundsMs: {lowerMs: 100, upperMs: 100.2}, decodedAtBoundsMs: {lowerMs: 101, upperMs: 101.2},
+      source: 7, pcm: new Float32Array(960).fill(.25)})
+    worklet.port.onmessage?.({data: {kind: 'rendered', packetIndex: 0, rtpTimestamp: 99,
+      packetSampleOffset: 0, startFrame: 24000, endFrame: 24960, energy: .25,
+      renderQuantumStartFrame: 24000, renderClockConfirmationFrame: 24000}} as MessageEvent)
+    privateEvent({type: 'response_audio_finished', input_sample_count: 960, captured_sample_count: 960, padding_sample_count: 0})
+    if (outputComplete) await vi.waitFor(() => expect(observations.some(row => row.playbackCompletedResponseId === responseId)).toBe(true))
+    else await new Promise(resolve => setTimeout(resolve, 10))
+    observer.playback!.interrupted!()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    const recovery = frames().filter(frame => ['playback_stopped', 'response_cancel_requested', 'state_sync_request'].includes(frame.type))
+    if (outputComplete) {
+      expect(recovery).toEqual([])
+      expect(observations.some(row => row.mediaTimelineInterruption?.responseId === responseId)).toBe(true)
+      room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+        {trackSid: 'TR_next', trackName: `ds-response-v1:${nextResponse}`})
+      await vi.waitFor(() => expect(frames().some(frame => frame.type === 'response_track_ready' && frame.response_id === nextResponse && frame.generation === 0)).toBe(true))
+    } else {
+      await vi.waitFor(() => expect(frames().some(frame => frame.type === 'state_sync_request')).toBe(true))
+      expect(observations.some(row => row.playbackCompletedResponseId === responseId)).toBe(false)
+    }
+  } finally {client.disconnect(); now.mockRestore()}
+})
+
+
+
+test('取消後のRTP観測は旧応答へ一度だけ送信し、非同期完了で再生状態を戻さない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  let resolveStats!: (value: Map<string, unknown>) => void
+  const receiver = {getStats: () => new Promise<Map<string, unknown>>(resolve => {resolveStats = resolve})}
+  room.emit('trackSubscribed', {kind:'audio', mediaStreamTrack:{}, receiver},
+    {trackSid:'TR_cancel_network', trackName:`ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const publish = vi.spyOn(client, 'publishControlEvent')
+  const cancelled = {protocol_version:'2.0', type:'response_cancelled', session_id:sessionId,
+    event_id:'60000000-0000-4000-8000-000000000003', response_id:responseId, reason:'barge_in', monotonic_timestamp_ms:1000}
+  try {
+    emitCoreEvent(room, cancelled)
+    expect(observations.at(-1)?.cancelConfirmedAtMs).toBeTypeOf('number')
+    expect(publish).not.toHaveBeenCalled()
+    const count = observations.length
+    emitCoreEvent(room, cancelled)
+    resolveStats(new Map([['private', {id:'private', type:'inbound-rtp', kind:'audio',
+      bytesReceived:200, packetsReceived:4, packetsLost:1}]]))
+    await vi.waitFor(() => expect(publish).toHaveBeenCalledOnce())
+    expect(publish.mock.calls[0][0]).toMatchObject({response_id:responseId, measurement:'network_summary',
+      network_summary:{boundary:'response_cancelled', downlink:{bytes:200, packets:4, lostPackets:1}}})
+    expect(observations).toHaveLength(count)
+  } finally {client.disconnect()}
+})
+
+
+
+test.each(['measured', 'missing', 'stale', 'send_failed'])('RTP統計を同一応答の製品観測へ送り、計測失敗で再生をcancelしない: %s', async mode => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  const sender = {getStats: async () => new Map([['private-uplink', {id:'private-uplink', type:'outbound-rtp',
+    kind:'audio', bytesSent:100, packetsSent:8, address:'private-address'}]])}
+  const receiver = {getStats: async () => new Map([['private-downlink', {id:'private-downlink', type:'inbound-rtp',
+    kind:'audio', bytesReceived:200, packetsReceived:4, packetsLost:0, address:'private-address'}]])}
+  if (mode !== 'missing') room.localParticipant.getTrackPublication.mockReturnValue({track:{sender}})
+  room.emit('trackSubscribed', {kind:'audio', mediaStreamTrack:{}, receiver},
+    {trackSid:'TR_network', trackName:`ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const publish = vi.spyOn(client, 'publishControlEvent')
+  if (mode === 'send_failed') publish.mockRejectedValueOnce(new Error('disconnected'))
+  try {
+    const internal = client as unknown as {observeNetwork: (response: string, key: string, generation: number, expected: number) => Promise<void>}
+    await internal.observeNetwork(responseId, 'TR_network', mode === 'stale' ? -1 : 0, 4)
+    if (mode === 'stale') {
+      expect(publish).not.toHaveBeenCalled()
+      expect(observations.some(row => row.networkObservation)).toBe(false)
+    } else {
+      const event = publish.mock.calls.find(([value]) => value.measurement === 'network_summary')?.[0]
+      expect(event).toMatchObject({type:'observation', session_id:sessionId, response_id:responseId,
+        measurement:'network_summary', clock_domain:'client_monotonic', unit:'millisecond',
+        network_summary:{method:'browser_audio_rtp_counters_v1',
+          uplink: mode === 'missing' ? {status:'missing', reason:'stats_api_unavailable'} : {status:'measured', bytes:100, packets:8},
+          downlink:{status:'measured', bytes:200, packets:4, lostPackets:0}}})
+      expect(JSON.stringify(event)).not.toMatch(/private-address|private-uplink|private-downlink/)
+      expect(observations.find(row => row.networkObservation)?.networkMeasurementDelivered).toBe(mode !== 'send_failed')
+    }
+    expect(observations.some(row => row.failureStage)).toBe(false)
+    expect(disconnected).not.toHaveBeenCalled()
+  } finally {client.disconnect()}
+})
+})
+
+
+test('実roomのprobe応答をnonce・世代へ相関し、通常の状態同期を追加送信しない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  expect((await client.probeControl()).status).toBe('unavailable')
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  room.localParticipant.publishData.mockClear()
+  const count = observations.length
+  const pending = client.probeControl()
+  const sent = room.localParticipant.publishData.mock.calls[0]
+  const frame = JSON.parse(new TextDecoder().decode(sent[0]))
+  expect(frame).toMatchObject({type: 'control_probe', generation: 0})
+  expect(sent[1]).toEqual({reliable: true, topic: 'digital-souls.livekit-transport.v2'})
+  emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...frame, type: 'control_probe_ack'})))
+  expect(await pending).toMatchObject({status: 'received', probeId: frame.probe_id, generation: 0})
+  expect(observations.length).toBe(count)
+  expect(room.localParticipant.publishData).toHaveBeenCalledTimes(1)
+  client.disconnect()
+  expect((await client.probeControl()).status).toBe('unavailable')
+})
+
+test.each(['reconnecting', 'disconnected', 'generation'])('接続変化でprobe待機を終了する: %s', async change => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const pending = client.probeControl()
+  if (change === 'generation') emitPrivateFrame(room, authoritativeState(1))
+  else room.emit(change)
+  expect((await pending).status).toBe('interrupted')
+  client.disconnect()
+})
+
+
+test('接続診断はsignal再接続とCore世代の時系列だけを通知する', async () => {
+  const client = new LiveKitRoomClient(() => undefined), observed: unknown[] = []
+  client.setConnectionObserver(row => observed.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  room.emit('signalReconnecting')
+  room.emit('signalConnected')
+  room.emit('reconnecting')
+  room.emit('reconnected')
+  await Promise.resolve()
+  emitPrivateFrame(room, authoritativeState(1))
+  client.disconnect()
+  expect(observed).toEqual([
+    expect.objectContaining({event: 'signal_reconnecting', generation: 0}),
+    expect.objectContaining({event: 'signal_connected', generation: 0}),
+    expect.objectContaining({event: 'reconnecting', generation: 0}),
+    expect.objectContaining({event: 'reconnected', generation: 0}),
+    expect.objectContaining({event: 'state_sync_requested', generation: 0}),
+    expect.objectContaining({event: 'authoritative_state', generation: 1}),
+    expect.objectContaining({event: 'disconnected', generation: 1}),
+  ])
+})
+
+
+test('新世代の状態同期が終わるまで診断音を要求しない', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  try {
+    expect(client.isAudioProbeReady()).toBe(true)
+    room.emit('signalReconnecting')
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(await client.probeAudio()).toMatchObject({reason: 'unavailable'})
+    room.emit('reconnected')
+    await Promise.resolve()
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(0))
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
+    expect(client.isAudioProbeReady()).toBe(true)
+    const messages = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    expect(messages.filter(p => p.type === 'state_sync_request')).toHaveLength(1)
+    expect(messages.filter(p => p.type === 'audio_probe_request')).toHaveLength(0)
+  } finally {client.disconnect()}
+})
+
+test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再送で接続を維持する', async () => {
+  vi.useFakeTimers()
+  const receive = vi.fn(), delivery = vi.fn(), client = new LiveKitRoomClient(() => undefined, receive)
+  client.setCoreDeliveryObserver(delivery)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  const event = {protocol_version: '2.0', event_id: '10000000-0000-4000-8000-000000000010',
+    type: 'response_delta', session_id: '20000000-0000-4000-8000-000000000010',
+    response_id: '30000000-0000-4000-8000-000000000010', text_sequence: 1, text: 'a',
+    text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 1}
+  try {
+    room.emit('signalReconnecting')
+    room.localParticipant.publishData.mockRejectedValueOnce(new Error('disconnected'))
+    emitCoreEvent(room, event)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(receive).toHaveBeenCalledTimes(1)
+    expect(disconnected).not.toHaveBeenCalled()
+    emitCoreEvent(room, event)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(receive).toHaveBeenCalledTimes(1)
+    expect(delivery).toHaveBeenCalledTimes(2)
+    expect(delivery.mock.calls.map(([row]) => row.duplicate)).toEqual([false, true])
+    expect(delivery.mock.calls[1][0]).toMatchObject({type: 'response_delta',
+      responseId: event.response_id, textCharacters: 1, textSequence: 1})
+    expect(delivery.mock.calls[1][0]).not.toHaveProperty('text')
+    expect(room.localParticipant.publishData.mock.calls.filter(([p]) =>
+      JSON.parse(new TextDecoder().decode(p)).type === 'ack')).toHaveLength(2)
+    expect(disconnected).not.toHaveBeenCalled()
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test.each(['send_failed', 'reply_missing'])('状態同期は同じ要求世代で再送し、確認後は世代を再更新しない: %s', async mode => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  const requests = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    .filter(p => p.type === 'state_sync_request')
+  try {
+    if (mode === 'send_failed') room.localParticipant.publishData.mockRejectedValueOnce(new Error('disconnected'))
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(requests().map(p => p.generation)).toEqual([0, 0, 0])
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(disconnected).not.toHaveBeenCalled()
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
+    expect(client.isAudioProbeReady()).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(requests()).toHaveLength(3)
+    expect(observations.some(row => row.failureStage)).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test('制御の同期確認後もSDKのmedia再接続完了まで診断音を送らず、同期を繰り返さない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const messages = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+  try {
+    room.emit('signalReconnecting')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(messages().filter(p => p.type === 'state_sync_request').map(p => p.generation)).toEqual([0])
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(await client.probeAudio()).toMatchObject({reason: 'unavailable'})
+    expect(messages().filter(p => p.type === 'audio_probe_request')).toHaveLength(0)
+    room.emit('reconnected')
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
+    expect(client.isAudioProbeReady()).toBe(true)
+    const probe = client.probeAudio()
+    await vi.advanceTimersByTimeAsync(250)
+    expect(messages().filter(p => p.type === 'state_sync_request')).toHaveLength(1)
+    expect(messages().filter(p => p.type === 'audio_probe_request')).toHaveLength(1)
+    // 遅着した旧世代の状態で同期確認を巻き戻さない。
+    emitPrivateFrame(room, authoritativeState(0))
+    expect(client.isAudioProbeReady()).toBe(true)
+    room.emit('signalReconnecting')
+    expect(await probe).toMatchObject({reason: 'connection_changed'})
+    expect(client.isAudioProbeReady()).toBe(false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(messages().filter(p => p.type === 'state_sync_request').map(p => p.generation)).toEqual([0, 1])
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(2))
+    expect(client.isAudioProbeReady()).toBe(false)
+    room.emit('reconnecting')
+    room.emit('reconnected')
+    expect(client.isAudioProbeReady()).toBe(false)
+    await vi.advanceTimersByTimeAsync(0)
+    emitPrivateFrame(room, authoritativeState(3))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 3)
+    expect(client.isAudioProbeReady()).toBe(true)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test.each([[3, 3], [undefined, null], ['token-must-not-appear', null], [{token: 'token-must-not-appear'}, null], [NaN, null], [Infinity, null]])(
+  'SDK切断診断は理由の数値だけを記録する: %s', async (reason, expectedReason) => {
+    const client = new LiveKitRoomClient(() => undefined), observed: unknown[] = []
+    client.setConnectionObserver(row => observed.push(row))
+    await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+    latestRoom().emit('disconnected', reason)
+    expect(observed).toEqual([expect.objectContaining({event: 'disconnected', disconnect: {
+      reason: expectedReason,
+      origin: 'sdk',
+    }})])
+    expect(JSON.stringify(observed)).not.toContain('token-must-not-appear')
+    client.disconnect()
+  },
+)
+
+test.each(['explicit', 'temporary', 'transport_failure'] as const)('アプリ起点の切断をSDKの切断と区別する: %s', async origin => {
+  const client = new LiveKitRoomClient(() => undefined), observed: unknown[] = []
+  client.setConnectionObserver(row => observed.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  if (origin === 'explicit') client.disconnect()
+  else if (origin === 'temporary') client.temporaryDisconnect()
+  else emitPrivateFrame(latestRoom(), new TextEncoder().encode('invalid private frame'))
+  expect(observed).toEqual([expect.objectContaining({event: 'disconnected', disconnect: {reason: null, origin}})])
+  client.disconnect()
+})
+
+
+test('時計probeと復旧用control probeは別pendingを持ち、切断時に両方を終了する', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
+  try {
+    const control = client.probeControl(), clock = client.probeClock(), room = latestRoom()
+    const frames = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    const request = frames.find(frame => frame.type === 'control_probe' && frame.observe_clock === true)
+    expect(frames.filter(frame => frame.type === 'control_probe')).toHaveLength(2)
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '2.0',
+      type: 'control_probe_ack', probe_id: request.probe_id, generation: request.generation,
+      server_received_us: 1000, server_sent_us: 1001})))
+    expect(await clock).toMatchObject({status: 'received', serverReceivedAtUs: 1000, serverSentAtUs: 1001})
+    const interrupted = client.probeClock()
+    client.disconnect()
+    expect((await control).status).toBe('interrupted')
+    expect((await interrupted).status).toBe('interrupted')
+  } finally {client.disconnect()}
+})
+
+
+test('時計probeはSDK connect完了までpublishせず、接続待ちへ割り込まない', async () => {
+  const blocked = deferred()
+  const connect = vi.spyOn(livekitMocks.FakeRoom.prototype, 'connect').mockImplementation(() => blocked.promise)
+  const client = new LiveKitRoomClient(() => undefined)
+  try {
+    const connecting = client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
+    const room = latestRoom()
+    expect((await client.probeClock()).status).toBe('unavailable')
+    expect(room.localParticipant.publishData).not.toHaveBeenCalled()
+    blocked.resolve(); await connecting
+    const clock = client.probeClock()
+    expect(room.localParticipant.publishData).toHaveBeenCalledOnce()
+    client.disconnect(); expect((await clock).status).toBe('interrupted')
+  } finally {blocked.resolve(); client.disconnect(); connect.mockRestore()}
+})
+
+
+test('再接続の下り通知やpublish完了では操作可能に戻らず、同じnonceを再送して正しい相手の返信を待つ', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    await vi.advanceTimersByTimeAsync(0)
+    observations.length = 0
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(500)
+    const requests = recoveryRequests(room)
+    expect(requests).toHaveLength(3)
+    expect(requests.every(row => JSON.stringify(row) === JSON.stringify(requests[0]))).toBe(true)
+    const reply = (participant: unknown, probeId = requests[0].probe_id, generation = 1) => room.emit('dataReceived',
+      new TextEncoder().encode(JSON.stringify({protocol_version: '2.0', type: 'control_probe_ack', probe_id: probeId, generation})),
+      participant, undefined, 'digital-souls.livekit-transport.v2')
+    const publisher = {identity: `character-miori-${sessionId}`, sid: 'PA_character'}
+    reply(undefined)
+    reply({...publisher, sid: ''})
+    reply({...publisher, identity: 'character-miori-20000000-0000-4000-8000-000000000099'})
+    reply(publisher, crypto.randomUUID())
+    reply(publisher, requests[0].probe_id, 0)
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(observations.every(row => row.transport === 'unavailable' && row.control === 'unavailable')).toBe(true)
+    reply(publisher)
+    expect(client.isAudioProbeReady()).toBe(true)
+    expect(observations.at(-1)).toMatchObject({transport: 'available', control: 'available', generation: 1})
+    const count = observations.length
+    reply(publisher)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(observations).toHaveLength(count)
+    expect(recoveryRequests(room)).toHaveLength(3)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test('世代変更と次の再接続は前の往復確認を破棄し、遅着返信で復旧扱いにしない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  const reply = (request: Record<string, unknown>) => room.emit('dataReceived',
+    new TextEncoder().encode(JSON.stringify({...request, type: 'control_probe_ack'})),
+    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v2')
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(0)
+    const first = recoveryRequests(room).at(-1)
+    emitPrivateFrame(room, authoritativeState(2))
+    await vi.advanceTimersByTimeAsync(0)
+    const second = recoveryRequests(room).at(-1)
+    expect(second.probe_id).not.toBe(first.probe_id)
+    reply(first)
+    expect(client.isAudioProbeReady()).toBe(false)
+    room.emit('signalReconnecting')
+    reply(second)
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(3))
+    await vi.advanceTimersByTimeAsync(500)
+    expect(recoveryRequests(room)).toHaveLength(2)
+    room.emit('reconnected')
+    await acknowledgeRecovery(room, 3)
+    expect(client.isAudioProbeReady()).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(recoveryRequests(room)).toHaveLength(3)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test.each(['reply_missing', 'publish_pending'] as const)('往復確認が終わらない再接続は期限で終了し、timerを残さない: %s', async mode => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    await vi.advanceTimersByTimeAsync(0)
+    if (mode === 'publish_pending') room.localParticipant.publishData.mockImplementation(() => new Promise(() => undefined))
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(disconnected).toHaveBeenCalledTimes(1)
+    expect(observations.at(-1)).toMatchObject({transport: 'unavailable', failureReason: 'recovery_probe_timeout'})
+    expect(recoveryRequests(room)).toHaveLength(mode === 'publish_pending' ? 1 : 240)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(client.isAudioProbeReady()).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test('往復確認中に切断した後は返信も再送も次sessionへ持ち越さない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(recoveryRequests(room)).toHaveLength(1)
+    client.disconnect()
+    await acknowledgeRecovery(room, 1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(recoveryRequests(room)).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(client.isAudioProbeReady()).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test('同じsessionへ明示再接続した場合も往復確認を待つ', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  await client.connect('ws://test', 'token', sessionId)
+  try {
+    client.temporaryDisconnect()
+    await client.connect('ws://test', 'token', sessionId)
+    const room = latestRoom()
+    expect(observations.at(-1)).toMatchObject({transport: 'unavailable', control: 'unavailable'})
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
+    expect(observations.at(-1)).toMatchObject({transport: 'available', control: 'available'})
+    expect(client.isAudioProbeReady()).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test('往復確認中にサーバーが再びunavailableになったら状態同期からやり直す', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(0)
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '2.0',
+      type: 'authoritative_state', generation: 1, session_phase: 'unavailable', terminal_outcomes: []})))
+    await acknowledgeRecovery(room, 1)
+    expect(client.isAudioProbeReady()).toBe(false)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(recoveryRequests(room)).toHaveLength(1)
+    const requests = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+      .filter(row => row.type === 'state_sync_request')
+    expect(requests.map(row => row.generation)).toEqual([1, 1, 1])
+    emitPrivateFrame(room, authoritativeState(2))
+    await acknowledgeRecovery(room, 2)
+    expect(client.isAudioProbeReady()).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test('SDKの再試行中と最終切断を区別して通知する', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  latestRoom().emit('reconnecting')
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable'})
+  expect(observations.at(-1)?.recoveryStopped).not.toBe(true)
+  latestRoom().emit('disconnected', 1)
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable', recoveryStopped: true})
+  client.disconnect()
+})
+
+test('呼び出し元が復旧する一時切断を最終切断と誤認しない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  observations.length = 0
+  client.temporaryDisconnect()
+  expect(observations.some(value => value.recoveryStopped)).toBe(false)
+  client.disconnect()
+})

@@ -121,7 +121,8 @@ export const createSuiteConfig = (
         ],
     use: {
       baseURL: profile.dependencies.frontend.baseUrl,
-      trace: 'on-first-retry',
+      trace: 'retain-on-failure',
+      screenshot: 'only-on-failure',
     },
     webServer: {
       // PlaywrightがSIGTERMで後始末できるよう、orchestratorをforegroundで維持する。
