@@ -17,9 +17,9 @@
 
 ## ローカル検証
 
-- Backend unit: **4,606成功、1 skip、2除外**。除外2件は `cross_language` job へ分離したもの。
+- Backend unit: **4,604成功、1 skip、4除外**。除外4件は `cross_language` job へ分離したもの。
 - Backend module: **2,022成功、54除外**。除外54件は `cross_language` job へ分離したもの。起動・停止の実CLIテストも通過。
-- Backend cross-language: **56成功**。従来の artifact・履歴・Node replay の監査を実行。
+- Backend cross-language: **58成功**。従来の artifact・履歴・Node replay の監査を実行。
 - Frontend: 汎用 Vitest **1,206成功、収集エラーなし**。CI と同じ分割コマンドでは unit **1,018成功**、module **188成功**。JUnit を生成。
 - Frontend check、build、共有 voice-session 生成差分チェック、Backend mypy、実装側変更箇所の Ruff、`pip check`、CI YAML 解析、Compose config、`git diff --check` は成功。
 - Python constraints は requirements と合わせた `pip install --dry-run --ignore-installed` に成功。完全な新規環境へのインストールや Docker image build の代用ではない。

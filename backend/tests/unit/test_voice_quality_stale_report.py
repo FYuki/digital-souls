@@ -149,6 +149,7 @@ def test_schema_rejects_ids_text_timestamps_and_false_pass_even_when_other_count
     with pytest.raises(ValueError,match='report_channel_mismatch'):reporter.validate_report(invalid,SCHEMA)
 
 
+@pytest.mark.cross_language
 def test_cli_saves_missing_report_without_leaking_arbitrary_process_errors_or_overwriting(tmp_path,capsys):
     m,fb,traces=cohort(1)
     # 合成inputには音声archiveがないため実Node replayが拒否する。その試行も欠測として残す。
@@ -170,6 +171,7 @@ def test_cli_saves_missing_report_without_leaking_arbitrary_process_errors_or_ov
     assert str(tmp_path) not in captured.out+captured.err
 
 
+@pytest.mark.cross_language
 def test_startup_failure_without_trace_remains_missing_and_has_no_fabricated_trace_hash(tmp_path):
     m,fb,_=cohort(1)
     t=m['trials'][0]
