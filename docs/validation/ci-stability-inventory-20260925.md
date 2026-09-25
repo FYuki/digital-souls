@@ -11,7 +11,8 @@
 | 対象commit | `main` `3f82389`（2026-09-25） |
 | CI履歴 | `ci.yml`の完了済みrun直近300件（2026-09-13〜2026-09-25）をGitHub Actions APIで取得 |
 | 失敗ログ | 失敗19件のログ末尾と、再実行で成功した9件のうち5件のattempt 1をjob・stepで確認 |
-| ローカル実測 | Python 3.12 venv、`npm ci --prefix frontend`後、`pytest backend/tests/unit`と`backend/tests/module`を`--durations`付きで実行（4 CPU） |
+| ローカル実測 | Claude Code on the webのクラウドコンテナ（Ubuntu 24.04、4 CPU、WSLではない）。Python 3.12 venv、`npm ci --prefix frontend`後、`pytest backend/tests/unit`と`backend/tests/module`を`--durations`付きで実行。開発標準のWSL2 Ubuntu（`AGENTS.md`「環境」）やCIの`ubuntu-latest`とは絶対値が異なるため、比率で読む |
+| 重複分析 | テスト関数のAST正規化比較、3-gram類似度、per-test coverage context（`coverage run`の`dynamic_context = test_function`）と実行時間の突合（7章） |
 | 未実施 | Frontend unit/module、mocked E2E、Docker image buildのローカル実行。反復実行による再現率測定 |
 
 ## 2. 観測結果の要約
@@ -99,7 +100,8 @@ module testsの遅いファイル（上位60件内の合計）:
 | 6 | `pytest-xdist`による並列化の可否を調査。port・一時dir・環境変数・`os.fork`（`test_restore_crash_recovery.py`）の衝突を洗い出してから導入する | `backend/tests` | module 8分の短縮 |
 | 7 | CI backend jobをunit／moduleの2job、またはmoduleをshard分割 | `ci.yml` | wall-clockと再実行単位の縮小 |
 | 8 | 60秒実待機テストをclock注入へ置換。実時間の検証が必須なら専用markで分離し、実行条件を文書化する | `test_addon_action_process_recovery.py:226` | 約60秒の短縮 |
-| 9 | 実DBOSのpolling間隔・起動待ちをテスト用設定で短縮（production設定は変えない） | `test_character_life*.py` | 約2分の短縮見込み（要計測） |
+| 9 | 実DBOSのpolling間隔・停止待ちをテスト用設定で短縮（production設定は変えない。7.3参照） | `test_character_life*.py`、`backend/app/character_life/runtime.py:129,303` | 実測120.8秒→77.8秒（60件全件合格のまま） |
+| 9a | VAD parityのNode起動を全fixtureで1回にまとめる（7.3参照） | `test_voice_input_vad_parity.py:69` | 実測72秒の大半（Node起動1回1.6秒×43件） |
 
 ### P2：テストの決定性を上げる（リファクタリング）
 
@@ -131,3 +133,58 @@ module testsの遅いファイル（上位60件内の合計）:
 - 分類C（3件）と、分類Dと推定した再実行成功4件の個別ログ。ログ末尾を未取得のため、A/Bと同系統というのは推定。
 - Frontend unit/moduleとmocked E2Eのローカル反復実行による再現率。直近300件のCIでは、これらのjob失敗は分類D（全job同時失敗）以外に観測されていない。
 - 300件より前の履歴。
+
+## 7. 重複テストと長時間実行の分析（追補）
+
+### 7.1 方法
+
+| 観点 | 方法 | 注意 |
+|---|---|---|
+| 字面の重複 | テスト関数本体をASTで正規化し、完全一致・リテラルのみ相違を検出。ファイル跨ぎは3-gram Jaccard 0.6以上 | 対象3,592関数 |
+| 意味的な重複 | 各テスト関数が通過した`backend/app`・`environments`等の行集合を記録し、「固有行が0」かつ「より速い別テストが全行を包含」する遅いテスト（0.5秒以上）を抽出 | 行が同じでもassertionが異なれば重複ではない。候補は全件本文を読んで判定した |
+| 対象外 | subprocessで別processを起動するテスト等、app行を記録しない1,007関数（計測下139秒） | 本手法では重複判定できない |
+
+計測時、8箇所のテストがプロセス全体の`sqlite3.connect`を差し替えており、coverage自身のSQLite書込みまで失敗した
+（例：`test_backup_restore_sqlite_coordination.py:266`、`test_runtime_startup_order.py:77`、`test_restore_intent_startup.py:86`）。
+テストは合格しているが、モジュール属性経由でグローバルを差し替えるため、同一processで動く他の処理へ影響し得る。差し替え対象を注入点へ限定することを改修候補に加える（7.4 #D5）。
+
+### 7.2 結果：純粋な重複は少ない
+
+| 分類 | 件数 | 判定 | 時間への影響 |
+|---|---:|---|---|
+| 本文完全一致 | 2組 | **重複**。`test_livekit_bootstrap_api.py:313`と`test_runtime_contract.py:707`（同じ`client`fixtureで`GET /`を検証）、`test_environment_adapters.py:657`と`:739`（本文同一、名前のみ相違） | ほぼ0 |
+| リテラルのみ相違 | 31組68関数 | 重複ではない（入力値が異なる）。`pytest.mark.parametrize`への統合候補 | 0（件数不変） |
+| ファイル跨ぎ高類似 | 3組 | `test_dogfood_deploy.py:1716`と`test_dogfood_rollback.py:410`など。対象コマンドが異なり重複ではない | 0 |
+| coverage包含（遅いテスト） | 12件 | 本文確認の結果、**実質重複は1件**：`test_episodic_retrieval.py:162`（4ケース）。実Chroma索引・月精度・content versionの確認は`:307`と重なり、固有なのはNarrativeContextの表示ラベル対応のみ | 数秒 |
+| 同上（非重複と判定） | 11件 | 例：`test_notifications_module.py:352`と`:83`は再起動後の反復ONとOFF中の非遡及で別の振る舞い。`test_irodori_service.py:157`と`:262`は無応答と部分応答で別の障害 | — |
+| CIジョブ間の重複 | 1件 | voice-session生成物の照合を`ci.yml:86`とbackend unit `test_voice_session_contract.py:422`の両方で実行 | 約2.5秒 |
+
+**結論**：テストコードの重複を解消しても、実行時間はほとんど短縮しない。
+長時間実行の主因は重複ではなく、**テストごとに繰り返される重い準備・後始末と実時間待ち**である（7.3）。
+
+### 7.3 長時間実行の実因（実測）
+
+| 対象 | 実測（通常実行） | 原因 | 対策案 | 効果（実測／推定） |
+|---|---:|---|---|---|
+| `test_voice_input_vad_parity.py` | 72秒（43件） | 各ケースで`node frontend/scripts/voice-vad-parity.mjs`を起動。1回1.6秒のうち大半はesbuild変換とONNX／WASM読込で、Python側の処理は0.06秒 | 全fixtureを1回のNode起動で処理するsession fixtureへ変更。比較内容は変えない | 推定60秒以上 |
+| `test_character_life*.py`（3ファイル60件） | 120.8秒 | 1テスト約4秒の大半が`DBOS.destroy()`。(1)`workflow_completion_timeout_sec=10`（`runtime.py:303`）では稼働workflow 0件でも最初に1秒sleep、(2)SQLite通知listenerの既定polling 1秒で終了待ちが発生 | テスト用にpolling間隔と停止待ちを注入可能にする。production既定値は維持 | **実測77.8秒（-43秒、60件全件合格）** |
+| `test_addon_action_process_recovery.py:226` | 約62秒 | `autonomous_wait_seconds == 60`を実時間で待ち、`60 <= elapsed < 70`を検証 | clock注入で待機を短縮。実時間の検証が必要なら専用markで分離 | 推定約60秒 |
+| `test_episodic_retrieval.py:162` | 数秒 | 4ケースとも実Chromaで索引・検索 | ラベル対応はunitで検証し、実Chroma経路は1ケースへ集約 | 推定数秒 |
+
+module testsのローカル実測は485秒。上表の対策で約160秒（約35%）の短縮が見込める（DBOSのみ実測、他は推定）。
+
+計測に使った測定専用プラグイン（DBOS設定の差し替え）はリポジトリへ入れていない。
+DBOS 2.31.0では、`DBOSConfig`に渡した`runtimeConfig`の`notification_listener_polling_interval_sec`が反映されなかった。
+生成後の内部設定へ値を入れた場合に限り効果を確認したため、実装時には公開APIでの設定方法を先に確認する。
+
+### 7.4 改修候補（重複・長時間）
+
+| # | 改修 | 優先 |
+|---|---|---|
+| D1 | VAD parityのNode起動を1回にまとめる | 高 |
+| D2 | Character LifeのDBOS停止待ち・pollingをテスト用に注入可能にする | 高 |
+| D3 | 60秒実待機テストをclock注入へ変更（4章 P1-8と同じ） | 高 |
+| D4 | 完全一致2組を1件ずつに統合し、`test_episodic_retrieval.py:162`のラベル対応をunit化 | 低 |
+| D5 | `sqlite3.connect`のグローバル差し替え8箇所を、注入された接続factoryの差し替えへ変更 | 中（隔離性） |
+| D6 | リテラル違い31組を`parametrize`へ統合 | 低（保守性のみ） |
+| D7 | voice-session生成物の照合をCIのどちらか一方へ寄せる | 低 |
