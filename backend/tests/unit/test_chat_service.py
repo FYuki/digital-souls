@@ -2334,6 +2334,18 @@ def test_internal_client_uses_the_same_core_entry_as_http() -> None:
     assert submitter.submit.call_args.args[0].turn_id == history.started_turn.turn_id
 
 
+@pytest.mark.parametrize("message", ["", "  \t\n"])
+def test_core_invocation_rejects_blank_message(message: str) -> None:
+    from app.core_invocation import CoreInvocation
+
+    with pytest.raises(ValueError, match="message"):
+        CoreInvocation.owner_web(
+            character_id="miori",
+            conversation_id=CONVERSATION_ID,
+            message=message,
+        )
+
+
 def test_unsupported_actor_and_public_output_fail_before_history_or_inference() -> None:
     from app.core_invocation import ActorKind, CoreActor, CoreInvocation, OutputVisibility
 

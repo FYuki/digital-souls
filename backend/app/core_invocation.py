@@ -48,7 +48,7 @@ class CoreInvocation:
     def __post_init__(self) -> None:
         if not self.character_id.strip():
             raise ValueError("character_id is required")
-        if not self.message:
+        if not self.message.strip():
             raise ValueError("message is required")
         if any(not input_id for input_id in self.input_ids):
             raise ValueError("input_ids must not contain empty values")

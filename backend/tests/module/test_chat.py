@@ -572,6 +572,20 @@ class TestChatEndpoint:
         assert response.status_code == 422
         generate.assert_not_called()
 
+    def test_returns_422_for_whitespace_message(self, client):
+        with patch(_GENERATE_RESPONSE) as generate:
+            response = client.post(
+                "/chat",
+                json={
+                    "character": "miori",
+                    "conversation_id": str(CONVERSATION_ID),
+                    "message": "  \t\n",
+                },
+            )
+
+        assert response.status_code == 422
+        generate.assert_not_called()
+
     def test_returns_422_for_wrapped_body_envelope(self, client):
         response = client.post(
             "/chat",
