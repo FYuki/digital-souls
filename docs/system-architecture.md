@@ -511,7 +511,7 @@ loopに固定した候補を資格・関連性・schema容量で絞り、専用`
 結果は秘密情報・生エラーを除いた非信頼データとして現在turnの最終回答へ統合する。
 履歴・Memory Formationには既存privacy方針を通った通常の会話だけが渡り、native payloadは渡らない。
 
-Toolを含む応答準備は、HTTP全量生成とLiveKit音声streamが同じ呼出境界を使う。
+Toolを含む応答準備は、HTTP全量生成とLiveKit音声streamが`CoreInvocation`を介して`ChatService.prepare_core_reply`を共有する。現行入口はowner・privateのみを受け付け、他主体・公開出力は後続の認可／記憶絞り込みまで拒否する。音声の確定入力ID・応答IDは既存`ConversationCoreSession.Response`から渡し、受理・取消・実再生済みprefixの所有は音声側に残す。[呼出ADR](decisions/common-core-invocation-2026-09.md)を参照する。
 `_chat_runtime.py`の`ChatService.prepare_reply`が、現在の画面materialの確認、Life Stateを含まない
 基底promptの構築、Tool結果用の入力token枠の確保、`ToolService`によるTool実行、結果のprompt合成、
 通常経路ではLife Stateを追加し、準備完了時に画面material・履歴accessを再検証する。

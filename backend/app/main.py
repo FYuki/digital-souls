@@ -15,14 +15,15 @@ from app.async_worker import run_sync
 from app.addon_action.interaction import confirmation_resume_scope
 from app.characters.loader import load_character_card
 from app.chat_prompt import build_chat_prompt
+from app.core_invocation import CoreInvocation, submit_completed_turn
 from app.conversation_core.control_input import current_control_request
+from app.conversation_core.models import Response
 from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.service import HistorySession
 from app.inference import InferenceCaller, InferenceTarget
 from app.inference.config import INFERENCE_TARGET_PREFIX, reject_legacy_inference_environment
 from app.notifications.startup import NotificationAvailabilityMiddleware, notification_lifespan
 from app.llm import router as llm_router
-from app.memory.formation.contracts import MemoryFormationJob
 from app.model_settings import ModelSettings
 from app.prompting import BuiltPrompt
 from app.routers.addon_actions import router as addon_actions_router
@@ -174,6 +175,7 @@ def _create_core_session_factory(
             [tuple[ScreenLineage, ...]], None
         ],
         prompt_observer: Callable[[BuiltPrompt], None] | None,
+        response: Response,
     ) -> AsyncIterator[str]:
         history_access = (
             await app.state.screen_perception_service.history_access(
@@ -216,6 +218,15 @@ def _create_core_session_factory(
             tools=app.state.tool_service,
             conversation_id=str(conversation_id),
             prompt_observer=prompt_observer,
+            core_invocation=CoreInvocation.owner_voice(
+                character_id=character,
+                conversation_id=conversation_id,
+                message=transcript,
+                input_ids=tuple(
+                    source.input_id for source in response.source_inputs
+                ),
+                response_id=response.response_id,
+            ),
         ):
             yield text
 
@@ -226,18 +237,14 @@ def _create_core_session_factory(
             )
         if persisted_turn.status is not TurnStatus.COMPLETED:
             return
-        if history_repository.is_screen_derived(
-            persisted_turn.character_id,
-            persisted_turn.conversation_id,
-            persisted_turn.turn_id,
-        ):
-            return
-        formation_scheduler.submit(
-            MemoryFormationJob(
-                character_id=persisted_turn.character_id,
-                conversation_id=persisted_turn.conversation_id,
-                turn_id=persisted_turn.turn_id,
-            )
+        submit_completed_turn(
+            persisted_turn,
+            screen_derived=history_repository.is_screen_derived(
+                persisted_turn.character_id,
+                persisted_turn.conversation_id,
+                persisted_turn.turn_id,
+            ),
+            submitter=formation_scheduler,
         )
 
     return ProductionConversationCoreSessionFactory(
@@ -294,31 +301,52 @@ async def _stream_core_reply(
     tools: ToolService | None = None,
     conversation_id: str | None = None,
     prompt_observer: Callable[[BuiltPrompt], None] | None = None,
+    core_invocation: CoreInvocation | None = None,
 ) -> AsyncIterator[str]:
     from app.inference.diagnostics import diagnostic
 
     diagnostic("prompt_preparation_started")
-    prepared = await chat_service.prepare_reply(
-        character,
-        transcript,
-        history_session,
-        conversation=conversation_id,
-        screen=screen,
-        history_access=history_access,
-        tools=tools,
-        base_prompt_observer=(
-            None
-            if screen_lineage_observer is None
-            else lambda prompt: screen_lineage_observer(prompt.screen_lineages)
-        ),
-        tool_scope=(
-            confirmation_resume_scope(
-                character, conversation_id, current_control_request()
-            )
-            if tools is not None and conversation_id is not None
-            else None
-        ),
+    base_prompt_observer = (
+        None
+        if screen_lineage_observer is None
+        else lambda prompt: screen_lineage_observer(prompt.screen_lineages)
     )
+    tool_scope = (
+        confirmation_resume_scope(
+            character, conversation_id, current_control_request()
+        )
+        if tools is not None and conversation_id is not None
+        else None
+    )
+    if core_invocation is None:
+        # 旧単体試験の呼出形を維持する。正式音声入口は共通契約を渡す。
+        prepared = await chat_service.prepare_reply(
+            character,
+            transcript,
+            history_session,
+            conversation=conversation_id,
+            screen=screen,
+            history_access=history_access,
+            tools=tools,
+            base_prompt_observer=base_prompt_observer,
+            tool_scope=tool_scope,
+        )
+    else:
+        if (
+            core_invocation.character_id != character
+            or core_invocation.message != transcript
+            or str(core_invocation.conversation_id) != conversation_id
+        ):
+            raise ValueError("Core invocation does not match the voice entry")
+        prepared = await chat_service.prepare_core_reply(
+            core_invocation,
+            history_session,
+            screen=screen,
+            history_access=history_access,
+            tools=tools,
+            base_prompt_observer=base_prompt_observer,
+            tool_scope=tool_scope,
+        )
     prompt = prepared.prompt
     if prompt_observer is not None:
         prompt_observer(prompt)

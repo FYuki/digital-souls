@@ -74,7 +74,7 @@ class ControlledStreamingLlm:
     first_delta_emitted: asyncio.Event = field(default_factory=asyncio.Event)
     release_remainder: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+    async def generate(self, _transcript: str, *, response: object | None = None) -> AsyncIterator[TextDelta]:
         yield TextDelta(1, "最初の文です。", (0, 7))
         self.first_delta_emitted.set()
         await self.release_remainder.wait()
@@ -139,7 +139,7 @@ def test_first_audio_is_delivered_before_llm_stream_completes() -> None:
 def test_streaming_pipeline_completes_when_whitespace_only_segment_is_not_spoken() -> None:
     @dataclass
     class ParagraphLlm:
-        async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+        async def generate(self, _transcript: str, *, response: object | None = None) -> AsyncIterator[TextDelta]:
             text = "一文目。\n二文目。"
             yield TextDelta(1, text, (0, len(text)))
 
@@ -181,7 +181,7 @@ def test_bounded_tts_queue_applies_backpressure_to_llm_stream() -> None:
     class BurstLlm:
         yielded: int = 0
 
-        async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+        async def generate(self, _transcript: str, *, response: object | None = None) -> AsyncIterator[TextDelta]:
             offset = 0
             for sequence in range(1, 21):
                 text = f"文{sequence}。"

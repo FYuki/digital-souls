@@ -16,6 +16,7 @@ FE／BEはprotocol 2.0へ一組で更新する。残る品質・実接続・実�
 
 | 領域 | 実装と境界 |
 |---|---|
+| 共通Core呼出 | 既存Web通常chatとLiveKit Speech/Textが`CoreInvocation`から同じ応答準備を使う。現行はowner・privateに限定し、FEなし内部clientからも通常テキストを呼べる。[契約](docs/decisions/common-core-invocation-2026-09.md) |
 | キャラクター・会話UI | Character Card V3、Character Book、立ち絵、キャラクター別スレッド、名称変更、ピン留め、アーカイブ・復元・削除、PC／compactレイアウト |
 | 会話履歴 | `character_id`と`conversation_id`で分離してSQLiteへ保存。同じスレッドの保存済み履歴を再開し、別スレッドの生会話をそのまま混ぜない |
 | 音声・テキスト併用 | LiveKitの継続音声入力、STT、応答の逐次生成・TTS・再生、割り込み、再接続。同じ実行中Sessionへのテキスト入力と受理結果照合にも対応。旧WebSocket音声はbaseline／互換用 |

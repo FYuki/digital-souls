@@ -183,7 +183,7 @@ def test_core_diagnostics_reach_correlated_trace_and_anonymous_report(
     release = asyncio.Event()
 
     class Llm:
-        async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+        async def generate(self, _transcript: str, *, response: object | None = None) -> AsyncIterator[TextDelta]:
             diagnostic("ollama_internal_timing_unavailable")
             diagnostic("llm_http_started")
             diagnostic("llm_first_token")

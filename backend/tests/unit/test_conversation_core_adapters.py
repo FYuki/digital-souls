@@ -867,3 +867,33 @@ def test_response_without_generation_can_terminate_without_provenance(terminal_s
         assert state.finish("no-prompt") is None
 
     asyncio.run(exercise())
+
+
+def test_prompt_llm_adapter_passes_the_active_response_to_the_core_callback() -> None:
+    from app.conversation_core.models import InputSource, Response, ResponseState
+
+    response = Response(
+        response_id="response-1",
+        generation=2,
+        source_utterance_ids=("input-1",),
+        source_inputs=(InputSource("input-1", "text"),),
+        state=ResponseState.IN_PROGRESS,
+    )
+    calls: list[tuple[str, Response]] = []
+
+    async def generate_stream(transcript: str, active: Response):
+        calls.append((transcript, active))
+        yield "回答"
+
+    async def scenario() -> None:
+        _public, adapters = _modules()
+        adapter = adapters.PromptLlmAdapter(
+            generate_stream_with_response=generate_stream,
+        )
+        deltas = [
+            delta async for delta in adapter.generate("確定入力", response=response)
+        ]
+        assert [delta.text for delta in deltas] == ["回答"]
+
+    asyncio.run(scenario())
+    assert calls == [("確定入力", response)]

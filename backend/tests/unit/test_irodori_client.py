@@ -187,7 +187,7 @@ def test_real_adapter_keeps_segment_streaming_and_allows_next_response_after_fai
         calls = []
         generation_count = 0
         class Llm:
-            async def generate(self, _):
+            async def generate(self, _, *, response: object | None = None):
                 nonlocal generation_count
                 generation_count += 1
                 try:

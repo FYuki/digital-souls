@@ -27,7 +27,7 @@ def test_screen_control_is_not_inferred_from_transcript_or_inherited_by_pending_
         )
 
         class Llm:
-            async def generate(self, text):
+            async def generate(self, text, *, response: object | None = None):
                 seen.append((text, current_control_request()))
                 if len(seen) == 1:
                     first_started.set()
