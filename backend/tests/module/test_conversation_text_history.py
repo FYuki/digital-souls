@@ -43,7 +43,7 @@ def test_speech_text_speech_share_sqlite_history_context_and_tts(tmp_path: Path)
         contexts = []
 
         class ContextLlm:
-            async def generate(self, text):
+            async def generate(self, text, *, response: object | None = None):
                 contexts.append(tuple(history.prompt_turns(max_completed_turns=10, page_size=10)))
                 reply = f"回答:{text}。"
                 yield TextDelta(1, reply, (0, len(reply)))

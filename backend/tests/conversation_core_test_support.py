@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Iterator
 
-from app.conversation_core.models import AudioSegment, ResponseStartResult, TextDelta
+from app.conversation_core.models import AudioSegment, Response, ResponseStartResult, TextDelta
 
 
 def make_pcm16_wav(
@@ -112,7 +112,7 @@ class BlockingLlm:
     calls: list[str] = field(default_factory=list)
     release: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def generate(self, transcript: str) -> AsyncIterator[TextDelta]:
+    async def generate(self, transcript: str, *, response: Response | None = None) -> AsyncIterator[TextDelta]:
         self.calls.append(transcript)
         await self.release.wait()
         if False:
@@ -124,7 +124,7 @@ class RecordingLlm:
     deltas: tuple[TextDelta, ...]
     calls: list[str] = field(default_factory=list)
 
-    async def generate(self, transcript: str) -> AsyncIterator[TextDelta]:
+    async def generate(self, transcript: str, *, response: Response | None = None) -> AsyncIterator[TextDelta]:
         self.calls.append(transcript)
         for delta in self.deltas:
             yield delta

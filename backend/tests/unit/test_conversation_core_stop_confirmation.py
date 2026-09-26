@@ -40,7 +40,7 @@ class LateLlm:
         self.release = asyncio.Event()
         self.closed = asyncio.Event()
 
-    async def generate(self, _):
+    async def generate(self, _, *, response: object | None = None):
         self.entered.set()
         try:
             await asyncio.Event().wait()
@@ -291,7 +291,7 @@ def test_output_ack_does_not_skip_inflight_delivery_cleanup():
 def test_tts_receipt_during_stop_is_not_delivered_or_hidden():
     async def exercise():
         class Llm:
-            async def generate(self, _):
+            async def generate(self, _, *, response: object | None = None):
                 yield TextDelta(1, "開始。", (0, 3))
                 await asyncio.Event().wait()
         class Tts:

@@ -21,7 +21,7 @@ class SttPort(Protocol):
 
 
 class LlmPort(Protocol):
-    def generate(self, transcript: str) -> AsyncIterator[TextDelta]:
+    def generate(self, transcript: str, *, response: Response) -> AsyncIterator[TextDelta]:
         ...
 
 

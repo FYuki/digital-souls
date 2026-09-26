@@ -2294,3 +2294,73 @@ class TestSharedToolReplyPreparation:
 
         assert len(calls) == 1
         assert len(streamed) == 1
+
+
+def test_internal_client_uses_the_same_core_entry_as_http() -> None:
+    from app.core_invocation import ActorKind, CoreActor, CoreInvocation, OutputVisibility
+
+    history = _RecordingHistorySession()
+    submitter = MagicMock()
+    service = ChatService(
+        ChatRuntimeConfig(
+            rag_enabled=False,
+            memory_policy=None,
+            prompt_config=_PROMPT_CONFIG,
+            chroma_path=_CHROMA_PATH,
+        ),
+        _RecordingHistoryService(history),
+        _runtime_dependencies(submitter),
+    )
+
+    async def scenario() -> None:
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value="回答") as generate:
+                reply = await service.invoke_text(
+                    CoreInvocation(
+                        character_id="miori",
+                        conversation_id=CONVERSATION_ID,
+                        message="こんにちは",
+                        actor=CoreActor(ActorKind.OWNER, "internal-test"),
+                        output_visibility=OutputVisibility.PRIVATE,
+                    )
+                )
+        assert _assistant_content(reply) == "回答"
+        assert _generated_contents(generate)[-1] == "こんにちは"
+
+    asyncio.run(scenario())
+    assert history.start_calls == ["こんにちは"]
+    assert history.complete_calls == [(history.started_turn, "回答")]
+    submitter.submit.assert_called_once()
+    assert submitter.submit.call_args.args[0].turn_id == history.started_turn.turn_id
+
+
+def test_unsupported_actor_and_public_output_fail_before_history_or_inference() -> None:
+    from app.core_invocation import ActorKind, CoreActor, CoreInvocation, OutputVisibility
+
+    history = _RecordingHistorySession()
+    service = ChatService(
+        ChatRuntimeConfig(
+            rag_enabled=False,
+            memory_policy=None,
+            prompt_config=_PROMPT_CONFIG,
+            chroma_path=_CHROMA_PATH,
+        ),
+        _RecordingHistoryService(history),
+        _runtime_dependencies(),
+    )
+    base = CoreInvocation.owner_web(
+        character_id="miori", conversation_id=CONVERSATION_ID, message="こんにちは",
+    )
+
+    async def scenario() -> None:
+        with patch(_GENERATE_RESPONSE) as generate:
+            for invocation in (
+                dataclass_replace(base, actor=CoreActor(ActorKind.OTHER, "cli")),
+                dataclass_replace(base, output_visibility=OutputVisibility.PUBLIC),
+            ):
+                with pytest.raises(ValueError):
+                    await service.invoke_text(invocation)
+            generate.assert_not_called()
+
+    asyncio.run(scenario())
+    assert history.start_calls == []

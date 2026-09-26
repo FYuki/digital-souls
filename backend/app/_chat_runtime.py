@@ -15,6 +15,11 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app import chat_service
+from app.core_invocation import (
+    CoreInvocation,
+    MemoryFormationSubmitter,
+    submit_completed_turn,
+)
 from app.inference import InferenceError, InferenceErrorCategory
 from app.inference.contracts import InferenceCancellationToken
 from app.inference.cancellation import cancellation_scope, raise_if_cancelled
@@ -35,7 +40,6 @@ from app.memory import rag_service as _rag_service
 from app.memory.chroma_store import MemorySearchResult
 from app.memory.read_contracts import MemoryReadRepository
 from app.memory.persistence.sqlite import format_datetime
-from app.memory.formation.contracts import MemoryFormationJob
 from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
@@ -103,9 +107,6 @@ class LlmResponseGenerator(Protocol):
 class InputTokenCounter(Protocol):
     def __call__(self, messages: tuple[PromptMessage, ...]) -> int: ...
 
-
-class MemoryFormationSubmitter(Protocol):
-    def submit(self, job: MemoryFormationJob) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -254,16 +255,69 @@ class ChatService:
         screen: ScreenTurnMaterial | None = None,
         history_access: ScreenHistoryAccess | None = None,
     ) -> chat_service.ChatReply:
+        return await self.invoke_text(
+            CoreInvocation.owner_web(
+                character_id=character,
+                conversation_id=conversation_id,
+                message=message,
+            ),
+            screen=screen,
+            history_access=history_access,
+        )
+
+    async def invoke_text(
+        self,
+        invocation: CoreInvocation,
+        *,
+        screen: ScreenTurnMaterial | None = None,
+        history_access: ScreenHistoryAccess | None = None,
+    ) -> chat_service.ChatReply:
+        """FEなしの内部clientとHTTPが共用する全量応答の入口。"""
+        invocation.require_current_entry()
         tools = self.tools
         scope = (
-            tools.response_scope(character, str(conversation_id))
+            tools.response_scope(
+                invocation.character_id, str(invocation.conversation_id)
+            )
             if tools is not None
             else contextlib.nullcontext()
         )
         with scope:
             return await self._generate_tool_reply(
-                character, conversation_id, message, screen, history_access
+                invocation.character_id,
+                invocation.conversation_id,
+                invocation.message,
+                screen,
+                history_access,
+                invocation=invocation,
             )
+
+    async def prepare_core_reply(
+        self,
+        invocation: CoreInvocation,
+        history_session: HistorySession,
+        *,
+        screen: ScreenTurnMaterial | None = None,
+        history_access: ScreenHistoryAccess | None = None,
+        tools: ToolService | None = None,
+        base_prompt_observer: Callable[[BuiltPrompt], None] | None = None,
+        tool_scope: contextlib.AbstractContextManager[None] | None = None,
+        context: _ResolvedChatContext | None = None,
+    ) -> PreparedReply:
+        """両入口が共有する、入口固有型を持たない応答準備。"""
+        invocation.require_current_entry()
+        return await self.prepare_reply(
+            invocation.character_id,
+            invocation.message,
+            history_session,
+            conversation=str(invocation.conversation_id),
+            screen=screen,
+            history_access=history_access,
+            tools=tools,
+            base_prompt_observer=base_prompt_observer,
+            tool_scope=tool_scope,
+            context=context,
+        )
 
     async def prepare_reply(
         self,
@@ -354,8 +408,23 @@ class ChatService:
         message: str,
         screen: ScreenTurnMaterial | None,
         history_access: ScreenHistoryAccess | None,
+        *,
+        invocation: CoreInvocation | None = None,
     ) -> chat_service.ChatReply:
         """外部I/Oの停止をasync境界で扱い、既存の履歴・privacy契約へ返す。"""
+        if invocation is None:
+            invocation = CoreInvocation.owner_web(
+                character_id=character,
+                conversation_id=conversation_id,
+                message=message,
+            )
+        if (
+            invocation.character_id != character
+            or invocation.conversation_id != conversation_id
+            or invocation.message != message
+        ):
+            raise ValueError("Core invocation does not match the entry request")
+        invocation.require_current_entry()
         context = await run_sync(
             _resolve_chat_context, character, self._runtime_config, self._dependencies
         )
@@ -365,12 +434,12 @@ class ChatService:
             conversation_id,
         )
         started = await run_sync(history_session.start_turn, message)
+        if isinstance(started, StartedHistoryTurn):
+            invocation = replace(invocation, response_id=str(started.turn_id))
         try:
-            prepared = await self.prepare_reply(
-                character,
-                message,
+            prepared = await self.prepare_core_reply(
+                invocation,
                 history_session,
-                conversation=str(conversation_id),
                 screen=screen,
                 history_access=history_access,
                 tools=self.tools,
@@ -419,14 +488,11 @@ class ChatService:
                     )
                     break
             raise
-        if persisted.status is TurnStatus.COMPLETED and not prompt.screen_lineages:
-            self._dependencies.memory_formation_submitter.submit(
-                MemoryFormationJob(
-                    character_id=persisted.character_id,
-                    conversation_id=persisted.conversation_id,
-                    turn_id=persisted.turn_id,
-                )
-            )
+        submit_completed_turn(
+            persisted,
+            screen_derived=bool(prompt.screen_lineages),
+            submitter=self._dependencies.memory_formation_submitter,
+        )
         _log_prompt_references(prompt)
         return _persisted_chat_reply(persisted)
 
@@ -1135,14 +1201,11 @@ def _generate_recorded_reply(
                 cleanup_error.__class__.__name__,
             )
         raise
-    if persisted_turn.status is TurnStatus.COMPLETED and not prompt.screen_lineages:
-        dependencies.memory_formation_submitter.submit(
-            MemoryFormationJob(
-                character_id=persisted_turn.character_id,
-                conversation_id=persisted_turn.conversation_id,
-                turn_id=persisted_turn.turn_id,
-            )
-        )
+    submit_completed_turn(
+        persisted_turn,
+        screen_derived=bool(prompt.screen_lineages),
+        submitter=dependencies.memory_formation_submitter,
+    )
     delivery_turn = (
         started_turn if persisted_turn.status is TurnStatus.COMPLETED else None
     )

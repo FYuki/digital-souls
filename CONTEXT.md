@@ -160,17 +160,17 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | dogfood | 継続利用する運用相当環境。dev/testのデータ破棄・fixture・cleanupを適用しない | 運用契約：[dogfood手順](infra/dogfood/README.md) |
 | ADR / `ACTIVE` / `ARCHIVED` | 判断履歴／有効な設計判断／全面失効・統合済みの履歴。ACTIVEを機能の完成・有効化状態として使わない | 文書契約：[ADR案内](docs/decisions/README.md) |
 
-## 複数入口・公開範囲（設計）
+## 複数入口・公開範囲
 
-2026-09-26に#3で合意した要件の用語であり、いずれも設計段階で実装はない。正本は[複数入口ADR](docs/decisions/multi-entry-character-core-2026-09.md)。
+2026-09-26に#3で合意した要件の用語。既存Web・音声の共通呼出境界は[呼出ADR](docs/decisions/common-core-invocation-2026-09.md)に従い一部実装した。後続入口・公開範囲の正本は[複数入口ADR](docs/decisions/multi-entry-character-core-2026-09.md)。
 
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
 |---|---|---|
-| 共通Core / 人格コア | 全入口が共有する人格・記憶・履歴・判断・権限の呼出境界。「キャラクター・人格定義」の`Character Core`（Cardから組み立てるprompt領域）とは別 | 設計：#3、[複数入口ADR](docs/decisions/multi-entry-character-core-2026-09.md) |
+| 共通Core / 人格コア | 全入口が共有する人格・記憶・履歴・判断・権限の呼出境界。「キャラクター・人格定義」の`Character Core`（Cardから組み立てるprompt領域）とは別 | 既存Web・音声の呼出は実装：[CoreInvocation](backend/app/core_invocation.py)、[呼出ADR](docs/decisions/common-core-invocation-2026-09.md)。他入口は#516以降 |
 | 入口 / 入口Adapter | Web・Discord・スマホ・CLI・SNS等の利用経路と、その認証・呼出主体の同定・会話対応・能力宣言を担う層。人格・記憶・権限を持たない。MVPはBackendと同一プロセスに置く | 設計：#516 |
 | 対話型入口 / 活動型入口 | 相手の入力に応答する入口／Character Lifeが起点となり外部へ作用する入口。活動型の作用はExecution Gateを通す | 設計：#516、#517 |
-| 呼出主体 / Actor（`owner / other / self`） | Coreを呼ぶ主体。`owner`はオーナー（Webはtailnet到達者）、`other`は非信頼の他者（エピソード記憶だけを形成）、`self`は活動型のキャラクター自身。将来`platform`と`external_id`で個別識別する | 設計：#516 |
-| 公開範囲 / Visibility（`public / private`） | 出力先の公開区分。`public`の出力先では公開不可フラグのない記憶と公開用要約だけを使う。`private`（秘密の話）の記憶指定は後続 | 設計：#518（#517より前） |
+| 呼出主体 / Actor（`owner / other / self`） | Coreを呼ぶ主体。`owner`はオーナー（Webはtailnet到達者）、`other`は非信頼の他者（エピソード記憶だけを形成）、`self`は活動型のキャラクター自身。将来`platform`と`external_id`で個別識別する | `CoreActor`で契約一部実装。owner固定、個別識別は#516 |
+| 公開範囲 / Visibility（`public / private`） | 出力先の公開区分。`public`の出力先では公開不可フラグのない記憶と公開用要約だけを使う。`private`（秘密の話）の記憶指定は後続 | `OutputVisibility`で欄を予約。publicの絞り込みは#518（#517より前） |
 | 公開不可フラグ | 記憶の作成時に出典の種類から機械的に決める印。許可リスト（会話外活動の本人経験・公開情報）以外はフラグあり。派生記憶は直接の根拠から引き継ぐ。#518以前の既存記憶は全てフラグあり扱い | 設計：#518、[複数入口ADR §4.1](docs/decisions/multi-entry-character-core-2026-09.md) |
 | 公開用要約 | 会話Episodeの抽出時に生成する「述語＋気持ち」だけの要約。5Wの値を含まないことを機械照合し、公開出力が会話由来の内容に触れる唯一の経路とする。元のEpisodeとは別 | 設計：#518、[複数入口ADR §4.2](docs/decisions/multi-entry-character-core-2026-09.md) |
 

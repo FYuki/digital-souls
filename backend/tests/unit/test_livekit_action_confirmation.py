@@ -87,7 +87,7 @@ def test_confirmation_expiring_while_core_lock_is_held_does_not_register_input()
         seen = []
 
         class Llm:
-            async def generate(self, text):
+            async def generate(self, text, *, response: object | None = None):
                 seen.append(text)
                 yield TextDelta(1, "結果です。", (0, 5))
 
