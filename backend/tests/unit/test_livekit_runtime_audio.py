@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from app.conversation_core import CoreEvent
+from app.conversation_core.models import Response
 from app.livekit_transport import (
     core_delivery,
     core_factory,
@@ -186,14 +187,28 @@ def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
         assert character_id == "miori"
         return SimpleNamespace(speaker_id=7)
 
-    async def generate_reply_stream(
+    active_responses: list[Response] = []
+
+    async def generate_screen_reply_stream(
+        active_session_id: str,
+        client_session_id: UUID | None,
         character_id: str,
+        conversation_id: UUID,
         history_session: object,
         transcript: str,
+        screen_lineage_observer: object,
+        prompt_observer: object,
+        response: Response,
     ):
+        assert active_session_id == session_id
+        assert client_session_id is None
         assert character_id == "miori"
+        assert conversation_id == UUID("60000000-0000-4000-8000-000000000010")
         assert isinstance(history_session, HistorySession)
         assert transcript == "利用者の発話"
+        assert callable(screen_lineage_observer)
+        assert prompt_observer is None
+        active_responses.append(response)
         yield "\n"
         yield "光織"
         yield "の応答"
@@ -211,7 +226,7 @@ def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
         transcriber=Transcriber(),
         synthesizer=Synthesizer(),
         history_service=HistoryService(),
-        generate_reply_stream=generate_reply_stream,
+        generate_screen_reply_stream=generate_screen_reply_stream,
         measurement_kind="dogfood",
         trace_record=trace_events.append,
         measurement_clock_ns=iter(range(1_000, 2_000)).__next__,
@@ -258,6 +273,11 @@ def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
         },
     )
     assert response_ids == [metadata["response_id"]]
+    assert len(active_responses) == 1
+    assert active_responses[0].response_id == metadata["response_id"]
+    assert [source.input_id for source in active_responses[0].source_inputs] == [
+        "30000000-0000-4000-8000-000000000010"
+    ]
     assert metadata["audio_sequence"] == 1
     assert metadata["text_range"] == {"start": 0, "end": 5}
     assert "audio" not in metadata

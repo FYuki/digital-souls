@@ -14,7 +14,7 @@
 | 検証 | 状態 |
 |---|---|
 | Python型検査・変更差分検査 | 実施済み。型検査は変更した7ファイルで成功。Python lintと`git diff --check`も成功 |
-| HTTP／音声Core主要unit・module | 実施済み。Backend unit・module全体で6687件成功、1件スキップ |
+| HTTP／音声Core主要unit・module | 実施済み。Backend unit・module全体で6687件成功、1件スキップ。音声IDの追加試験後、関連unit 102件成功 |
 | frontend unit・module | 実施済み。両suite成功 |
 | mocked E2E | 実施済み。独立test-mocked Profileで58件成功。実サービス・実マイクの証跡には含めない |
 | 実Ollamaの短い推論 | 実施済み。既存Inference Routerから`gemma4:e4b`へ1件送信し、非空の応答と正常終了を確認。共通Core全体の実接続受入ではない |
