@@ -33,7 +33,7 @@ router = APIRouter(route_class=ConversationRoute)
 class ChatRequest(BaseModel):
     character: str
     conversation_id: UUID4
-    message: str = Field(min_length=1)
+    message: str = Field(min_length=1, pattern=r"\S")
     screen_reference: bool = False
     screen_client_session_id: UUID4 | None = None
 
