@@ -5,7 +5,7 @@
 **ACTIVE**。2026-09-13に合意した#329の設計判断であり、Irodori実装・配備・実会話受入の完了を意味しない。
 実装要件は[Irodori差し替え要件](../irodori-tts-requirements.md)、
 進捗は[Epic #329](https://github.com/FYuki/digital-souls/issues/329)、
-概念の対応は[用語集](../glossary.md)を参照する。
+概念の対応は[用語集](../../CONTEXT.md)を参照する。
 
 本ADRは既存の[音声Session契約](voice-session-contract-2026-08.md)と
 [Speech/Text共通Session契約](conversation-session-text-input-2026-09.md)に、

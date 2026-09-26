@@ -5,7 +5,7 @@
 > 理由・経緯は `docs/decisions/` を参照。
 
 本書は現在のコードの構成・責務境界を説明する。採用設計と実装範囲が異なる箇所は分けて記す。
-用語は[用語集](glossary.md)、ADRの優先関係は[ADR案内](decisions/README.md)、起動・配備は
+用語は[用語集](../CONTEXT.md)、ADRの優先関係は[ADR案内](decisions/README.md)、起動・配備は
 [開発環境](development-environment.md)と[dogfood運用](../infra/dogfood/README.md)を参照する。
 `ACTIVE`なADRの存在を、その全体の実装完了・既定有効・dogfood受入済みとは扱わない。
 
@@ -329,7 +329,7 @@ Coreは`chat`、`privacy`、`memory-extraction`、`memory-consolidation`、`embe
 既存の非同期形成経路の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`である。
 Episodic subjectは`USER / SHARED`で、SELF、`experienced_at`、派生意味記憶、独立した内省記憶、人格適応は
 採用済みの拡張設計と現在の型を区別する。[admission型](../backend/app/memory/admission/contracts.py)、
-[永続化型](../backend/app/memory/persistence/contracts.py)、[用語集](glossary.md)を参照する。
+[永続化型](../backend/app/memory/persistence/contracts.py)、[用語集](../CONTEXT.md)を参照する。
 既存memoryのconsolidationは実装済みだが、意味抽象化・内省・人格更新を行う処理ではない。
 
 UI上のスレッドはBackendの`conversation_id`に対応する。同じ`character_id`と
@@ -573,7 +573,7 @@ snapshotを再検証する。#363はLLMを介さなくても共有Gateを通り�
 
 通知の閲覧だけでは別キャラクターへ内容を渡さない。ユーザーがコピー・会話引用で明示共有した範囲は
 通常会話の話題として扱い、その会話・回答・記憶を元の非同期処理の担当・対象・監視・実行・報告状態へ
-伝播させない。#366で設計する通知からの会話導線は登録時担当へ戻す。用語の対応は[用語集](glossary.md)を参照する。
+伝播させない。#366で設計する通知からの会話導線は登録時担当へ戻す。用語の対応は[用語集](../CONTEXT.md)を参照する。
 
 Event取得・復旧の詳細は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)と
 [要件指示書](epic-187-addon-event-requirements.md)を参照する。取得位置と有限sanitized bufferの永続化、

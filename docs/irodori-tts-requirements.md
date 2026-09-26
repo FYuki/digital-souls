@@ -7,7 +7,7 @@ LiveKit接続を実装中。実音声受入、モデルの本採用を完了し�
 実装の運用・設定は[共有Irodoriサービス](../infra/irodori/README.md)を参照する。
 進捗・依存・完了条件は[Epic #329](https://github.com/FYuki/digital-souls/issues/329)、
 設計理由は[TTSと参照音声のADR](decisions/tts-engine-reference-voice-2026-09.md)、
-用語は[用語集](glossary.md)を参照する。
+用語は[用語集](../CONTEXT.md)を参照する。
 
 VOICEVOXからIrodori-TTSへ設定で差し替えられるようにする。既存の
 「LLM deltaを文・節で分割 → 区間ごとに合成 → 完成した区間からLiveKitへ送信・再生」

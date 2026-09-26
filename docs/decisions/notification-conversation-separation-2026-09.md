@@ -7,7 +7,7 @@
 会話への関連付け・通知起点の応答・キャラクター報告は#364／#365／#366の後続範囲であり、
 [Conversation Session ADR](conversation-session-text-input-2026-09.md)の接続点と区別する。
 実装済みは既定有効・実外部サービス受入済みを意味しない。進捗・依存・受入はIssuesを正本とする。
-用語と現行実装名の対応は[用語集](../glossary.md)を参照する。
+用語と現行実装名の対応は[用語集](../../CONTEXT.md)を参照する。
 
 本ADRは[Addon接続ADR](addon-connection-foundation-2026-09.md)の旧「#183＝Event会話通知・自発発話」を
 通知基盤と会話統合へ分割する。通知用取得の再利用境界と将来の応答起点について、

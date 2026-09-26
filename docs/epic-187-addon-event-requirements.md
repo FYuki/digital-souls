@@ -11,7 +11,7 @@
 
 判断の正本は[Event復旧ADR](decisions/addon-event-recovery-2026-09.md)、
 通知・会話との境界は[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md)、
-用語は[用語集](glossary.md)を参照する。
+用語は[用語集](../CONTEXT.md)を参照する。
 
 ## 確認済みの前提と範囲
 
