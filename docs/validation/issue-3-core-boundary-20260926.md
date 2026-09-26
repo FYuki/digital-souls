@@ -20,10 +20,14 @@
 | 実Ollamaの短い推論 | 実施済み。既存Inference Routerから`gemma4:e4b`へ1件送信し、非空の応答と正常終了を確認 |
 | 実Webテキスト会話 | 実施済み。独立`integration-text`環境で1件成功し、実Backend・Ollamaの応答がブラウザへ表示された |
 | 実画面共有・Vision | 実施済み。任意のVision Targetを`ollama/gemma4:e4b`へ明示した再実行で1件成功。初回は未設定のため認識完了に到達しなかった。設定変更はtest実行環境のみ |
-| devの実Tool・音声サービス接続 | `NOT_RUN`。LiveKitは現在到達不能。終了済みdev実行のreportを本変更の証跡に流用しない |
+| 実LiveKit固定音声 | 実施済み。独立`integration-voice`環境で通常音声・3往復・barge-inの5件成功。実マイクではなく固定音声fixture |
+| 実Speech/Text混在 | 実施済み。生成中／再生中のtext割り込み、音声→text→音声、履歴・TTS・privacy省略を含む10件成功 |
+| devの実Tool接続 | `NOT_RUN`。公開MCP server packageがこのworktreeの依存にない。終了済みdev実行のreportを本変更の証跡に流用しない |
 | 実マイク・聴感 | `NOT_RUN`。利用者の検証結果を待つ |
 | 変更前後の本文開始・実再生開始と処理負荷 | `NOT_RUN`。固定条件の実サービス測定が必要 |
 
-実行：`PYTHONPATH=/tmp/issue3-test-deps:backend /home/asa/dev/digital-souls/backend/.venv/bin/python -m pytest -q backend/tests/unit backend/tests/module`（使用したvenvはmain checkoutの同一依存環境）、`npm --prefix frontend run test:unit`、`npm --prefix frontend run test:module`、`npm --prefix frontend run test:e2e:mocked`。実Webは`npm --prefix frontend run test:integration:text`、画面共有は同コマンドに`-- screen-perception.spec.ts`を付け、実行環境へ文書のVision Target設定を追加した。`wasmtime==36.0.0`のみworktree外の一時targetに補い、リポジトリや共有venvは変更していない。`/api/tags`等へのHTTP 200はモデルの実応答や実音声の証跡とは分ける。
+実行：`PYTHONPATH=/tmp/issue3-test-deps:backend /home/asa/dev/digital-souls/backend/.venv/bin/python -m pytest -q backend/tests/unit backend/tests/module`（使用したvenvはmain checkoutの同一依存環境）、`npm --prefix frontend run test:unit`、`npm --prefix frontend run test:module`、`npm --prefix frontend run test:e2e:mocked`。実Webは`npm --prefix frontend run test:integration:text`、画面共有は同コマンドに`-- screen-perception.spec.ts`を付け、実行環境へ文書のVision Target設定を追加した。実音声は`npm --prefix frontend run test:integration:voice -- voice-chat.spec.ts`と、`conversation-session.spec.ts conversation-session-controls.spec.ts --workers=1`を実行した。LiveKitは専用Compose project `issue3-livekit-validation`へ一時起動し、終了時に削除した。`wasmtime==36.0.0`のみworktree外の一時targetに補い、リポジトリや共有venvは変更していない。`/api/tags`等へのHTTP 200はモデルの実応答や実音声の証跡とは分ける。
+
+固定音声の成功は手持ち実マイク・聴感、長時間連続運用、全端末の音声品質を示さない。
 
 既存#507のLiveKit取消・終了問題と、本変更で発生した回帰は分けて追跡する。mocked E2E、readiness、run reportは実音声の品質・取消受入の証跡としない。
