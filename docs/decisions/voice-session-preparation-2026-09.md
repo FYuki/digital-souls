@@ -4,7 +4,7 @@
 
 **ACTIVE**。2026-09-19の#350・#423・#424共通要件整理で採用した判断。
 採用は実装・配備・受入済みを意味しない。要求と受入は[共通指示書](../voice-quality-350-423-424-requirements.md)、
-定義は[用語集](../glossary.md)、具体的な進捗は各Issueを参照する。
+定義は[用語集](../../CONTEXT.md)、具体的な進捗は各Issueを参照する。
 
 対象は音声会話の開始準備と、準備失敗後のユーザーによる再試行。
 [TTS選択ADR](tts-engine-reference-voice-2026-09.md)のSession設定固定、

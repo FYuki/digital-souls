@@ -16,6 +16,7 @@ FE／BEはprotocol 2.0へ一組で更新する。残る品質・実接続・実�
 
 | 領域 | 実装と境界 |
 |---|---|
+| 共通Core呼出 | 既存Web通常chatとLiveKit Speech/Textが`CoreInvocation`から同じ応答準備を使う。現行はowner・privateに限定し、FEなし内部clientからも通常テキストを呼べる。[契約](docs/decisions/common-core-invocation-2026-09.md) |
 | キャラクター・会話UI | Character Card V3、Character Book、立ち絵、キャラクター別スレッド、名称変更、ピン留め、アーカイブ・復元・削除、PC／compactレイアウト |
 | 会話履歴 | `character_id`と`conversation_id`で分離してSQLiteへ保存。同じスレッドの保存済み履歴を再開し、別スレッドの生会話をそのまま混ぜない |
 | 音声・テキスト併用 | LiveKitの継続音声入力、STT、応答の逐次生成・TTS・再生、割り込み、再接続。同じ実行中Sessionへのテキスト入力と受理結果照合にも対応。旧WebSocket音声はbaseline／互換用 |
@@ -26,7 +27,7 @@ FE／BEはprotocol 2.0へ一組で更新する。残る品質・実接続・実�
 | 通知 | Eventからmetadataを個別保存し、未読・フィルタ・通知元／種類別ON・OFF・明示的な内容取得を提供。初回保存から30日と件数上限で保持。会話への報告・要約連携は後続範囲。[通知runtime](docs/notification-runtime.md)を参照 |
 | Character Life | DBOSによる会話外活動、Life State、許可・実行履歴の基盤。**既定無効・dev/test対象**。SELF Episode、Reflection、人格適応、Skill等との全体接続は未完了 |
 
-既存の非同期形成経路の許可型は`EPISODIC_EVENT`、`USER_PREFERENCE`、`INTERACTION_PREFERENCE`です。複数Episodeからの意味抽象化、独立した内省記憶、経験に基づく人格適応は、既存の記憶統合と区別します。[用語集](docs/glossary.md)に、設計上の概念と現在の実装名の対応をまとめています。
+既存の非同期形成経路の許可型は`EPISODIC_EVENT`、`USER_PREFERENCE`、`INTERACTION_PREFERENCE`です。複数Episodeからの意味抽象化、独立した内省記憶、経験に基づく人格適応は、既存の記憶統合と区別します。[用語集](CONTEXT.md)に、設計上の概念と現在の実装名の対応をまとめています。
 
 LiveKitへの移行・音声／テキスト併用の実装があることと、遅延・回復・連続運用の課題が解消したことは別です。[混在Session受入](docs/conversation-session-acceptance.md)、[dev回復記録](docs/conversation-session-dev-recovery.md)、[連続操作試験](docs/conversation-session-dev-operations.md)に既知の制約と証跡を残しています。無期限に同じ実行Sessionを維持できる保証はありません。
 
@@ -83,7 +84,7 @@ environments/down.sh
 
 | 読みたい内容 | 参照先 |
 |---|---|
-| 用語・実装名・設計との違い | [用語集](docs/glossary.md) |
+| 用語・実装名・設計との違い | [用語集](CONTEXT.md) |
 | 現在の責務境界 | [システムアーキテクチャ](docs/system-architecture.md) |
 | 採用判断・優先関係 | [ADR一覧・運用](docs/decisions/README.md) |
 | 開発目標と分解 | [ロードマップ](docs/roadmap.md) / [拡張計画](docs/enhancement-plan.md) |

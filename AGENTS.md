@@ -1,12 +1,12 @@
 ## 現行仕様の確認
 
-実装の入口は[README](README.md)、用語は[用語集](docs/glossary.md)、現在の責務境界は
+実装の入口は[README](README.md)、用語は[用語集](CONTEXT.md)、現在の責務境界は
 [システムアーキテクチャ](docs/system-architecture.md)を参照する。
 設計判断の優先関係は[ADR案内](docs/decisions/README.md)、具体的な進捗・依存・完了条件はGitHub Issuesで管理する。
 
 ADRが`ACTIVE`でも、その全体が実装済み・既定有効・dogfood受入済みとは限らない。
 実装状態を説明・変更するときは対象ブランチのコードと設定を照合する。用語や責務境界を追加・変更する場合は、
-対応ADRに加えて`docs/glossary.md`の定義・実装名・状態・参照先を更新する。
+対応ADRに加えて`CONTEXT.md`の定義・実装名・状態・参照先を更新する。
 
 ## 技術スタック
 

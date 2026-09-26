@@ -127,7 +127,7 @@ async def _produce_text_segments(
     segmenter = JapaneseTextSegmenter()
     try:
         async with _measure_llm_stage(response, record_diagnostic):
-            async for delta in llm.generate(response_input):
+            async for delta in llm.generate(response_input, response=response):
                 state = get_response_state() if get_response_state else response.state
                 if audit is not None:
                     audit.text(
@@ -258,7 +258,7 @@ async def run_llm_stage(
     await _record_stage(record_stage, "llm", "started")
     try:
         async with _measure_llm_stage(response, record_diagnostic):
-            async for delta in llm.generate(response_input):
+            async for delta in llm.generate(response_input, response=response):
                 await accept_text_delta(
                     response_id=response.response_id,
                     generation=response.generation,

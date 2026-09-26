@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from app.characters.loader import IrodoriTtsConfig, TtsConfig, load_tts_config
 from app.tts.irodori_client import IrodoriClient, IrodoriRuntimeConfig, IrodoriTtsAdapter
 from app.conversation_core import ConversationCoreSession
+from app.conversation_core.models import Response
 from app.conversation_core.adapters import (
     ConversationHistoryPersistenceAdapter,
     PromptLlmAdapter,
@@ -77,6 +78,7 @@ class ProductionConversationCoreSessionFactory:
                 str, UUID | None, str, UUID, object, str,
                 Callable[[tuple[ScreenLineage, ...]], None],
                 Callable[[BuiltPrompt], None] | None,
+                Response,
             ],
             AsyncIterator[str],
         ] | None = None,
@@ -213,7 +215,7 @@ class ProductionConversationCoreSessionFactory:
             stt=self._stt,
             llm=(
                 PromptLlmAdapter(
-                    generate_stream=lambda transcript: self._required_generate_screen_reply_stream()(
+                    generate_stream_with_response=lambda transcript, response: self._required_generate_screen_reply_stream()(
                         session_id,
                         client_session_id,
                         character_id,
@@ -222,6 +224,7 @@ class ProductionConversationCoreSessionFactory:
                         transcript,
                         screen_lineage_state.record,
                         prompt_state.observer() if prompt_state is not None else None,
+                        response,
                     )
                 )
                 if self._generate_screen_reply_stream is not None
@@ -260,6 +263,7 @@ class ProductionConversationCoreSessionFactory:
             str, UUID | None, str, UUID, object, str,
             Callable[[tuple[ScreenLineage, ...]], None],
             Callable[[BuiltPrompt], None] | None,
+            Response,
         ],
         AsyncIterator[str],
     ]:

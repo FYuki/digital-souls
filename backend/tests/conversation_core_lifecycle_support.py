@@ -138,7 +138,7 @@ class CancellationSuppressingLlm:
     cancellation_received: asyncio.Event = field(default_factory=asyncio.Event)
     blocker: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def generate(self, transcript: str) -> AsyncIterator[object]:
+    async def generate(self, transcript: str, *, response: object | None = None) -> AsyncIterator[object]:
         module = _core_module()
         self.started.set()
         try:
@@ -153,7 +153,7 @@ class FirstCallFailingLlm:
     calls: list[str] = field(default_factory=list)
     next_call_blocker: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def generate(self, transcript: str) -> AsyncIterator[object]:
+    async def generate(self, transcript: str, *, response: object | None = None) -> AsyncIterator[object]:
         self.calls.append(transcript)
         if len(self.calls) == 1:
             raise RuntimeError("llm failure sentinel")

@@ -94,6 +94,6 @@ Event transport・復旧本体、Task lifecycle・scheduler、外部write／dele
 今回の合意は#183のgrill-me（2026-09-16）で確認した。既存の責務と安全条件は以下を継続する。
 
 - [通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md)：第11節が旧通知レコード集約案を置き換える。
-- [用語集](glossary.md)：通知、通知ON／OFF、保持、表示・要約、read-only caller。
+- [用語集](../CONTEXT.md)：通知、通知ON／OFF、保持、表示・要約、read-only caller。
 - [Event復旧ADR](decisions/addon-event-recovery-2026-09.md)・[Event runtime](addon-event-runtime.md)：#187の72時間バッファと取得・欠落復旧。
 - [拡張計画](enhancement-plan.md)・[リポジトリ運用方針](repository-policy.md)：実施順序と文書責務。

@@ -158,7 +158,7 @@ Feature: 会話からの意味記憶の取得と利用
 
 - [設計判断](decisions/semantic-memory-lifecycle-2026-09.md)
 - [共通境界](decisions/episode-fact-semantic-boundaries-2026-09.md)
-- [用語集](glossary.md)
+- [用語集](../CONTEXT.md)
 - [テスト方針](testing-policy.md)
 - [推論基盤](decisions/inference-provider-foundation-2026-09.md)
 

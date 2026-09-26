@@ -33,7 +33,7 @@ def test_provider_callbacks_after_cancellation_are_counted_and_closed_only_after
     async def exercise():
         class Llm:
             def __init__(self):self.late=asyncio.Event();self.release=asyncio.Event()
-            async def generate(self,_):
+            async def generate(self, _, *, response: object | None = None):
                 yield TextDelta(1,'開始。',(0,3))
                 try:await asyncio.Event().wait()
                 except asyncio.CancelledError:

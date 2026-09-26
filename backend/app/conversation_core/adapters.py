@@ -13,6 +13,7 @@ from app.async_worker import SyncWorkerCapacityError, run_sync
 
 from app.conversation_core.models import (
     AudioSegment,
+    Response,
     ResponseStartResult,
     ResponseState,
     TerminalOutcome,
@@ -277,14 +278,25 @@ class PromptLlmAdapter:
         *,
         generate_reply: Callable[[str], str] | None = None,
         generate_stream: Callable[[str], AsyncIterator[str]] | None = None,
+        generate_stream_with_response: Callable[
+            [str, Response], AsyncIterator[str]
+        ] | None = None,
     ) -> None:
-        if (generate_reply is None) == (generate_stream is None):
+        if sum(
+            source is not None
+            for source in (
+                generate_reply, generate_stream, generate_stream_with_response
+            )
+        ) != 1:
             raise ValueError("exactly one LLM generation source is required")
         self._generate_reply = generate_reply
         self._generate_stream = generate_stream
+        self._generate_stream_with_response = generate_stream_with_response
 
-    async def generate(self, transcript: str) -> AsyncIterator[TextDelta]:
-        if self._generate_stream is None:
+    async def generate(
+        self, transcript: str, *, response: Response | None = None
+    ) -> AsyncIterator[TextDelta]:
+        if self._generate_stream is None and self._generate_stream_with_response is None:
             if self._generate_reply is None:
                 raise RuntimeError("LLM generation source is missing")
             text = (await run_sync(self._generate_reply, transcript)).strip()
@@ -295,7 +307,14 @@ class PromptLlmAdapter:
         sequence = 0
         offset = 0
         pending_whitespace = ""
-        async for text in self._generate_stream(transcript):
+        if self._generate_stream_with_response is not None:
+            if response is None:
+                raise ValueError("response identity is required")
+            stream = self._generate_stream_with_response(transcript, response)
+        else:
+            assert self._generate_stream is not None
+            stream = self._generate_stream(transcript)
+        async for text in stream:
             if not text:
                 continue
             buffered = pending_whitespace + text

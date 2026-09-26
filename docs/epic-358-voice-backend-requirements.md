@@ -17,7 +17,7 @@ FEは音声入出力、ユーザー操作、端末で観測した事実を担当
 ## 根拠と優先関係
 
 - #358本文の責務・既存操作・非スコープを基礎とし、2026-09-14〜15の対話で移行方式、音声欠落、遅延回帰基準を追加合意した。
-- 設計判断は[Backend集約ADR](decisions/voice-backend-authority-2026-09.md)、用語は[用語集](glossary.md)を参照する。
+- 設計判断は[Backend集約ADR](decisions/voice-backend-authority-2026-09.md)、用語は[用語集](../CONTEXT.md)を参照する。
 - 文書作業の分岐元は2026-09-15確認のorigin/main `07b8b1ee638ca222afe61983ebaf17c6edaaf1f7`。これは性能baselineの実測済みcommitを意味しない。
 - 同commitの`frontend/src/lib/audio/utterance-detector.ts`には`silenceMs=600`、`neuralSilenceMs=700`がある。古いADRの1,400msと区別し、有効設定・モデル・preroll・検証済み挙動はM1で改めて棚卸しする。
 - 同mainには#329のIrodori対応が含まれる。既存のSession単位TTS選択・区間合成・取消契約を保持する。Irodoriの採用・声選定・品質改善を#358の前提に追加しない。

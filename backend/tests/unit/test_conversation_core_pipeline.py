@@ -25,7 +25,7 @@ class BlockingLlm:
     cancelled: asyncio.Event = field(default_factory=asyncio.Event)
     release: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+    async def generate(self, _transcript: str, *, response: object | None = None) -> AsyncIterator[TextDelta]:
         self.started.set()
         yield TextDelta(1, "開始。", (0, 3))
         try:
@@ -64,7 +64,7 @@ def test_pipeline_completes_only_after_text_and_audio_consumers_finish():
         completed = False
 
         class Llm:
-            async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+            async def generate(self, _transcript: str, *, response: object | None = None) -> AsyncIterator[TextDelta]:
                 yield TextDelta(1, "結果。", (0, 3))
 
         class Tts:
