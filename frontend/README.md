@@ -1,6 +1,6 @@
 # frontend
 
-`digital-souls`の自作フロントエンド（Vite + Svelte + TypeScript）。概念と実装名は[用語集](../docs/glossary.md)、FE/BEの責務境界は[アーキテクチャ](../docs/system-architecture.md)を参照する。
+`digital-souls`の自作フロントエンド（Vite + Svelte + TypeScript）。概念と実装名は[用語集](../CONTEXT.md)、FE/BEの責務境界は[アーキテクチャ](../docs/system-architecture.md)を参照する。
 
 ## 音声入力の責務（#358導入済み）
 

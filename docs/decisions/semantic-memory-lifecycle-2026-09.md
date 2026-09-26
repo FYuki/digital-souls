@@ -5,7 +5,7 @@
 ACTIVE。2026-09-14の#341要件整理で採用した判断。実装・実受入の完了を意味しない。
 意味記憶の時間変化・矛盾・UI操作について本ADRを優先し、
 [Episode・Fact・Semantic境界](episode-fact-semantic-boundaries-2026-09.md)のprivacy、出典失効、
-SQLite正本、キャラクター境界は維持する。用語の入口は[用語集](../glossary.md)。
+SQLite正本、キャラクター境界は維持する。用語の入口は[用語集](../../CONTEXT.md)。
 
 ## 背景と選択肢
 

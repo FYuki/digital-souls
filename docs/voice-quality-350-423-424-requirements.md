@@ -58,7 +58,7 @@
 - 開始準備の再試行方針を、既存の通信再接続や共有サービス内部の回復方式の変更へ広げない。
 
 判断の根拠・優先関係は[開始準備ADR](decisions/voice-session-preparation-2026-09.md)、
-用語は[用語集](glossary.md)を参照する。
+用語は[用語集](../CONTEXT.md)を参照する。
 
 ## 評価の順序と条件
 
@@ -150,7 +150,7 @@ mainへのマージはユーザーが行う。文書更新、CI、マージを�
 
 ## 根拠・参照
 
-- [開始準備ADR](decisions/voice-session-preparation-2026-09.md)、[用語集](glossary.md)
+- [開始準備ADR](decisions/voice-session-preparation-2026-09.md)、[用語集](../CONTEXT.md)
 - [#150の指標と目標](https://github.com/FYuki/digital-souls/issues/150)
 - [Sessionの過去受入](conversation-session-acceptance.md)：再接続94/100、相槌8/10等は当時の記録
 - [Irodoriの過去検証](irodori-tts-validation-2026-09.md)：speed 1.00等の測定をspeed 1.02の実測に読み替えない

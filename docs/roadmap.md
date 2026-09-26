@@ -5,7 +5,7 @@
 `digital-souls`の開発を、キャラクター設計・会話基盤・音声・長期記憶・外部活動・表示連携へ段階的に進める。
 
 この文書はPhase／Wave等で実現する機能を示す。タスクの進捗、依存関係、完了条件はGitHub Issuesで管理し、チェックボックスや個別Issueの状態を重複管理しない。
-現在のmainの実装範囲は[README](../README.md)と[アーキテクチャ](system-architecture.md)、用語と設計／実装の区別は[用語集](glossary.md)を参照する。
+現在のmainの実装範囲は[README](../README.md)と[アーキテクチャ](system-architecture.md)、用語と設計／実装の区別は[用語集](../CONTEXT.md)を参照する。
 
 2026-06-17にAIRIフォーク利用を取りやめ、自作BE（FastAPI）+ 自作FE（Vite + Svelte）へ移行した。
 2026-07-09にはMVP完了を受け、旧Phase 5〜8のタスク列挙をpost-MVPのWave 1〜4へ再編した。

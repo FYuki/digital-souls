@@ -3,7 +3,7 @@
 ## 状態・適用範囲
 
 **ACTIVE**。#358と2026-09-14〜15の対話で採用した設計判断。BE VADへの移設は未実装・未受入。
-要件は[指示書](../epic-358-voice-backend-requirements.md)、用語は[用語集](../glossary.md)、進捗は[#358](https://github.com/FYuki/digital-souls/issues/358)で管理する。
+要件は[指示書](../epic-358-voice-backend-requirements.md)、用語は[用語集](../../CONTEXT.md)、進捗は[#358](https://github.com/FYuki/digital-souls/issues/358)で管理する。
 
 新しいLiveKit音声入力経路のVAD・正式発話境界の決定権と互換性について、
 [旧音声契約](voice-session-contract-2026-08.md)、

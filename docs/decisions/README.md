@@ -11,12 +11,14 @@
 | `ARCHIVED` | 全面失効、または有効な判断を現行文書へ統合済み | `docs/decisions/archive/` |
 
 **ACTIVEは実装完了・機能の既定有効・dogfood受入済みを意味しない。**
-現在の実装範囲は[README](../../README.md)と[アーキテクチャ](../system-architecture.md)、用語と実装名の対応は[用語集](../glossary.md)、タスクの進捗・完了条件はIssuesを参照する。
+現在の実装範囲は[README](../../README.md)と[アーキテクチャ](../system-architecture.md)、用語と実装名の対応は[用語集](../../CONTEXT.md)、タスクの進捗・完了条件はIssuesを参照する。
 
 一部だけが有効なADRでは、状態タグを増やさず、状態欄に現行範囲と後続ADRを文章で記載する。
 archive内の文書を現行仕様や実装のSource of Truthとして使用しない。
 
 ## 現行の優先関係
+
+- [`multi-entry-character-core-2026-09.md`](multi-entry-character-core-2026-09.md)は、#3で合意した複数入口（Web・Discord・スマホ・CLI・SNS）から同じ人格コアを使う要件、最終構成、入口ごとの会話と認証、呼出主体、公開範囲、自律SNS参加の制御、実施順を定める。自律活動・外部送信・高影響操作はCharacter Life共通契約を再利用し、緩和しない。採用済みの要件であり、実装は#3／#516／#517／#518で追跡する。
 
 - [音声Session開始準備](voice-session-preparation-2026-09.md)は、#350/#423/#424の開始準備、全体の固定時間上限なし、処理側の失敗検出、手動再試行を定める。既存の個別要求・worker・入力ACK等の期限や通信再接続は維持する。採用済みの要件であり、実装・受入完了ではない。[共通指示書](../voice-quality-350-423-424-requirements.md)を参照する。
 
@@ -33,7 +35,7 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 - [`character-life-runtime-2026-09.md`](character-life-runtime-2026-09.md)は、#249のtop-level runtimeへDBOSを採用し、domain正本・関連Epicとの責務境界を定める。現在の任意有効化・接続範囲は[Life運用](../character-life-operations.md)を参照する。
 - [`character-life-memory-personality-autonomy-2026-09.md`](character-life-memory-personality-autonomy-2026-09.md)は、本人視点のEpisode、Semantic/Reflection分離、Life State、Big Five Aspects人格、Relationship、Autonomy Target、外部送信privacy、高影響操作の共通契約を定める。
 - 上記範囲で`wave2-memory-formation-retrieval-2026-08.md`、`rag-memory-privacy-policy-2026-07.md`、`tool-use-foundation-2026-09.md`と競合する場合は、2026-09のCharacter Life ADRを優先する。ただし、採用した拡張設計と現在の許可型・永続modelは区別する。
-- [`memory-personality-terminology-2026-09.md`](memory-personality-terminology-2026-09.md)は、気質／変動人格、各記憶種別、記憶統合／意味抽象化／内省、現在の興味関心、会話での参照を定義する共通語彙の正本である。実装方式そのものは確定せず、実装契約と競合する場合はその契約側を優先する。[用語集](../glossary.md)は既存実装との対応を補助する。
+- [`memory-personality-terminology-2026-09.md`](memory-personality-terminology-2026-09.md)は、気質／変動人格、各記憶種別、記憶統合／意味抽象化／内省、現在の興味関心、会話での参照を定義する共通語彙の正本である。実装方式そのものは確定せず、実装契約と競合する場合はその契約側を優先する。[用語集](../../CONTEXT.md)は既存実装との対応を補助する。
 - [`miori-personality-without-fixed-role-2026-09.md`](miori-personality-without-fixed-role-2026-09.md)は、光織のCharacter Coreを性格中心とし、記録・検索等の固定業務を外す。2026-06のキャラクターADRの該当部分を置き換える。興味・役割の自動形成機能の追加とは別の変更である。
 
 新しい記憶表現を理由にprivacyや外部実行権限を緩和しない。長期記憶保存時の絶対禁止、SQLite正本／Chroma派生index、transactional outbox、#104/#182のCapability Snapshot／Execution Gate等、後続ADRで明示的に変更していない既存契約は継続する。

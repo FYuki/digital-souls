@@ -1,6 +1,6 @@
 # backend
 
-`digital-souls`の自作バックエンド（FastAPI）。現在の全体構成は[アーキテクチャ](../docs/system-architecture.md)、概念と実装名の対応は[用語集](../docs/glossary.md)を参照する。
+`digital-souls`の自作バックエンド（FastAPI）。現在の全体構成は[アーキテクチャ](../docs/system-architecture.md)、概念と実装名の対応は[用語集](../CONTEXT.md)を参照する。
 
 ## 音声入力の責務（#358導入済み）
 
