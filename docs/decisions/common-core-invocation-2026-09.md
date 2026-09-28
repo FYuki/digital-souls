@@ -21,7 +21,7 @@ FEの表示結果と音声の実再生結果は、生成済み本文とは異な
 
 `ChatService.invoke_text`はFEなしの内部clientから直接使える。#516のCLI・認証・能力宣言を先取りしない。活動型は将来`self`を用いて同じ呼出契約に接続するが、現行実装は拒否する。公開出力の記憶絞り込みは#518が実装する。
 
-推論実行は既存Inference RouterのTarget／Provider Adapterへ委譲する。#422のRunner差替えでもprompt・入力上限・cancel・errorと出力をこの境界で保つ。MemoryはHistoryService／MemoryReadRepository／形成workerの契約を用い、SQLite正本とChroma派生indexを維持する。remote Memory実装・新しいネットワークhopは追加しない。
+会話応答の推論実行は`backend/app/inference/conversation_runner.py`の`ConversationInferenceRunner` port（全量生成・streaming・入力token計測）を通り、利用側は`create_conversation_inference_runner` factoryが返すport実装だけに依存する。現行実装は既存Inference Routerの`CHAT` callerへ委譲する。Target／Provider Adapter／Capabilityの解決と設定検証はRouter側に残る。#422のRunner差替えはこのport実装の交換だけで行い、prompt・入力上限・cancel・errorと出力をこの境界で保つ。MemoryはHistoryService／MemoryReadRepository／形成workerの契約を用い、SQLite正本とChroma派生indexを維持する。remote Memory実装・新しいネットワークhopは追加しない。
 
 Toolの候補・確認再開は既存ToolServiceを使い、Capability Snapshot、Execution Gate、送信検査、取消後dispatch拒否、結果不明の扱いを維持する。入口側に独立した権限判定やTool loopを置かない。外部作用の実行直前検査はGateの契約による。
 

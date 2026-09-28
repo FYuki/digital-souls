@@ -102,7 +102,7 @@ Ollama以外の未対応Providerへダミー会話やfallbackを送らない。�
 * `prompting/` — Character Core、Character Lore、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
 * `inference/` — Coreの用途Targetを環境ローカルな`provider/model`へ解決し、text／画像Capability認可、画像decodeと入力上限、同時実行数、共通error、readiness、metadata観測を一元化する。optionalなVision Targetは構造化観測だけを返し、Ollama、OpenAI API、Codex runtimeの差とBase64化はAdapter内へ閉じ込める
 * `screen_perception/` / `routers/screen_perception.py` — 有限leaseの共有session、generation、所有会話、routing同意を検証し、参照が確定したturnだけへ新しい静止画1枚を要求する。参照判断はruleを優先し、競合時だけ`screen-reference` callerでChat Targetを使う。Vision観測は現在request内の非信頼データであり、生画像とともに履歴へ保存しない
-* `llm/` — 完成済みpromptをChat Targetへ接続する互換境界。ProviderやModelを直接選択せず、共通Inference Routerだけを呼び出す
+* `llm/` — 完成済みpromptをChat Targetへ接続する互換境界。ProviderやModelを直接選択せず、`inference/conversation_runner.py`の会話応答Runner port経由で共通Inference Routerだけを呼び出す
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/remote_whisper_client.py` — 共有GPU Whisper HTTP serviceによる音声認識。旧`whisper_client.py`はGoal 2受入までrollback用に保持する
 * `model_settings.py` — Whisperモデル、履歴・入力・モデルcontext上限を型付きで解決する。InferenceのProvider、Model、入力／出力上限は`inference/config.py`がTarget単位で解決し、Backendはlifespanの先頭で検証する
@@ -319,6 +319,8 @@ VRMは常用ではなく、配信・イベント用の身体として扱う。
 ## 推論ルーター
 
 Coreは`chat`、`privacy`、`memory-extraction`、`memory-consolidation`、`embedding`、`vision`、`heavy-reasoning`、`tool-routing`、`character-life`の用途Targetを指定する。型の正本は[`inference/contracts.py`](../backend/app/inference/contracts.py)である。環境は各Targetへ`provider/model`を直接割り当て、Provider RegistryがOllama、OpenAI API、Codex runtimeのAdapterを選ぶ。独立したInference Profileや暗黙fallbackは持たない。
+
+HTTP・音声の会話応答は`inference/conversation_runner.py`の`ConversationInferenceRunner` port（全量生成・streaming・入力token計測）を経由する。利用側は`create_conversation_inference_runner` factoryが返すport実装だけに依存し、現行実装は登録済みInference Routerへ`CHAT` callerで委譲する薄い実装で、Target解決・Provider Adapter選択・Capability検査・設定検証を再実装しない。#422（Pydantic AI）ではこのfactoryが返すport実装だけを差し替える。
 
 `privacy`と`character-life`はローカルProviderに限定する。cloud利用が可能なTargetへcloud Providerを割り当てた場合は起動時にwarningを記録する。起動時には静的設定を検証した後、生成を伴わないProvider別probeを行う。`chat`の利用不能は起動失敗、他の設定済みTargetは`degraded`として起動を継続する。
 

@@ -106,6 +106,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 | Provider / Model / Adapter | 推論の接続先・使用モデル・接続先固有の実装境界。用途Targetへ`provider/model`を割り当てる。環境Profileや人格とは別 | 実装：[Inference運用](docs/inference-operations.md)、[inference](backend/app/inference) |
 | モデル開始準備 | 会話本文を使わず、実際の推論設定でモデルを準備する操作。endpoint疎通やモデル存在確認とは別。常駐継続や速度受入を保証しない | 実装：Inference Capability `prepare_model` / `prepare_text`。[運用](docs/inference-operations.md#音声sessionのモデル開始準備) |
 | Inference Caller | 同じTargetを呼ぶ処理の識別。`screen-reference`はChat Targetのcallerであり、独立したTargetではない | 実装：[画面契約](docs/decisions/browser-screen-perception-2026-09.md)、[アーキテクチャ](docs/system-architecture.md) |
+| 推論Runner port / `ConversationInferenceRunner` | HTTP・音声の会話応答が共有するSDK非依存の推論実行port。全量生成・streaming・入力token計測を持ち、利用側は`create_conversation_inference_runner` factoryが返すport実装だけに依存する。現行実装は`CHAT` callerでInference Routerへ委譲する。#422の差替え対象 | 実装：[conversation_runner](backend/app/inference/conversation_runner.py)、[呼出ADR](docs/decisions/common-core-invocation-2026-09.md) |
 | Capability | Inferenceでは画像・構造化出力等の推論能力、MCPでは公開されるTool・Resource等。権限と能力は同義ではない | 実装：[Inference型](backend/app/inference/contracts.py)、[MCP基盤](docs/external-mcp-foundation.md) |
 | Screen Session / lease / generation | 利用者が選択した共有対象と会話・同意・有効期限を結び付ける状態。永続スレッドや音声Sessionとは別 | 実装：[screen_perception](backend/app/screen_perception)、[capture](frontend/src/lib/screen-perception/capture.ts) |
 | `answer_without_screen / inspect_screen / clarify_reference` | 画面を見ず回答／必要な静止画を参照／参照対象を確認、の3分岐。LLM出力だけで画像送信や認可を決めない | 実装：[画面契約](docs/decisions/browser-screen-perception-2026-09.md) |
