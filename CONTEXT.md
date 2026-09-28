@@ -174,6 +174,19 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | 公開不可フラグ | 記憶の作成時に出典の種類から機械的に決める印。許可リスト（会話外活動の本人経験・公開情報）以外はフラグあり。派生記憶は直接の根拠から引き継ぐ。#518以前の既存記憶は全てフラグあり扱い | 設計：#518、[複数入口ADR §4.1](docs/decisions/multi-entry-character-core-2026-09.md) |
 | 公開用要約 | 会話Episodeの抽出時に生成する「述語＋気持ち」だけの要約。5Wの値を含まないことを機械照合し、公開出力が会話由来の内容に触れる唯一の経路とする。元のEpisodeとは別 | 設計：#518、[複数入口ADR §4.2](docs/decisions/multi-entry-character-core-2026-09.md) |
 
+## 目標シナリオ・エージェント分離・音声推定
+
+2026-09-28のアーキテクチャ見直しで追加した設計用語。正本は各ADR。
+
+| 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
+|---|---|---|
+| 共有体験 / 活動状態 | ユーザーとキャラクターが一緒に行うゲーム・タスク等と、その進行状況（場面、担当等）。会話履歴とは別に持ち、応答生成時に合流させる。Life Stateとの関係は未決 | 設計：[目標シナリオADR](docs/decisions/companion-target-architecture-2026-09.md) |
+| 会話エージェント / 活動エージェント | 対話型入口の入力に応答する実行単位／会話外の自律活動（Character Life）を実行する単位。Card・記憶・Life State等の正本を共有し、活動エージェントは会話へ直接発話せず報告経路で渡す | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
+| 推論の優先度 | 推論資源が競合したときの順序。音声会話のターン、テキスト会話、会話外活動の順。会話外活動は待機・中断されうる | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
+| Cardハッシュ | 応答の生成に使ったCharacter Cardの内容ハッシュ。版の固定ではなく、評価・調査で応答とCardを対応付けるために応答メタデータへ記録する | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
+| 再生済み範囲（推定） | 割り込み時点でユーザーが聞いたとみなす応答の範囲。BEの送出位置から下り遅延を引いて推定し、曖昧な場合は短い側に丸める。FEの実再生観測は任意の補正値。現行の`last_played_audio_sequence`（FE報告）とは別 | 設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
+| 下り遅延 d | BEが音声を送出してから端末で再生されるまでの遅延の推定値。ネットワーク・ジッタバッファ・再生デバイスの遅延を含む。決め方は未決 | 設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
+
 ## 更新時の扱い
 
 新しい概念、公開API・schema上の用語、既存語の意味・責務境界を変更するPRでは、本書の対応行と参照先を更新します。設計時に追加した「設計」項目も、mainへの実装・接続時に状態を見直します。新しい仕様判断はADRへ、未実装の作業はIssueへ残し、用語集だけで決定しません。

@@ -2,7 +2,7 @@
 
 ## 状態
 
-**ACTIVE**。Issue #213の初期contract実装、Windows 11上のGoogle Chrome／Microsoft Edgeによる実機確認、レビュー受入を完了した。その後のIssue #225で、最初の共有許可後は会話文脈に応じてon-demand参照する方針へ改訂した。旧取得・失効契約は維持し、改訂点は本ADRの参照判断、対象特定、派生履歴、評価契約に明示する。
+**ACTIVE**。Issue #213で定めた初期contractを、Issue #225で最初の共有許可後は会話文脈に応じてon-demand参照する方針へ改訂した。旧取得・失効契約は維持し、改訂点は本ADRの参照判断、対象特定、派生履歴、評価契約に明示する。
 
 本ADRはIssue #212の画面知覚にだけ適用する。Inference全般は`inference-provider-foundation-2026-09.md`、音声sessionとLiveKit固有transportの分離は`voice-session-contract-2026-08.md`および`livekit-transport-2026-08.md`、会話履歴と長期記憶は`wave2-memory-formation-retrieval-2026-08.md`を正本とする。本ADRと既存ADRが重なる場合、画面画像と画面由来情報の追加制約だけを本ADRが優先する。
 

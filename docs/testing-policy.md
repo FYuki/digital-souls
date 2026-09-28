@@ -146,6 +146,17 @@ main向けPRはCI成功に加え、最新差分へのCodeRabbitレビューと�
 配置、prompt tuningとproduction conformanceの分離、合格基準は
 `docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を正本とする。
 
+## ペルソナ一貫性評価（設計）
+
+入口・エージェントをまたいで同じキャラクターとして振る舞うかを、ユーザーの確認だけでなく自動で評価する。
+判断は[会話・活動エージェントADR](decisions/conversation-activity-agents-2026-09.md)を正本とする。
+
+- 最初の対象は会話エージェントと活動エージェントの比較とする。FEなしの内部client（`CoreInvocation`）から同じ質問を投げ、応答を比べる。
+- 他の`backend/evals/`と同じく固定した合成caseを使い、実ユーザー本文をcase・結果・logへコピーしない。
+- 実modelを使うため通常CIへ混在させず、Card・model・promptを変更したときの実接続証跡として扱う。
+- 各応答に記録されたCardハッシュで、評価結果と使用したCardを対応付ける。
+- 評価指標と合否基準は未決とし、評価suiteの追加時に定める。
+
 ## LiveKit実サーバーsuite
 
 LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_BACKEND_URL`、`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、リポジトリルートの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
