@@ -24,8 +24,13 @@ from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.inference.observer import InferenceObservation, InferenceObserver
 from app.inference.registry import ProviderRegistry, default_provider_registry
 from app.inference.router import InferenceRouter
+from app.inference.conversation_runner import (
+    ConversationInferenceRunner,
+    create_conversation_inference_runner,
+)
 
 __all__ = [
+    "ConversationInferenceRunner",
     "EmbeddingResult",
     "InferenceCaller",
     "InferenceCancellationToken",
@@ -48,6 +53,7 @@ __all__ = [
     "TextGenerationResult",
     "TokenEstimate",
     "TokenEstimateAccuracy",
+    "create_conversation_inference_runner",
     "default_provider_registry",
     "authorize",
     "parse_provider_reference",

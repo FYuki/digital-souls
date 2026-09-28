@@ -2,17 +2,17 @@ from collections.abc import AsyncIterator
 import threading
 
 from app.inference import (
-    InferenceCaller,
+    ConversationInferenceRunner,
     InferenceMessage,
     InferenceRouter,
     InferenceTarget,
+    create_conversation_inference_runner,
 )
 from app.model_settings import ModelSettings
 from app.prompting import BuiltPrompt, PromptMessage
 
 _router_lock = threading.Lock()
 _configured_routers: list[InferenceRouter] = []
-_CHAT_CALLER = InferenceCaller.CHAT
 
 
 def register_inference_router(router: InferenceRouter) -> None:
@@ -39,6 +39,13 @@ def _inference_messages(
     )
 
 
+def _conversation_runner() -> ConversationInferenceRunner:
+    inference_router = current_inference_router()
+    if inference_router is None:
+        raise RuntimeError("inference router is not configured")
+    return create_conversation_inference_runner(inference_router)
+
+
 def generate_response(
     prompt: BuiltPrompt,
     *,
@@ -46,11 +53,8 @@ def generate_response(
     settings: ModelSettings,
 ) -> str:
     del max_output_tokens, settings
-    inference_router = current_inference_router()
-    if inference_router is None:
-        raise RuntimeError("inference router is not configured")
-    return inference_router.generate_text(
-        caller=_CHAT_CALLER,
+    runner = _conversation_runner()
+    return runner.generate_text(
         target=InferenceTarget.CHAT,
         messages=_inference_messages(prompt.messages),
     ).text
@@ -59,12 +63,9 @@ def generate_response(
 def count_input_tokens(
     messages: tuple[PromptMessage, ...], *, settings: ModelSettings
 ) -> int:
-    inference_router = current_inference_router()
     del settings
-    if inference_router is None:
-        raise RuntimeError("inference router is not configured")
-    return inference_router.estimate_input_tokens(
-        caller=_CHAT_CALLER,
+    runner = _conversation_runner()
+    return runner.estimate_input_tokens(
         target=InferenceTarget.CHAT,
         messages=_inference_messages(messages),
     ).count
@@ -77,12 +78,9 @@ async def stream_response(
     settings: ModelSettings,
     latency_sensitive: bool = False,
 ) -> AsyncIterator[str]:
-    inference_router = current_inference_router()
     del max_output_tokens, settings
-    if inference_router is None:
-        raise RuntimeError("inference router is not configured")
-    async for delta in inference_router.stream_text(
-        caller=_CHAT_CALLER,
+    runner = _conversation_runner()
+    async for delta in runner.stream_text(
         target=InferenceTarget.CHAT,
         messages=_inference_messages(prompt.messages),
         latency_sensitive=latency_sensitive,
