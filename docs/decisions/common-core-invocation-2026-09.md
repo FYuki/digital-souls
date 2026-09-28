@@ -2,7 +2,7 @@
 
 ## 状態・適用範囲
 
-**ACTIVE（#3作業ブランチ）**。既存Web通常chatとLiveKit Speech/Textを同一Backendの会話準備へ接続する契約を定める。複数入口の目標と後続範囲は[複数入口ADR](multi-entry-character-core-2026-09.md)を優先する。実サービス・実マイクの受入状況は[検証記録](../validation/issue-3-core-boundary-20260926.md)を参照する。
+**ACTIVE**。既存Web通常chatとLiveKit Speech/Textを同一Backendの会話準備へ接続する契約を定める。複数入口の目標と後続範囲は[複数入口ADR](multi-entry-character-core-2026-09.md)を優先する。受入の証跡は[検証記録](../validation/issue-3-core-boundary-20260926.md)を参照する。
 
 ## 呼出と所有
 

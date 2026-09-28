@@ -4,37 +4,21 @@
 [システムアーキテクチャ](docs/system-architecture.md)を参照する。
 設計判断の優先関係は[ADR案内](docs/decisions/README.md)、具体的な進捗・依存・完了条件はGitHub Issuesで管理する。
 
-ADRが`ACTIVE`でも、その全体が実装済み・既定有効・dogfood受入済みとは限らない。
-実装状態を説明・変更するときは対象ブランチのコードと設定を照合する。用語や責務境界を追加・変更する場合は、
+ADRの`ACTIVE`は判断の有効性だけを表し、実装・既定有効・受入の状況を表さない。
+実装状態を説明・変更するときは対象ブランチのコードと設定、進捗はIssueを照合する。用語や責務境界を追加・変更する場合は、
 対応ADRに加えて`CONTEXT.md`の定義・実装名・状態・参照先を更新する。
+文書の正本と書き方は[文書の正本と更新責務](docs/decisions/documentation-governance-2026-09.md)に従い、
+同じ事実を複数文書へ複製しない。ADRへ進捗・受入状況・作業ブランチ名を書かない。
 
 ## 技術スタック
 
-2026-06-17にAIRIフォークから自作BE／FEへ移行した。以下は現行の実装である。
+各層の技術と責務は[システムアーキテクチャ](docs/system-architecture.md)を正本とする。作業時は次の制約を守る。
 
-| 層 | 技術・責務 |
-|---|---|
-| バックエンド | FastAPI（Python）。会話、キャラクター、記憶、推論、画面知覚、MCP、管理API |
-| フロントエンド | Vite + Svelte + TypeScript。テキスト／音声会話、スレッド、静止画立ち絵、管理UI |
-| 推論 | `inference/`の用途別TargetとProvider Adapter。Ollama／OpenAI API／Codex runtimeを環境設定で選ぶ。暗黙fallbackはない |
-| 会話履歴・長期記憶 | SQLiteを正本、Chromaを承認済み長期記憶の派生indexとする。`character_id`で所有を分離し、履歴はさらに`conversation_id`で分離 |
-| 音声通信 | LiveKitが正式経路。Speech/Text共通のConversation Sessionを使用。旧WebSocketは移行前baseline／互換用 |
-| STT | 共有GPU Whisper HTTP service。Backendはremote clientを使い、GPUモデルを所有しない |
-| TTS | VOICEVOX。応答単位の逐次合成・再生・cancelと完了確認 |
-| 外部連携 | 登録済みMCP、Capability Snapshot、Execution Gate、Tool routing、操作承認・結果回復、Addon管理 |
-| 会話外活動 | DBOS + Character Life。既定無効・dev/test対象。記憶・内省・人格・Skillとの全体接続は未完了 |
-| 通常起動 | Environment Profile + Docker。サービス所有とruntime data rootを環境ごとに分離 |
-
-Ollamaの開発用モデル等は`backend/.env.example`と[推論運用](docs/inference-operations.md)を確認する。
-`privacy`と`character-life`のローカルProvider制約は設定で緩和しない。
-既存の非同期形成経路の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`であり、
-SELF経験、意味抽象化、独立した内省記憶、人格適応を実装済みの記憶統合と混同しない。
-
-Episode / Factの保存・登録・参照・管理基盤へ、会話スレッド単位の永続予約と非同期抽出workerを接続する。
-通常抽出は反復18を採用したv13-compact18を使う。実装・固定評価と、devでの総合受入を区別する。
-
-Live2D、VRM、Desktop／Discord等の追加クライアント、複数キャラクターのグループ会話、
-Mac mini等への常時稼働環境移行は拡張方針である。現行のブラウザ・静止画UIと区別する。
+- `privacy`と`character-life`のローカルProvider制約は設定で緩和しない。推論設定は[推論運用](docs/inference-operations.md)を確認する。
+- 会話履歴・長期記憶はSQLiteを正本、Chromaを派生indexとする。`character_id`で所有を分離する。
+- GPUモデル（Whisper等）は共有サービスが所有し、Backendのプロセスへ読み込まない。
+- 既存の非同期形成経路の許可型（`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`）と、
+  SELF経験・意味抽象化・独立した内省記憶・人格適応を混同しない。
 
 ## 環境
 
@@ -66,18 +50,7 @@ Mac mini等への常時稼働環境移行は拡張方針である。現行のブ
 
 ## リポジトリ構成
 
-```text
-digital-souls/
-├─ backend/          # FastAPI・会話・記憶・推論・外部連携・活動
-├─ frontend/         # ブラウザUI・LiveKit client
-├─ characters/       # Character Cardと編集用補助資料
-├─ contracts/        # FE/BE共有契約
-├─ environments/     # Profile・環境管理
-├─ infra/            # Compose・dogfood運用
-├─ whisper_service/  # 共有Whisper HTTP service
-├─ scripts/          # 起動・検証・運用入口
-└─ docs/             # 用語集・構成・ADR・運用・受入証跡
-```
+ディレクトリ構成は[README](README.md#ディレクトリ構成)、格納方針は[リポジトリ運用方針](docs/repository-policy.md)を参照する。
 
 ## 実装フロー管理（TAKT）
 

@@ -4,39 +4,10 @@
 
 初期キャラクターは[光織（Miori）](characters/miori/)です。runtimeの定義はCharacter Cardを正本とし、記録係などの固定業務ではなく性格を中心に設計しています。役割は実際の会話や活動の文脈で扱います。
 
-LiveKitのVAD・発話区間・入力世代をBackendへ移す#358の導入はPR #408でmainへ反映済み。
-FE／BEはprotocol 2.0へ一組で更新する。残る品質・実接続・実マイク受入等は#424で追跡する。
-採用済みIrodoriの品質は#423、既存の再接続・初回推論待ち・相槌は#350で改善する。
-[共通実行指示書](docs/voice-quality-350-423-424-requirements.md)、[移行契約](docs/voice-backend-migration-contract.md)、
-[検証記録](docs/validation/voice-backend-vad-358.md)を参照する。この作業ブランチでは開始準備・取消・失敗表示とSTT／対応LLMの事前準備を実装している。正式な性能・品質受入は未完了。
+目標とする利用シナリオ（利用場所をまたぐ一貫性、キャラクター設定の一元管理、共有体験）は
+[目標シナリオADR](docs/decisions/companion-target-architecture-2026-09.md)を参照してください。
 
-## 現在の実装範囲
-
-この一覧はリポジトリ内の実装を説明するもので、すべての機能が既定で有効、またはdogfoodで受入済みであることを意味しません。進捗・残課題はGitHub Issues、検証条件は各受入記録を参照してください。
-
-| 領域 | 実装と境界 |
-|---|---|
-| 共通Core呼出 | 既存Web通常chatとLiveKit Speech/Textが`CoreInvocation`から同じ応答準備を使う。現行はowner・privateに限定し、FEなし内部clientからも通常テキストを呼べる。[契約](docs/decisions/common-core-invocation-2026-09.md) |
-| キャラクター・会話UI | Character Card V3、Character Book、立ち絵、キャラクター別スレッド、名称変更、ピン留め、アーカイブ・復元・削除、PC／compactレイアウト |
-| 会話履歴 | `character_id`と`conversation_id`で分離してSQLiteへ保存。同じスレッドの保存済み履歴を再開し、別スレッドの生会話をそのまま混ぜない |
-| 音声・テキスト併用 | LiveKitの継続音声入力、STT、応答の逐次生成・TTS・再生、割り込み、再接続。同じ実行中Sessionへのテキスト入力と受理結果照合にも対応。旧WebSocket音声はbaseline／互換用 |
-| 長期記憶 | privacy判定・positive allowlistを経た非同期形成、検索、閲覧・訂正・物理削除、既存記憶の統合。SQLiteが正本、Chromaは派生検索index |
-| 推論 | 用途別TargetをOllama／OpenAI API／Codex runtimeへ割り当てる共通境界。Provider・Model・上限は環境設定で解決し、暗黙のfallbackは行わない |
-| 画面知覚 | 利用者が選んだ単一のモニター／ウィンドウ／ブラウザタブを必要なturnだけ参照。Vision Targetは任意設定で、共有ONだけでは画像を送信しない |
-| 外部ツール・管理 | 登録済みMCPへの接続、会話からのTool／Resource利用、接続管理、操作承認・確認・結果回復。実行前の権限・引数・送信内容の検証を共通化 |
-| 通知 | Eventからmetadataを個別保存し、未読・フィルタ・通知元／種類別ON・OFF・明示的な内容取得を提供。初回保存から30日と件数上限で保持。会話への報告・要約連携は後続範囲。[通知runtime](docs/notification-runtime.md)を参照 |
-| Character Life | DBOSによる会話外活動、Life State、許可・実行履歴の基盤。**既定無効・dev/test対象**。SELF Episode、Reflection、人格適応、Skill等との全体接続は未完了 |
-
-既存の非同期形成経路の許可型は`EPISODIC_EVENT`、`USER_PREFERENCE`、`INTERACTION_PREFERENCE`です。複数Episodeからの意味抽象化、独立した内省記憶、経験に基づく人格適応は、既存の記憶統合と区別します。[用語集](CONTEXT.md)に、設計上の概念と現在の実装名の対応をまとめています。
-
-LiveKitへの移行・音声／テキスト併用の実装があることと、遅延・回復・連続運用の課題が解消したことは別です。[混在Session受入](docs/conversation-session-acceptance.md)、[dev回復記録](docs/conversation-session-dev-recovery.md)、[連続操作試験](docs/conversation-session-dev-operations.md)に既知の制約と証跡を残しています。無期限に同じ実行Sessionを維持できる保証はありません。
-
-Episode / Factの独立した保存・同thread登録・版付き参照・検索投影・管理UIも実装しています。
-会話全体からEpisode / Factを自動抽出するworkerを、永続予約と非同期実行で接続しています。
-採用抽出器はv13-compact18です。固定評価の残る未達とdev総合受入は[検討記録](docs/episodic-quality-iterations-2026-09.md)で区別します。
-詳細は[アーキテクチャ](docs/system-architecture.md#episode--factの保存登録管理基盤)を参照してください。
-
-## 構成とデータの扱い
+## 構成の概要
 
 ```text
 ブラウザ（テキスト・マイク・立ち絵・管理UI）
@@ -48,14 +19,23 @@ Episode / Factの独立した保存・同thread登録・版付き参照・検索
                     ├─ 会話履歴・長期記憶（SQLite → Chroma）
                     ├─ 共通Inference Router
                     ├─ MCP / Execution Gate
-                    └─ Character Life（任意有効化）
+                    └─ Character Life（会話外の活動）
                   STT: 共有Whisper HTTP service
-                  TTS: VOICEVOX
+                  TTS: VOICEVOX / Irodori
 ```
 
-会話履歴と長期記憶は別の保存・削除境界です。スレッドを削除しても長期記憶を暗黙削除しません。画像や外部ツールのnative payloadをそのまま長期記憶へ登録せず、履歴・長期記憶・外部送信それぞれのprivacy境界を通します。秘密値・会話原文をログやIssueへ転記しないでください。
+| 機能領域 | 説明 |
+|---|---|
+| 会話 | テキストと音声（LiveKit）の会話、割り込み、キャラクター別スレッド。[会話スレッドと実行Session](docs/system-architecture.md#会話スレッドと実行session) |
+| キャラクター | Character Card V3を正本とする人格・設定・声。[Character CardとCharacter Lore](docs/system-architecture.md#character-cardとcharacter-lore) |
+| 記憶 | 会話履歴と長期記憶（Episode / Fact / 意味記憶）。[記憶・ツール設計](docs/system-architecture.md#記憶ツール設計) |
+| 推論 | 用途別にローカル／クラウドのモデルを割り当てる共通境界。[推論ルーター](docs/system-architecture.md#推論ルーター) |
+| 外部ツール・通知 | 登録済みMCPの利用と操作承認、外部Eventの通知。[外部MCP接続・実行基盤](docs/system-architecture.md#外部mcp接続実行基盤) |
+| 会話外の活動 | キャラクター自身の活動と状態。[Character Life Runtime](docs/system-architecture.md#character-life-runtime) |
 
-Live2D／VRM、Desktop／Discord等の追加クライアント、複数キャラクターのグループ会話、Mac miniへの常時稼働環境移行は、現行ブラウザ実装とは分けた拡張方針です。詳細は[アーキテクチャ](docs/system-architecture.md)と[ロードマップ](docs/roadmap.md)を参照してください。
+会話履歴と長期記憶は別の保存・削除境界です。画像や外部ツールのnative payloadをそのまま長期記憶へ登録せず、履歴・長期記憶・外部送信それぞれのprivacy境界を通します。秘密値・会話原文をログやIssueへ転記しないでください。
+
+各機能の現在の構成は[アーキテクチャ](docs/system-architecture.md)、進捗と受入結果はGitHub Issues、今後の拡張は[ロードマップ](docs/roadmap.md)を参照してください。
 
 ## 開発環境で起動する
 

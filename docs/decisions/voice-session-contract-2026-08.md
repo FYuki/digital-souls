@@ -4,7 +4,7 @@
 
 ## 状態
 
-**ACTIVE**。Wave 3 の transport 非依存 Conversation Core が扱う音声セッション契約と、JSON Schema から生成する FE/BE 型を定める。LiveKit認証とtransport基盤はIssue #113および`livekit-transport-2026-08.md`で実装済みであり、VAD、streaming LLM/TTS、barge-in等は後続Issueで本契約へ接続する。
+**ACTIVE**。Wave 3 の transport 非依存 Conversation Core が扱う音声セッション契約と、JSON Schema から生成する FE/BE 型を定める。LiveKit認証とtransport基盤は`livekit-transport-2026-08.md`を正本とする。VAD、streaming LLM/TTS、barge-in等は後続Issueで本契約へ接続する。
 
 ## 背景
 

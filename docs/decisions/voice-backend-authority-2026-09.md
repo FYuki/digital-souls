@@ -2,7 +2,8 @@
 
 ## 状態・適用範囲
 
-**ACTIVE**。#358と2026-09-14〜15の対話で採用した設計判断。BE VADへの移設は未実装・未受入。
+**ACTIVE**。#358と2026-09-14〜15の対話で採用した設計判断。
+実再生観測の所有（決定2の一部）は[再生済み範囲推定ADR](voice-playback-estimation-speech-services-2026-09.md)が置き換える。
 要件は[指示書](../epic-358-voice-backend-requirements.md)、用語は[用語集](../../CONTEXT.md)、進捗は[#358](https://github.com/FYuki/digital-souls/issues/358)で管理する。
 
 新しいLiveKit音声入力経路のVAD・正式発話境界の決定権と互換性について、

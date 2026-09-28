@@ -17,6 +17,12 @@
 Mac mini等への常時稼働環境移行は拡張方針として分ける。推論先は用途別Targetへ明示的に割り当て、
 Windowsやcloudへの暗黙fallbackを前提にしない。
 
+モジュール間は名前空間とAPI（ポート）の単位で疎結合にし、他モジュールの内部実装へ直接依存しない。
+プロセスの分割は事前に決めず、必要が生じた時点でポートの境界から切り出す。GPUモデルは共有サービスが所有する。
+目標とする利用シナリオと構成の原則は[目標シナリオADR](decisions/companion-target-architecture-2026-09.md)、
+会話と会話外活動の分担は[会話・活動エージェントADR](decisions/conversation-activity-agents-2026-09.md)を参照する。
+本書は現在のコードの構成を説明し、これらのADRで採用した構成のうちコードへ反映していない部分は含めない。
+
 ## 全体構成
 
 ```text
@@ -43,13 +49,14 @@ Windowsやcloudへの暗黙fallbackを前提にしない。
 現行のdev ProfileではBackend／Frontendがmanaged、Ollama／VOICEVOX／Whisper／LiveKitがexternal、
 Chromaがin_processである。接続先とreadinessは[dev Profile](../environments/profiles/dev.json)を参照する。
 
-#358作業ブランチのLiveKit入力はCore／private protocol 2.0を使用する。FEは新trackを通知し、
+LiveKit入力はCore／private protocol 2.0を使用する。FEは新trackを通知し、
 BEの入力開始ACK後にマイクを有効化する。発話境界と割り込み判断はBEが通知し、
 FEは再生停止と実再生観測を担当する。FE／BEを一組で更新・切り戻す。
 VAD推論失敗は発話を破棄して静音後に回復する。reset失敗・認可trackのreader終了は、
 入力世代付きのエラーで当該マイクを停止し、新SIDによる明示再開を必要とする。
 [移行契約](voice-backend-migration-contract.md)と[検証記録](validation/voice-backend-vad-358.md)を参照する。
-実サービス・前後性能比較・人の実マイク受入は未完了である。
+再生済み範囲と出力完了をBEの送出位置から推定し、FEの実再生観測を任意の補正値とする変更は
+[再生済み範囲推定ADR](decisions/voice-playback-estimation-speech-services-2026-09.md)で採用しており、本節の現在の挙動とは異なる。
 
 音声Sessionの新規開始は、同じrequest IDの非同期準備をHTTP 202で確認する。
 UIは「準備中」を表示し、token取得・接続完了までマイクを開始しない。
@@ -61,7 +68,7 @@ TTS/VAD/STT/会話用LLMの準備失敗と個別操作のtimeoutは安全なcode
 STTは100msの無音PCMを通常の認識経路へ送り、会話用LLMは明示的なモデル準備に対応するProviderで
 実際のChatと同じcontext・設定を使う。準備要求に会話本文・記憶を渡さず、認識結果も履歴へ保存しない。
 Ollama以外の未対応Providerへダミー会話やfallbackを送らない。詳細は[Inference運用](inference-operations.md#音声sessionのモデル開始準備)を参照する。
-準備成功は、その後のモデル常駐・速度目標の達成を保証しない。正式性能受入は別途行う。
+準備成功は、その後のモデル常駐・速度目標の達成を保証しない。
 全体の要求・受入は[共通指示書](voice-quality-350-423-424-requirements.md)を参照する。
 
 ## 自作BE/FE構成
