@@ -542,3 +542,14 @@ def test_candidate_pcm_keeps_inference_and_explicit_observation(tmp_path, monkey
                                     profile='integration-irodori-cuda-graph', **options)
     assert plain['DS_PROFILE'] == 'integration-irodori-cuda-graph'
     assert 'VOICE_QUALITY_OBSERVE_STT_PCM' not in plain
+
+
+def test_livekit_keys_can_be_inherited_without_secret_file(tmp_path, monkeypatch):
+    inference = tmp_path / 'inference.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    monkeypatch.setenv('LIVEKIT_KEYS', 'test-key: ephemeral-value')
+    missing = tmp_path / 'not-created.env'
+    env = pilot.pilot_environment(inference, missing, 'shell-keys', 3, False)
+    assert env['LIVEKIT_API_KEY'] == 'test-key'
+    assert env['LIVEKIT_API_SECRET'] == 'ephemeral-value'
+    assert not missing.exists()

@@ -16,10 +16,13 @@ Backendの候補イメージは同じソースとpatchを使ってFFIを同梱�
 
 ## ビルド
 
-Python 3.12以降、patch、Dockerを用意し、リポジトリのルートで実行する。
+Python 3.12以降、git、patch、Dockerを用意し、リポジトリのルートで実行する。
 作業先には存在しない専用のパスを使う。prepare.pyはSDK・protocolのarchiveのSHA-256を照合し、一致しなければ停止する。
-libyuvのGitiles archiveは同じcommitでも包装の時刻等が変わるため、全entryのpath・種別・mode・link先・ファイル本文ハッシュの一覧を正規化してSHA-256で照合する。
+libyuvはGitilesのarchive取得が長時間HTTP 503になることがあるため、git protocolで固定commitだけを浅く取得し、
+取得commitが固定値と一致することを確かめてから`git archive`（`tar.umask=022`）で包む。包装の時刻等に依存しないよう、
+全entryのpath・種別・mode・link先・ファイル本文ハッシュの一覧を正規化してSHA-256で照合する。git・CA証明書が必要となる。
 取得元の一時的な失敗（HTTP 429・5xx・通信断）は最大5回まで待機して再試行する。待機は`Retry-After`があればその秒数、なければ2・4・8秒…とし、30秒を上限とする。照合の不一致や4xxは再試行しない。
+libyuvの`git fetch`失敗は原因を区別できないため、同じ間隔で最大5回再試行する。
 SDK、Cargo cache、成果物は専用作業先にだけ置く。
 
 ```bash

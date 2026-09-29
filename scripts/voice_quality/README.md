@@ -965,3 +965,16 @@ probe_capacity_exceededを観測全体の欠測として保持し、停止確認
 その後も既存の所有・image・port・worker同一性検査を行う。
 故障復帰テストの外枠は600秒とし、個々の生成・故障検出・worker回復・再生のtimeoutは維持する。
 過去の測定artifactは変更せず、変更後の診断と以前の実測を区別する。
+
+## Epic #3の前後比較と再生推定差分
+
+`compare_core_acceptance.py`は既存pilotのmanifest・trace・resource観測から、
+同一BE時計の本文開始、同一browser時計の実再生開始、準備、CPU／メモリを集計する。
+欠測・失敗を保持し、数値比較を正式受入の合格へ変換しない。
+`--delta-trace`ではFE−BEの区間番号差を種別別に集計し、負値を過大推定として扱う。
+実行条件・全100試行の判定と再実行手順は
+[#541受入記録](../../docs/validation/issue-3-acceptance-20260929.md#前後比較の再実行)を参照する。
+
+devの秘密値をファイルへ保存しない場合、`run_pilot.py`と`probe_native_audio_source.py`は
+shellの`LIVEKIT_KEYS`を既存鍵ファイルより優先する。独立Compose projectと同じ値を使い、
+終了時は同じshellで`down`する。鍵をコマンド引数・ログへ展開しない。

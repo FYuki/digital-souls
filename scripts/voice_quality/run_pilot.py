@@ -190,7 +190,7 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         or not 1 <= trials <= 10
     )):
         raise ValueError("control probe diagnostic requires scheduled fixture and one to ten probes")
-    if not inference_env.is_file() or not livekit_env.is_file():
+    if not inference_env.is_file():
         raise ValueError("pilot environment files are unavailable")
     if type(continuous_turns) is not int or not 0 <= continuous_turns <= 10 or (continuous_turns and not scheduled_fixture):
         raise ValueError("continuous track diagnostic requires scheduled fixture and 1 to 10 turns")
@@ -214,7 +214,12 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
             raise ValueError("chat options must be an object")
         options["think"] = False
         env["INFERENCE_TARGET_CHAT_OPTIONS_JSON"] = json.dumps(options)
-    keys = dotenv_values(livekit_env).get("LIVEKIT_KEYS")
+    # dev計測では秘密値をファイルへ書かず、起動したComposeと同じshellから渡せる。
+    keys = os.environ.get("LIVEKIT_KEYS")
+    if keys is None:
+        if not livekit_env.is_file():
+            raise ValueError("pilot environment files are unavailable")
+        keys = dotenv_values(livekit_env).get("LIVEKIT_KEYS")
     if keys is None or ":" not in keys:
         raise ValueError("LiveKit keys are unavailable")
     key, secret = keys.split(":", 1)

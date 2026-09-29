@@ -25,3 +25,15 @@
 - 実接続でのd妥当性計測: 未実施（実LiveKit接続と外部推論serviceが必要。
   音声入力は固定音声fixtureを使用し、物理マイクは不要）。
 - 単体・結合テストでは送出位置・decision時刻減算・schema optional化・観測転送を確認済み。
+
+## #541での追試（2026-09-29）
+
+独立dev Compose projectでLiveKit起動・HTTP 200と、固定PCMの実WebRTC送受信診断を確認した。
+ただし、通常会話の`test:integration:voice`は共有Ollamaのreadinessで停止し、
+`playback_estimate_delta_*`は**観測0件・NOT_RUN**。VOICEVOX／WhisperもGET接続不可だった。
+独立PCM診断には会話経路の推定値がないため、過大推定0件の受入へ代用しない。
+
+既定300msを変更する根拠は得られておらず、暫定値を維持する。過大推定件数・短い側の分布は欠測。
+実行条件・再実行コマンド・種別ごとの分母を含む集計方法は
+[#541受入記録](issue-3-acceptance-20260929.md)を参照する。
+`value = FE − BE`の負値が過大推定であり、観測がない場合は合格へ変換しない。

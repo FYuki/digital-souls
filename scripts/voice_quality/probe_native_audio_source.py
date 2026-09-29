@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 from array import array
 from importlib.metadata import version
 from pathlib import Path
@@ -188,7 +189,7 @@ async def run(output: Path) -> None:
     # 失敗した診断も上書きしない。秘密値はstdinだけで子processへ渡す。
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x") as report_file:
-        keys = dotenv_values(ROOT / "infra/livekit/.env").get("LIVEKIT_KEYS")
+        keys = os.environ.get("LIVEKIT_KEYS") or dotenv_values(ROOT / "infra/livekit/.env").get("LIVEKIT_KEYS")
         if not keys or ":" not in keys:
             raise ValueError("test LiveKit keys are unavailable")
         key, secret = (value.strip() for value in keys.split(":", 1))
