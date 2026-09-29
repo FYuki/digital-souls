@@ -126,10 +126,18 @@ def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
         def begin_response(self, *, response_id: str) -> None:
             response_ids.append(response_id)
 
+        def confirm_estimated_playback(
+            self, *, response_id: str, sequence: int
+        ) -> None:
+            del response_id, sequence
+
         async def send_logical_audio_segment(self, **metadata: object) -> None:
             events.append(("logical_metadata", metadata))
 
         async def send_core(self, payload: bytes) -> None:
+            events.append(("metadata", json.loads(payload)))
+
+        def schedule_observation(self, payload: bytes, *, response_id: str) -> None:
             events.append(("metadata", json.loads(payload)))
 
     class RtcAudioSource:
@@ -349,6 +357,9 @@ def test_cancel_clears_character_audio_queue_and_next_response_can_publish(
             operations.append(("logical", metadata))
 
         async def send_core(self, payload: bytes) -> None:
+            operations.append(("core", json.loads(payload)))
+
+        def schedule_observation(self, payload: bytes, *, response_id: str) -> None:
             operations.append(("core", json.loads(payload)))
 
     class RtcAudioSource:
@@ -597,7 +608,6 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
     assert sorted(name for name, _request in calls) == sorted([
         "transcription",
         "cancel",
-        "playback",
         "disconnect",
         "reconnect",
         "end",
@@ -791,18 +801,21 @@ def test_turn_preview_does_not_transcribe_silence_or_closed_input() -> None:
             operation.close()
 
 
-def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
+def test_production_core_bridge_records_playback_stop_as_observation() -> None:
+    """playback_stopped は差分観測のみ。BE送出停止・Core状態は変更しない。"""
     scheduled: list[Awaitable[None]] = []
-    stopped: list[str] = []
+    observed: list[tuple[str, int | None, str]] = []
 
     class RecordingCoreSession:
         async def confirm_playback(self, **_request: object) -> bool:
-            return True
+            raise AssertionError("FE報告はCoreの再生済み状態を更新しない")
 
     bridge = microphone_bridge._ConversationCoreBridge(
         RecordingCoreSession(),
         scheduled.append,
-        stop_audio=stopped.append,
+        playback_observation=lambda response_id, sequence, kind, final: observed.append(
+            (response_id, sequence, kind, final)
+        ),
         )
     bridge.notify(
         json.dumps(
@@ -821,41 +834,7 @@ def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
 
     asyncio.run(exercise())
 
-    assert stopped == ["50000000-0000-4000-8000-000000000010"]
-
-
-def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -> None:
-    scheduled: list[Awaitable[None]] = []
-    operations: list[str] = []
-
-    class RejectingCoreSession:
-        async def confirm_playback(self, **_request: object) -> bool:
-            operations.append("confirm")
-            raise ValueError("invalid playback prefix")
-
-    bridge = microphone_bridge._ConversationCoreBridge(
-        RejectingCoreSession(),
-        scheduled.append,
-        stop_audio=lambda _response_id: operations.append("stop"),
-        )
-    bridge.notify(
-        json.dumps(
-            {
-                "type": "playback_stopped",
-                "response_id": "50000000-0000-4000-8000-000000000010",
-                "reason": "barge_in",
-                "last_played_audio_sequence": 1,
-            }
-        ).encode()
-    )
-
-    async def exercise() -> None:
-        with pytest.raises(ValueError, match="invalid playback prefix"):
-            await scheduled[0]
-
-    asyncio.run(exercise())
-
-    assert operations == ["stop", "confirm"]
+    assert observed == [("50000000-0000-4000-8000-000000000010", 1, "stopped", True)]
 
 
 def test_production_core_bridge_bounds_waiting_stt_and_discards_overflow() -> None:

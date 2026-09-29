@@ -7,7 +7,7 @@
 
 | 既存ADR | 置き換える範囲 |
 |---|---|
-| [Backend集約](voice-backend-authority-2026-09.md) 決定2 | FEが実再生観測を所有し、その報告を正とする前提。FEの観測は任意の補正値とする |
+| [Backend集約](voice-backend-authority-2026-09.md) 決定2 | FEが実再生観測を所有し、その報告を正とする前提。FEの観測は推定を上書きしない任意の観測値とする |
 | [LiveKit transport](livekit-transport-2026-08.md)「応答生成と出力完了の境界」 | ブラウザの全出力確認を待って応答を完了させる規則と、10秒の確認待ち |
 | [共通client](conversation-session-client-2026-09.md) `interruptResponse` | 中断時にFEが送る再生済みprefixを正とする前提 |
 
@@ -76,7 +76,7 @@ VAD、発話区間、相槌とtake-turnの判断、再生の停止は、音声�
 ## 影響
 
 - `last_played_audio_sequence`を必須入力とする処理と、全出力確認を待つ`ResponseCompletionPort`の実装を置き換える。
-- 推定値と、FEから補正値が届いた場合の値の差を計測できるようにし、d の妥当性を確認する。
+- 推定値と、FEから任意の観測値が届いた場合の値の差を計測できるようにし、d の妥当性を確認する。FEの観測値は推定を補正・上書きしない。
 - 既存のSTT clientはライブラリ経由の接続へ置き換える。
 
 ## 補足決定（Grill 2026-09）

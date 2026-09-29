@@ -340,7 +340,7 @@ def test_confirmed_stop_joins_capture_and_retains_muted_track(rig):
         source.capture_frame = capture
         publishing = asyncio.create_task(output.publish(b"\x01\x00" * 480, response_id=A))
         await entered.wait()
-        stopping = asyncio.create_task(output.stop_response(A))
+        stopping = asyncio.create_task(output.stop_response(A, decided_at_ns=time.monotonic_ns()))
         await cancelled.wait()
         assert not stopping.done()
         assert tracks[0].muted and source.clears == 1
@@ -360,7 +360,7 @@ def test_confirmed_stop_joins_capture_and_retains_muted_track(rig):
 def test_stop_before_track_creation_prevents_late_start_and_allows_next_response(rig):
     output, sources, _, _, _ = rig
     async def exercise():
-        await output.stop_response(A)
+        await output.stop_response(A, decided_at_ns=time.monotonic_ns())
         with pytest.raises(asyncio.CancelledError):
             await output.begin_response(A)
         assert sources == []
@@ -370,7 +370,8 @@ def test_stop_before_track_creation_prevents_late_start_and_allows_next_response
     asyncio.run(exercise())
 
 
-def test_livekit_ack_completes_core_cancellation_while_control_queue_is_waiting(rig):
+def test_be_estimation_completes_cancellation_without_fe_confirmation(rig):
+    """BE送出停止だけで取消が確定し、FEのoutput_stop_confirmedは差分観測になる。"""
     import json
     from app.conversation_core import ConversationCoreSession, ResponseState
     from app.livekit_transport import coordinator as module
@@ -382,12 +383,29 @@ def test_livekit_ack_completes_core_cancellation_while_control_queue_is_waiting(
     async def exercise():
         from app.livekit_transport.measurement import LiveKitMeasurementSession
         published, scheduled, trace = [], [], []
-        coordinator = _coordinator(module, published, [])
+        notify_tasks: list[asyncio.Task[None]] = []
+        observations: list[tuple[str, int]] = []
+
+        def collect(operation, _response_id):
+            task = asyncio.create_task(operation)
+            notify_tasks.append(task)
+            return task
+
+        coordinator = _coordinator(module, published, [], schedule=collect)
         coordinator.participant_connected(identity=coordinator.user_identity, participant_sid="PA_current", room_sid="RM_one")
         delivery = _ConversationCoreDelivery(coordinator=coordinator, audio_source=output,
             character_participant_id=B, character_id="miori")
-        delivery.attach_measurement(LiveKitMeasurementSession(session_id=coordinator.session_id,
-            character_id="miori", measurement_kind="controlled_baseline", record=trace.append, clock_ns=time.monotonic_ns))
+        measurement = LiveKitMeasurementSession(session_id=coordinator.session_id,
+            character_id="miori", measurement_kind="controlled_baseline", record=trace.append, clock_ns=time.monotonic_ns)
+        delivery.attach_measurement(measurement)
+        coordinator._dependencies = coordinator._dependencies.__class__(
+            **{**coordinator._dependencies.__dict__,
+               "output_stop_observation": lambda response_id, sequence: (
+                   observations.append((response_id, sequence)),
+                   delivery.observe_output_stop_report(response_id, sequence),
+               )[0]},
+        )
+        # productionではsession_runtimeがdelivery生成後にこのcallbackを接続する。
         session = ConversationCoreSession(session_id=coordinator.session_id, response_id_factory=lambda: A,
             delivery=delivery, cancellation=delivery, persistence=RecordingPersistence(),
             observation=RecordingObservation(), stt=RecordingStt(), llm=BlockingLlm(), tts=RecordingTts())
@@ -401,18 +419,21 @@ def test_livekit_ack_completes_core_cancellation_while_control_queue_is_waiting(
                     if frame["type"] == "output_stop_request":
                         return frame
                 await asyncio.sleep(0)
+        if notify_tasks:
+            await asyncio.wait_for(asyncio.gather(*notify_tasks), 0.5)
         request = await asyncio.wait_for(request_sent(), 0.5)
-        assert session.response(A).state is ResponseState.CANCELLING
-        assert not scheduled[0].done()
+        # FE確認を待たず、BE送出停止だけで取消が確定する。
+        await asyncio.wait_for(asyncio.gather(*scheduled), 0.5)
+        assert session.response(A).state is ResponseState.CANCELLED
+        # 遅れて届いたFE確認は推定を上書きせず、観測として記録されるだけ。
         await coordinator.receive_data(identity=coordinator.user_identity, participant_sid="PA_current",
             topic=module.PRIVATE_TOPIC, payload=json.dumps({**request, "type": "output_stop_confirmed",
                 "last_played_audio_sequence": 0, "output_confirmation": "never_connected"}).encode())
-        await asyncio.wait_for(asyncio.gather(*scheduled), 0.5)
-        assert session.response(A).state is ResponseState.CANCELLED
-        assert [event.event_id for event in trace if event.name == "output_stop_confirmed"] == [request["request_id"]]
+        assert observations == [(A, 0)]
+        names = [event.name for event in trace]
+        assert "output_stop_requested" in names and "output_stop_confirmed" in names
         times = {event.name: event.timestamp for event in trace}
-        assert times["output_stop_requested"] <= times["response_audio_source_stopped"]
-        assert times["response_audio_source_stopped"] <= times["output_stop_confirmed"] <= times["cancel_state_lower"]
+        assert times["output_stop_requested"] <= times["response_audio_source_stopped"] <= times["cancel_state_lower"]
         await session.end()
         await output.aclose()
         await coordinator.cleanup("test_complete")

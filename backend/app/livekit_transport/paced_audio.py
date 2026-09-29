@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from bisect import bisect_right
 import importlib
 import time
 from typing import TYPE_CHECKING
@@ -35,6 +36,8 @@ class PacedPcmSource:
         self.first_capture_ns: int | None = None
         self.input_sample_count = 0
         self.captured_sample_count = 0
+        # (capture_frame完了時刻ns, その時点の累積captured sample数)。時刻昇順。
+        self._capture_log: list[tuple[int, int]] = []
         self.padding_sample_count = 0
         self.max_queued_samples = 0
         self.capture_wait_ns = 0
@@ -46,6 +49,16 @@ class PacedPcmSource:
     @property
     def queued_samples(self) -> int:
         return len(self._buffer) // (self._channels * 2)
+
+    def sent_sample_count(self, at_ns: int) -> int:
+        """`at_ns` までに capture_frame を完了した論理PCMの累積sample数を返す。
+
+        末尾paddingは本文進捗に含めないため input_sample_count で頭打ちにする。
+        """
+        # captured累積は単調増加するため、同一時刻の後側captureもat_nsへ含める。
+        end = bisect_right(self._capture_log, (at_ns, 1 << 62))
+        captured = self._capture_log[end - 1][1] if end else 0
+        return min(captured, self.input_sample_count)
 
     def _check(self) -> None:
         if self._error is not None:
@@ -143,6 +156,7 @@ class PacedPcmSource:
                 self.capture_wait_ns += waited_ns
                 self.maximum_capture_wait_ns = max(self.maximum_capture_wait_ns, waited_ns)
                 self.captured_sample_count += self._frame_samples
+                self._capture_log.append((capture_started_ns + waited_ns, self.captured_sample_count))
                 if self.first_capture_ns is None:
                     self.first_capture_ns = time.monotonic_ns()
                     self._first_capture.set()

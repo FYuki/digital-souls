@@ -57,10 +57,13 @@ class ResponseCompletionPort(Protocol):
 
 
 class ResponseCancellationPort(Protocol):
-    async def stop_response(self, response: Response) -> ResponseStopResult:
-        """送出停止と、その応答の最終出力停止を確認する。欠測は例外にする。
+    async def stop_response(
+        self, response: Response, *, decided_at_ns: int
+    ) -> ResponseStopResult:
+        """送出を停止し、decided_at_ns 時点の再生済みprefixを返す。
 
-        呼出元の取消を受けたら待機資源を解放する。確認前のtimeoutや切断を
-        成功として返してはいけない。応答・世代・要求ごとの相関は実装側で検証する。
+        decided_at_ns は中断判断の確定時刻（take-turn確定または取消受理）を
+        単調時計で表したもの。FE等の外部確認を待ってはいけない。
+        呼出元の取消を受けたら待機資源を解放する。停止失敗や欠測は例外にする。
         """
         ...

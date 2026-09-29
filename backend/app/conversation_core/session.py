@@ -336,6 +336,8 @@ class ConversationCoreSession:
         await self._record_utterance_stage(
             utterance_id, "turn_decision", "completed"
         )
+        # take-turn確定時刻を配送・取消の待機より前に固定し、推定の基準時刻とする。
+        decided_at_ns = self._monotonic_ns() if decision == "take_turn" else None
         if decision == "take_turn":
             await self._record_utterance_stage(
                 utterance_id, "take_turn_decision", "completed"
@@ -357,6 +359,7 @@ class ConversationCoreSession:
                 response_id=interrupted_response_id,
                 reason="barge_in",
                 input_is_current=input_is_current,
+                decided_at_ns=decided_at_ns,
             )
             if cancelled is not None and cancelled.state is ResponseState.CANCELLED:
                 await self._record_utterance_stage(
@@ -523,6 +526,7 @@ class ConversationCoreSession:
     async def cancel_response(
         self, *, response_id: str, reason: str,
         input_is_current: Callable[[], bool] | None = None,
+        decided_at_ns: int | None = None,
     ) -> Response | None:
         if self._cancellation is not None:
             async with self._state_lock:
@@ -533,11 +537,20 @@ class ConversationCoreSession:
                     return response
                 task = self._cancellation_tasks.get(response_id)
                 if task is None:
+                    # take-turn以外は取消を受理した時刻を中断確定時刻とする。
+                    # 時計の失敗でCANCELLING滞留を作らないため、状態遷移より先に採る。
+                    stop_decision_ns = (
+                        decided_at_ns
+                        if decided_at_ns is not None
+                        else self._monotonic_ns()
+                    )
                     response = replace(response, state=ResponseState.CANCELLING)
                     self._responses[response_id] = response
                     # 受付を閉じてから一度だけ停止を要求し、activeは確認まで保持する。
                     stop_task = asyncio.create_task(asyncio.wait_for(
-                        self._cancellation.stop_response(response),
+                        self._cancellation.stop_response(
+                            response, decided_at_ns=stop_decision_ns,
+                        ),
                         timeout=self._cancellation_timeout,
                     ))
                     self._output_stop_tasks[response_id] = stop_task
@@ -587,10 +600,15 @@ class ConversationCoreSession:
                 type(stopped.last_played_audio_sequence) is int
                 and 0 <= stopped.last_played_audio_sequence <= len(response.audio_segments)
             ):
-                await self.confirm_playback(
-                    response_id=response_id,
-                    last_played_audio_sequence=stopped.last_played_audio_sequence,
-                )
+                async with self._state_lock:
+                    current = self._responses[response_id]
+                    if not current.state.is_terminal:
+                        # BEが送出位置から推定した値をそのまま採用する。FE報告との
+                        # max-mergeはしない（推定が唯一の再生済み正本）。
+                        self._responses[response_id] = replace(
+                            current,
+                            last_played_audio_sequence=stopped.last_played_audio_sequence,
+                        )
                 outcome = (ResponseState.CANCELLED, reason)
             else:
                 outcome = (ResponseState.FAILED, "output_stop_unconfirmed")
@@ -601,25 +619,6 @@ class ConversationCoreSession:
         await self._publish_closed_provider_audit(response_id)
         self._output_stop_tasks.pop(response_id, None)
         return result
-
-    async def confirm_playback(
-        self, *, response_id: str, last_played_audio_sequence: int
-    ) -> bool:
-        async with self._state_lock:
-            response = self._responses.get(response_id)
-            if response is None:
-                return False
-            if response.state.is_terminal:
-                return False
-            if last_played_audio_sequence <= response.last_played_audio_sequence:
-                return False
-            if last_played_audio_sequence > len(response.audio_segments):
-                raise TerminalProtocolError("playback sequence exceeds generated audio")
-            self._responses[response_id] = replace(
-                response,
-                last_played_audio_sequence=last_played_audio_sequence,
-            )
-            return True
 
     def start_stage(
         self,
@@ -844,6 +843,8 @@ class ConversationCoreSession:
             await self._record_utterance_stage(
                 utterance_id, "turn_decision", "completed"
             )
+            # take-turn確定時刻を配送・取消の待機より前に固定し、推定の基準時刻とする。
+            take_turn_ns = self._monotonic_ns() if should_response else None
             if should_response:
                 await self._record_utterance_stage(
                     utterance_id, "take_turn_decision", "completed"
@@ -863,6 +864,7 @@ class ConversationCoreSession:
                     response_id=interrupted_response_id,
                     reason="barge_in",
                     input_is_current=input_is_current,
+                    decided_at_ns=take_turn_ns,
                 )
                 if cancelled is not None and cancelled.state is ResponseState.CANCELLED:
                     await self._record_utterance_stage(

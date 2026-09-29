@@ -364,7 +364,7 @@ def test_disconnect_discards_response_and_interrupts_at_confirmed_prefix_once() 
     ]
 
 
-def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, ready=None, sync_observer=None):
+def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, ready=None, sync_observer=None, output_stop_observation=None, schedule=None, notify_failure=None):  # noqa: E501
     async def publish(payload: bytes, topic: str) -> None:
         published.append((payload, topic))
 
@@ -386,6 +386,10 @@ def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, r
             generation_ready=generation_ready,
             audio_probe=audio_probe,
             sync_observer=sync_observer,
+            output_stop_observation=output_stop_observation
+            or (lambda _response_id, _sequence: None),
+            **({} if schedule is None else {"schedule": schedule}),
+            **({} if notify_failure is None else {"notify_failure": notify_failure}),
         ),
         core_port=core_port or RecordingCorePort(),
     )
@@ -565,8 +569,13 @@ def test_disconnect_resynchronizes_the_acknowledged_terminal_outcome() -> None:
         coordinator.begin_response(
             response_id="30000000-0000-4000-8000-000000000010"
         )
+        # 再接続時の終端prefixはBE推定値を使う。FE報告はこの状態を更新しない。
+        coordinator.confirm_estimated_playback(
+            response_id="30000000-0000-4000-8000-000000000010", sequence=1,
+        )
+        # FE報告(2)はBE推定値(1)を上書きしない。
         playback = _playback_payload(
-            event_id="10000000-0000-4000-8000-000000000020"
+            event_id="10000000-0000-4000-8000-000000000020", sequence=2,
         )
         await coordinator.receive_data(
             identity=identity,
@@ -621,13 +630,16 @@ def test_state_sync_request_interrupts_once_before_authoritative_state() -> None
         coordinator.begin_response(
             response_id="30000000-0000-4000-8000-000000000010"
         )
+        coordinator.confirm_estimated_playback(
+            response_id="30000000-0000-4000-8000-000000000010", sequence=1,
+        )
         await coordinator.receive_data(
             identity=identity,
             participant_sid="PA_current",
             topic=module.APPLICATION_TOPIC,
             payload=_playback_payload(
                 event_id="10000000-0000-4000-8000-000000000021",
-                event_type="playback_stopped",
+                event_type="playback_stopped", sequence=2,
             ),
         )
         sync_request = json.dumps(
@@ -1113,15 +1125,26 @@ def test_source_completion_reports_conserved_samples_on_private_topic() -> None:
         published = []
         coordinator = _coordinator(module, published, [])
         coordinator.participant_connected(identity="user-20000000-0000-4000-8000-000000000010", participant_sid="PA_current", room_sid="RM_one")
-        await coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
+        scheduled = []
+
+        def collect(operation, _response_id):
+            task = asyncio.create_task(operation)
+            scheduled.append(task)
+            return task
+
+        coordinator._dependencies = coordinator._dependencies.__class__(
+            **{**coordinator._dependencies.__dict__, "schedule": collect},
+        )
+        coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
             input_sample_count=1234, captured_sample_count=2880, padding_sample_count=1646)
+        await asyncio.gather(*scheduled)
         payload, topic = published[0]
         assert topic == module.PRIVATE_TOPIC
         assert json.loads(payload) == {"protocol_version": "2.0", "type": "response_audio_finished",
             "response_id": "30000000-0000-4000-8000-000000000010", "generation": 0,
             "input_sample_count": 1234, "captured_sample_count": 2880, "padding_sample_count": 1646}
         with pytest.raises(ValueError):
-            await coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
+            coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
                 input_sample_count=1234, captured_sample_count=1920, padding_sample_count=1646)
         assert len(published) == 1
         await coordinator.cleanup("test_complete")

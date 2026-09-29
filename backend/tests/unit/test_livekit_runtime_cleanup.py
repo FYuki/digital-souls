@@ -1031,15 +1031,14 @@ def test_scheduled_preparation_does_not_start_after_session_ends() -> None:
     asyncio.run(exercise())
 
 
-def test_only_explicit_full_playback_confirmation_releases_output_wait():
-    scheduled, confirmations = [], []
+def test_playback_completed_is_forwarded_as_observation_only():
+    scheduled, observations = [], []
     class Session:
         async def confirm_playback(self, **_request):
-            # 最後のprefix自体は既に進捗通知で確認済みでも、全出力確認は受ける。
-            return False
+            raise AssertionError("FE報告はCoreの再生済み状態を更新しない")
     bridge = microphone_bridge._ConversationCoreBridge(
         Session(), scheduled.append,
-        confirm_response_playback=lambda response, sequence: confirmations.append((response, sequence)) or True,
+        playback_observation=lambda response, sequence, kind, final: observations.append((response, sequence, kind, final)),
     )
     for full in [False, True]:
         bridge.notify(json.dumps({"type":"playback_completed", "response_id":"old-response", "last_played_audio_sequence":2, "response_finished":full}).encode())
@@ -1047,7 +1046,7 @@ def test_only_explicit_full_playback_confirmation_releases_output_wait():
         for operation in scheduled:
             await operation
     asyncio.run(exercise())
-    assert confirmations == [("old-response", 2)]
+    assert observations == [("old-response", 2, "completed", False), ("old-response", 2, "completed", True)]
 
 
 def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() -> None:

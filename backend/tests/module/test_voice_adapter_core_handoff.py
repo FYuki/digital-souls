@@ -1,7 +1,8 @@
 """LiveKitなしのテスト用Voice adapter経由で、Coreへの受渡しと中断履歴を検証する。
 
-対象: Issue #539。同一 ConversationCoreSession で
+対象: Issue #540。同一 ConversationCoreSession で
 「入力→応答生成・音声区間の送出→割込→保存」を連続して観測する。
+再生済み範囲は BE の送出位置から推定し、FE 報告は推定を上書きしない。
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock
 from uuid import UUID, uuid4
+
+import pytest
 
 from app.conversation_core import (
     AudioSegment,
@@ -94,9 +97,14 @@ def _make_sanitizer() -> MagicMock:
 def _build_session(
     tmp_path: Path,
     *,
-    played_prefix: int,
+    estimated_prefix: int,
     response_ids: tuple[str, ...] = (),
 ):
+    """BE送出位置から推定された再生済み範囲を返す session を構築する。
+
+    `estimated_prefix` は BE が送出位置から推定した `audio_sequence` 数。
+    FE の `last_played_audio_sequence` 報告ではなく、BE の推定値が使われる。
+    """
     repository = create_repository(tmp_path / "voice_adapter.db", uuid_factory=uuid4)
     conversation = repository.create_conversation("miori")
     history = ConversationHistorySession(
@@ -108,7 +116,7 @@ def _build_session(
     persistence = ConversationHistoryPersistenceAdapter(history_session=history)
     delivery = VoiceAdapterDelivery()
     adapter = VoiceAdapterCoreHandoff(
-        played_prefix_source=lambda _response: played_prefix,
+        played_prefix_source=lambda _response: estimated_prefix,
     )
     ids = response_ids or (str(uuid4()), str(uuid4()))
     llm = TwoSentenceLlm(hold_response_ids={ids[0]})
@@ -152,11 +160,7 @@ async def _wait_delivery_event(
     response_id: str,
     timeout: float = 5.0,
 ) -> None:
-    """指定した応答IDの配送イベントが記録されるまで待つ。
-
-    配送イベントは応答の終端後も残るため、一時的な `active_response` を
-    ポーリングせずに開始・完了を観測できる。
-    """
+    """指定した応答IDの配送イベントが記録されるまで待つ。"""
     async def poll() -> None:
         while not any(
             event.response_id == response_id
@@ -185,10 +189,12 @@ async def _wait_turn_status(
     await asyncio.wait_for(poll(), timeout=timeout)
 
 
-def test_interrupt_persists_played_prefix_and_rejects_late_output(tmp_path: Path) -> None:
+def test_interrupt_persists_estimated_prefix_and_rejects_late_output(tmp_path: Path) -> None:
+    """中断時に BE 推定値で履歴が保存され、旧応答の遅延出力は拒否される。"""
     async def run():
+        # BE推定: 1セグメントまで再生済みと推定
         session, adapter, delivery, repository, conversation, ids, llm = _build_session(
-            tmp_path, played_prefix=1,
+            tmp_path, estimated_prefix=1,
         )
         response_id = ids[0]
 
@@ -201,7 +207,7 @@ def test_interrupt_persists_played_prefix_and_rejects_late_output(tmp_path: Path
         assert response.response_id == response_id
         await _wait_delivered_audio_segments(delivery, 2, response_id=response_id)
 
-        # 2区間の配送後も旧応答は進行中である（LLMがreleaseを待つため自然完了しない）
+        # 2区間の配送後も旧応答は進行中である
         audio_events = [
             event
             for event in delivery.events_of("response_audio_segment")
@@ -211,7 +217,7 @@ def test_interrupt_persists_played_prefix_and_rejects_late_output(tmp_path: Path
         assert [event.audio_sequence for event in audio_events] == [1, 2]
         assert session.response(response_id).state is ResponseState.IN_PROGRESS
 
-        # 新発話を保留し旧応答を割込停止。adapter が prefix=1 を返す。
+        # 新発話を保留し旧応答を割込停止。BE推定値=1 が使われる。
         cancelled = await adapter.interrupt_with_utterance(
             utterance_id=str(uuid4()),
             transcript="次の質問",
@@ -220,7 +226,6 @@ def test_interrupt_persists_played_prefix_and_rejects_late_output(tmp_path: Path
         assert cancelled is not None
         terminal = await adapter.wait_for_terminal(response_id=response_id)
         assert terminal.state is ResponseState.CANCELLED
-        # adapterの stop_response がCoreから呼ばれ、供給値を返したことを確認する
         assert len(adapter.stopped_responses) == 1
         assert adapter.stopped_responses[0].response_id == response_id
 
@@ -255,8 +260,6 @@ def test_interrupt_persists_played_prefix_and_rejects_late_output(tmp_path: Path
         ]) == 2
 
         # 次応答は同じSessionで開始され、中断履歴と別turnになる。
-        # 配送イベントと保存済みturnは終端後も残るため、一時的なactive_responseへの
-        # ポーリングではなく、次応答IDの結果で確定的に観測する。
         await _wait_delivery_event(
             delivery, "response_started", response_id=ids[1],
         )
@@ -276,10 +279,11 @@ def test_interrupt_persists_played_prefix_and_rejects_late_output(tmp_path: Path
     asyncio.run(run())
 
 
-def test_interrupt_persists_full_text_when_played_prefix_covers_all(tmp_path: Path) -> None:
+def test_interrupt_persists_full_text_when_estimated_prefix_covers_all(tmp_path: Path) -> None:
+    """BE推定値が全区間をカバーする場合、全文が履歴に保存される。"""
     async def run():
         session, adapter, delivery, repository, conversation, ids, llm = _build_session(
-            tmp_path, played_prefix=2,
+            tmp_path, estimated_prefix=2,
         )
         response_id = ids[0]
 
@@ -312,10 +316,11 @@ def test_interrupt_persists_full_text_when_played_prefix_covers_all(tmp_path: Pa
     asyncio.run(run())
 
 
-def test_explicit_cancel_response_also_uses_supplied_prefix(tmp_path: Path) -> None:
+def test_explicit_cancel_response_also_uses_estimated_prefix(tmp_path: Path) -> None:
+    """明示的な取消でも BE 推定値が使われる。"""
     async def run():
         session, adapter, delivery, repository, conversation, ids, llm = _build_session(
-            tmp_path, played_prefix=1,
+            tmp_path, estimated_prefix=1,
         )
         response_id = ids[0]
 
@@ -330,6 +335,88 @@ def test_explicit_cancel_response_also_uses_supplied_prefix(tmp_path: Path) -> N
         cancelled = await adapter.cancel_response(
             response_id=response_id,
             reason="user_cancelled",
+        )
+        assert cancelled is not None
+        terminal = await adapter.wait_for_terminal(response_id=response_id)
+        assert terminal.state is ResponseState.CANCELLED
+        llm.release.set()
+        await _wait_turn_status(
+            repository, "miori", conversation.conversation_id, TurnStatus.INTERRUPTED,
+        )
+
+        turns = repository.list_turns("miori", conversation.conversation_id)
+        interrupted = next(turn for turn in turns if turn.status is TurnStatus.INTERRUPTED)
+        assert interrupted.assistant_content == FIRST_SENTENCE
+        await session.end()
+
+    asyncio.run(run())
+
+
+def test_interrupt_with_zero_estimated_prefix_saves_empty_content(tmp_path: Path) -> None:
+    """送出前の中断では空の再生済み範囲が保存される。"""
+    async def run():
+        session, adapter, delivery, repository, conversation, ids, llm = _build_session(
+            tmp_path, estimated_prefix=0,
+        )
+        response_id = ids[0]
+
+        response = await adapter.submit_utterance(
+            utterance_id=str(uuid4()),
+            transcript="質問",
+        )
+        assert response is not None
+        await _wait_delivered_audio_segments(delivery, 2, response_id=response_id)
+        assert session.response(response_id).state is ResponseState.IN_PROGRESS
+
+        # 送出前に中断（BE推定値=0）
+        cancelled = await adapter.cancel_response(
+            response_id=response_id,
+            reason="user_cancelled",
+        )
+        assert cancelled is not None
+        terminal = await adapter.wait_for_terminal(response_id=response_id)
+        assert terminal.state is ResponseState.CANCELLED
+        llm.release.set()
+        await _wait_turn_status(
+            repository, "miori", conversation.conversation_id, TurnStatus.INTERRUPTED,
+        )
+
+        turns = repository.list_turns("miori", conversation.conversation_id)
+        interrupted = next(turn for turn in turns if turn.status is TurnStatus.INTERRUPTED)
+        # 再生済み範囲が0なので、assistant_contentは空
+        assert interrupted.assistant_content == ""
+        await session.end()
+
+    asyncio.run(run())
+
+
+def test_fe_report_does_not_override_be_estimation(tmp_path: Path) -> None:
+    """FE の再生報告は BE 推定値を上書きしない。
+
+    新実装では再生済みprefixは `stop_response` が返す BE 推定値だけが使われ、
+    FE 経路から Core の `last_played_audio_sequence` を更新する入口はない。
+    adapter 側に記録された FE 報告値があっても、履歴は推定値で保存される。
+    """
+    async def run():
+        # BE推定: 1セグメント。FE報告: 2セグメント（異なる値）
+        session, adapter, delivery, repository, conversation, ids, llm = _build_session(
+            tmp_path, estimated_prefix=1,
+        )
+        response_id = ids[0]
+
+        response = await adapter.submit_utterance(
+            utterance_id=str(uuid4()),
+            transcript="質問",
+        )
+        assert response is not None
+        await _wait_delivered_audio_segments(delivery, 2, response_id=response_id)
+
+        # FE が 2 区間再生を報告しても、Core 側の参照先は BE 推定値のみ。
+        adapter.report_fe_playback(response_id, 2)
+
+        cancelled = await adapter.cancel_response(
+            response_id=response_id,
+            reason="barge_in",
         )
         assert cancelled is not None
         terminal = await adapter.wait_for_terminal(response_id=response_id)

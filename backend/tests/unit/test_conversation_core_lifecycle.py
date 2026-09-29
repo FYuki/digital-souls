@@ -618,13 +618,8 @@ def test_unknown_response_control_is_ignored_idempotently() -> None:
             response_id="50000000-0000-4000-8000-000000000999",
             reason="barge_in",
         )
-        playback_confirmed = await session.confirm_playback(
-            response_id="50000000-0000-4000-8000-000000000999",
-            last_played_audio_sequence=1,
-        )
 
         assert cancelled is None
-        assert playback_confirmed is False
         assert session.active_response == response
         assert _terminal_events(delivery) == []
         assert persistence.outcomes == []

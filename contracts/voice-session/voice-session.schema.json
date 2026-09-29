@@ -1397,7 +1397,6 @@
         "session_id",
         "response_id",
         "reason",
-        "last_played_audio_sequence",
         "monotonic_timestamp_ms"
       ],
       "properties": {
@@ -1519,7 +1518,6 @@
         "event_id",
         "session_id",
         "response_id",
-        "last_played_audio_sequence",
         "monotonic_timestamp_ms"
       ],
       "dependentSchemas": {

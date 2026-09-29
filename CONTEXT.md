@@ -37,7 +37,7 @@ Issue #358のBE所有への接続はPR #408でmainへ反映済み。以下の「
 | Speech / Text input | 同じ会話処理へ渡す音声由来／テキスト由来の入力。音声Sessionがない通常のテキスト会話にはHTTP経路もある | 実装：[入力契約](docs/decisions/conversation-session-text-input-2026-09.md)、[Core](backend/app/conversation_core) |
 | Utterance / 発話、`utterance_id` | 音声入力の発話区間を識別する単位。永続Turnや応答IDと同一視しない。#358では正式な発話識別と区間をBEが所有する | BEの発行へ接続済み：[BackendVoiceInput](backend/app/voice_input/session.py)、[Backend集約ADR](docs/decisions/voice-backend-authority-2026-09.md) |
 | Response / 応答、`response_id` | 生成・音声出力・中断の対象となる応答の単位。遅れて届いた旧応答を新応答へ混ぜない | 実装：[音声契約](docs/decisions/voice-session-contract-2026-08.md) |
-| 入力受理 / 応答完了 / 再生完了 | 入力が受け付けられたこと、応答処理が終わったこと、ブラウザ出力が終わったことは別。受理済みでも完了・成功とは限らない | 実装：[共通client契約](docs/decisions/conversation-session-client-2026-09.md)、[再生完了境界](backend/app/livekit_transport/playback_completion.py) |
+| 入力受理 / 応答完了 / 再生完了 | 入力が受け付けられたこと、応答処理が終わったこと、ブラウザ出力が終わったことは別。受理済みでも完了・成功とは限らない | 実装：[共通client契約](docs/decisions/conversation-session-client-2026-09.md)、[送出境界](backend/app/livekit_transport/response_audio.py) |
 | Generation / 世代 | Session・応答・画面共有等で古い処理を識別して採用しないための世代。どの領域の世代かを明記する | 実装：[音声契約](docs/decisions/voice-session-contract-2026-08.md)、[画面契約](docs/decisions/browser-screen-perception-2026-09.md) |
 | 音声入力世代 | 抑止・再開・再接続等の境界をまたぐ旧音声と遅延処理結果を新しい発話へ採用しないための識別。response IDや画面共有の世代とは区別する | BE採番のinput_generationへ接続済み：[BackendVoiceInput](backend/app/voice_input/session.py)、[移行契約](docs/voice-backend-migration-contract.md) |
 | 入力操作順序、`input_revision` | FEのmute・focus・text送信・再開要求の順序番号。BEが採番する音声入力世代や正式utteranceとは別 | 接続済み：[client](frontend/src/livekit/voice-session.ts)、[移行契約](docs/voice-backend-migration-contract.md) |
@@ -185,8 +185,8 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | 会話エージェント / 活動エージェント | 対話型入口の入力に応答する実行単位／会話外の自律活動（Character Life）を実行する単位。Card・記憶・Life State等の正本を共有し、活動エージェントは会話へ直接発話せず報告経路で渡す | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
 | 推論の優先度 | 推論資源が競合したときの順序。音声会話のターン、テキスト会話、会話外活動の順。会話外活動は待機・中断されうる | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
 | Cardハッシュ | 応答の生成に使ったCharacter Cardの内容ハッシュ。版の固定ではなく、評価・調査で応答とCardを対応付けるために応答メタデータへ記録する | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
-| 再生済み範囲（推定） | 割り込み時点でユーザーが聞いたとみなす応答の範囲。BEの送出位置から下り遅延を引いて推定し、区間途中の割込みは区間境界へ切り下げ、曖昧な場合は短い側に丸める。FEの実再生観測は推定を変えない任意の差分記録。現行の`last_played_audio_sequence`（FE報告）とは別 | 設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
-| 下り遅延 d | BEが音声を送出してから端末で再生されるまでの遅延の推定値。ネットワーク・ジッタバッファ・再生デバイスの遅延を含む。Backend環境変数1本で設定し、初期値はFE観測との差分計測から仮置きして見直す。再生済み範囲と出力完了判定で同一値を使う | 設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
+| 再生済み範囲（推定） | 割り込み時点でユーザーが聞いたとみなす応答の範囲。BEの送出位置から下り遅延を引いて推定し、区間途中の割込みは区間境界へ切り下げ、曖昧な場合は短い側に丸める。FEの実再生観測は推定を変えない任意の差分記録。応答の`last_played_audio_sequence`はこの推定値を保持し、FE報告を直接反映しない | 実装済み：[送出位置推定](backend/app/livekit_transport/response_audio.py)、[停止確定](backend/app/livekit_transport/core_delivery.py)、設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
+| 下り遅延 d | BEが音声を送出してから端末で再生されるまでの遅延の推定値。ネットワーク・ジッタバッファ・再生デバイスの遅延を含む。`DS_VOICE_DOWNLINK_DELAY_MS`1本で設定し、初期値はFE観測との差分計測から仮置きして見直す。再生済み範囲と出力完了判定で同一値を使う | 実装済み：[設定解決](backend/app/livekit_transport/production.py)、設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
 
 ## 更新時の扱い
 
