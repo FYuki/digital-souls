@@ -101,6 +101,7 @@
   let showingMemoryManagement = false
   let endingVoiceSession = false
   let voiceSourceLabel = ''
+  let voiceRecorder: AudioRecorder | null = null
   let voiceSwitchMutedSessionId: string | null = null
   let voiceErrors: Record<string, string> = {}
   let sidebarOpen = true
@@ -451,9 +452,17 @@
   }
 
   const restartVoiceSession = async () => {
+    const context = conversationController.selectedContext()
+    if (context === null) return
     voiceSession.recordRetryAttempt()
     try {
       await ensureVoiceSession()
+      // Session準備と画面反映が済んだ後、この明示的な再開操作でマイクもONにする。
+      await tick()
+      if (conversationController.selectedContext()?.version !== context.version
+        || !voiceSession.matchesContext({characterId: context.character, conversationId: context.conversationId})
+        || voiceSnapshot.phase !== 'muted') return
+      await voiceRecorder?.enableAfterSessionRestart()
     } catch {
       // ensureVoiceSessionが利用者向けerrorを設定する。
     }
@@ -592,6 +601,7 @@
         }}
       />
       <AudioRecorder
+        bind:this={voiceRecorder}
         suspended={voiceSnapshot.phase === 'reconnecting' || voiceSnapshot.input === 'suppressed'}
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}

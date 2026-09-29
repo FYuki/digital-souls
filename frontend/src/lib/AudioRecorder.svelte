@@ -265,6 +265,12 @@
     }
   }
 
+  // セッション再開ボタンからのみ呼び、準備成功後の明示操作としてマイクを取得する。
+  export async function enableAfterSessionRestart(): Promise<void> {
+    if (destroyed || status !== 'off' || isLoading || disabled || forceOff || suspended) return
+    await enableMicrophone()
+  }
+
   const toggleMicrophone = async () => {
     try {
       if (status === 'off') {

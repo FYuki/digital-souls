@@ -96,6 +96,35 @@ describe('App conversation lifecycle', () => {
 
 
 
+  test('停止した音声会話の明示再開で新SessionのマイクもONになる', async () => {
+    render(App)
+    await startLiveKitSession()
+    await emitCoreEvent({type: 'session_ended'})
+    await waitFor(() => expect(screen.getByText('セッション: 終了')).toBeTruthy())
+    expect(screen.getByRole('button', {name: 'マイクをオンにする'}).getAttribute('aria-pressed')).toBe('false')
+
+    await fireEvent.click(screen.getByRole('button', {name: '音声会話を再開'}))
+
+    await waitFor(() => expect(screen.getByText('入力: 聞き取り中')).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('button', {name: 'マイクをオフにする'}).getAttribute('aria-pressed')).toBe('true'))
+    expect(audioMocks.getUserMedia).toHaveBeenCalledTimes(2)
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(2)
+  })
+
+  test('再開に失敗した場合はマイクを再取得しない', async () => {
+    render(App)
+    await startLiveKitSession()
+    await emitCoreEvent({type: 'session_ended'})
+    fetchMock.mockImplementation((input, init) => String(input) === '/api/voice/livekit/token'
+      ? Promise.resolve(new Response(null, {status: 503})) : defaultFetch(input, init))
+
+    await fireEvent.click(screen.getByRole('button', {name: '音声会話を再開'}))
+
+    await waitFor(() => expect(screen.getByText('セッション: エラー')).toBeTruthy())
+    expect(audioMocks.getUserMedia).toHaveBeenCalledTimes(1)
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+  })
+
   test('通常UIからLiveKit sessionを開始しBE発話通知と順序付きdeltaを表示する', async () => {
     render(App)
     await startLiveKitSession()
