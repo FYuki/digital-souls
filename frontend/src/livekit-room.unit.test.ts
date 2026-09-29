@@ -315,6 +315,53 @@ describe('LiveKit Room generation synchronization', () => {
 
 
 
+  test('中断後にgraphが解除されてから届く停止観測は欠測とし、会話を切断しない', async () => {
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const observe = vi.fn()
+    const client = new LiveKitRoomClient(observe)
+    try {
+      await client.connect('ws://test', 'token', sessionId)
+      const room = latestRoom()
+      const disconnect = vi.spyOn(room, 'disconnect')
+      const track = {kind: 'audio', mediaStreamTrack: {}}
+      const publication = {trackSid: 'TR_stop', trackName: `ds-response-v1:${responseId}`}
+      room.emit('trackSubscribed', track, publication)
+      await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
+      room.emit('trackUnsubscribed', track, publication)
+      room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({
+        protocol_version: '2.0', type: 'output_stop_request', session_id: sessionId,
+        response_id: responseId, request_id: crypto.randomUUID(), generation: 0,
+      })), {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined,
+      'digital-souls.livekit-transport.v2')
+      await new Promise(resolve => setTimeout(resolve, 10))
+      expect(disconnect).not.toHaveBeenCalled()
+      expect(observe.mock.calls.some(([entry]) => entry.recoveryStopped === true)).toBe(false)
+      expect(room.localParticipant.publishData.mock.calls.map(([payload]) =>
+        JSON.parse(new TextDecoder().decode(payload))).some(frame => frame.type === 'output_stop_confirmed')).toBe(false)
+    } finally {client.disconnect()}
+  })
+
+  test('同じ応答への矛盾した停止要求はprotocol違反として切断する', async () => {
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const observe = vi.fn()
+    const client = new LiveKitRoomClient(observe)
+    await client.connect('ws://test', 'token', sessionId)
+    const room = latestRoom()
+    const disconnect = vi.spyOn(room, 'disconnect')
+    const send = (requestId: string) => room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({
+      protocol_version: '2.0', type: 'output_stop_request', session_id: sessionId,
+      response_id: responseId, request_id: requestId, generation: 0,
+    })), {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined,
+    'digital-souls.livekit-transport.v2')
+    send(crypto.randomUUID())
+    await vi.waitFor(() => expect(room.localParticipant.publishData).toHaveBeenCalled())
+    send(crypto.randomUUID())
+    await vi.waitFor(() => expect(disconnect).toHaveBeenCalled())
+    expect(observe.mock.calls.some(([entry]) => entry.recoveryStopped === true)).toBe(true)
+  })
+
   test('準備中に停止した未接続graphは後から接続せず、停止確認を欠測と混同しない', async () => {
     const sessionId = '20000000-0000-4000-8000-000000000001'
     const responseId = '50000000-0000-4000-8000-000000000001'

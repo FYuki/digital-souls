@@ -521,7 +521,20 @@ export class LiveKitRoomClient {
   ): void {
     void this.audioGraph
       .confirmOutputStop(room, frame)
-      .catch((error) => this.failTransport('output_clock', error))
+      .catch((error) => {
+        // BEは送出位置で既に停止・履歴を確定済み。後着のFE観測が欠測しても
+        // 会話を切断しない。ただし応答相関の矛盾はprotocol違反として扱う。
+        if (error instanceof Error &&
+          ['output_stop_request_changed', 'output_stop_request_mismatch'].includes(error.message)) {
+          this.failTransport('output_clock', error)
+          return
+        }
+        const message = error instanceof Error ? error.message : error
+        const reason = typeof message === 'string' && KNOWN_FAILURE_REASONS.includes(message)
+          ? message : 'unclassified'
+        ;(import.meta as ImportMeta & {hot?: {send(event: string, data: unknown): void}})
+          .hot?.send('voice:failure', {stage: 'output_clock', reason})
+      })
   }
 
   private handlePrivateFrame(
