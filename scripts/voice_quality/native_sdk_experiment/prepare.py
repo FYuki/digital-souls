@@ -5,8 +5,10 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import subprocess
 import tarfile
+import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +21,7 @@ FETCH_ATTEMPTS = 5
 MAX_RETRY_WAIT_SECONDS = 30.0
 
 REVISION = "63128d01d955d9d8967544f46cff64a361232bf6"
+LIBYUV_REVISION = "917276084a49be726c90292ff0a6b0a3d571a6af"
 SOURCES = (
     (
         "sdk",
@@ -36,18 +39,21 @@ SOURCES = (
     ),
     (
         "libyuv",
-        "https://chromium.googlesource.com/libyuv/libyuv/+archive/917276084a49be726c90292ff0a6b0a3d571a6af.tar.gz",
-        "279e6c72880a53616a5ece2d81ff4f86490500b0bb7099ce804648136b25f36d",
+        "https://chromium.googlesource.com/libyuv/libyuv",
+        "72b456ff52c2fb30ea8b1e5038e228af5889c4ed7789c8e652ff94b63b7d1743",
         "yuv-sys/libyuv",
         False,
     ),
 )
+# Gitilesのarchive取得は長時間503になることがあるため、git protocolで固定commitを取得する。
+GIT_REVISIONS = {"libyuv": LIBYUV_REVISION}
+GIT_FETCH_TIMEOUT_SECONDS = 300
 
 
 def source_digest(name: str, archive: bytes) -> str:
     if name != "libyuv":
         return hashlib.sha256(archive).hexdigest()
-    # Gitilesは同じcommitでもarchiveの時刻等が変わるため、全entryの内容と属性を照合する。
+    # git archiveは包装の時刻等に依存しないよう、全entryの内容と属性を照合する。
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
         members = tar.getmembers()
         if len(members) > 10000 or sum(member.size for member in members) > 100_000_000:
@@ -95,6 +101,48 @@ def fetch_archive(
     raise AssertionError("unreachable")
 
 
+def _git_env() -> dict[str, str]:
+    # 実行者のgit設定・認証promptに左右されない取得にする。
+    return {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+
+
+def fetch_git_archive(
+    url: str,
+    revision: str,
+    *,
+    run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+    sleep: Callable[[float], None] = time.sleep,
+    attempts: int = FETCH_ATTEMPTS,
+) -> bytes:
+    """公開Git repositoryから固定commitだけを取得し、git archiveのtar.gzとして返す。"""
+    env = _git_env()
+    with tempfile.TemporaryDirectory() as work:
+        # modeを実行環境のumaskに依存させないよう、tar.umaskを固定する。
+        git = ["git", "-C", work, "-c", "tar.umask=022"]
+        run([*git, "init", "--quiet"], check=True, env=env)
+        for attempt in range(1, attempts + 1):
+            try:
+                run(
+                    [*git, "fetch", "--quiet", "--depth=1", url, revision],
+                    check=True, env=env, timeout=GIT_FETCH_TIMEOUT_SECONDS,
+                )
+                break
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                if attempt == attempts:
+                    raise
+                wait = min(2.0 ** attempt, MAX_RETRY_WAIT_SECONDS)
+                print(f"git fetchに失敗したため{wait:.0f}秒後に再試行します（{attempt}/{attempts}）: {error}")
+                sleep(wait)
+        fetched = run(
+            [*git, "rev-parse", "FETCH_HEAD^{commit}"], check=True, env=env, capture_output=True,
+        ).stdout.decode().strip()
+        if fetched != revision:
+            raise ValueError(f"取得したcommitが固定値と一致しません: {fetched}")
+        return run(
+            [*git, "archive", "--format=tar.gz", "FETCH_HEAD"], check=True, env=env, capture_output=True,
+        ).stdout
+
+
 def prepare(destination: Path) -> None:
     if not destination.is_absolute():
         raise ValueError("作業先は新しい絶対パスで指定してください")
@@ -102,7 +150,7 @@ def prepare(destination: Path) -> None:
     source = destination / "source"
     source.mkdir()
     for name, url, expected, relative, strip_root in SOURCES:
-        archive = fetch_archive(url)
+        archive = fetch_git_archive(url, GIT_REVISIONS[name]) if name in GIT_REVISIONS else fetch_archive(url)
         if len(archive) > MAX_ARCHIVE_BYTES or source_digest(name, archive) != expected:
             raise ValueError(f"公開archiveの検証に失敗しました: {name}")
         (destination / f"{name}.tar.gz").write_bytes(archive)
