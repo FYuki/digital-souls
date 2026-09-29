@@ -371,6 +371,8 @@ class _ConversationCoreDelivery:
     def _record_estimate_delta(
         self, response_id: str, kind: str, reported: int, expected: int
     ) -> None:
+        if self._measurement is None:
+            return
         self._measurement.record_response_event(
             response_id=response_id, name=f"playback_estimate_delta_{kind}",
             stage="playback", value=float(reported - expected),

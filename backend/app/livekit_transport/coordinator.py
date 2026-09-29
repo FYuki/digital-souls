@@ -44,6 +44,13 @@ def _required_int(value: object, field: str) -> int:
     return value
 
 
+def _create_notification_task(operation: Awaitable[None]) -> asyncio.Task[None]:
+    async def run() -> None:
+        await operation
+
+    return asyncio.create_task(run())
+
+
 @dataclass(frozen=True)
 class SessionCoordinatorDependencies:
     publish_data: Callable[[bytes, str], Awaitable[None]]
@@ -51,7 +58,7 @@ class SessionCoordinatorDependencies:
     generation_ready: Callable[[], Awaitable[None]]
     # 通知送信はCore確定の外でsession寿命のtaskとして所有する。
     schedule: Callable[[Awaitable[None], str | None], asyncio.Task[None] | None] = (
-        lambda operation, _response_id: asyncio.create_task(operation)
+        lambda operation, _response_id: _create_notification_task(operation)
     )
     # 通知送信の失敗は本文なしの応答単位metadataで観測する。Core確定・履歴は変更しない。
     notify_failure: Callable[[str, str], None] = lambda _response_id, _name: None
