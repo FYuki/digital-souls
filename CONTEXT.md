@@ -186,7 +186,7 @@ Eventの取得・復旧はEventRuntime / EventStoreとして実装する。通�
 | 推論の優先度 | 推論資源が競合したときの順序。音声会話のターン、テキスト会話、会話外活動の順。会話外活動は待機・中断されうる | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
 | Cardハッシュ | 応答の生成に使ったCharacter Cardの内容ハッシュ。版の固定ではなく、評価・調査で応答とCardを対応付けるために応答メタデータへ記録する | 設計：[会話・活動エージェントADR](docs/decisions/conversation-activity-agents-2026-09.md) |
 | 再生済み範囲（推定） | 割り込み時点でユーザーが聞いたとみなす応答の範囲。BEの送出位置から下り遅延を引いて推定し、区間途中の割込みは区間境界へ切り下げ、曖昧な場合は短い側に丸める。FEの実再生観測は推定を変えない任意の差分記録。応答の`last_played_audio_sequence`はこの推定値を保持し、FE報告を直接反映しない | 実装済み：[送出位置推定](backend/app/livekit_transport/response_audio.py)、[停止確定](backend/app/livekit_transport/core_delivery.py)、設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
-| 下り遅延 d | BEが音声を送出してから端末で再生されるまでの遅延の推定値。ネットワーク・ジッタバッファ・再生デバイスの遅延を含む。`DS_VOICE_DOWNLINK_DELAY_MS`1本で設定し、初期値はFE観測との差分計測から仮置きして見直す。再生済み範囲と出力完了判定で同一値を使う | 実装済み：[設定解決](backend/app/livekit_transport/production.py)、設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
+| 下り遅延 d | BEが音声を送出してから端末で再生されるまでの遅延の推定値。ネットワーク・ジッタバッファ・再生デバイスの遅延を含む。`DS_VOICE_DOWNLINK_DELAY_MS`1本で設定し、初期値は実測未確定の仮置きであり、FE観測との差分計測で見直す（[値の根拠と検証](docs/validation/voice-downlink-delay-540-20260928.md)）。再生済み範囲と出力完了判定で同一値を使う | 実装済み：[設定解決](backend/app/livekit_transport/production.py)、設計：[再生済み範囲推定ADR](docs/decisions/voice-playback-estimation-speech-services-2026-09.md) |
 
 ## 更新時の扱い
 

@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0",
+  "date": "2026-09-29",
+  "issue": 541,
+  "status": "INCONCLUSIVE",
+  "before_revision": "9e8697a638d4f941dac399e1bdf50690ede04ef7",
+  "after_revision": "5d10ab490be8c7a2ec5b13bcaf9fc9a3386be429",
+  "log_hashes": {
+    "backend-tests": {
+      "sha256": "daa49cce3ffed79ec714c77c1a04897a78aa71b02208b5946666f52ed6ef15be"
+    },
+    "privacy-retest": {
+      "sha256": "6f160ca2dad483fa9686984f8798955531542a14eb7ac37b0fb6efbc0dcfdafb"
+    },
+    "fe-unit": {
+      "sha256": "f25773899e3999e1faaf5da952330bff6f972b5559d06b8da7690b7deb86c814"
+    },
+    "fe-module": {
+      "sha256": "3f91a527a1f823f8060fcd2b34a5605b9db22612ec14397d21e01ebbefe8a09f"
+    },
+    "mocked": {
+      "sha256": "1e54583e2cb6ddf67e775af0a074ed1c61bd376f734a87715831c890f210d0a5"
+    },
+    "mcp": {
+      "sha256": "f5780b78913876123e012576d697effbab739f4700468ee3175542bfbd9d9204"
+    },
+    "report-tests": {
+      "sha256": "5d515c9d47f51d13a3323358362b76917a94e6b680d1e809fe0032df68486eee"
+    },
+    "native-source": {
+      "sha256": "a39a56975f6a751043bdcf33bdbac4a962cc5be72a2dab0b17bbfab1fce26456"
+    },
+    "voice-2": {
+      "sha256": "8890fbafbfba46823f979aaccce375d63c4baa33e50a0fd2ee8d1dc2ebff6bbd"
+    },
+    "report-final": {
+      "sha256": "9ced990d8fab992bbeefe1ee84883e6d85413bb4afebf59610594a1aa1e15689"
+    },
+    "fe-check": {
+      "sha256": "c58aa814f89ae545a742dcdf22781455af0cc8407b668393538638ddff82138d"
+    },
+    "backend-retest": {
+      "sha256": "cee67962f494ab527068bb90f9ad079f10ec8efb53d0140a26e819909a0e9a26"
+    }
+  },
+  "checks": {
+    "backend_initial": {
+      "passed": 6762,
+      "failed": 1,
+      "skipped": 1,
+      "failure": "privacy_scanner_linear_growth_timing"
+    },
+    "privacy_retest": {
+      "passed": 101,
+      "failed": 0
+    },
+    "frontend_unit": {
+      "passed": 1021
+    },
+    "frontend_module": {
+      "passed": 188
+    },
+    "mocked_e2e": {
+      "passed": 58
+    },
+    "report_and_pilot": {
+      "passed": 119
+    },
+    "real_mcp": {
+      "passed": 2,
+      "deselected": 3,
+      "package_version": "2026.8.31",
+      "protocol_version": "2025-11-25"
+    },
+    "livekit_native_audio": {
+      "status": "observed",
+      "python_livekit_version": "1.1.16",
+      "verification": {
+        "status": "verified_diagnostic_only",
+        "packets": 51,
+        "decoded_samples": 48960,
+        "rendered_packets": 51,
+        "max_decoder_timestamp_deviation_us": 1,
+        "completed_packets": 51,
+        "pre_input_packets": 0,
+        "first_receive_to_decode_ms": 0.7999999523162842,
+        "first_decode_to_output_bounds_ms": {
+          "lowerMs": 38.765000011921074,
+          "upperMs": 39.16500001192071
+        },
+        "max_receive_to_decode_ms": 0.7999999523162842,
+        "max_decode_to_output_upper_ms": 39.706666666666024,
+        "worker_clock_offset_bounds_ms": {
+          "lowerMs": 5122.200000035763,
+          "upperMs": 5122.600000035763
+        },
+        "origin_offset_difference_ms": 0.20014644861203124,
+        "output_clock_passed_all_samples": true,
+        "source_pcm_offset_verified": false,
+        "production_playback_verified": false
+      }
+    },
+    "voice_suite": {
+      "status": "NOT_RUN",
+      "attempts": 2,
+      "failure_categories": [
+        "profile",
+        "readiness"
+      ],
+      "final_reason": "external_ollama_not_ready"
+    },
+    "performance_comparison": {
+      "status": "NOT_RUN",
+      "reason": "shared_inference_unreachable",
+      "before_trials": 0,
+      "after_trials": 0,
+      "first_text_ms": null,
+      "first_playback_ms": null,
+      "cpu_percent": null,
+      "memory_bytes": null
+    },
+    "playback_estimate": {
+      "status": "NOT_RUN",
+      "observations": 0,
+      "overestimates": null,
+      "short_side_distribution": null,
+      "delay_ms": 300,
+      "delay_status": "provisional"
+    },
+    "microphone_and_listening": {
+      "status": "NOT_RUN",
+      "reason": "awaiting_user_verification"
+    },
+    "report_final": {
+      "passed": 13
+    },
+    "frontend_typecheck": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "backend_final": {
+      "passed": 6777,
+      "failed": 0,
+      "skipped": 1,
+      "warnings": 15,
+      "duration_seconds": 530.3
+    }
+  }
+}
