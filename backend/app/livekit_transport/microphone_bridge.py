@@ -77,8 +77,7 @@ class _ConversationCoreBridge:
         self,
         session: ConversationCoreSession,
         schedule: Callable[[Awaitable[None]], None],
-        stop_audio: Callable[[str], None] = lambda _response_id: None,
-        confirm_response_playback: Callable[[str, int], bool] = lambda _response_id, _sequence: False,
+        playback_observation: Callable[[str, int | None, str, bool], None] = lambda _response_id, _sequence, _kind, _final: None,
         measurement: LiveKitMeasurementSession | None = None,
         session_metrics: SessionMetrics | None = None,
         text_input: TextInputReceiver | None = None,
@@ -96,8 +95,7 @@ class _ConversationCoreBridge:
         self._user_participant_id = user_participant_id
         self._playback_response_id: str | None = None
         self._schedule = schedule
-        self._stop_audio = stop_audio
-        self._confirm_response_playback = confirm_response_playback
+        self._playback_observation = playback_observation
         self._measurement = measurement
         self._session_metrics = session_metrics
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
@@ -683,26 +681,26 @@ class _ConversationCoreBridge:
                 reason=reason,
             )
         elif event_type in ("playback_completed", "playback_stopped"):
+            # FE報告は任意の差分観測。Core・再接続状態・履歴・送出停止を更新しない。
             response_id = event.get("response_id")
+            if not isinstance(response_id, str):
+                self._log_invalid_control_event(event_type)
+                return
             last_played_audio_sequence = event.get("last_played_audio_sequence")
             if (
-                not isinstance(response_id, str)
-                or type(last_played_audio_sequence) is not int
+                last_played_audio_sequence is not None
+                and type(last_played_audio_sequence) is not int
             ):
                 self._log_invalid_control_event(event_type)
                 return
             if self._playback_response_id == response_id:
                 self._playback_response_id = None
-            if event_type == "playback_stopped":
-                # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
-                self._stop_audio(response_id)
-            await self._session.confirm_playback(
-                response_id=response_id,
-                last_played_audio_sequence=last_played_audio_sequence,
-            )
+            kind = "stopped" if event_type == "playback_stopped" else "completed"
+            # 停止報告は常に終端。completed は response_finished で最終性を判定する。
+            final = kind == "stopped" or event.get("response_finished") is True
+            self._playback_observation(response_id, last_played_audio_sequence, kind, final)
             if event_type == "playback_completed" and event.get("response_finished") is True:
-                accepted = self._confirm_response_playback(response_id, last_played_audio_sequence)
-                if accepted and self._measurement is not None and "playback_summary" in event:
+                if self._measurement is not None and "playback_summary" in event:
                     recorded = self._measurement.record_playback_summary(
                         response_id=response_id, summary=event["playback_summary"],
                     )

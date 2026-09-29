@@ -368,6 +368,40 @@ describe('voice session shared contract', () => {
     expect(() => parseVoiceSessionEvent(loaded.event)).toThrow()
   })
 
+  it('last_played_audio_sequence省略のplayback_stoppedを受理し型不正を拒否する', async () => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const stopped = {
+      type: 'playback_stopped',
+      protocol_version: '2.0',
+      event_id: '10000000-0000-4000-8000-000000000001',
+      session_id: '20000000-0000-4000-8000-000000000001',
+      response_id: '50000000-0000-4000-8000-000000000001',
+      reason: 'barge_in',
+      monotonic_timestamp_ms: 1,
+    }
+    expect(parseVoiceSessionEvent(stopped).last_played_audio_sequence).toBeUndefined()
+    expect(() => parseVoiceSessionEvent({
+      ...stopped, last_played_audio_sequence: true,
+    })).toThrow()
+  })
+
+  it('last_played_audio_sequence省略のplayback_completedを受理し型不正を拒否する', async () => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const completed = {
+      type: 'playback_completed',
+      protocol_version: '2.0',
+      event_id: '10000000-0000-4000-8000-000000000002',
+      session_id: '20000000-0000-4000-8000-000000000001',
+      response_id: '50000000-0000-4000-8000-000000000001',
+      response_finished: true,
+      monotonic_timestamp_ms: 1,
+    }
+    expect(parseVoiceSessionEvent(completed).last_played_audio_sequence).toBeUndefined()
+    expect(() => parseVoiceSessionEvent({
+      ...completed, last_played_audio_sequence: false,
+    })).toThrow()
+  })
+
   it('JavaScript安全整数上限を超えるeventをtyped eventへ変換しない', async () => {
     const { parseVoiceSessionEvent } = await loadValidationModule()
     const loaded = fixture('unsafe-integer.json')

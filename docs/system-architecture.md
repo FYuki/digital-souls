@@ -55,11 +55,11 @@ FEは再生停止と実再生観測を担当する。FE／BEを一組で更新�
 VAD推論失敗は発話を破棄して静音後に回復する。reset失敗・認可trackのreader終了は、
 入力世代付きのエラーで当該マイクを停止し、新SIDによる明示再開を必要とする。
 [移行契約](voice-backend-migration-contract.md)と[検証記録](validation/voice-backend-vad-358.md)を参照する。
-再生済み範囲と出力完了をBEの送出位置から推定する変更は
-[再生済み範囲推定ADR](decisions/voice-playback-estimation-speech-services-2026-09.md)で採用しており、本節の現在の挙動とは異なる。
-採用設計では、下り遅延dをBackend環境変数1本で設定し、再生済み範囲と出力完了判定で同一値を使う。
-区間途中の割込みは区間境界へ切り下げ、中断はFEの停止確認を待たずBE送出停止時点で確定する。
-FEの実再生観測は推定を上書きせず、d妥当性の差分計測のみへ使う任意入力とする（`last_played_audio_sequence`等の報告はoptional化して残す）。
+再生済み範囲と出力完了は[再生済み範囲推定ADR](decisions/voice-playback-estimation-speech-services-2026-09.md)のとおり
+BEの送出位置から推定する。下り遅延dはBackend環境変数`DS_VOICE_DOWNLINK_DELAY_MS`1本で設定し、
+再生済み範囲と出力完了判定で同一値を使う。区間途中の割込みは区間境界へ切り下げ、
+中断はFEの停止確認を待たずBE送出停止時点で確定する。
+FEの実再生観測は推定を上書きしない任意の差分記録であり、`last_played_audio_sequence`等の報告はoptionalとして残す。
 
 音声Sessionの新規開始は、同じrequest IDの非同期準備をHTTP 202で確認する。
 UIは「準備中」を表示し、token取得・接続完了までマイクを開始しない。
@@ -86,8 +86,8 @@ Ollama以外の未対応Providerへダミー会話やfallbackを送らない。�
 * `main.py` / `runtime/` — FastAPI lifespanの入口と起動資源の所有境界。`main.py`はroute登録・health endpoint・業務callbackのwiringだけを持ち、`runtime/`配下の資源ownerが推論・履歴・記憶・privacy・画面知覚・tool・Character Life・音声・chatの構築・`app.state`公開・起動・停止を担う。起動順・停止順・失敗時の回収と`app.state`属性名は`runtime/application.py`の`ApplicationRuntime`へ固定する。owner別の所有表と起動・停止順は後述の「lifespanの資源所有と起動・停止順」を参照
 * `voice_input/` — LiveKitの連続PCMをCPUのSilero legacy／libfvadへ入力し、発話区間と正式utterance・入力世代をBEで確定する。モデル資産はhash固定、処理とbufferには上限を設ける
 * `livekit_transport/microphone_frames.py` / `microphone_integrity.py` — SDK queue前のsample位置とtrack統計から欠落を確認し、終了済みcaptureを固定してSTTへ渡す
-* `livekit_transport/paced_audio.py` — 応答ごとのPCM queueを最大1秒に制限し、入力のある10ms frameだけをbufferなしのnative AudioSourceへ供給する。cancel時はqueueと送信taskを止め、応答末尾は明示的にpaddingしてnative供給完了を待つ
-* `livekit_transport/playback_completion.py` — 現行は残りPCMの送出後、応答ID・最終sequenceが一致するブラウザの全出力確認を待つ。Coreの生成pipelineは`ResponseCompletionPort`を介して完了を待ち、その間もcancelできる。再生済み範囲推定の実装後は全出力確認の待機を除去し、「送出完了＋d」で完了を判定する
+* `livekit_transport/paced_audio.py` — 応答ごとのPCM queueを最大1秒に制限し、入力のある10ms frameだけをbufferなしのnative AudioSourceへ供給する。cancel時はqueueと送信taskを止め、応答末尾は明示的にpaddingしてnative供給完了を待つ。各`capture_frame`の完了時刻と累積sample数を記録し、`sent_sample_count(at_ns)`で過去任意時点の送出量を引く
+* `livekit_transport/response_audio.py` — 応答trackの所有・publish・停止を担う。停止時はdecision時刻からdを引いた時点の送出量を`audio_sequence`境界へ切り下げて推定再生済み区間数とし、完了はFEを待たず「送出完了＋d」で判定する
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
 * `conversation_core/` — Speech/Text入力を共通の応答・中断・履歴処理へ接続する。`ConversationCoreSession`がresponse、input、lock、generation、状態遷移、first-terminalの決定を所有し、`pipeline.py`はLLM→有界queue→TTSの実行、`terminal_effects.py`は保存→配送→保留入力開始の終端副作用、`task_tracker.py`はstage/effect taskの登録・取消・drainを担当する。これらの内部moduleは状態を複製せず、公開Core APIへ追加しない

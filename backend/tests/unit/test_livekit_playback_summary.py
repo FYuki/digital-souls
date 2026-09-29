@@ -4,7 +4,6 @@ from uuid import uuid4
 import pytest
 
 from app.livekit_transport.measurement import LiveKitMeasurementSession
-from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.microphone_bridge import _ConversationCoreBridge
 from app.voice_session.validation import parse_voice_session_event
 from app.voice_session_metrics import SessionMetrics
@@ -57,33 +56,40 @@ def test_invalid_summary_never_becomes_zero_gap(damage):
     assert not any(event.stage == 'playback' for event in events)
 
 
-def test_bridge_records_only_accepted_full_response_completion():
+def test_bridge_records_only_finished_response_summary():
+    """playback_summary は response_finished=True の報告だけが記録される。
+
+    再生位置の確定はBE推定が担うため、FE報告のsequence一致は受け入れ条件ではない。
+    """
     async def exercise():
         recorder, events = measurement()
-        gate = PlaybackCompletionGate()
         class Core:
-            async def confirm_playback(self, **kwargs): pass
+            pass
         session_events = []
         session_metrics = SessionMetrics(character_id="fixture", session_id="session",
             measurement_kind="dogfood", record=session_events.append)
         session_metrics.activate()
+        observed = []
         bridge = _ConversationCoreBridge(Core(), lambda task: None,
-                                         confirm_response_playback=gate.confirm, measurement=recorder,
+                                         playback_observation=lambda r, s, k, f: observed.append((r, s, k, f)),
+                                         measurement=recorder,
                                          session_metrics=session_metrics)
-        async def prepare(): pass
-        pending = asyncio.create_task(gate.wait('response', 2, prepare))
-        await asyncio.sleep(0)
         raw = dict(type='playback_completed', response_id='response',
                    last_played_audio_sequence=2, response_finished=True, playback_summary=summary())
         for invalid in ({**raw, 'response_finished': False},
-                        {**raw, 'last_played_audio_sequence': 1},
                         {**raw, 'response_id': 'old-response'}):
             await bridge._receive(invalid)
-        assert not any(event.stage == 'playback' for event in events)
+        assert not any(event.name == 'playback_duration_ms' for event in events)
         assert not any(event.name == "playback_completed" for event in session_events)
         await bridge._receive(raw)
         await bridge._receive(raw)
-        await pending
+        # 観測の転送は報告ごとに行い、記録側の重複排除は measurement の責務とする。
+        assert observed == [
+            ('response', 2, 'completed', False),
+            ('old-response', 2, 'completed', True),
+            ('response', 2, 'completed', True),
+            ('response', 2, 'completed', True),
+        ]
         assert len([event for event in events if event.stage == 'playback']) == 6
         assert [event.response_id for event in session_events if event.name == 'playback_completed'] == ['response']
     asyncio.run(exercise())

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from collections import deque
@@ -13,11 +12,9 @@ from uuid import uuid4
 from app.conversation_core import CoreEvent
 from app.conversation_core.models import Response, ResponseStopResult
 from app.livekit_transport.coordinator import (
-    ConfirmedOutputStop,
     ProductionSessionCoordinator,
 )
 from app.livekit_transport.measurement import LiveKitMeasurementSession
-from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.production_sdk import (
     PCM_CHANNELS,
     PCM_SAMPLE_RATE,
@@ -119,10 +116,14 @@ class _ConversationCoreDelivery:
             else None
         )
         self._session_id: str | None = None
-        self._completion_gate = PlaybackCompletionGate()
         self._completed_output_responses: set[str] = set()
         self._first_audio_observed: set[str] = set()
         self._first_text_observed: set[str] = set()
+        # BE送出位置から推定した再生済み区間数。FE報告との差分記録の比較対象。
+        self._estimated_played: dict[str, int] = {}
+        # 推定確定前に届いたFE観測値（response_id -> kind -> sequence）。
+        # 停止系は常に終端、completedは response_finished=True の最終報告のみを保持する。
+        self._fe_playback_observations: dict[str, dict[str, int]] = {}
         self._measurement: LiveKitMeasurementSession | None = None
 
     @property
@@ -246,7 +247,7 @@ class _ConversationCoreDelivery:
             )
             await self._coordinator.send_core(self._voice_payload(event))
             first_capture_ns = await self._audio_source.publish(event.audio, response_id=response_id)
-            await self._observe_first_audio_out(response_id, first_capture_ns)
+            self._observe_first_audio_out(response_id, first_capture_ns)
             return
         if (
             event.type == "response_cancelled"
@@ -296,43 +297,95 @@ class _ConversationCoreDelivery:
                 )
         await self._coordinator.send_core(self._voice_payload(event))
 
-    async def stop_response(self, response: Response) -> ResponseStopResult:
+    async def stop_response(self, response: Response, *, decided_at_ns: int) -> ResponseStopResult:
+        """BE送出を停止し、decided_at_ns 時点の推定再生済みprefixを返す。
+
+        FEの停止確認は待たない。output_stop_request の通知は後片付けと
+        差分観測のために送るが、到達・確認は中断確定の条件にしない。
+        """
         if not isinstance(self._audio_source, ResponseAudioTracks):
-            raise RuntimeError("output stop confirmation requires response audio tracks")
+            raise RuntimeError("playback estimation requires response audio tracks")
         if self._measurement is not None:
             self._measurement.record_response_event(
                 response_id=response.response_id, name="output_stop_requested", stage="transport",
             )
-        stopped, prefix = await asyncio.gather(
-            self._audio_source.stop_response(response.response_id),
-            self._coordinator.request_output_stop(response.response_id),
-            return_exceptions=True,
+        stopped = await self._audio_source.stop_response(
+            response.response_id, decided_at_ns=decided_at_ns,
         )
-        if isinstance(stopped, BaseException) or not isinstance(prefix, ConfirmedOutputStop):
-            raise RuntimeError("response output stop was not confirmed")
-        if self._measurement is not None:
-            self._measurement.record_response_event(
-                response_id=response.response_id, name="output_stop_confirmed", stage="transport",
-                # この確認eventのIDを要求nonceと揃え、privateな一次記録同士だけで照合する。
-                event_id=prefix.request_id,
-            )
-        return ResponseStopResult(prefix.last_played_audio_sequence)
+        # FEへの停止通知はCore確定とは別のsession寿命で送る。
+        # 送信の滞留・失敗は中断確定を変えない。
+        self._coordinator.notify_output_stop(response.response_id)
+        self._estimated_played[response.response_id] = stopped
+        self._record_estimate_deltas(response.response_id)
+        self._coordinator.confirm_estimated_playback(
+            response_id=response.response_id, sequence=stopped,
+        )
+        return ResponseStopResult(stopped)
 
     async def finish_response(self, response: Response) -> None:
         if not response.audio_segments:
             self._completed_output_responses.add(response.response_id)
+            self._estimated_played[response.response_id] = 0
             return
-        if isinstance(self._audio_source, ResponseAudioTracks):
-            await self._completion_gate.wait(
-                response.response_id, len(response.audio_segments),
-                lambda: self._finish_audio(response.response_id),
-            )
-        else:
-            await self._finish_audio(response.response_id)
+        await self._finish_audio(response.response_id)
+        self._estimated_played[response.response_id] = len(response.audio_segments)
+        self._record_estimate_deltas(response.response_id)
+        # 通常完了も切断・再同期の公開結果が使う再接続用状態へ同じ推定値を渡す。
+        self._coordinator.confirm_estimated_playback(
+            response_id=response.response_id, sequence=len(response.audio_segments),
+        )
         self._completed_output_responses.add(response.response_id)
 
-    def confirm_response_playback(self, response_id: str, last_audio_sequence: int) -> bool:
-        return self._completion_gate.confirm(response_id, last_audio_sequence)
+    def observe_fe_playback(
+        self, response_id: str, reported_sequence: int | None, kind: str,
+        final: bool = False,
+    ) -> None:
+        """FEの再生報告を推定値との差分として記録する。判定・状態は変更しない。
+
+        `kind` は stopped / completed / output_stop。completed の途中経過
+        （final=False）は終端差分へ使わず観測のみに留める。
+        """
+        if self._measurement is None:
+            return
+        self._measurement.record_response_event(
+            response_id=response_id, name=f"fe_{kind}_observed", stage="playback",
+            value=None if reported_sequence is None else float(reported_sequence),
+        )
+        # 終端差分の対象は最終報告だけ。途中経過は保持しない。
+        # completed は response_finished=True、それ以外の種別は常に終端として扱う。
+        if reported_sequence is None or (kind == "completed" and not final):
+            return
+        self._fe_playback_observations.setdefault(response_id, {})[kind] = reported_sequence
+        expected = self._estimated_played.get(response_id)
+        if expected is not None:
+            self._record_estimate_delta(response_id, kind, reported_sequence, expected)
+
+    def _record_estimate_deltas(self, response_id: str) -> None:
+        """推定確定時に、保持済みのFE観測値との差分を記録する。"""
+        expected = self._estimated_played.get(response_id)
+        if expected is None or self._measurement is None:
+            return
+        for kind, reported in self._fe_playback_observations.get(response_id, {}).items():
+            self._record_estimate_delta(response_id, kind, reported, expected)
+
+    def _record_estimate_delta(
+        self, response_id: str, kind: str, reported: int, expected: int
+    ) -> None:
+        if self._measurement is None:
+            return
+        self._measurement.record_response_event(
+            response_id=response_id, name=f"playback_estimate_delta_{kind}",
+            stage="playback", value=float(reported - expected),
+        )
+
+    def observe_output_stop_report(self, response_id: str, reported_sequence: int) -> None:
+        """output_stop_confirmed のFE観測値を差分記録へ渡す。"""
+        if self._measurement is not None:
+            self._measurement.record_response_event(
+                response_id=response_id, name="output_stop_confirmed", stage="transport",
+            )
+        # output_stop_confirmed は停止要求への応答であり常に終端報告。
+        self.observe_fe_playback(response_id, reported_sequence, kind="output_stop", final=True)
 
     async def _finish_audio(self, response_id: str) -> None:
         first_capture_ns = await self._audio_source.finish_response(response_id)
@@ -343,15 +396,17 @@ class _ConversationCoreDelivery:
                     self._measurement.record_response_event(
                         response_id=response_id, name=name, stage="transport", value=value,
                     )
-            await self._coordinator.send_response_audio_finished(
+            # FEへの末尾通知はCore完了判定の外で送る。
+            # 送信の滞留・失敗は終端を変えない。
+            self._coordinator.send_response_audio_finished(
                 response_id=response_id,
                 input_sample_count=statistics["response_audio_input_samples"],
                 captured_sample_count=statistics["response_audio_captured_samples"],
                 padding_sample_count=statistics["response_audio_padding_samples"],
             )
-        await self._observe_first_audio_out(response_id, first_capture_ns)
+        self._observe_first_audio_out(response_id, first_capture_ns)
 
-    async def _observe_first_audio_out(self, response_id: str | None, timestamp_ns: int | None) -> None:
+    def _observe_first_audio_out(self, response_id: str | None, timestamp_ns: int | None) -> None:
         if timestamp_ns is None or response_id is None or response_id in self._first_audio_observed:
             return
         self._first_audio_observed.add(response_id)
@@ -359,12 +414,14 @@ class _ConversationCoreDelivery:
             self._measurement.record_response_event(
                 response_id=response_id, name="first_audio_out", stage="transport", timestamp=timestamp_ns,
             )
-        await self._coordinator.send_core(json.dumps({
+        # 計測値の記録はここで確定し、externalへの観測配送はCore完了を待たせない
+        # session寿命taskへ切り離す。
+        self._coordinator.schedule_observation(json.dumps({
             "type": "observation", "protocol_version": "2.0", "event_id": str(uuid4()),
             "session_id": self._session_id, "response_id": response_id,
             "measurement": "first_audio_out", "timestamp": str(timestamp_ns),
             "clock_domain": "server_monotonic", "unit": "nanosecond",
-        }, separators=(",", ":")).encode())
+        }, separators=(",", ":")).encode(), response_id=response_id)
 
     def _voice_payload(
         self, event: CoreEvent, *, utterance_id: str | None = None

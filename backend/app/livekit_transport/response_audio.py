@@ -26,14 +26,20 @@ class _ResponseTrack:
     pacer: PacedPcmSource
     client_ready: asyncio.Event = field(default_factory=asyncio.Event)
     source_closed: bool = False
+    # publish呼出しごと（=audio_sequence）の論理PCM累積末尾。1始まり区間の境界。
+    segment_sample_ends: list[int] = field(default_factory=list)
 
 
 class ResponseAudioTracks:
     def __init__(self, room: rtc.Room, *, sample_rate: int = 48_000, channels: int = 1,
-                 ready_timeout_seconds: float = 3) -> None:
+                 ready_timeout_seconds: float = 3, downlink_delay_seconds: float = 0.3) -> None:
         if not math.isfinite(ready_timeout_seconds) or ready_timeout_seconds <= 0:
             raise ValueError("audio readiness timeout must be positive")
+        if not math.isfinite(downlink_delay_seconds) or downlink_delay_seconds < 0:
+            raise ValueError("downlink delay must be a non-negative number of seconds")
         self._ready_timeout = ready_timeout_seconds
+        # 再生済み範囲の推定と出力完了判定で同じdを使う。Session較正はしない。
+        self._downlink_delay_seconds = downlink_delay_seconds
         self._pending_ready_sid: str | None = None
         self._room = room
         self._sample_rate = sample_rate
@@ -136,6 +142,7 @@ class ResponseAudioTracks:
                 raise
             if self._closed or self._stopped:
                 raise asyncio.CancelledError("response audio was stopped while capturing")
+            current.segment_sample_ends.append(current.pacer.input_sample_count)
             return first_capture_ns
 
     async def finish_response(self, response_id: str) -> int | None:
@@ -145,6 +152,8 @@ class ResponseAudioTracks:
                 raise asyncio.CancelledError("audio does not belong to the active response")
             try:
                 first_capture_ns = await current.pacer.finish()
+                # 出力完了は送出完了+dで判定する。待機中も呼出元の取消は有効。
+                await asyncio.sleep(self._downlink_delay_seconds)
             except asyncio.CancelledError:
                 self.clear(response_id)
                 raise
@@ -181,21 +190,32 @@ class ResponseAudioTracks:
                 self._current.source.clear_queue()
             self._current.track.mute()
 
-    async def stop_response(self, response_id: str) -> None:
+    async def stop_response(self, response_id: str, *, decided_at_ns: int) -> int:
+        """BE送出を停止し、decision時刻からdを引いた推定再生済み区間数を返す。
+
+        capture記録は停止後も変わらないため、推定は停止処理の中で行う。
+        """
         # まだpublishに入っていない開始処理も、後からこの応答を出力させない。
         self._stopped_response_ids.add(response_id)
         self.clear(response_id)
         async with self._lock:
             current = self._current
             if current is None or current.response_id != response_id:
-                return
+                return 0
+            played_before_ns = decided_at_ns - round(self._downlink_delay_seconds * 1e9)
+            sent_samples = current.pacer.sent_sample_count(played_before_ns)
+            ends = current.segment_sample_ends
+            played = 0
+            while played < len(ends) and ends[played] <= sent_samples:
+                played += 1
             if not current.source_closed:
                 await current.pacer.aclose()
                 # 取消を吸収したcapture_frameがqueueへ渡した分も、pump終了後に除去する。
                 current.source.clear_queue()
             current.track.mute()
             self._observe("response_audio_source_stopped", response_id)
-            # browserの確認前にunsubscribe/disposeを誘発しないようtrackを保持する。
+            # unsubscribe/disposeを誘発しないよう、track自体はsession終了まで保持する。
+            return played
 
     async def aclose(self) -> None:
         self._closed = True

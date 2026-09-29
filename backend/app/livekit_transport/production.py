@@ -7,6 +7,7 @@ session資源所有は各責務moduleが担う。
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -35,10 +36,31 @@ if TYPE_CHECKING:
 LIVEKIT_URL_ENV = "LIVEKIT_URL"
 LIVEKIT_API_KEY_ENV = "LIVEKIT_API_KEY"
 LIVEKIT_API_SECRET_ENV = "LIVEKIT_API_SECRET"
+VOICE_DOWNLINK_DELAY_ENV = "DS_VOICE_DOWNLINK_DELAY_MS"
+# 固定音声の実接続計測が済むまでの仮置き。見直し根拠はdocs/validationへ記録する。
+DEFAULT_VOICE_DOWNLINK_DELAY_MS = 300
 
 
 class LiveKitConfigurationError(RuntimeError):
     pass
+
+
+def resolve_voice_downlink_delay_ms(environment: Mapping[str, str]) -> int:
+    """下り遅延 d を環境変数1本から非負整数で解決する。Session較正は行わない。"""
+    value = environment.get(VOICE_DOWNLINK_DELAY_ENV)
+    if value is None:
+        return DEFAULT_VOICE_DOWNLINK_DELAY_MS
+    try:
+        delay = int(value, 10)
+    except ValueError as error:
+        raise LiveKitConfigurationError(
+            f"{VOICE_DOWNLINK_DELAY_ENV} must be a non-negative integer"
+        ) from error
+    if delay < 0:
+        raise LiveKitConfigurationError(
+            f"{VOICE_DOWNLINK_DELAY_ENV} must be a non-negative integer"
+        )
+    return delay
 
 
 def resolve_livekit_settings() -> tuple[str, str, str] | None:
@@ -112,6 +134,7 @@ async def configure_production_resources(
         core_session_factory=core_session_factory,
         screen_session_revoker=screen_session_revoker,
         audio_probe_enabled=audio_probe_enabled(os.environ, livekit_url),
+        downlink_delay_seconds=resolve_voice_downlink_delay_ms(os.environ) / 1000,
         session_trace_recorder=session_trace_recorder,
         measurement_kind=measurement_kind,
     )

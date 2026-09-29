@@ -47,6 +47,9 @@ class VoiceAdapterCoreHandoff:
 
     played_prefix_source: Callable[[Response], int]
     stopped_responses: list[Response] = field(default_factory=list)
+    # FEから届いた再生報告の記録（response_id -> last_played_audio_sequence）。
+    # 推定の入力には使われない。Core側には報告を更新へ反映する入口がない。
+    fe_reported_playback: dict[str, int] = field(default_factory=dict)
     _session: ConversationCoreSession | None = field(default=None, init=False, repr=False)
 
     def attach_session(self, session: ConversationCoreSession) -> None:
@@ -94,6 +97,10 @@ class VoiceAdapterCoreHandoff:
             reason="barge_in",
         )
 
+    def report_fe_playback(self, response_id: str, last_played_audio_sequence: int) -> None:
+        """FEの再生報告が届いたことを記録する。差分観測相当でCore状態は変えない。"""
+        self.fe_reported_playback[response_id] = last_played_audio_sequence
+
     async def cancel_response(self, *, response_id: str, reason: str) -> Response | None:
         """応答を明示的に取消す。"""
         session = self._require_session()
@@ -102,7 +109,9 @@ class VoiceAdapterCoreHandoff:
             reason=reason,
         )
 
-    async def stop_response(self, response: Response) -> ResponseStopResult:
+    async def stop_response(
+        self, response: Response, *, decided_at_ns: int
+    ) -> ResponseStopResult:
         """Coreからの出力停止要求に再生済みprefixを返す。
 
         ResponseCancellationPort の実装。注入された供給関数の値を

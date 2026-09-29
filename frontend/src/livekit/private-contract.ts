@@ -17,7 +17,7 @@ export type OutputStopRequest = Readonly<{
 type PrivateFrame =
   | OutputStopRequest
   | Readonly<{type: 'output_stop_confirmed'; sessionId: string; responseId: string; requestId: string;
-    generation: number; lastPlayedAudioSequence: number; outputConfirmation: 'output_clock_passed' | 'never_connected'}>
+    generation: number; lastPlayedAudioSequence?: number; outputConfirmation: 'output_clock_passed' | 'never_connected'}>
   | Readonly<{
     type: 'authoritative_state'
     generation: number
@@ -59,7 +59,7 @@ type TerminalOutcomeWire = Readonly<{
 type PrivateFrameWire =
   | Readonly<{type: 'output_stop_request'; session_id: string; response_id: string; request_id: string; generation: number}>
   | Readonly<{type: 'output_stop_confirmed'; session_id: string; response_id: string; request_id: string;
-    generation: number; last_played_audio_sequence: number; output_confirmation: 'output_clock_passed' | 'never_connected'}>
+    generation: number; last_played_audio_sequence?: number; output_confirmation: 'output_clock_passed' | 'never_connected'}>
   | Readonly<{
     type: 'authoritative_state'
     generation: number

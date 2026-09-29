@@ -20,6 +20,9 @@ from app.livekit_transport.delivery import (
     retry_deadlines_ms,
 )
 from app.livekit_transport.lifecycle import SessionLifecycle
+
+# `output_stop_confirmed` の応答相関に使う最終要求の保持上限。
+_OUTPUT_STOP_REQUEST_HISTORY = 64
 from app.voice_session_metrics import SessionMetrics
 from app.livekit_transport.mapping import ParticipantMapping
 from app.livekit_transport.outbox import (
@@ -41,11 +44,11 @@ def _required_int(value: object, field: str) -> int:
     return value
 
 
-@dataclass(frozen=True)
-class ConfirmedOutputStop:
-    request_id: str
-    generation: int
-    last_played_audio_sequence: int
+def _create_notification_task(operation: Awaitable[None]) -> asyncio.Task[None]:
+    async def run() -> None:
+        await operation
+
+    return asyncio.create_task(run())
 
 
 @dataclass(frozen=True)
@@ -53,10 +56,18 @@ class SessionCoordinatorDependencies:
     publish_data: Callable[[bytes, str], Awaitable[None]]
     cleanup: Callable[[str], Awaitable[None]]
     generation_ready: Callable[[], Awaitable[None]]
+    # 通知送信はCore確定の外でsession寿命のtaskとして所有する。
+    schedule: Callable[[Awaitable[None], str | None], asyncio.Task[None] | None] = (
+        lambda operation, _response_id: _create_notification_task(operation)
+    )
+    # 通知送信の失敗は本文なしの応答単位metadataで観測する。Core確定・履歴は変更しない。
+    notify_failure: Callable[[str, str], None] = lambda _response_id, _name: None
     response_track_ready: Callable[[str, str], None] = lambda _response_id, _track_sid: None
     audio_probe: Callable[[str, str, int, str | None], None] | None = None
     sync_observer: Callable[[str, int, int], None] | None = None
     session_metrics: SessionMetrics | None = None
+    # FEのoutput_stop_confirmed観測を差分記録へ渡す。判定・状態は変更しない。
+    output_stop_observation: Callable[[str, int], None] = lambda _response_id, _sequence: None
 
 
 class ProductionSessionCoordinator:
@@ -72,7 +83,6 @@ class ProductionSessionCoordinator:
         monotonic_ms: Callable[[], int] = lambda: int(time.monotonic() * 1000),
         monotonic_us: Callable[[], int] = lambda: time.monotonic_ns() // 1000,
     ) -> None:
-        self._output_stop_requests: dict[str, tuple[str, int, asyncio.Future[int]]] = {}
         self.session_id = session_id
         self.user_identity = user_identity
         self._dependencies = dependencies
@@ -101,6 +111,10 @@ class ProductionSessionCoordinator:
         )
         self._retry_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
         self._deadline_task: asyncio.Task[None] | None = None
+        # FE向けprivate通知の送信task。Core確定とは別のsession寿命で所有する。
+        self._notify_tasks: set[asyncio.Task[None]] = set()
+        # response_id -> (request_id, generation)。FEの確認応答を要求へ対応付ける。
+        self._output_stop_requests: dict[str, tuple[str, int]] = {}
         self._ended = False
         self._state_sync_lock = asyncio.Lock()
         self._ready_generation: int | None = None
@@ -217,14 +231,7 @@ class ProductionSessionCoordinator:
                 self._delivery.receive(payload, event)
                 if event.get("measurement") == "session_summary" and self._dependencies.session_metrics is not None:
                     self._dependencies.session_metrics.observe_summary(event.get("session_summary"))
-                if event["type"] in ("playback_completed", "playback_stopped"):
-                    self._lifecycle.confirm_playback(
-                        response_id=str(event["response_id"]),
-                        confirmed_audio_sequence=_required_int(
-                            event["last_played_audio_sequence"],
-                            "last_played_audio_sequence",
-                        ),
-                    )
+
                 await self._publish_private(
                     {
                         "protocol_version": "2.0",
@@ -281,7 +288,7 @@ class ProductionSessionCoordinator:
                         self._observe_sync("probe_unavailable")
                     return
                 if frame["type"] == "output_stop_confirmed":
-                    self._confirm_output_stop(frame)
+                    self._observe_output_stop(frame)
                     return
                 if frame["type"] == "response_track_ready":
                     self._dependencies.response_track_ready(str(frame["response_id"]), str(frame["track_sid"]))
@@ -319,51 +326,52 @@ class ProductionSessionCoordinator:
         self._retry_tasks[("character_to_user", event_id)] = task
         await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
 
-    async def request_output_stop(self, response_id: str) -> ConfirmedOutputStop:
-        if self._lifecycle.phase != "available":
-            raise RuntimeError("output stop requires an available session")
-        request_id, generation = str(uuid4()), self.generation
-        confirmed: asyncio.Future[int] = asyncio.get_running_loop().create_future()
-        self._output_stop_requests[request_id] = (response_id, generation, confirmed)
-        try:
-            await self._publish_private({
-                "protocol_version": "2.0", "type": "output_stop_request",
-                "session_id": self.session_id, "response_id": response_id,
-                "request_id": request_id, "generation": generation,
-            })
-            prefix = await confirmed
-            if generation != self.generation or self._lifecycle.phase != "available":
-                raise RuntimeError("output stop connection changed")
-            return ConfirmedOutputStop(request_id, generation, prefix)
-        finally:
-            self._output_stop_requests.pop(request_id, None)
-            if not confirmed.done():
-                confirmed.cancel()
-            elif not confirmed.cancelled():
-                confirmed.exception()
+    def notify_output_stop(self, response_id: str) -> None:
+        """FEへ出力停止を通知する。確認応答は待たず、差分観測だけに使う。
 
-    def _confirm_output_stop(self, frame: dict[str, object]) -> None:
-        pending = self._output_stop_requests.get(str(frame["request_id"]))
-        if pending is None or self._lifecycle.phase != "available":
+        送信はBEの送出停止確定を妨げないよう、session寿命のtaskへ切り離す。
+        滞留・失敗はCore確定や履歴を変えない。
+        """
+        if self._lifecycle.phase != "available":
             return
-        response_id, generation, confirmed = pending
-        prefix = frame["last_played_audio_sequence"]
+        request_id, generation = str(uuid4()), self.generation
+        self._output_stop_requests[response_id] = (request_id, generation)
+        if len(self._output_stop_requests) > _OUTPUT_STOP_REQUEST_HISTORY:
+            oldest = next(iter(self._output_stop_requests))
+            self._output_stop_requests.pop(oldest, None)
+        frame = {
+            "protocol_version": "2.0", "type": "output_stop_request",
+            "session_id": self.session_id, "response_id": response_id,
+            "request_id": request_id, "generation": generation,
+        }
+        self._schedule_private_notification(
+            frame, "output_stop_notify_failed", response_id,
+        )
+
+    def confirm_estimated_playback(self, *, response_id: str, sequence: int) -> None:
+        """BE推定の再生済みprefixを再接続用の終端状態へ記録する。"""
+        self._lifecycle.confirm_playback(
+            response_id=response_id, confirmed_audio_sequence=sequence,
+        )
+
+    def _observe_output_stop(self, frame: dict[str, object]) -> None:
+        request = self._output_stop_requests.get(str(frame["response_id"]))
+        if request is None:
+            return
+        request_id, generation = request
+        prefix = frame.get("last_played_audio_sequence")
         if (
-            confirmed.done() or frame["session_id"] != self.session_id
-            or frame["response_id"] != response_id or frame["generation"] != generation
+            frame["request_id"] != request_id
+            or frame["session_id"] != self.session_id
+            or frame["generation"] != generation
             or type(prefix) is not int or prefix < 0
             or frame["output_confirmation"] not in {"output_clock_passed", "never_connected"}
             or (frame["output_confirmation"] == "never_connected" and prefix != 0)
         ):
             return
-        self._lifecycle.confirm_playback(response_id=response_id, confirmed_audio_sequence=prefix)
-        # Coreが取消処理を待つ制御キューへ戻さず、この要求のfutureだけを解決する。
-        confirmed.set_result(prefix)
-
-    def _abort_output_stops(self) -> None:
-        for _, _, future in self._output_stop_requests.values():
-            if not future.done():
-                future.set_exception(RuntimeError("output stop connection lost"))
+        self._dependencies.output_stop_observation(
+            str(frame["response_id"]), prefix,
+        )
 
     async def send_screen(self, payload: bytes) -> None:
         """画面制御metadataを音声Core eventとは別topicで配送する。"""
@@ -392,22 +400,68 @@ class ProductionSessionCoordinator:
             }
         )
 
-    async def send_response_audio_finished(
+    def send_response_audio_finished(
         self, *, response_id: str, input_sample_count: int,
         captured_sample_count: int, padding_sample_count: int,
     ) -> None:
-        """native供給完了の総sample数を送る。ブラウザ再生完了とは区別する。"""
+        """native供給完了の総sample数を送る。ブラウザ再生完了とは区別する。
+
+        送信はCore完了判定の外で行う。滞留・失敗は終端を変えない。
+        """
         if self._lifecycle.phase != "available":
             raise RuntimeError("session is not available")
         if input_sample_count + padding_sample_count != captured_sample_count:
             raise ValueError("response source sample conservation failed")
-        await self._publish_private({
+        frame = {
             "protocol_version": "2.0", "type": "response_audio_finished",
             "response_id": response_id, "generation": self.generation,
             "input_sample_count": input_sample_count,
             "captured_sample_count": captured_sample_count,
             "padding_sample_count": padding_sample_count,
-        })
+        }
+        self._schedule_private_notification(
+            frame, "response_audio_finished_notify_failed", response_id,
+        )
+
+    def _schedule_private_notification(
+        self, frame: dict[str, object], failure_name: str, response_id: str,
+    ) -> None:
+        # 送信例外はこの通知の境界内で応答単位metadataへ記録する。
+        # Session所有taskの致命的例外へ伝播させず、Core確定・履歴を変えない。
+        async def deliver() -> None:
+            try:
+                await self._publish_private(frame)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._dependencies.notify_failure(response_id, failure_name)
+
+        self._track_notification_task(self._dependencies.schedule(deliver(), response_id))
+
+    def schedule_observation(self, payload: bytes, *, response_id: str) -> None:
+        """計測observationのCore配送をsession寿命taskへ切り離す。
+
+        応答の送出位置計測は記録済みで、配送完了をCore完了の条件にしない。
+        `send_core`内の検証・相関・再送と、失敗時のcleanup・unavailable遷移は
+        そのまま実行され、残った例外だけを応答単位metadataとして観測する。
+        """
+        if self._lifecycle.phase != "available":
+            return
+
+        async def deliver() -> None:
+            try:
+                await self.send_core(payload)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._dependencies.notify_failure(response_id, "observation_send_failed")
+
+        self._track_notification_task(self._dependencies.schedule(deliver(), response_id))
+
+    def _track_notification_task(self, task: asyncio.Task[None] | None) -> None:
+        if task is not None:
+            self._notify_tasks.add(task)
+            task.add_done_callback(self._notify_tasks.discard)
 
     def acknowledge(self, event_id: str, direction: str) -> bool:
         acknowledged = self._outboxes.get(self.session_id, direction).ack(event_id)
@@ -425,14 +479,26 @@ class ProductionSessionCoordinator:
             self._notify_core("session_disconnected")
             self._replace_deadline(self._lifecycle.reconnect_grace_ms / 1000)
         self._cancel_retry_tasks()
+        # 切断で届かない通知を滞留させない。
+        for task in tuple(self._notify_tasks):
+            task.cancel()
+        if self._notify_tasks:
+            await asyncio.gather(*self._notify_tasks, return_exceptions=True)
+        self._notify_tasks.clear()
 
     async def cleanup(self, reason: str) -> None:
         if self._ended:
             return
         self._ended = True
-        self._abort_output_stops()
+        self._output_stop_requests.clear()
         self._cancel_deadline()
         self._cancel_retry_tasks()
+        # session終了と共に通知送信を止め、残留taskを回収する。
+        for task in tuple(self._notify_tasks):
+            task.cancel()
+        if self._notify_tasks:
+            await asyncio.gather(*self._notify_tasks, return_exceptions=True)
+        self._notify_tasks.clear()
         self._outboxes.clear_session(self.session_id)
         self._terminal_outcomes.clear()
         self._mapping.clear()
@@ -522,7 +588,8 @@ class ProductionSessionCoordinator:
 
     def _notify_core(self, event_type: str) -> None:
         if event_type in {"session_disconnected", "session_ended"}:
-            self._abort_output_stops()
+            # 停止要求の応答相関履歴は接続世代をまたいで使い回さない。
+            self._output_stop_requests.clear()
         payload = json.dumps(
             {
                 "protocol_version": "2.0",

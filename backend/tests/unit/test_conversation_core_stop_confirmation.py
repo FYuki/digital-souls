@@ -18,11 +18,13 @@ class HeldStop:
         self.entered = asyncio.Event()
         self.release = asyncio.Event()
         self.calls = []
+        self.decided_at_ns_calls = []
         self.result = result
         self.closed = asyncio.Event()
 
-    async def stop_response(self, response):
+    async def stop_response(self, response, *, decided_at_ns):
         self.calls.append(response)
+        self.decided_at_ns_calls.append(decided_at_ns)
         self.entered.set()
         try:
             await self.release.wait()
@@ -230,7 +232,7 @@ def test_response_stage_can_request_cancellation_without_waiting_for_itself():
 
 
 @pytest.mark.parametrize("prefix", [0, 1, 2])
-def test_confirmed_prefix_is_saved_without_regressing_newer_playback(prefix):
+def test_estimated_prefix_is_saved_as_reported_by_stop_response(prefix):
     async def exercise():
         stop = HeldStop(prefix)
         session, _, persistence, _ = make_session(stop)
@@ -242,12 +244,12 @@ def test_confirmed_prefix_is_saved_without_regressing_newer_playback(prefix):
                 audio_sequence=sequence, audio=b"pcm", text_range=(sequence - 1, sequence))
         cancelling = asyncio.create_task(session.cancel_response(response_id="r", reason="barge_in"))
         await stop.entered.wait()
-        await session.confirm_playback(response_id="r", last_played_audio_sequence=1)
         stop.release.set()
         result = await cancelling
         await tick()
-        assert result.last_played_audio_sequence == max(1, prefix)
-        assert persistence.outcomes[0].last_played_audio_sequence == max(1, prefix)
+        # BE推定値がそのまま採用される。FE報告由来のmax-mergeは行わない。
+        assert result.last_played_audio_sequence == prefix
+        assert persistence.outcomes[0].last_played_audio_sequence == prefix
         await session.end()
     asyncio.run(exercise())
 
@@ -310,7 +312,7 @@ def test_tts_receipt_during_stop_is_not_delivered_or_hidden():
         stop, tts = HeldStop(), Tts()
         observation, delivery = RecordingObservation(), RecordingDelivery()
         def clock():
-            assert tts.closed.is_set() and stop.closed.is_set()
+            # decision時刻はcancel受理時に取得するため、provider終了前にも呼ばれる。
             return 100
         session = ConversationCoreSession(session_id="s", response_id_factory=lambda: "r",
             delivery=delivery, persistence=RecordingPersistence(), observation=observation,
@@ -342,6 +344,81 @@ def test_unknown_or_terminal_response_does_not_request_output_stop():
         assert (await session.cancel_response(response_id="r", reason="barge_in")).state is ResponseState.COMPLETED
         assert stop.calls == []
         await session.end()
+    asyncio.run(exercise())
+
+
+def test_preview_turn_passes_take_turn_decision_time_to_stop_port():
+    """preview入口では配送待ち後も、停止ポートへtake-turn確定時刻を渡す。"""
+    async def exercise():
+        ticks = iter((1_000, 2_000))
+        clock = lambda: next(ticks, 2_000)
+
+        class HeldDecisionDelivery(RecordingDelivery):
+            def __init__(self):
+                super().__init__()
+                self.entered = asyncio.Event()
+                self.release = asyncio.Event()
+
+            async def publish(self, event):
+                if event.type == "turn_decision":
+                    self.entered.set()
+                    await self.release.wait()
+                await super().publish(event)
+
+        stop, delivery = HeldStop(), HeldDecisionDelivery()
+        session, _, _, _ = make_session(stop, delivery=delivery, monotonic_ns=clock)
+        response = await start(session)
+        previewing = asyncio.create_task(session.preview_turn(
+            utterance_id="u2", audio=b"preview", interrupted_response_id="r",
+        ))
+        # turn_decisionイベントの配送中に時計を進めても、確定時刻1,000 nsを渡す。
+        await asyncio.wait_for(delivery.entered.wait(), 0.5)
+        delivery.release.set()
+        await asyncio.wait_for(stop.entered.wait(), 0.5)
+        assert stop.decided_at_ns_calls == [1_000]
+        stop.release.set()
+        decision = await asyncio.wait_for(previewing, 0.5)
+        assert decision == "take_turn"
+        await tick()
+        await session.end()
+        assert session.running_stage_count == 0
+    asyncio.run(exercise())
+
+
+def test_transcription_passes_take_turn_decision_time_to_stop_port():
+    """確定発話入口でも配送待ち後に、停止ポートへtake-turn確定時刻を渡す。"""
+    async def exercise():
+        ticks = iter((1_000, 2_000))
+        clock = lambda: next(ticks, 2_000)
+
+        class HeldDecisionDelivery(RecordingDelivery):
+            def __init__(self):
+                super().__init__()
+                self.entered = asyncio.Event()
+                self.release = asyncio.Event()
+
+            async def publish(self, event):
+                if event.type == "turn_decision":
+                    self.entered.set()
+                    await self.release.wait()
+                await super().publish(event)
+
+        stop, delivery = HeldStop(), HeldDecisionDelivery()
+        session, _, _, _ = make_session(stop, delivery=delivery, monotonic_ns=clock)
+        response = await start(session)
+        task = session.start_transcription(
+            utterance_id="u2", audio=b"final", should_response=True,
+            interrupted_response_id="r",
+        )
+        await asyncio.wait_for(delivery.entered.wait(), 0.5)
+        delivery.release.set()
+        await asyncio.wait_for(stop.entered.wait(), 0.5)
+        assert stop.decided_at_ns_calls == [1_000]
+        stop.release.set()
+        await asyncio.shield(task)
+        await tick()
+        await session.end()
+        assert session.running_stage_count == 0
     asyncio.run(exercise())
 
 

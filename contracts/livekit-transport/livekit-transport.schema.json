@@ -30,7 +30,6 @@
         "response_id",
         "request_id",
         "generation",
-        "last_played_audio_sequence",
         "output_confirmation"
       ],
       "properties": {

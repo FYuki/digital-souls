@@ -127,6 +127,33 @@ test.each([
   expect(() => parsePrivateFrame(frame)).toThrow()
 })
 
+test('output_stop_confirmedはlast_played_audio_sequence省略を受理し型不正を拒否する', () => {
+  const base = {
+    protocol_version: '2.0',
+    type: 'output_stop_confirmed',
+    session_id: '20000000-0000-4000-8000-000000000010',
+    response_id: '50000000-0000-4000-8000-000000000001',
+    request_id: '60000000-0000-4000-8000-000000000010',
+    generation: 1,
+    output_confirmation: 'output_clock_passed',
+  }
+  expect(parsePrivateFrame(base)).toEqual({
+    type: 'output_stop_confirmed',
+    sessionId: base.session_id,
+    responseId: base.response_id,
+    requestId: base.request_id,
+    generation: 1,
+    lastPlayedAudioSequence: undefined,
+    outputConfirmation: 'output_clock_passed',
+  })
+  expect(() => parsePrivateFrame({
+    ...base, last_played_audio_sequence: true,
+  })).toThrow()
+  expect(() => parsePrivateFrame({
+    ...base, last_played_audio_sequence: -1,
+  })).toThrow()
+})
+
 test('音声probeは固定長の診断音とnonce・世代・trackだけを通知する', () => {
   const base = {protocol_version: '2.0', generation: 1, probe_id: controlProbe.probe_id}
   expect(parsePrivateFrame({...base, type: 'audio_probe_request'})).toEqual({

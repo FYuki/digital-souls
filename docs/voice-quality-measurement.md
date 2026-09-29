@@ -122,7 +122,8 @@ Browser時計の量子化を考慮して各sampleの両端へ0.2msの余裕を�
 
 LiveKitの停止要求にはsession、response、transport generationと要求IDを付ける。
 通常の出力経路では最終AudioWorkletを不可逆に無音化し、無音化位置を実出力時計が通過してから確認を返す。
-サーバーは音声sourceの停止とその確認を待ち、生成stageの終了と合わせてCoreの取消を確定する。
+サーバーは音声sourceの停止を実行した時点でCoreの取消を確定し、ブラウザからの確認は後着し得る差分観測として扱う。
+生成stageの終了と合わせた取消の完了は、FEの停止確認を待たずに進行する。
 
 明示的な診断では、ブラウザの各出力graphに別々のIDを付け、要求、停止位置、時計通過の一次記録を
 既存の出力・時計archiveへ保存する。サーバーの`output_stop_confirmed` event IDは対応する要求IDと一致する。
@@ -155,7 +156,7 @@ HTTP header受信時刻とtotal/load/prompt evaluation/generationの残差を、
 
 ### 応答全体の再生品質を通常traceへ記録する
 
-完全再生を確認した`playback_completed`は、任意の`playback_summary`で出力sample数、RTP範囲、gap、出力時計を送る。途中prefixの通知には添付できない。Backendは現在待機している応答と末尾sequenceの完了gateが受理した通知だけを扱い、送信済みPCM量、padding、連続RTP、出力時計の通過を検証する。音切れがある場合も実測値を保持し、不整合をゼロへ置き換えない。
+完全再生を確認した`playback_completed`は、任意の`playback_summary`で出力sample数、RTP範囲、gap、出力時計を送る。途中prefixの通知には添付できない。Backendは`response_finished`付きの報告だけを受理し、送信済みPCM量、padding、連続RTP、出力時計の通過を検証する。再生済み範囲の確定はBE送出位置の推定が担い、この報告は完了判定・状態更新を待たない差分観測である。音切れがある場合も実測値を保持し、不整合をゼロへ置き換えない。
 
 記録するのは`scheduled_playout`、`frame_playout`と、gap合計・最大gap・underrun回数・再生時間の4値である。前者2点は`browser_audio_context`の同一時計で比較する。controlledの集計では製品traceと測定manifestの値が一致することを検証し、重複、部分的な記録、矛盾を拒否する。旧runで製品側の6観測がすべて存在しない場合のみ、従来どおりmanifestの検証済み値を使用する。
 

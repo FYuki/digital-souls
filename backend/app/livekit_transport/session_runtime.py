@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import json
 import logging
+import math
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -172,7 +173,11 @@ class ProductionRuntimeManager:
         audio_probe_enabled: bool = False,
         session_trace_recorder: JsonlTraceRecorder | None = None,
         measurement_kind: MeasurementKind = "automated_test",
+        downlink_delay_seconds: float = 0.3,
     ) -> None:
+        if not math.isfinite(downlink_delay_seconds) or downlink_delay_seconds < 0:
+            raise ValueError("downlink delay must be a non-negative number of seconds")
+        self._downlink_delay_seconds = downlink_delay_seconds
         self._session_trace_recorder = session_trace_recorder
         self._measurement_kind = measurement_kind
         self._audio_probe_enabled = audio_probe_enabled
@@ -322,6 +327,24 @@ class ProductionRuntimeManager:
                            record=self._session_trace_recorder.record_session)
             if self._session_trace_recorder is not None else None
         )
+        # coordinatorはdeliveryより先に作るため、観測callbackは遅延参照で接続する。
+        owner_delivery: list[_ConversationCoreDelivery | None] = [None]
+
+        def schedule_session_operation(
+            operation: Awaitable[None], _response_id: str | None,
+        ) -> asyncio.Task[None] | None:
+            return owner.schedule_task(operation)
+
+        def observe_notify_failure(response_id: str, name: str) -> None:
+            measurement = (
+                owner_delivery[0].measurement if owner_delivery[0] is not None else None
+            )
+            if measurement is not None:
+                measurement.record_response_event(
+                    response_id=response_id, name=name, stage="transport",
+                    outcome="failure", reason_code=name,
+                )
+
         coordinator = ProductionSessionCoordinator(
             session_id=session_id,
             user_identity=user_identity,
@@ -333,10 +356,16 @@ class ProductionRuntimeManager:
                 publish_data=publish_data,
                 cleanup=cleanup,
                 generation_ready=generation_ready,
+                schedule=schedule_session_operation,
+                notify_failure=observe_notify_failure,
                 response_track_ready=response_track_ready,
                 audio_probe=handle_audio_probe if audio_probe is not None else None,
                 sync_observer=observe_sync if self._audio_probe_enabled else None,
                 session_metrics=session_metrics,
+                output_stop_observation=lambda response_id, sequence: (
+                    owner_delivery[0].observe_output_stop_report(response_id, sequence)
+                    if owner_delivery[0] is not None else None
+                ),
             ),
             core_port=self._core_port,
         )
@@ -473,6 +502,7 @@ class ProductionRuntimeManager:
             character_id=str(request["character_id"]),
             user_participant_id=str(request["core_participant_id"]),
         )
+        owner_delivery[0] = delivery
         create_session = getattr(
             self._core_session_factory, "create_ready", self._core_session_factory.create,
         )
@@ -512,8 +542,7 @@ class ProductionRuntimeManager:
         bridge = _ConversationCoreBridge(
             core_session,
             schedule_core_operation,
-            stop_audio=audio_source.clear,
-            confirm_response_playback=delivery.confirm_response_playback,
+            playback_observation=delivery.observe_fe_playback,
             measurement=delivery.measurement,
             session_metrics=session_metrics,
             publish_audio_event=publish_input_result,
@@ -541,7 +570,10 @@ class ProductionRuntimeManager:
 
     async def _prepare_output_track(self, room: rtc.Room) -> ResponseAudioTracks:
         # 応答決定まで無所属の出力trackを発行しない。
-        return ResponseAudioTracks(room, sample_rate=PCM_SAMPLE_RATE, channels=PCM_CHANNELS)
+        return ResponseAudioTracks(
+            room, sample_rate=PCM_SAMPLE_RATE, channels=PCM_CHANNELS,
+            downlink_delay_seconds=self._downlink_delay_seconds,
+        )
 
     async def send_core(self, session_id: str, payload: bytes) -> None:
         owner = self._owners.get(session_id)
