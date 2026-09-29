@@ -103,7 +103,22 @@ def fetch_archive(
 
 def _git_env() -> dict[str, str]:
     # 実行者のgit設定・認証promptに左右されない取得にする。
-    return {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+    # GIT_CONFIG_GLOBAL/NOSYSTEMだけでは継承したGIT_CONFIG_COUNT/KEY/VALUEは無効化できず、
+    # url.insteadOfによるURL書き換え・GIT_ASKPASSのhelper起動が残るため、GIT_*とSSH_ASKPASSを外す。
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GIT_") and key != "SSH_ASKPASS"
+    }
+    env.update(
+        {
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_ASKPASS": "",
+        }
+    )
+    return env
 
 
 def fetch_git_archive(

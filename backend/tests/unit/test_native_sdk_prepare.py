@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import os
 import subprocess
 from email.message import Message
 from pathlib import Path
@@ -147,3 +148,30 @@ def test_git_archive_rejects_unexpected_commit() -> None:
         prepare.fetch_git_archive(URL, "a" * 40, run=runner, sleep=lambda _: None)
 
     assert [command[5] for command in runner.commands] == ["init", "fetch", "rev-parse"]
+
+
+def test_git_env_excludes_inherited_git_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # GIT_CONFIG_COUNT経由のurl.insteadOf等、GIT_*全般とSSH_ASKPASSを継承しない。
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "url.https://redirect.invalid/.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "https://github.com/")
+    monkeypatch.setenv("GIT_ASKPASS", "/usr/bin/fake-askpass")
+    monkeypatch.setenv("SSH_ASKPASS", "/usr/bin/fake-ssh-askpass")
+    monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -o ProxyCommand=evil")
+
+    env = prepare._git_env()
+
+    # GIT_*は明示設定の4本だけが残り、継承した設定変数・helperは全て外れる。
+    assert {key for key in env if key.startswith("GIT_")} == {
+        "GIT_TERMINAL_PROMPT",
+        "GIT_CONFIG_NOSYSTEM",
+        "GIT_CONFIG_GLOBAL",
+        "GIT_ASKPASS",
+    }
+    assert "SSH_ASKPASS" not in env
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert env["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert env["GIT_ASKPASS"] == ""
