@@ -551,6 +551,25 @@ describe('App conversation lifecycle', () => {
 
 
 
+  test('音声入力の再試行警告は次の成功した発話で消し、Sessionを維持する', async () => {
+    render(App)
+    await startLiveKitSession()
+    await emitCoreEvent({
+      type: 'error', utterance_id: TURN_ID,
+      error_code: 'audio_input_repeat_required', recoverable: true,
+    })
+    expect((await screen.findByRole('alert')).textContent).toBe('音声の一部を受け取れませんでした。もう一度話してください。')
+
+    await emitCoreEvent({
+      type: 'utterance_finalized', utterance_id: crypto.randomUUID(),
+      transcript: '次の発話', should_response: true,
+    })
+
+    await waitFor(() => expect(screen.queryByText('音声の一部を受け取れませんでした。もう一度話してください。')).toBeNull())
+    expect(screen.getByRole('button', {name: 'マイクをオフにする'})).toBeTruthy()
+    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
+  })
+
   test('recoverable音声エラー後もmicを維持して次の応答を処理する', async () => {
     const nextUtteranceId = '30000000-0000-4000-8000-000000000030'
     const nextResponseId = '50000000-0000-4000-8000-000000000030'
@@ -568,6 +587,7 @@ describe('App conversation lifecycle', () => {
       type: 'utterance_finalized', utterance_id: nextUtteranceId,
       transcript: '復旧後の質問', should_response: true,
     })
+    expect(screen.queryByText('応答の取得に失敗しました。')).toBeNull()
     await emitCoreEvent({
       type: 'response_started', response_id: nextResponseId,
       source_utterance_ids: [nextUtteranceId],

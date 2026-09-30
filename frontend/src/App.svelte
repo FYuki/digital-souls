@@ -135,9 +135,14 @@
     const received = voiceHistory.receive(event, voiceContext, voiceSnapshot.textSubmissions)
     if (received.pendingInputAccepted && screenReferenceAvailable) screenReferenceDecisionActive = true
     if (received.pendingInputResolved) screenReferenceDecisionActive = false
+    const key = `${voiceContext.characterId}:${voiceContext.conversationId}`
+    // 次の音声入力が確定したら、前の発話の再試行警告を残さない。
+    if (event.type === 'utterance_finalized' && voiceErrors[key]) {
+      voiceErrors = {...voiceErrors, [key]: ''}
+    }
     if (event.type !== 'error') return
     screenReferenceDecisionActive = false
-    voiceErrors = {...voiceErrors, [`${voiceContext.characterId}:${voiceContext.conversationId}`]:
+    voiceErrors = {...voiceErrors, [key]:
       event.error_code === 'audio_input_repeat_required'
         ? '音声の一部を受け取れませんでした。もう一度話してください。'
         : event.error_code === 'audio_input_unavailable'
