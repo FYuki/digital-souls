@@ -118,6 +118,8 @@ async def configure_production_resources(
     if core_session_factory is None:
         raise RuntimeError("Conversation Core session factory is required")
     livekit_url, api_key, api_secret = settings
+    # 設定不正でHTTP sessionの所有者が失われないよう、資源生成前に解決する。
+    downlink_delay_seconds = resolve_voice_downlink_delay_ms(os.environ) / 1000
     api = livekit_api_module()
 
     client: livekit_api.LiveKitAPI = api.LiveKitAPI(livekit_url, api_key, api_secret)
@@ -134,7 +136,7 @@ async def configure_production_resources(
         core_session_factory=core_session_factory,
         screen_session_revoker=screen_session_revoker,
         audio_probe_enabled=audio_probe_enabled(os.environ, livekit_url),
-        downlink_delay_seconds=resolve_voice_downlink_delay_ms(os.environ) / 1000,
+        downlink_delay_seconds=downlink_delay_seconds,
         session_trace_recorder=session_trace_recorder,
         measurement_kind=measurement_kind,
     )
