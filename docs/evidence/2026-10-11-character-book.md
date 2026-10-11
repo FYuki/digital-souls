@@ -117,3 +117,10 @@ ByteTokenCounter の値で、旧 prompt 全体の cost や実 tokenizer の値�
 - NOT RUN: CI、push、PR、merge（今回の作業権限外）。
 - SKIP: 必須試験のskipなし。markerで別suiteがdeselectedになった件数は上表に明示。
 - regex・再帰scan・Decorator実行・standalone Lorebook は決定済みの非対応機能。
+
+## 監督側の再実行（2026-10-11）
+
+`8cd25adddcfd50accb79e488ecf7103d11f597e0` に epic（`61924a66fb7c65ce11ce043b50667d3bc5c7cc4a`、人格評価の修正を含む）を衝突なく取り込んだうえで、差分を読み、同じ固定ツールで再実行した。
+uv sync --locked・uv lock --check・ruff（新しい CLI を含む）・mypy（135 files）・UT（949 passed）・IT1（813 passed）・uv build・
+test-postgres（441 passed）・npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。人格評価の標準 CLI（fixture、3回）も exit 0。
+実 tokenizer での Book の予算、実モデルの評価は NOT RUN。
