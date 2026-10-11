@@ -37,6 +37,7 @@ ADRの決定を機能単位に整理します。
 | embedded Character Book の厳密validation・未知field保持、privacy処理済み履歴のliteral scan、constant/selective・配置・Book/Lore/全体token予算のEntry単位削減、本文を含まない診断 | 実装済み（合成UT・両HTTP APIのIT1・同梱Mioriの固定回帰。regex・再帰scan・Decorator実行・standalone Lorebook・実モデル受入は対象外/未実施） | [ADR 0028](docs/adr/0028-character-book.md)、[推論API](docs/api.md#文脈プライバシー)、[証跡](docs/evidence/2026-10-11-character-book.md) |
 | 応答に使ったCardファイルの生バイト列SHA-256の起動時固定、全completionのheader、会話turnの保存・復元metadata | 実装済み（streamを含む合成試験。旧turnはNULL、再送fingerprint維持。人格評価ハーネスのfixture検証済み、実モデル評価は未実施） | [ADR 0029 §6](docs/adr/0029-persona-consistency-evaluation.md#6-card-のハッシュ)、[履歴API](docs/history-api.md) |
 | 入口をまたぐ人格一貫性の決定論的採点、3分類（自己紹介・好み・世界観）・各回90%以上、必須ゲート・Card hash照合、不一致warn/gate、質的Egogram報告 | 一部（fixtureと実モデルモードのfake UT/IT1・CLI、使い捨てPostgreSQL保存経路を検証。実モードは本番provider・runtime・token counterと運用者設定を使い、cacheなし既定3回・生成設定・commit/dirty・ケース版・Card hashを報告。実行失敗も必須ゲートのFAIL。Mioriの7ケースは固定済み。上書き耐性・system拒否の構造検査はインジェクション対策の評価へ分離。活動入口・実judge・実モデル評価はNOT RUN） | [ADR 0029](docs/adr/0029-persona-consistency-evaluation.md)、[評価手順](evals/persona/README.md) |
+| 人格一貫性とは独立したインジェクション耐性評価：system・user・記憶の3経路、両入口、canary と人格逸脱・履歴 system 受理・Card hash・実行不完了の0件ゲート | 一部（合成ケース／fixture の UT・IT1 と独立CLI、実モデルモードを実装。cacheなし既定3回、割合で相殺しない。固定検索から本番の記憶データ枠へ注入。Miori各経路3件はユーザー確認前の案。実モデル評価・ツール結果はNOT RUN） | [ADR 0030](docs/adr/0030-injection-resistance-evaluation.md)、[評価手順](evals/injection/README.md) |
 
 人格評価の今後の課題：運用開始後に、望ましい QA の組（質問と望ましい応答の例）を追加し、
 一致傾向の評価を加えます。含んだら不合格の表現は最低限に保ちます。この追加評価は未実装です。

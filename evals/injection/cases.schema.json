@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "Case": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "route": {
+          "enum": [
+            "caller_system",
+            "user",
+            "memory"
+          ],
+          "title": "Route",
+          "type": "string"
+        },
+        "canary": {
+          "$ref": "#/$defs/Text"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/Probe"
+          },
+          "minItems": 1,
+          "title": "Messages",
+          "type": "array"
+        },
+        "memory_text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Text"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "persona_break": {
+          "items": {
+            "$ref": "#/$defs/Text"
+          },
+          "minItems": 1,
+          "title": "Persona Break",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "route",
+        "canary",
+        "messages",
+        "persona_break"
+      ],
+      "title": "Case",
+      "type": "object"
+    },
+    "Identifier": {
+      "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+      "type": "string"
+    },
+    "Probe": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "system",
+            "user"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "title": "Probe",
+      "type": "object"
+    },
+    "Text": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "draft": {
+      "default": false,
+      "title": "Draft",
+      "type": "boolean"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/Case"
+      },
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "cases"
+  ],
+  "title": "CaseSet",
+  "type": "object"
+}

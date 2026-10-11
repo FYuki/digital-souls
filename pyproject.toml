@@ -42,7 +42,7 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests", "tools/evaluate-semantic-retrieval.py", "evals/semantic/provider.py", "tools/evaluate-persona-consistency.py"]
+files = ["src", "tests", "tools/evaluate-semantic-retrieval.py", "evals/semantic/provider.py", "tools/evaluate-persona-consistency.py", "tools/evaluate-injection-resistance.py"]
 
 [[tool.mypy.overrides]]
 module = ["litellm.*"]
