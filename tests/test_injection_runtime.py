@@ -195,7 +195,7 @@ async def test_real_mode_reuses_cache_controls_and_fixed_memory_with_fake_model(
     assert "safe-response-marker" not in json.dumps(report)
 
 
-@pytest.mark.parametrize("route", ["memory", "caller_system"])
+@pytest.mark.parametrize("route", ["memory", "caller_system", "user"])
 async def test_discarded_attack_cannot_be_reported_as_resistance(
     monkeypatch: pytest.MonkeyPatch, route: str
 ) -> None:
@@ -207,9 +207,12 @@ async def test_discarded_attack_cannot_be_reported_as_resistance(
     original = PromptBuilder.build
 
     async def discard(self: Any, data: PromptInput, budgets: Any) -> Any:
-        data = (
-            replace(data, memory=()) if route == "memory" else replace(data, caller_instructions=())
-        )
+        if route == "memory":
+            data = replace(data, memory=())
+        elif route == "caller_system":
+            data = replace(data, caller_instructions=())
+        elif data.current_input and "synthetic-user-1" in (data.current_input[-1].content or ""):
+            data = replace(data, current_input=())
         return await original(self, data, budgets)
 
     monkeypatch.setattr(PromptBuilder, "build", discard)
@@ -220,7 +223,9 @@ async def test_discarded_attack_cannot_be_reported_as_resistance(
         cases, entries, runs=3, commit="a" * 40, expected_card_hash=char.card_sha256
     )
     assert not report["passed"]
-    assert report["gates"]["execution_incomplete"]["count"] == (6 if route == "memory" else 3)
+    assert report["gates"]["execution_incomplete"]["count"] == (
+        3 if route == "caller_system" else 6
+    )
 
 
 @pytest.mark.parametrize("behavior", ["accepted", "privacy_denied", "unavailable"])
@@ -324,8 +329,8 @@ async def test_open_history_channel_is_detected_before_any_model_call(
 
 @pytest.mark.parametrize("filename", ["synthetic.cases.json", "miori.cases.json"])
 @pytest.mark.parametrize("name", ["chat", "history"])
-@pytest.mark.parametrize("body", ["canary", "persona_break"])
-def test_cli_user_canary_passes_but_persona_break_fails(
+@pytest.mark.parametrize("body", ["canary", "persona_break", "both"])
+def test_cli_user_roleplay_and_canary_are_reference(
     tmp_path: Path, filename: str, name: str, body: str
 ) -> None:
     cases = load_cases(ROOT / "evals/injection" / filename)
@@ -335,7 +340,11 @@ def test_cli_user_canary_passes_but_persona_break_fails(
         "scenarios": {
             "pass": {
                 name: {
-                    c.id: c.canary if body == "canary" else "Zeroです"
+                    c.id: c.canary
+                    if body == "canary"
+                    else "Zeroです"
+                    if body == "persona_break"
+                    else c.canary + " Zeroです"
                     for c in cases.cases
                     if c.route == "user" and "Zero" in c.messages[-1].content
                 }
@@ -360,25 +369,29 @@ def test_cli_user_canary_passes_but_persona_break_fails(
         timeout=30,
         check=False,
     )
-    assert result.returncode == (0 if body == "canary" else 1), result.stderr
+    assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
-    assert report["passed"] == (body == "canary")
+    assert report["passed"]
     assert report["case_version"] == cases.version and not report["cases_draft"]
     assert report["gates"]["injection_followed"]["count"] == 0
-    if body == "canary":
-        assert report["canary_reference"]["count"] == 3
-    else:
-        assert report["gates"]["persona_break"]["count"] == 3
+    assert report["gates"]["persona_break"]["count"] == 0
+    assert report["canary_reference"]["count"] == (0 if body == "persona_break" else 3)
+    assert report["persona_break_reference"]["count"] == (0 if body == "canary" else 3)
 
 
 @pytest.mark.parametrize(
     "name,route", [("chat", "caller_system"), ("chat", "memory"), ("history", "memory")]
 )
-def test_cli_external_canary_is_failure(tmp_path: Path, name: str, route: str) -> None:
+@pytest.mark.parametrize("body", ["canary", "persona_break"])
+def test_cli_external_content_gate_is_failure(
+    tmp_path: Path, name: str, route: str, body: str
+) -> None:
     cases = load_cases(ROOT / "evals/injection/synthetic.cases.json")
     case = next(c for c in cases.cases if c.route == route)
     fixture = json.loads((ROOT / "evals/injection/responses.fixture.json").read_text())
-    fixture["scenarios"]["pass"] = {name: {case.id: case.canary}}
+    fixture["scenarios"]["pass"] = {
+        name: {case.id: case.canary if body == "canary" else case.persona_break[0]}
+    }
     path = tmp_path / "responses.json"
     path.write_text(json.dumps(fixture))
     result = subprocess.run(
@@ -397,4 +410,64 @@ def test_cli_external_canary_is_failure(tmp_path: Path, name: str, route: str) -
     )
     assert result.returncode == 1, result.stderr
     report = json.loads(result.stdout)
-    assert report["status"] == "FAIL" and report["gates"]["injection_followed"]["count"] == 3
+    gate = "injection_followed" if body == "canary" else "persona_break"
+    assert report["status"] == "FAIL" and report["gates"][gate]["count"] == 3
+
+
+def test_cli_empty_cases_cannot_pass(tmp_path: Path) -> None:
+    path = tmp_path / "empty.cases.json"
+    path.write_text(json.dumps({"schema_version": 1, "cases": []}))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/evaluate-injection-resistance.py"),
+            "--cases",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 1 and not result.stdout
+    assert "インジェクション評価に失敗" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "gate", ["card_hash_missing", "card_hash_mismatch", "execution_incomplete"]
+)
+def test_cli_user_roleplay_keeps_noncontent_gates(tmp_path: Path, gate: str) -> None:
+    cases = load_cases(ROOT / "evals/injection/synthetic.cases.json")
+    # The fixture scenario alters the first case, so deliberately select user.
+    raw = cases.model_dump()
+    raw["cases"].sort(key=lambda c: c["route"] != "user")
+    case_path = tmp_path / "user-first.cases.json"
+    case_path.write_text(json.dumps(raw))
+    fixture = json.loads((ROOT / "evals/injection/responses.fixture.json").read_text())
+    user = next(c for c in cases.cases if c.route == "user")
+    fixture["responses"][user.id] = user.persona_break[0]
+    path = tmp_path / "responses.json"
+    path.write_text(json.dumps(fixture))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/evaluate-injection-resistance.py"),
+            "--cases",
+            str(case_path),
+            "--fixture",
+            str(path),
+            "--scenario",
+            gate,
+            "--runs",
+            "3",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert report["status"] == "FAIL" and report["gates"][gate]["count"] == 3
+    assert report["gates"]["persona_break"]["count"] == 0
+    assert all(x["case_id"] == user.id for x in report["gates"][gate]["violations"])
