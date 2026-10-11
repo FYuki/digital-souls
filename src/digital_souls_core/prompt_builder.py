@@ -1,12 +1,15 @@
 """Pure prompt assembly and whole-unit token budgeting (ADR 0026).
 
-No retrieval, configuration loading, provider calls, or logging occurs here.
+No retrieval, configuration loading, or logging occurs here.
+An injected counter may perform asynchronous tokenizer calls.
 The caller supplies selected lore, memory in descending rank, and a snapshot.
 """
 
+import inspect
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from hashlib import sha256
 from types import MappingProxyType
 from typing import Literal, Protocol
 
@@ -216,7 +219,9 @@ def convert_messages(data: PromptInput) -> tuple[Message, ...]:
 
 
 class TokenCounter(Protocol):
-    def __call__(self, messages: Sequence[Message], *, tools: Sequence[Tool] = ()) -> int: ...
+    def __call__(
+        self, messages: Sequence[Message], *, tools: Sequence[Tool] = ()
+    ) -> int | Awaitable[int]: ...
 
 
 class ByteTokenCounter:
@@ -326,21 +331,40 @@ class PromptBuilder:
         self.memory_floor = memory_floor
         self.history_floor = history_floor
 
-    def _count(self, data: PromptInput, *, region: bool = False) -> int:
+    async def _count(
+        self, data: PromptInput, cache: dict[bytes, int], *, region: bool = False
+    ) -> int:
         messages = self.converter(data)
         if region and not messages and not data.tools:
             return 0
-        value = self.counter(messages, tools=data.tools)
+        key = sha256(
+            json.dumps(
+                {
+                    "messages": [m.model_dump(exclude_none=True) for m in messages],
+                    "tools": [t.model_dump(exclude_none=True) for t in data.tools],
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).digest()
+        if key in cache:
+            return cache[key]
+        counted = self.counter(messages, tools=data.tools)
+        value = await counted if inspect.isawaitable(counted) else counted
         if type(value) is not int or value < 0:
             raise ValueError("Invalid prompt token count")
+        cache[key] = value
         return value
 
-    def _usage(self, data: PromptInput, dropped: Mapping[Region, int]) -> PromptUsage:
+    async def _usage(
+        self, data: PromptInput, dropped: Mapping[Region, int], cache: dict[bytes, int]
+    ) -> PromptUsage:
         return PromptUsage(
-            self._count(data),
+            await self._count(data, cache),
             MappingProxyType(
                 {
-                    region: self._count(_region_input(data, region), region=True)
+                    region: await self._count(_region_input(data, region), cache, region=True)
                     for region in REGIONS
                 }
             ),
@@ -354,7 +378,8 @@ class PromptBuilder:
                 return region
         return "total" if usage.total_tokens > budgets.total else None
 
-    def build(self, data: PromptInput, budgets: TokenBudgets) -> PromptResult:
+    async def build(self, data: PromptInput, budgets: TokenBudgets) -> PromptResult:
+        cache: dict[bytes, int] = {}
         # Filter empty optional items before counting or reporting dropped units.
         state = replace(
             data,
@@ -382,10 +407,10 @@ class PromptBuilder:
             tools=state.tools,
         )
         dropped: dict[Region, int] = dict.fromkeys(REGIONS, 0)
-        required_usage = self._usage(required, dropped)
+        required_usage = await self._usage(required, dropped, cache)
         if exceeded := self._exceeded(required_usage, budgets):
             raise PromptBudgetExceeded(exceeded)
-        usage = self._usage(state, dropped)
+        usage = await self._usage(state, dropped, cache)
 
         # Stages 1..8. A regional overflow only removes units from that region;
         # a total overflow follows the complete global priority order.
@@ -432,7 +457,7 @@ class PromptBuilder:
                         # both positions; replace with the Character Book ADR's rule.
                     state = replace(state, **{str(region): items[:index] + items[index + 1 :]})
                 dropped[region] += 1
-                usage = self._usage(state, dropped)
+                usage = await self._usage(state, dropped, cache)
         if exceeded := self._exceeded(usage, budgets):
             raise PromptBudgetExceeded(exceeded)
         return PromptResult(self.converter(state), usage)

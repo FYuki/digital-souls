@@ -163,8 +163,21 @@ post_historyの正の整数です。boolean・文字列・小数は拒否しま�
 旧 `context_budget_bytes` が残る設定は起動時エラーです。
 カード内の `token_budget` は運用設定の代わりにはなりません。
 
-この版は `ByteTokenCounter` 固定で、本文のUTF-8バイト数（tool callの名前・arguments、tool定義を含む）
-+ message数×16 + 16をtokenの上限として推定します。推論先tokenizerの実測は未実装です。
+profile の `token_counter` は `estimate`（既定）または `llamacpp` を明示します。
+`estimate` は `ByteTokenCounter` で、本文のUTF-8バイト数（tool callの名前・arguments、tool定義を含む）
++ message数×16 + 16をtokenの上限として推定します。
+`llamacpp` は `transport=llamacpp_chat` だけで許可し、その他のtransportや未知の値は起動時エラーです。
+profile の検証済みloopback `api_base` と同じサーバーの `/apply-template` へmessages・tools・tool_choiceを送り、
+返ったpromptを `/tokenize`（add_special/parse_special=true、with_pieces=false）へ送ってtoken ID配列の長さを使います。
+固定サーバーのChat Completionsと同じtemplate parserを使い、tool定義はtemplateに含めます。
+領域別の計数も同じtemplateを適用するので、領域の合計と全体は一致しません。
+計数はasyncで、同一build内の同一messages/toolsの成功結果だけをキャッシュします。
+接続失敗・不正な応答・redirectは502 `token_count_failed`、timeoutは504 `token_count_failed`です。
+推定へ切り替えず、推論と会話履歴のappendを行いません。cancelは伝播します。
+proxy環境変数を無視し、redirectを追跡せず、計数前にも実際の本文と権限を検査します。
+本文・template結果・token IDをログやエラーへ出しません。
+実サーバーのIT2によるtemplate受入・実token数の照合はNOT RUNです。
+[合成試験の証跡](evidence/2026-10-11-llamacpp-token-count.md)を参照してください。
 全体超過では、低順位の記憶を下限まで→古い呼び出し側の指示→記憶を1件まで→古い履歴を
 直近N往復まで→最後の記憶→直近N往復のうち保護する1往復より古い履歴→Lore→post_historyの順に削ります。
 領域超過ではその領域の同じ削減単位を適用します。本文を途中で切らず、tool callと結果の組は分けません。

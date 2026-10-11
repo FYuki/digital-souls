@@ -46,10 +46,13 @@ class Profile(BaseModel):
     ollama_think: StrictBool | None = None
     transport: Literal["sdk", "llamacpp_chat"] = "sdk"
     api_base: str | None = None
+    token_counter: Literal["estimate", "llamacpp"] = "estimate"
 
     @model_validator(mode="after")
     def validate_provider_settings(self) -> "Profile":
         """Pin route-specific operator options and reject unverified local endpoints."""
+        if self.token_counter == "llamacpp" and self.transport != "llamacpp_chat":
+            raise ValueError("llamacpp token_counter requires llamacpp_chat transport")
         if "ollama_think" in self.model_fields_set and not self.model.startswith("ollama_chat/"):
             raise ValueError("ollama_think requires an ollama_chat model")
         if self.transport == "llamacpp_chat":

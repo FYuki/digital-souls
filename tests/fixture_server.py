@@ -41,3 +41,30 @@ class IntegrationFixture(FakeProvider):
 
 def create_fixture_app() -> FastAPI:
     return create_app(Inference((character(), character("other")), IntegrationFixture()))
+
+
+def create_token_fixture_app() -> FastAPI:
+    """Synthetic chat template/tokenizer HTTP fixture; no model is loaded."""
+    import json
+
+    from fastapi import Request
+
+    app = FastAPI()
+    app.state.templates = []
+    app.state.tokenizations = []
+
+    @app.post("/apply-template")
+    async def apply_template(request: Request) -> dict[str, str]:
+        body = await request.json()
+        app.state.templates.append(body)
+        return {"prompt": json.dumps(body, ensure_ascii=False)}
+
+    @app.post("/tokenize")
+    async def tokenize(request: Request) -> dict[str, list[int]]:
+        body = await request.json()
+        app.state.tokenizations.append(body)
+        prompt = json.loads(body["content"])
+        # One per message and one per tool: fixture-only units, never model quality.
+        return {"tokens": [1] * (len(prompt["messages"]) + len(prompt.get("tools", [])))}
+
+    return app
