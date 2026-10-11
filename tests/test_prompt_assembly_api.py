@@ -33,7 +33,6 @@ REGIONS = (
     "character",
     "lore",
     "memory",
-    "caller_instructions",
     "history",
     "current_input",
     "post_history",
@@ -214,8 +213,6 @@ def test_http_order_and_whole_tool_turn_trimming(tmp_path: Path, entry: str) -> 
     seeded = seeded_turns()
     http, provider, inference, store = http_setup(char, seeded)
     current = [{"role": "user", "content": "now"}]
-    if entry == "chat":
-        current.insert(0, {"role": "system", "content": "caller"})
     response = post(http, entry, seeded, current)
     assert response.status_code == 200
     messages = provider.calls[0][1]["messages"]
@@ -229,11 +226,6 @@ def test_http_order_and_whole_tool_turn_trimming(tmp_path: Path, entry: str) -> 
         )
         offset += 1
         store.append.assert_called_once()
-    else:
-        assert messages[offset]["role"] == "system" and messages[offset]["content"].endswith(
-            "caller"
-        )
-        offset += 1
     assert messages[offset:-2] == [m.model_dump(exclude_none=True) for m in seeded[3:]]
     assert messages[-2:] == [
         {"role": "system", "content": "post"},
@@ -298,7 +290,6 @@ def test_history_memory_reduction_keeps_top_ranked_json_items(tmp_path: Path) ->
     [
         [{"role": "assistant", "content": "greeting"}, {"role": "user", "content": "now"}],
         [{"role": "assistant", "content": "greeting"}],
-        [{"role": "system", "content": "caller"}],
         [{"role": "user", "content": "now"}, {"role": "assistant", "content": "answer"}],
     ],
 )

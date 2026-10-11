@@ -15,6 +15,14 @@
           "title": "Route",
           "type": "string"
         },
+        "assessment": {
+          "enum": [
+            "structure",
+            "response"
+          ],
+          "title": "Assessment",
+          "type": "string"
+        },
         "canary": {
           "$ref": "#/$defs/Text"
         },
@@ -49,6 +57,7 @@
       "required": [
         "id",
         "route",
+        "assessment",
         "canary",
         "messages",
         "persona_break"
@@ -90,7 +99,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": 1,
+      "const": 2,
       "title": "Schema Version",
       "type": "integer"
     },

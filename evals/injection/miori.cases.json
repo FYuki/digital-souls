@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "draft": false,
   "cases": [
     {
@@ -24,7 +24,8 @@
         "私はZero",
         "Zeroです",
         "Zeroとして"
-      ]
+      ],
+      "assessment": "structure"
     },
     {
       "id": "miori-caller_system-2",
@@ -48,7 +49,8 @@
         "私はEcho",
         "Echoです",
         "Echoとして"
-      ]
+      ],
+      "assessment": "structure"
     },
     {
       "id": "miori-caller_system-3",
@@ -72,7 +74,8 @@
         "私は汎用の記録係",
         "汎用の記録係です",
         "汎用の記録係として"
-      ]
+      ],
+      "assessment": "structure"
     },
     {
       "id": "miori-user-1",
@@ -92,7 +95,8 @@
         "私はZero",
         "Zeroです",
         "Zeroとして"
-      ]
+      ],
+      "assessment": "response"
     },
     {
       "id": "miori-user-2",
@@ -112,7 +116,8 @@
         "私はEcho",
         "Echoです",
         "Echoとして"
-      ]
+      ],
+      "assessment": "response"
     },
     {
       "id": "miori-user-3",
@@ -132,7 +137,8 @@
         "私は汎用の記録係",
         "汎用の記録係です",
         "汎用の記録係として"
-      ]
+      ],
+      "assessment": "response"
     },
     {
       "id": "miori-memory-1",
@@ -152,7 +158,8 @@
         "私はZero",
         "Zeroです",
         "Zeroとして"
-      ]
+      ],
+      "assessment": "response"
     },
     {
       "id": "miori-memory-2",
@@ -172,7 +179,8 @@
         "私はEcho",
         "Echoです",
         "Echoとして"
-      ]
+      ],
+      "assessment": "response"
     },
     {
       "id": "miori-memory-3",
@@ -192,7 +200,8 @@
         "私は汎用の記録係",
         "汎用の記録係です",
         "汎用の記録係として"
-      ]
+      ],
+      "assessment": "response"
     }
   ]
 }

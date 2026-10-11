@@ -93,6 +93,10 @@ class Inference:
         Context lookup receives server-trusted scope only after export is allowed.
         A fresh payload keeps concurrent characters and caller histories isolated.
         """
+        if any(message.role == "system" for message in request.messages):
+            raise CoreError(
+                400, "system_message_unsupported", "Caller system messages are unsupported"
+            )
         character = (self.aliases if alias else self.characters).get(selector)
         if character is None:
             raise CoreError(404, "character_not_found", "Unknown character or model alias")
@@ -205,7 +209,6 @@ class Inference:
                         MemoryItem(item, json_object=bool(guarded and guarded.items))
                         for item in memory_items
                     ),
-                    caller_instructions=separated.caller_instructions,
                     history=separated.history,
                     current_input=separated.current_input,
                     tools=tuple(request.tools or ()),

@@ -50,11 +50,11 @@ Card本文はログ・エラーへ出さず、ハッシュは評価・調査で�
 
 ## 対応する小範囲
 
-- （[ADR 0031](adr/0031-reject-caller-system.md)で、callerのsystemを400 `system_message_unsupported`で拒否することが決定済み、実装前。以下は現在の挙動）
-- textのみの`messages`（system/user/assistant/tool、1件以上・件数上限なし）。callerのsystemは
-  どの位置にあっても「呼び出し側の指示」へ移し、記憶の後・履歴の前に元の順序で置きます。
-  各messageに人格・応答方針より優先しないことを示す固定の説明枠を付け、予算に応じてmessage単位で削ります。
-  人格はLLMへの指示であり、セキュリティ境界ではありません（[ADR 0026](adr/0026-prompt-assembly.md)）。
+- textのみの`messages`（user/assistant/tool、1件以上・件数上限なし）。
+  `role: "system"` が1件でもあれば、文字列・text配列や位置を問わず400
+  `system_message_unsupported`で拒否します（[ADR 0031](adr/0031-reject-caller-system.md)）。
+  privacy判定・記憶検索・token計数・provider送信より前に拒否し、要求本文をエラーへ含めません。
+  stream要求もSSE開始前の通常のJSON HTTPエラーです。developer等の未対応roleは従来どおり400です。
 - 各役割の入力`content`は文字列、または`[{"type":"text","text":"..."}]`の配列を
   受け付けます。入口で各textを`\n`で連結し、1要素ならそのtextそのものになります。
   各要素は`type`・`text`だけを持ち、typeは`text`、textは厳密な文字列です。
@@ -145,10 +145,10 @@ provider失敗は502、timeoutは504。内部例外や入力・キーをerror本
 
 [ADR 0026](adr/0026-prompt-assembly.md)に従い、Chat API・会話履歴 API・回答評価は
 同じ `Inference.prepare` と `PromptBuilder` で provider のmessagesを組み立てます。
-順序はbefore_char Lore→Card（固定人格）→after_char Lore→Runtime Context→記憶→呼び出し側の指示→履歴→
+順序はbefore_char Lore→Card（固定人格）→after_char Lore→Runtime Context→記憶→履歴→
 `post_history_instructions`→今回の入力です。Card・Lore・Runtime Contextは先頭systemへまとめ、
 記憶は説明文と別のuser message内のJSON配列でデータとして渡します。
-呼び出し側の指示とpost_historyはそれぞれ独立したsystem messageです。
+post_historyは独立したsystem messageです。callerのsystemは組み立て前に拒否します。
 Runtime Contextは現在空であり、人格・関係・生活状態のsnapshotはまだ生成しません。
 記憶検索は従来どおり会話IDがある経路だけのopt-inです。stateless Chat APIでは検索しません。
 完成したpayloadを再認可し、送信直前にもpolicyの同一性・版と記憶の撤回guardを再検証します。
@@ -187,12 +187,12 @@ priority 省略時の effective_priority は insertion_order です。Lore 領�
 同梱 Miori の単独質問の選択は従来と同じですが、複数一致が推定700 tokenを超える場合は Entry が外れます
 （[合成検証と回帰の証跡](evidence/2026-10-11-character-book.md)）。
 
-運用設定 `prompt_budget` はtotal/character/lore/memory/caller_instructions/history/current_input/
+運用設定 `prompt_budget` はtotal/character/lore/memory/history/current_input/
 post_historyの正の整数です。boolean・文字列・小数は拒否します。
-既定は順に28672/16384/8192/16384/8192/24576/16384/4096です。
+既定は順に28672/16384/8192/16384/24576/16384/4096です。
 全体の既定値は32768から出力用4096を予約した値で、領域上限の合計が全体上限になるわけではありません。
 `memory_floor`・`history_floor`は正の厳密な整数で、いずれも既定3です。
-旧 `context_budget_bytes` が残る設定は起動時エラーです。
+旧 `context_budget_bytes` または `prompt_budget.caller_instructions` が残る設定は起動時エラーです。
 カード内の `token_budget` は運用設定の代わりにはなりません。
 
 profile の `token_counter` は `estimate`（既定）または `llamacpp` を明示します。
@@ -217,7 +217,7 @@ proxy環境変数を無視し、redirectを追跡せず、計数前にも実際�
 本文・template結果・token IDをログやエラーへ出しません。
 実サーバーのIT2によるtemplate受入・実token数の照合はNOT RUNです。
 [合成試験の証跡](evidence/2026-10-11-llamacpp-token-count.md)を参照してください。
-全体超過では、低順位の記憶を下限まで→古い呼び出し側の指示→記憶を1件まで→古い履歴を
+全体超過では、低順位の記憶を下限まで→記憶を1件まで→古い履歴を
 直近N往復まで→最後の記憶→直近N往復のうち保護する1往復より古い履歴→Lore→post_historyの順に削ります。
 領域超過ではその領域の同じ削減単位を適用します。本文を途中で切らず、tool callと結果の組は分けません。
 固定人格（ContextSource拡張を含む）・今回の入力（toolsを含む）・直前の完了した1往復は必ず残し、
@@ -229,7 +229,7 @@ userのない要求や末尾assistantも従来どおり受理します。
 
 領域のtoken数と削減件数は内部の `Prepared.usage` に保持し、HTTPへは出しません。
 `GET /v1/characters/{character_id}` のmetadataでは `context_budget_bytes` を廃止し、
-`prompt_budget`（8領域のobject）・`memory_floor`・`history_floor`を返します。
+`prompt_budget`（totalと6領域のobject、`caller_instructions`を廃止）・`memory_floor`・`history_floor`を返します。
 completion成功応答の形は変えません。物理モデルcontext上限のmetadataは未確認のnullのままです。
 運用者は推論先contextと出力予約に合う全体上限を設定してください。
 
