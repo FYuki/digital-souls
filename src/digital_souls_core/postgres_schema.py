@@ -9,7 +9,7 @@ from .postgres_record_revocation import revoke_records
 from .postgres_record_schema import COLUMNS, RECORD_DDL
 from .postgres_record_schema import CONSTRAINTS as RECORD_CONSTRAINTS
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Tables present through version 5, used only to validate historical migration sources.
 LEGACY_VERBATIM_INDEXES = {("memory_source_lookup", "i")}
@@ -43,6 +43,7 @@ TABLE_COLUMNS = {
         "private_mode",
         "stated_at",
         "memory_confirmation",
+        "card_sha256",
     ),
     "source_deletions": ("seq", "event", "binding", "conversation", "through_revision"),
     "memory_events": ("seq", "id", "binding", "conversation", "epoch", "reason", "processed"),
@@ -137,7 +138,7 @@ DDL = (
         fingerprint TEXT NOT NULL, revision INTEGER NOT NULL, messages TEXT NOT NULL,
         finish TEXT NOT NULL, memory_excluded TEXT NOT NULL DEFAULT '[]',
         private_mode BOOLEAN NOT NULL DEFAULT false, stated_at TIMESTAMPTZ,
-        memory_confirmation TEXT NOT NULL DEFAULT '{}',
+        memory_confirmation TEXT NOT NULL DEFAULT '{}', card_sha256 TEXT,
         PRIMARY KEY(binding,conversation,request), UNIQUE(binding,conversation,revision),
         FOREIGN KEY(binding,conversation) REFERENCES conversations(binding,id) ON DELETE CASCADE
     )""",

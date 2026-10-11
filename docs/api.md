@@ -40,12 +40,20 @@ CLI等のOriginなし要求は許可します。別portのブラウザーUIや�
 inference profile、provider/modelは別の識別子です。返却JSONの`model`はSDKが返す実モデル表記を
 保持し、aliasに書き換えません。レスポンスheaderの`X-Character-ID`、
 `X-Character-Config-Version`、`X-Inference-Profile`で固定した設定を確認できます。
+両completion経路の成功応答（stream・非stream）には `X-Character-Card-SHA256` も付きます。
+これは起動時に読み込んだCardファイルの生バイト列のSHA-256（小文字64桁）です。改行・空白を
+正規化せず、解析に使った同じバイト列から計算し、起動後にファイルが変わっても値は変えません。
+`GET /v1/characters/{character_id}` も `card_sha256` を返します。要求とcompletion本文は変更しません。
+Card本文はログ・エラーへ出さず、ハッシュは評価・調査で応答とCardを対応付けるために使います
+（[ADR 0029 §6](adr/0029-persona-consistency-evaluation.md#6-card-のハッシュ)）。
 設定とカードは起動時に一度読み込みます。進行中の要求へ設定更新は入りません。
 
 ## 対応する小範囲
 
 - textのみの`messages`（system/user/assistant/tool、1件以上・件数上限なし）。callerのsystemは
-  人格systemの後に置きます（[ADR 0026](adr/0026-prompt-assembly.md)で「呼び出し側の指示」の枠へ移すことが決定済み、実装前）。人格はLLMへの指示であり、セキュリティ境界ではありません。
+  どの位置にあっても「呼び出し側の指示」へ移し、記憶の後・履歴の前に元の順序で置きます。
+  各messageに人格・応答方針より優先しないことを示す固定の説明枠を付け、予算に応じてmessage単位で削ります。
+  人格はLLMへの指示であり、セキュリティ境界ではありません（[ADR 0026](adr/0026-prompt-assembly.md)）。
 - 各役割の入力`content`は文字列、または`[{"type":"text","text":"..."}]`の配列を
   受け付けます。入口で各textを`\n`で連結し、1要素ならそのtextそのものになります。
   各要素は`type`・`text`だけを持ち、typeは`text`、textは厳密な文字列です。
@@ -134,22 +142,67 @@ provider失敗は502、timeoutは504。内部例外や入力・キーをerror本
 
 ## 文脈・プライバシー
 
-組み立ての順序、呼び出し側の system の扱い、予算は[ADR 0026](adr/0026-prompt-assembly.md)で置き換えることが決まっています（2026-10-11 承認、実装前）。
-以下は現在の実装の挙動です。
+[ADR 0026](adr/0026-prompt-assembly.md)に従い、Chat API・会話履歴 API・回答評価は
+同じ `Inference.prepare` と `PromptBuilder` で provider のmessagesを組み立てます。
+順序はCard（固定人格）→選択済みLore→Runtime Context→記憶→呼び出し側の指示→履歴→
+`post_history_instructions`→今回の入力です。Card・Lore・Runtime Contextは先頭systemへまとめ、
+記憶は説明文と別のuser message内のJSON配列でデータとして渡します。
+呼び出し側の指示とpost_historyはそれぞれ独立したsystem messageです。
+Runtime Contextは現在空であり、人格・関係・生活状態のsnapshotはまだ生成しません。
+記憶検索は従来どおり会話IDがある経路だけのopt-inです。stateless Chat APIでは検索しません。
+完成したpayloadを再認可し、送信直前にもpolicyの同一性・版と記憶の撤回guardを再検証します。
+削った記憶も含む検索結果全体のguardを保持します。
 
-元Mioriカードを変更せず、name/description/personality/scenario/system_prompt/mes_exampleを
-systemに組み立てます。Loreは最新user textに対する非再帰の単純key一致で、selective時には
-secondary keyも必要です。insertion_order順です。これは汎用CCv3実装ではありません。
-対応しないregex/constant/case-sensitive/配置/scan modeは起動時に拒否します。
-first_mes、音声extension、creator_notesはモデルへ注入しません。
+元Mioriカードを変更せず、description/personality/scenario/system_prompt/mes_exampleを
+「キャラクター概要」「性格と話し方」「関係と世界観」「応答方針」「会話例」の順に
+`## 見出し`とstrip済み本文で組み立てます。空の要素は見出しごと省き、name/first_mes/
+音声extension/creator_notesは注入しません。post_historyを持つカードも読み込みます。
+Loreは最新user textへの非再帰の単純key一致で、selective時にはsecondary keyも必要です。
+insertion_order順でafter_charへ置きます。これは汎用CCv3実装ではありません。
+対応しないregex/constant/case-sensitive/配置/scan modeの起動時拒否は維持します。
 
-カードの`token_budget`は、この版ではモデル別tokenizerを使わないため強制しません。
-注入system全体をUTF-8の`context_budget_bytes`で制限し、超過は切り捨てずエラーにします。
-これは物理モデルのcontext windowではありません。metadataの物理token上限は未確認のnullです。
-caller履歴の総token数を保証せず、providerの上限エラーはprovider失敗として返します。
+運用設定 `prompt_budget` はtotal/character/lore/memory/caller_instructions/history/current_input/
+post_historyの正の整数です。boolean・文字列・小数は拒否します。
+既定は順に28672/16384/8192/16384/8192/24576/16384/4096です。
+全体の既定値は32768から出力用4096を予約した値で、領域上限の合計が全体上限になるわけではありません。
+`memory_floor`・`history_floor`は正の厳密な整数で、いずれも既定3です。
+旧 `context_budget_bytes` が残る設定は起動時エラーです。
+カード内の `token_budget` は運用設定の代わりにはなりません。
+
+profile の `token_counter` は `estimate`（既定）または `llamacpp` を明示します。
+`estimate` は `ByteTokenCounter` で、本文のUTF-8バイト数（tool callの名前・arguments、tool定義を含む）
++ message数×16 + 16をtokenの上限として推定します。
+`llamacpp` は `transport=llamacpp_chat` だけで許可し、その他のtransportや未知の値は起動時エラーです。
+profile の検証済みloopback `api_base` と同じサーバーの `/apply-template` へmessages・tools・tool_choiceを送り、
+返ったpromptを `/tokenize`（add_special/parse_special=true、with_pieces=false）へ送ってtoken ID配列の長さを使います。
+固定サーバーのChat Completionsと同じtemplate parserを使い、tool定義はtemplateに含めます。
+領域別の計数も同じtemplateを適用するので、領域の合計と全体は一致しません。
+計数はasyncで、同一build内の同一messages/toolsの成功結果だけをキャッシュします。
+接続失敗・不正な応答・redirectは502 `token_count_failed`、timeoutは504 `token_count_failed`です。
+推定へ切り替えず、推論と会話履歴のappendを行いません。cancelは伝播します。
+proxy環境変数を無視し、redirectを追跡せず、計数前にも実際の本文と権限を検査します。
+本文・template結果・token IDをログやエラーへ出しません。
+実サーバーのIT2によるtemplate受入・実token数の照合はNOT RUNです。
+[合成試験の証跡](evidence/2026-10-11-llamacpp-token-count.md)を参照してください。
+全体超過では、低順位の記憶を下限まで→古い呼び出し側の指示→記憶を1件まで→古い履歴を
+直近N往復まで→最後の記憶→直近N往復のうち保護する1往復より古い履歴→Lore→post_historyの順に削ります。
+領域超過ではその領域の同じ削減単位を適用します。本文を途中で切らず、tool callと結果の組は分けません。
+固定人格（ContextSource拡張を含む）・今回の入力（toolsを含む）・直前の完了した1往復は必ず残し、
+これらだけで超過する場合は400 `prompt_budget_exceeded`、messageには領域名だけを返します。
+最初のuserより前のassistant等は削除可能な1単位で、完了往復には数えません。
+履歴の下限Nは完了した往復の数で、不完了の単位は下限に含めません。
+userのない要求や末尾assistantも従来どおり受理します。
+履歴の削減は送信payloadだけに適用し、保存済み履歴を削除しません。
+
+領域のtoken数と削減件数は内部の `Prepared.usage` に保持し、HTTPへは出しません。
+`GET /v1/characters/{character_id}` のmetadataでは `context_budget_bytes` を廃止し、
+`prompt_budget`（8領域のobject）・`memory_floor`・`history_floor`を返します。
+completion成功応答の形は変えません。物理モデルcontext上限のmetadataは未確認のnullのままです。
+運用者は推論先contextと出力予約に合う全体上限を設定してください。
 
 `ContextSource`は固定したCharacter（ID/version/profile）と`AccessScope`を受け取ります。
-初期実装は空で保存・検索・技能学習をしません。scopeはサーバー固定のlocal-operator/local/
+初期実装は空で保存・検索・技能学習をしません。既存の信頼済みmemory/skill拡張文字列は
+Cardの応答方針へ追加し、character予算に含めます。Runtime Contextの状態snapshotには使いません。scopeはサーバー固定のlocal-operator/local/
 local-privateであり、callerによるsubject/client/audienceの指定は拒否します。
 将来、公開配信や複数利用者の記憶を扱うには、認証済みsubjectと信頼できるclient用途・audienceを
 確立し、検索と外部送信の両境界で認可する実装が必要です。同じキャラクターIDだけで記憶を共有しません。

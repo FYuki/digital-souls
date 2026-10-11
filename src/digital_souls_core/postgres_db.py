@@ -160,7 +160,15 @@ class PostgresDatabase:
             if ("schema_version", "r") not in relations:
                 raise CoreError(503, "storage_schema", "Unsupported PostgreSQL schema")
             versions = db.execute("SELECT version FROM schema_version").fetchall()
-            if versions not in ([(1,)], [(2,)], [(3,)], [(4,)], [(5,)], [(SCHEMA_VERSION,)]):
+            if versions not in (
+                [(1,)],
+                [(2,)],
+                [(3,)],
+                [(4,)],
+                [(5,)],
+                [(6,)],
+                [(SCHEMA_VERSION,)],
+            ):
                 raise CoreError(503, "storage_schema", "Unsupported PostgreSQL schema")
             version = versions[0][0]
             tables = self._tables(version)
@@ -208,6 +216,10 @@ class PostgresDatabase:
                 db.execute("DROP TABLE memories")
                 db.execute("DROP TABLE memory_jobs")
                 db.execute("UPDATE schema_version SET version=6")
+                self._validate_schema(db, 6)
+            if version <= 6:
+                db.execute("ALTER TABLE turns ADD COLUMN card_sha256 TEXT")
+                db.execute(f"UPDATE schema_version SET version={SCHEMA_VERSION}")
                 self._validate_schema(db, SCHEMA_VERSION)
 
     @staticmethod
@@ -237,6 +249,8 @@ class PostgresDatabase:
                 expected = tuple(column for column in expected if column != "stated_at")
             if version < 3 and table == "turns":
                 expected = tuple(column for column in expected if column != "memory_confirmation")
+            if version < 7 and table == "turns":
+                expected = tuple(column for column in expected if column != "card_sha256")
             owned = [row for row in columns if row[0] == table]
             if tuple(row[1] for row in owned) != expected:
                 raise CoreError(503, "storage_schema", "Unsupported PostgreSQL schema")
@@ -269,7 +283,7 @@ class PostgresDatabase:
                     wanted_type, can_be_null = COLUMNS[table][column]
                     wanted_default = None
                 else:
-                    can_be_null = column in {"body", "revoked_by", "stated_at"}
+                    can_be_null = column in {"body", "revoked_by", "stated_at", "card_sha256"}
                 if (
                     kind != wanted_type
                     or nullable != ("YES" if can_be_null else "NO")

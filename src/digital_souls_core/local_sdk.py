@@ -23,8 +23,7 @@ async def local_openai_client(
     # relying on private SDK attributes to remove arbitrary credentials/Host.
     if os.environ.get("OPENAI_CUSTOM_HEADERS"):
         raise ValueError("Local SDK client does not accept environment custom headers")
-    http = httpx.AsyncClient(trust_env=False, follow_redirects=False)
-    try:
+    async with local_http_client(timeout_seconds) as http:
         client = openai.AsyncOpenAI(
             base_url=base,
             api_key="local-no-auth",
@@ -40,6 +39,14 @@ async def local_openai_client(
         client.organization = None
         client.project = None
         yield client
+
+
+@asynccontextmanager
+async def local_http_client(timeout_seconds: float) -> AsyncGenerator[httpx.AsyncClient]:
+    """No proxy/redirect, owned by one operation; cleanup completes on cancellation."""
+    http = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=timeout_seconds)
+    try:
+        yield http
     finally:
         with anyio.CancelScope(shield=True):
             closing = asyncio.create_task(http.aclose())

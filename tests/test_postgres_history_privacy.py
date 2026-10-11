@@ -12,6 +12,7 @@ from digital_souls_core.conversations import Conversations
 from digital_souls_core.history import Binding, SourceReference
 from digital_souls_core.privacy import PrivacyPolicy
 from digital_souls_core.privacy_classifier import LocalClassifier
+from digital_souls_core.prompt_builder import CharacterCard
 
 from . import test_postgres_stores
 from .conversation_support import turn
@@ -38,7 +39,9 @@ def policy_setup(
     char = character("synthetic")
     if local:
         char = type(char)(
-            char.config.model_copy(update={"profile": local_profile()}), char.system_prompt
+            char.config.model_copy(update={"profile": local_profile()}),
+            char.card,
+            card_sha256=char.card_sha256,
         )
     inference = Inference((char,), provider, privacy=policy)
     return (
@@ -210,8 +213,9 @@ async def test_actual_payload_injection_blocked(stores: Stores, source: str) -> 
     marker = "password: SYNTHETIC_ONLY"
     char = Character(
         old.config,
-        marker if source == "system" else old.system_prompt,
+        CharacterCard(system_prompt=marker) if source == "system" else old.card,
         (Lore(("Synthetic",), (), False, marker),) if source == "lore" else (),
+        card_sha256=old.card_sha256,
     )
 
     class Context:

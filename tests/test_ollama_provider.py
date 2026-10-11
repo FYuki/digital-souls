@@ -21,7 +21,11 @@ def ollama_character(think: bool | None = False) -> Character:
         sample.config.profile.model_dump(exclude_unset=True)
         | {"model": "ollama_chat/gemma4:12b", "ollama_think": think}
     )
-    return Character(sample.config.model_copy(update={"profile": profile}), sample.system_prompt)
+    return Character(
+        sample.config.model_copy(update={"profile": profile}),
+        sample.card,
+        card_sha256=sample.card_sha256,
+    )
 
 
 def native_response(message: dict[str, Any], reason: str = "stop") -> dict[str, Any]:

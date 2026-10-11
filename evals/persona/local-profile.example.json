@@ -1,0 +1,8 @@
+{
+  "profile_id": "persona-local-example",
+  "model": "openai/gemma4-12b",
+  "allowed_parameters": [],
+  "external_send_allowed": true,
+  "transport": "llamacpp_chat",
+  "api_base": "http://127.0.0.1:18080/v1"
+}

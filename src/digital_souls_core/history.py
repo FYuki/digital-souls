@@ -119,6 +119,14 @@ class Binding:
 
 
 @dataclass(frozen=True)
+class TurnMetadata:
+    """Identity of the Card used for the saved assistant response in this turn."""
+
+    turn_revision: int
+    card_sha256: str | None
+
+
+@dataclass(frozen=True)
 class Snapshot:
     conversation_id: str
     revision: int
@@ -127,6 +135,7 @@ class Snapshot:
     archived: bool = False
     memory_sources: tuple[SourceState, ...] = ()
     memory_confirmations: tuple[SourceReference, ...] = ()
+    turns: tuple[TurnMetadata, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -136,6 +145,7 @@ class Receipt:
     message: Message
     finish_reason: str
     memory_confirmation_indices: tuple[int, ...] = ()
+    card_sha256: str | None = None
 
 
 type Operation = Literal["create", "list", "read", "export", "store"]
@@ -173,6 +183,7 @@ class HistoryStore(Protocol):
         *,
         memory_excluded_indices: tuple[int, ...] = (),
         memory_confirmation_indices: tuple[int, ...] = (),
+        card_sha256: str | None = None,
     ) -> Receipt: ...
     def delete(self, binding: Binding, conversation_id: str) -> None: ...
 
