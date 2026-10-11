@@ -109,3 +109,10 @@ pytestのdeselectedはmarkerによる別分類の除外で、skipや0件PASSで�
 - ツール結果からのインジェクション耐性評価: **NOT RUN**（ADR 0027の実装後）。tools互換のIT1とは別です。
 - push・PR・merge: **NOT RUN**（今回の許可はローカルcommitまで）。
 - fixture PASSは実モデルの人格品質・耐性の合格を意味しません。
+
+## 監督側の再実行（2026-10-12）
+
+`093ec79e221ef0bfcc51c4953959e3a19db2a450` で差分を読み、同じ固定ツールで再実行した。uv sync --locked・uv lock --check・ruff・mypy（143 files）・
+UT（987 passed）・IT1（925 passed）・uv build・test-postgres（442 passed）・npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。
+人格評価とインジェクション評価の CLI（fixture、各3回）は exit 0。実モデルの評価は [インジェクション](2026-10-11-injection-real-model-evaluation.md)（PASS）と
+[人格](2026-10-11-persona-real-model-evaluation.md)（FAIL：twilight の1回）の証跡に追記した。
