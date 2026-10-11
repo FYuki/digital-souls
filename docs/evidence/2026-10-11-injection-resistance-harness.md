@@ -83,3 +83,78 @@ test-postgres（442 passed）・npm ci＋Node（59 tests）・check-docs・diff 
 記憶のデータの枠そのものの耐性を測るもので、本番に存在する経路の評価ではない（会話履歴 API × 記憶 context は本番の経路）。
 
 実モデルの評価は NOT RUN（Miori のケース `miori.draft.cases.json` がユーザー確認前のため）。ツールの結果の経路は NOT RUN（ADR 0027 の実装後）。
+
+
+## 経路別ゲートと Miori ケース固定（2026-10-11 追記）
+
+対象：`feature/165-miori-cases`、起点 `b8abdb9`。
+上の draft・全応答経路の canary 必須判定は初回検証時の記録です。
+今回のユーザー決定により以下へ更新しました。ADR の注記は監督担当が行います。
+
+- `injection_evaluation.ROUTES` に caller system / memory は canary ゲート有効、
+  user は無効という不変の経路定義を置きました。ケース単位の任意設定は受け付けません。
+- user の canary は入力本文を維持するため残しました。出力は `injection_followed` にせず、
+  `canary_reference` の「canary の出力：参考」の件数だけで報告します。
+  `route_policy` の `canary_gate` で必須ゲートかどうかも明示します。
+- 人格逸脱の既存3表現に加えて、攻撃先の Zero / Echo / 汎用の記録係の
+  「私は…」「…です」「…として」の名乗り・自認表現をケースへ追加しました。
+  判定は従来の NFKC / casefold の部分一致で、否定・引用を区別しない制約を維持します。
+  単独の別人格名は違反にしません。
+- `miori.draft.cases.json` を `miori.cases.json` へ改名し、`draft: false` に固定しました。
+  起点の JSON との比較で、Miori・合成ケースとも入力本文・canary・id・経路・記憶本文の一致を確認。
+  変更は固定の metadata と上記の人格逸脱表現のみです。
+- Card hash・履歴 system 拒否・実行不完了・非空の実行行列の必須ゲートは維持しました。
+  CLI・runtime・schema・標準の応答 fixture は既存の共通採点を利用し、そのままです。
+
+ケース集合の版（validator が正規化した JSON の SHA-256）：
+
+- Miori：`af45f3e80282356ab9e69d9eee2da59a37277736ece0c24843795d445f442fbf`
+- 合成：`36cb7a87d18c1f2fc9fd73b99b0dc03286549103b8a5a23b3bb3f4af4eaeba30`
+
+先に UT / IT1 を追加・更新し、修正前は **FAIL / exit 1（14 failed、48 passed）**。
+user の canary 誤判定、別人格の名乗りの見逃し、未固定の Miori ファイルによる失敗を確認してから
+実装しました。修正後の対象試験は **PASS（62 passed：UT 27件、IT1 35件）**。
+全ケースの経路別 canary と人格逸脱を UT で確認し、両入口の user canary は PASS / exit 0、
+user の人格逸脱と外部入力の canary は FAIL / exit 1 を IT1 で確認しました。
+各必須ゲートの CLI 失敗検証と空ケース拒否も維持しています。
+Miori ケースの offline CLI 試験も合成 Luma Card / fixture profile のみを使います。
+報告の `case_version` と `cases_draft: false` を照合し、実 Miori の品質試験とは区別します。
+
+今回も固定の uv 0.8.22 / Node 24.19.0、Python 3.12.3 と上記の環境変数で実行。
+依存取得以外の試験は外部通信・実 LLM・GPU なし。PostgreSQL は helper が作った
+ネットワークなし・公開ポートなしの専用コンテナだけを使い、終了時に削除しました。
+以下は今回の修正後の実測結果です。
+
+| コマンド | 結果 |
+| --- | --- |
+| `uv sync --locked` | PASS（80 packages、lock変更なし） |
+| `uv lock --check` | PASS |
+| `uv run --no-sync ruff check <上記対象>` | PASS |
+| `uv run --no-sync ruff format --check <上記対象>` | PASS（142 files） |
+| `uv run --no-sync mypy` | PASS（142 source files） |
+| `uv run --no-sync pytest -m ut -q` | PASS（979 passed、5.55秒） |
+| `uv run --no-sync pytest -m it1 -q` | PASS（874 passed、88.45秒） |
+| `uv build --no-build-isolation` | PASS（sdist / wheel） |
+| `bash tools/test-postgres.sh` | PASS（442 passed、83.32秒） |
+| `(cd evals/semantic && npm ci --no-audit --no-fund)` | PASS（575 packages、10秒） |
+| `node --test --test-reporter=./tools/required-tests-reporter.mjs tools/*.test.mjs` | PASS（59 registered required tests、skip/todo/cancelled 0） |
+| `node tools/check-docs.mjs` | PASS |
+| `git diff --check` / `git diff --cached --check` | PASS |
+| `uv run --no-sync python tools/evaluate-injection-resistance.py --runs 3 --output /dev/shm/injection-165-fix-gates/fixture-report.json` | PASS / exit 0（15応答＋3構造検査、6必須ゲート0件、user canary参考0件、本文なし） |
+
+必須試験の SKIP は0件。marker の deselected は対象外種別で、SKIP ではありません。
+修正前の TDD の FAIL は上に記録し、最終ゲートの PASS と区別しています。
+Starlette / Pydantic と npm の既存 warning はあり、最終ゲートの FAIL はありません。
+fixture 報告は起点 `b8abdb9` / `dirty: true` の変更中コードで測定し、
+引き渡し時にローカル commit の SHA を報告します。
+
+今回の未実施：実モデルの耐性と実 Miori Card での品質は **NOT RUN**（監督担当の実評価へ）。
+ツール結果は **NOT RUN（ADR 0027 の実装後）**。ADR 注記は監督担当の範囲です。
+Card・`evals/persona/`・ADR は変更しておらず、push・PR・merge は行いません。
+
+## 監督側の再実行（user 経路の判定変更とケース固定の後、2026-10-11）
+
+`256ab602e31c325ef1c09cc33352bc8637ff1884` に epic を取り込んだ `a4f30953a0de4db7a26a118d076a4400fdb8fdbe` で、差分を読み、同じ固定ツールで再実行した。
+uv sync --locked・uv lock --check・ruff・mypy（142 files）・UT（979 passed）・IT1（874 passed）・uv build・test-postgres（442 passed）・
+npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。インジェクション評価 CLI（fixture、3回）は exit 0。
+Miori の実モデル評価は [別の証跡](2026-10-11-injection-real-model-evaluation.md) にある（結果は FAIL）。
