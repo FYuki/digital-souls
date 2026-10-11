@@ -160,17 +160,21 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
   標準CLIのPASS / exit 0と各違反のFAIL / exit 1を、CI対象のUT・IT1で固定しています。
 - [固定 Miori ケース](miori.cases.json)：2026-10-11 ユーザー決定を反映した固定集合。
   自己紹介・話し方2件（自己紹介と挨拶）、好み・価値観2件、世界観・Lore3件（計7件）。
-  名前と丁寧語、木漏れ日・黄昏、由来・光の断片・光のかけらを扱います。
+  名前と丁寧語、木漏れ日・黄昏、光の現象が寄り集まって生まれた由来・光の断片・光のかけらを扱います。
   [同梱Card](../../characters/miori/miori.card.json) の field を各ケースに注記します。
   必須ゲート `persona_break` の表現は全ケース共通で「私は言語モデル」「AIアシスタントです」
   「大規模言語モデルとして」の3つに限定します。単独の「AI」「アシスタント」は禁止しません。
   2026-10-11 のユーザー決定で、`miori-name` の丁寧語の条件を「です／といいます／と申します」のいずれかに広げました
   （実モデルの応答が「光織といいます」の形で名乗り、人格に沿っていたため。[証跡](../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)）。
-  `miori-origin` の「AI」の条件は Card の Lore 自体の見直しと合わせて別に扱い、それまでは元の条件のまま評価します。
+  同日のユーザー決定で Card の概要・由来を「存在」に修正し、`miori-origin` の required を
+  `[["光"], ["生まれ", "寄り集ま"]]` に固定しました。「AI」のグループは外しました。
+  [同日先行の実モデル評価](../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)は
+  この変更前の「光」と「AI」を必須とする条件で測定した結果であり、新版の品質評価ではありません。
+  [変更の証跡](../../docs/evidence/2026-10-11-miori-origin-lore.md)に新旧 Card・ケース版を記録します。
   固定ケースを `--cases` で指定した報告の `case_version` に集合のSHA-256、`cases_draft: false` を記録します。
   標準CLIはLumaの合成fixtureを使います。Mioriの fixture 評価には対応するCard設定・応答fixtureを指定し、
   実モデル評価には上記の real モードを使います。
-  実モデルのMiori品質は未評価です。
+  新版の Card・ケースでの実モデルのMiori品質は未評価です。
 
 ## 今後の課題
 

@@ -121,6 +121,45 @@ bash tools/with-test-postgres.sh uv run --no-sync python tools/evaluate-persona-
 - 残りの不合格は回ごとのばらつき（`miori-twilight` の Chat 1回、`miori-tone` の会話履歴 1回）。分類ごとのケースが2件なので、
   1件のばらつきでその回の分類が 50% になり不合格になる。ケースの件数を増やすかは、今後の課題（望ましい QA の組の追加）と合わせて扱う。
 
+## 再評価（Card の由来の Lore と description を修正した後、2026-10-11）
+
+2026-10-11 のユーザー決定により、Card の由来の Entry を「…寄り集まって生まれた存在。…」に、description を「…という名前の存在。」に変え、
+`miori-origin` の含むべき表現を「光」と「生まれ／寄り集ま」の2グループ（「AI」を外す）にして新しい版として固定した（[変更の証跡](2026-10-11-miori-origin-lore.md)）。
+
+- 実行 commit: `c46ce0c3df49f290de4cb9ba634bfa74819e7285`（dirty=false）、ケース版 hash `c3d0e4e5597f21accd1208d9efdd3aa37f4a3a9fc866fcf4951c3462d8ef8adf`、Card hash `2de473dd239e5e6eca5a1aecb65688c0e1ec0a8e964792f34659857f76da3da8`（全応答で一致）。他の条件は上と同じ（cache なし3回、58秒）。
+- 結果：**FAIL**。必須ゲートはすべて0件。
+
+| 入口 | 分類 | 回 | 合格 | 判定（90% 以上） |
+| --- | --- | --- | --- | --- |
+| chat | self_intro | 1 | 2/2 | PASS |
+| chat | preferences | 1 | 1/2 | FAIL |
+| chat | world_lore | 1 | 3/3 | PASS |
+| chat | self_intro | 2 | 2/2 | PASS |
+| chat | preferences | 2 | 2/2 | PASS |
+| chat | world_lore | 2 | 3/3 | PASS |
+| chat | self_intro | 3 | 2/2 | PASS |
+| chat | preferences | 3 | 1/2 | FAIL |
+| chat | world_lore | 3 | 3/3 | PASS |
+| history | self_intro | 1 | 2/2 | PASS |
+| history | preferences | 1 | 2/2 | PASS |
+| history | world_lore | 1 | 3/3 | PASS |
+| history | self_intro | 2 | 2/2 | PASS |
+| history | preferences | 2 | 2/2 | PASS |
+| history | world_lore | 2 | 3/3 | PASS |
+| history | self_intro | 3 | 2/2 | PASS |
+| history | preferences | 3 | 2/2 | PASS |
+| history | world_lore | 3 | 3/3 | PASS |
+
+| 入口 | ケース | 欠けたグループ | 回数 |
+| --- | --- | --- | --- |
+| chat | `miori-twilight` | [0] | 2/3 |
+
+入口をまたぐ不一致（warn）: 2 件（miori-twilight）。
+
+- `miori-origin` は両入口で3回とも合格した。`miori-name` も両入口で3回とも合格。
+- 残る不合格は `miori-twilight`（Chat API で2回、「惹かれ／好き／馴染み」のいずれも含まない）だけ。分類「好み」はケースが2件のため、
+  この1件で該当回が 50% になり FAIL になる。期待値は変えていない。
+
 ## NOT RUN
 
 - 会話外の活動の入口（未実装）、実 Egogram judge、ST。
