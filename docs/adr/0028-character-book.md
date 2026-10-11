@@ -45,6 +45,8 @@ Core での読み替えは次のとおりです。
    Lore が0件なら何も足さず、Book がないカードと同じ messages にします。
 3. **予算**：Book の `token_budget` と ADR 0026 の Lore 領域の上限は、どちらも ADR 0026 §5 の token の数え方（profile ごと）で数えます。
    全体の予算が足りないときは、ADR 0026 の削減順の7番目で、上と同じ `removal_key` の小さい Entry から1件ずつ削ります。
+   token 数を推論先から取得できない profile でも、Book の `token_budget` は ADR 0026 の推定式で数えて適用します
+   （2026-10-11 ユーザー決定。下の選択肢の表を参照）。
 4. **記憶との分離**：Lore は記憶 context に入れず、記憶の参照名も付けません（PoC と同じ）。
 5. **起動時の拒否の見直し**：`constant`、`case_sensitive`、`position`、`scan_depth`、`priority`、`token_budget` を理由にした起動時の拒否をやめます。
    `use_regex=true` と `recursive_scanning=true` のカードも拒否せず、上の非対応の扱いにします。
@@ -57,6 +59,13 @@ Core での読み替えは次のとおりです。
 | PoC の Book ADR を採用し、Core の組み立て（ADR 0026）に合わせて読み替える | 採用案 |
 | regex・再帰 scan・Decorator まで対応する | 不採用。PoC でも MVP の範囲外（regex の timeout がない実行による遅延、未解釈の制御文字列の混入を避ける） |
 
+token 数を推論先から取得できない profile での Book の `token_budget`：
+
+| 案 | 判断 |
+| --- | --- |
+| A：推定式のまま `token_budget` を適用する | 採用（2026-10-11 ユーザー決定、原文「推奨案でよい」）。ADR 0026 の数え方と一貫し、予算を超えない側に倒れる |
+| B：推定式の profile では `token_budget` を適用せず、ADR 0026 の Lore 領域と全体の予算だけで削る | 不採用。profile によって Book の予算の意味が変わり、カードに書かれた上限を守らない場合が生じる |
+
 ## 影響
 
 - 標準的な CCV3 の Character Book を、起動時に拒否されずに読めます。[推論 API](../api.md) の「汎用 CCv3 実装ではない」という記述と、非対応の field の拒否を書き換えます。
@@ -64,7 +73,8 @@ Core での読み替えは次のとおりです。
 - Book の `token_budget` と `priority` が効くようになり、一致した Lore が多いときは優先度の低い Entry が外れます。
   token 数を推論先から取得できない profile では、ADR 0026 の推定式が実際より2〜3倍多く数えるため、実際より多くの Entry が外れます。
 - 同梱の Miori カード（`scan_depth=1`、`token_budget=700`、全 Entry が `after_char`、`constant` なし）は、一致する Entry の選択と並びが変わりません。
-  ただし、多くの Entry に同時に一致し、推定で 700 token を超える場合は、優先度の低い Entry が外れます（この点は下の確認事項）。
+  ただし、多くの Entry に同時に一致し 700 token を超える場合は、優先度の低い Entry が外れます。token 数を取得できない profile では、
+  推定式が実際の2〜3倍に数えるため、この外れ方が実際より起きやすくなります（案 A の採用による）。
 
 ## 検証
 
@@ -74,10 +84,3 @@ Core での読み替えは次のとおりです。
 - 回帰：同梱の Miori カードで、代表的な質問に対して選ばれる Entry と並びが現在の実装と同じであること。
 - IT1：Chat API と会話履歴 API で同じ Lore が選ばれること。
 - ログ・metadata に Lore の本文と keys が出ないこと。
-
-## 確認事項（ユーザーの判断が必要）
-
-- token 数を取得できない profile で Book の `token_budget` を推定式で数えると、Lore が実際より多く外れます。
-  案 A：そのまま推定式で数える（予算を超えない側に倒す。ADR 0026 と一貫する）。
-  案 B：推定式の profile では Book の `token_budget` を適用せず、ADR 0026 の Lore 領域と全体の予算だけで削る。
-  推奨は A です。Miori の通常の推論先（llama.cpp）は、ADR 0026 で token 数を取得できる推論先として数える予定のため（実装前）、実際の数で数えられます。
