@@ -34,7 +34,9 @@ PoC（公開 `FYuki/digital-souls`、revision `fce7382884d981c42be7fbd3ddaffe746
 - R5：会話外の活動の実行基盤には汎用 Agent を使ってよい。条件は、その Agent が使えるツールを Agent 単位で
   Core の MCP だけに限定でき、Gate を必ず通ることを設定で強制できること。開発用の Agent や T3 全体には制約をかけない。
 - R6：決まった定期処理（記憶の形成・内省など）はプロンプトを使わない。timer から Core の API を呼び、成功か失敗かを受け取る。
-  重複の防止・再試行・中断後の再開は Core 側（job の台帳と drain API）が持ち、timer は呼ぶだけ。外の最小 worker は置かない。
+  中断した処理を途中から再開する仕組みは持たず、安全は冪等性で担保する。中断や失敗のあとは次回の実行で最初からやり直し、
+  同じ入力で何度実行しても正本の結果が重複・食い違わないことを要件にする。重複の防止と再試行は Core 側（job の台帳と drain API）が持ち、
+  timer は呼ぶだけ。外の最小 worker は置かない。
 - 推論先は Core の profile 方式を維持し、会話中のツール判断に使う推論先だけをこの ADR で決める（J5）。
 - Accepted の ADR 0025・0017 §4・0020 §6/§7 との矛盾は、この ADR で置換を提案し、PrivateAgent の中止もこの ADR で確定する（J4）。
 - OpenClaw は止める。実行基盤の候補から外す。
@@ -123,8 +125,10 @@ CLI で 1〜3 を満たしました（T3 アプリ経由は未確認）。組み
 記憶の形成・内省など、手順が決まっている定期処理はプロンプトを使いません。OS の timer 等が Core の API（drain）を呼び、
 成功か失敗かを受け取るだけにします。キャラクターの判断が必要な部分は、Core の中で Core の LLM を使います。
 
-重複の防止、再試行、中断後の再開は Core が持ちます。Core は job の台帳（永続予約と状態）と、有限の範囲を処理する drain API を提供し、
-同じ job を二重に処理せず、途中で止まった job を次の呼び出しで再開します。timer は呼ぶだけで、状態を持ちません。
+重複の防止と再試行は Core が持ちます。Core は job の台帳（永続予約と状態）と、有限の範囲を処理する drain API を提供し、
+同じ job を二重に処理しません。中断した処理を途中から再開する仕組み（checkpoint）は持ちません。途中で止まった job は
+次の呼び出しで最初からやり直し、冪等性で結果の重複・食い違いを防ぎます。同じ入力で何度実行しても、正本の結果が
+重複したり食い違ったりしないことを要件にします。timer は呼ぶだけで、状態を持ちません。
 外の最小 worker は置きません。
 
 ### 4. Core に MCP の入口を置く
@@ -143,9 +147,9 @@ PrivateAgent の開発を中止します。PrivateAgent に任せていたこと
 
 | 以前の担当（PrivateAgent） | 置き換え先 |
 | --- | --- |
-| 形成 job の起動・スケジュール・再試行・待機と再開（ADR 0017 §4） | timer が Core の drain API を呼ぶ。再試行・再開は Core の job の台帳（§3） |
+| 形成 job の起動・スケジュール・再試行・待機と再開（ADR 0017 §4） | timer が Core の drain API を呼ぶ。重複の防止と再試行は Core の job の台帳。中断した job は途中から再開せず、次回に最初からやり直す（冪等性で担保、§3） |
 | Autonomy Target、High Impact の確認、実行結果の状態（ADR 0020 §6） | Core（§2） |
-| orchestration・queue・scheduling・checkpoint（ADR 0020 §7） | 定期処理は Core の job の台帳。活動のループは汎用 Agent（§2・§3） |
+| orchestration・queue・scheduling・checkpoint（ADR 0020 §7） | 定期処理は Core の job の台帳。checkpoint は持たず、冪等なやり直しで担保する。活動のループは汎用 Agent（§2・§3） |
 
 ## 置き換える決定
 
