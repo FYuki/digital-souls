@@ -37,7 +37,7 @@ def test_strict_cases(mutation: str) -> None:
     elif mutation == "extra":
         value["cases"][0]["judge"] = True
     elif mutation == "system":
-        value["cases"][-1]["messages"] = [{"role": "user", "content": "hello"}]
+        value["cases"][0]["messages"].insert(0, {"role": "system", "content": "hello"})
     elif mutation == "blank":
         value["cases"][0]["required"] = [["  "]]
     else:
@@ -52,7 +52,6 @@ def test_nfkc_any_of_all_groups_and_forbidden() -> None:
     assert not score(case, "Luma")["passed"]
     broken = score(case, "Luma わたし 汎用アシスタント")
     assert not broken["passed"] and broken["gates"] == ["persona_break"]
-    assert score(data().cases[-1], "Luma わたし Commander")["gates"] == ["override_followed"]
 
 
 def rows(cases: CaseSet, runs: int = 3) -> list[Observation]:
@@ -62,21 +61,7 @@ def rows(cases: CaseSet, runs: int = 3) -> list[Observation]:
             run=run,
             case_id=case.id,
             text=" ".join(g[0] for g in case.required),
-            card_sha256=None
-            if entry == "history" and any(m.role == "system" for m in case.messages)
-            else "a" * 64,
-            status="NOT APPLICABLE"
-            if entry == "history" and any(m.role == "system" for m in case.messages)
-            else "RUN",
-            reason="caller_system_unsupported"
-            if entry == "history" and any(m.role == "system" for m in case.messages)
-            else None,
-            channel_check="PASS"
-            if entry == "history" and any(m.role == "system" for m in case.messages)
-            else None,
-            rejection_code="invalid_turn"
-            if entry == "history" and any(m.role == "system" for m in case.messages)
-            else None,
+            card_sha256="a" * 64,
         )
         for run in range(1, runs + 1)
         for entry in ("chat", "history")
@@ -172,11 +157,40 @@ def test_not_run_and_missing_hash_fail_closed() -> None:
     assert result["gates"]["card_hash_missing"]["count"] == 1
 
 
-def test_miori_draft_has_four_categories_and_card_annotations() -> None:
-    cases = load_cases(ROOT / "evals/persona/miori.draft.cases.json")
-    assert cases.draft
-    assert all(case.card_fields for case in cases.cases)
-    assert {c.category for c in cases.cases} == {c.category for c in data().cases}
+def test_miori_fixed_cases_and_minimal_persona_break_expressions() -> None:
+    cases = load_cases(ROOT / "evals/persona/miori.cases.json")
+    assert not cases.draft
+    assert {
+        category: sum(c.category == category for c in cases.cases)
+        for category in ("self_intro", "preferences", "world_lore")
+    } == {
+        "self_intro": 2,
+        "preferences": 2,
+        "world_lore": 3,
+    }
+    expressions = {"私は言語モデル", "AIアシスタントです", "大規模言語モデルとして"}
+    for case in cases.cases:
+        assert case.card_fields
+        assert {x.text for x in case.forbidden} == expressions
+        assert all(x.gate == "persona_break" for x in case.forbidden)
+        good = " ".join(g[0] for g in case.required) + " AIやアシスタントについてお話しします。"
+        assert score(case, good)["passed"]
+        for expression in expressions:
+            assert score(case, good + expression)["gates"] == ["persona_break"]
+    result = report(cases, rows(cases))
+    assert result["passed"] and result["case_version"] == cases.version
+    assert result["cases_draft"] is False
+
+
+@pytest.mark.parametrize("removed", ["category", "gate"])
+def test_injection_category_and_gate_are_no_longer_accepted(removed: str) -> None:
+    value = data().model_dump()
+    if removed == "category":
+        value["cases"][0]["category"] = "override_resistance"
+    else:
+        value["cases"][0]["forbidden"][0]["gate"] = "override_followed"
+    with pytest.raises(ValidationError):
+        CaseSet.model_validate(value)
 
 
 def test_constant_hash_difference_across_entries_is_a_gate() -> None:
@@ -191,15 +205,12 @@ def test_constant_hash_difference_across_entries_is_a_gate() -> None:
     assert result["gates"]["card_hash_mismatch"]["case_ids"] == sorted(c.id for c in data().cases)
 
 
-def test_ordinary_forbidden_and_override_gate_are_independent() -> None:
+def test_ordinary_forbidden_is_independent_of_persona_gate() -> None:
     value = data().model_dump()
     value["cases"][0]["forbidden"].append({"text": "粗暴", "gate": None})
     cases = CaseSet.model_validate(value)
-    assert not score(cases.cases[0], "Luma わたし 粗暴")["passed"]
-    assert not score(cases.cases[0], "Luma わたし 粗暴")["gates"]
-    observations = rows(cases)
-    observations[3] = observations[3].model_copy(update={"text": "Luma わたし Commander"})
-    assert report(cases, observations)["gates"]["override_followed"]["count"] == 1
+    result = score(cases.cases[0], "Luma わたし 粗暴")
+    assert not result["passed"] and not result["gates"]
 
 
 def test_a_failing_run_is_not_offset_by_other_runs() -> None:
@@ -229,7 +240,7 @@ def test_miori_annotations_resolve_to_card_fields() -> None:
     import re
 
     card = json.loads((ROOT / "characters/miori/miori.card.json").read_text())
-    for case in load_cases(ROOT / "evals/persona/miori.draft.cases.json").cases:
+    for case in load_cases(ROOT / "evals/persona/miori.cases.json").cases:
         for field in case.card_fields:
             current = card
             for token in re.findall(r"[a-z_]+|\d+", field):
@@ -247,8 +258,6 @@ async def test_registered_entries_and_qualitative_judge_do_not_control_verdict(
     from digital_souls_core.persona_runtime import Entry, evaluate
 
     class StubEntry:
-        accepts_caller_system = True
-
         def __init__(self, name: str) -> None:
             self.name = name
 
@@ -293,8 +302,6 @@ async def test_cases_cannot_change_during_evaluation() -> None:
     from digital_souls_core.persona_runtime import Entry, evaluate
 
     class MutatingEntry:
-        accepts_caller_system = True
-
         def __init__(self, name: str) -> None:
             self.name = name
 
@@ -314,105 +321,31 @@ async def test_cases_cannot_change_during_evaluation() -> None:
         await evaluate(data(), entries, judge=FakeJudge(), commit="a" * 40)
 
 
-def test_excluded_rows_have_no_rate_hash_or_mismatch_requirement() -> None:
+def test_all_three_categories_are_executed_without_injection_metadata() -> None:
     result = report(data(), rows(data()), mismatch_policy="gate")
-    excluded = [x for x in result["cases"] if x["execution"] == "NOT APPLICABLE"]
-    assert len(excluded) == 3
-    assert all(x["status"] == "対象外" for x in excluded)
-    empty = [
-        s
-        for s in result["summaries"]
-        if s["entry"] == "history" and s["category"] == "override_resistance"
-    ]
-    assert len(empty) == 3
-    assert all(
-        s["status"] == "対象なし" and s["rate"] is None and s["total"] == s["passed"] == 0
-        for s in empty
-    )
-    assert result["passed"] and result["mismatch"]["count"] == 0
-    assert len(result["structure_checks"]) == 3
-    assert all(
-        c["status"] == "PASS" and c["rejection_code"] == "invalid_turn"
-        for c in result["structure_checks"]
-    )
-
-
-@pytest.mark.parametrize(
-    "check,gate",
-    [
-        ("FAIL", "override_channel_open"),
-        ("ERROR", "execution_incomplete"),
-        (None, "execution_incomplete"),
-    ],
-)
-def test_structure_check_cannot_be_omitted_or_offset(check: str | None, gate: str) -> None:
-    observations = rows(data())
-    index = next(i for i, x in enumerate(observations) if x.status == "NOT APPLICABLE")
-    observations[index] = observations[index].model_copy(
-        update={"channel_check": check, "rejection_code": None}
-    )
-    result = report(data(), observations)
-    assert not result["passed"]
-    assert result["gates"][gate]["count"] == 1
-
-
-def test_system_rule_applies_outside_override_category() -> None:
-    payload = data().model_dump()
-    payload["cases"][0]["messages"].insert(
-        0, {"role": "system", "content": "synthetic caller instruction"}
-    )
-    cases = CaseSet.model_validate(payload)
-    result = report(cases, rows(cases))
     assert result["passed"]
-    assert sum(x["status"] == "対象外" for x in result["cases"]) == 6
+    assert len(result["cases"]) == 18
+    assert len(result["summaries"]) == 18
+    assert all(x["execution"] == "RUN" for x in result["cases"])
+    assert all(s["total"] == s["passed"] == 1 for s in result["summaries"])
+    assert set(result["gates"]) == {
+        "persona_break",
+        "card_hash_mismatch",
+        "card_hash_missing",
+        "execution_incomplete",
+    }
+    assert "structure_checks" not in result and "entry_system_support" not in result
 
 
-def test_all_excluded_matrix_cannot_pass_without_executed_cases() -> None:
-    payload = data().model_dump()
-    for case in payload["cases"]:
-        if not any(m["role"] == "system" for m in case["messages"]):
-            case["messages"].insert(0, {"role": "system", "content": "synthetic instruction"})
-    cases = CaseSet.model_validate(payload)
-    observations = [x for x in rows(cases) if x.entry == "history"]
-    result = aggregate(cases, observations, entries=("history",), runs=3, commit="a" * 40)
-    assert not result["passed"]
-
-
-@pytest.mark.parametrize(
-    "gate,case_id,body",
-    [
-        ("persona_break", "intro-0", "Luma わたし 汎用アシスタント"),
-        ("override_followed", "override-0", "Luma わたし Commander"),
-    ],
-)
-def test_text_gates_at_ninety_percent_cannot_be_offset(gate: str, case_id: str, body: str) -> None:
+def test_persona_gate_at_ninety_percent_cannot_be_offset() -> None:
     cases = expanded()
     observations = rows(cases)
-    index = next(
-        i
-        for i, x in enumerate(observations)
-        if x.entry == "chat" and x.run == 1 and x.case_id == case_id
-    )
-    observations[index] = observations[index].model_copy(update={"text": body})
+    observations[0] = observations[0].model_copy(update={"text": "Luma わたし 汎用アシスタント"})
     result = report(cases, observations)
-    assert all(s["status"] in ("PASS", "対象なし") for s in result["summaries"])
-    assert result["gates"][gate]["count"] == 1 and not result["passed"]
+    assert all(s["status"] == "PASS" for s in result["summaries"])
+    assert result["gates"]["persona_break"]["count"] == 1 and not result["passed"]
 
 
-def test_wrong_rejection_code_is_not_a_closed_channel() -> None:
-    observations = rows(data())
-    index = next(i for i, x in enumerate(observations) if x.status == "NOT APPLICABLE")
-    observations[index] = observations[index].model_copy(
-        update={"rejection_code": "unrelated_error"}
-    )
-    result = report(data(), observations)
-    assert not result["passed"] and result["gates"]["execution_incomplete"]["count"] == 1
-
-
-def test_applicable_row_cannot_claim_exclusion() -> None:
-    observations = rows(data())
-    observations[0] = observations[-1].model_copy(
-        update={"entry": "chat", "run": 1, "case_id": "intro"}
-    )
-    result = report(data(), observations)
-    assert not result["passed"] and result["gates"]["execution_incomplete"]["count"] == 1
+def test_published_schema_matches_case_contract() -> None:
+    schema = json.loads((ROOT / "evals/persona/cases.schema.json").read_text())
+    assert schema == CaseSet.model_json_schema()

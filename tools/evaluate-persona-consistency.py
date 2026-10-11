@@ -37,10 +37,10 @@ def main() -> int:
             "pass",
             "fail",
             "persona_break",
-            "override_followed",
             "mismatch",
             "card_hash_mismatch",
-            "override_channel_open",
+            "card_hash_missing",
+            "execution_incomplete",
         ),
         default="pass",
     )

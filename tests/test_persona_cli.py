@@ -38,6 +38,13 @@ def test_default_report_and_explicit_body_option(tmp_path: Path) -> None:
     assert result.returncode == 0 and not result.stdout and not result.stderr
     report = json.loads(path.read_text())
     assert report["status"] == "PASS" and report["mode"] == "fixture"
+    assert report["runs"] == 3 and len(report["summaries"]) == 18
+    assert {s["category"] for s in report["summaries"]} == {
+        "self_intro",
+        "preferences",
+        "world_lore",
+    }
+    assert "structure_checks" not in report and "entry_system_support" not in report
     assert len(report["commit"]["sha"]) == 40 and isinstance(report["commit"]["dirty"], bool)
     assert "responses" not in report and "Luma" not in path.read_text()
     assert report["gates"]["execution_incomplete"]["count"] == 0
@@ -58,9 +65,9 @@ def test_bad_input_error_hides_content_and_path(tmp_path: Path) -> None:
     [
         ("fail", None),
         ("persona_break", "persona_break"),
-        ("override_followed", "override_followed"),
         ("card_hash_mismatch", "card_hash_mismatch"),
-        ("override_channel_open", "override_channel_open"),
+        ("card_hash_missing", "card_hash_missing"),
+        ("execution_incomplete", "execution_incomplete"),
         ("mismatch", None),
     ],
 )
@@ -108,5 +115,49 @@ def test_cli_mismatch_at_ninety_percent_is_independent_gate(
     assert result.returncode == exit_code
     report = json.loads(result.stdout)
     assert report["mismatch"]["count"] == 3
-    assert all(s["status"] in ("PASS", "対象なし") for s in report["summaries"])
+    assert all(s["status"] == "PASS" for s in report["summaries"])
     assert all(g["count"] == 0 for g in report["gates"].values())
+
+
+def test_fixed_miori_case_version_is_reported_with_its_card(tmp_path: Path) -> None:
+    import hashlib
+
+    from digital_souls_core.persona_evaluation import load_cases
+
+    cases_path = ROOT / "evals/persona/miori.cases.json"
+    cases = load_cases(cases_path)
+    card_path = ROOT / "characters/miori/miori.card.json"
+    characters = json.loads((ROOT / "evals/persona/synthetic.characters.json").read_text())
+    characters[0].update(character_id="miori", alias="miori", card_path=str(card_path))
+    character_path = tmp_path / "characters.json"
+    character_path.write_text(json.dumps(characters))
+    fixture_path = tmp_path / "responses.json"
+    fixture_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "responses": {c.id: " ".join(g[0] for g in c.required) for c in cases.cases},
+                "scenarios": {"pass": {}},
+            }
+        )
+    )
+    result = run(
+        "--characters",
+        str(character_path),
+        "--character-id",
+        "miori",
+        "--cases",
+        str(cases_path),
+        "--fixture",
+        str(fixture_path),
+        "--runs",
+        "3",
+    )
+    assert result.returncode == 0 and not result.stderr
+    report = json.loads(result.stdout)
+    assert report["case_version"] == cases.version and report["cases_draft"] is False
+    assert report["status"] == "PASS" and report["quality_evidence"] is False
+    assert len(report["cases"]) == 42
+    assert {c["card_sha256"] for c in report["cases"]} == {
+        hashlib.sha256(card_path.read_bytes()).hexdigest()
+    }
