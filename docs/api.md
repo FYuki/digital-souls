@@ -144,7 +144,7 @@ provider失敗は502、timeoutは504。内部例外や入力・キーをerror本
 
 [ADR 0026](adr/0026-prompt-assembly.md)に従い、Chat API・会話履歴 API・回答評価は
 同じ `Inference.prepare` と `PromptBuilder` で provider のmessagesを組み立てます。
-順序はCard（固定人格）→選択済みLore→Runtime Context→記憶→呼び出し側の指示→履歴→
+順序はbefore_char Lore→Card（固定人格）→after_char Lore→Runtime Context→記憶→呼び出し側の指示→履歴→
 `post_history_instructions`→今回の入力です。Card・Lore・Runtime Contextは先頭systemへまとめ、
 記憶は説明文と別のuser message内のJSON配列でデータとして渡します。
 呼び出し側の指示とpost_historyはそれぞれ独立したsystem messageです。
@@ -157,9 +157,34 @@ Runtime Contextは現在空であり、人格・関係・生活状態のsnapshot
 「キャラクター概要」「性格と話し方」「関係と世界観」「応答方針」「会話例」の順に
 `## 見出し`とstrip済み本文で組み立てます。空の要素は見出しごと省き、name/first_mes/
 音声extension/creator_notesは注入しません。post_historyを持つカードも読み込みます。
-Loreは最新user textへの非再帰の単純key一致で、selective時にはsecondary keyも必要です。
-insertion_order順でafter_charへ置きます。これは汎用CCv3実装ではありません（Character Bookの解釈は[ADR 0028](adr/0028-character-book.md)で置き換えることが決定済み、実装前）。
-対応しないregex/constant/case-sensitive/配置/scan modeの起動時拒否は維持します。
+embedded の `data.character_book` は [ADR 0028](adr/0028-character-book.md) が採用する
+PoC の Book・Entry 契約に従って読み込みます。既知 field の欠落・型不正・制約違反は
+カード内 path を含むエラーでカード全体を拒否し、未知 field と extensions は保持します。
+整数 field は boolean・小数・文字列を拒否し、scan_depth/token_budget は非負です。
+
+Lore は今回の user 発言と、同じ会話の user・assistant 履歴を新しい順に scan します。
+scan_depth は今回の発言を含む message 数（省略時1、0はscanなし）で、履歴の予算削減より前に適用します。
+会話履歴 API は保存済みの privacy 処理済み履歴、stateless Chat API は ADR 0026 の分割後の履歴を使います。
+system・tool の本文、記憶、Card、選んだ Lore は scan しません。比較は NFKC 正規化後の message ごとの
+部分一致で、case_sensitive が true でないときだけ casefold します。空の key は一致しません。
+enabled、空の本文、Decorator、regex、constant、primary key、selective の secondary key の順で判定します。
+同じ Entry は source index で1件にまとめます。
+
+constant/case_sensitive/position/scan_depth/priority/token_budget を解釈します。
+use_regex=true、recursive_scanning=true、Decorator を含むカードも読み込めますが、regex と
+行頭の空白除去後に @@ で始まる行を含む Entry は選ばず、再帰 scan は行いません。
+standalone Lorebook、regex、再帰、Decorator の実行は対応範囲外です。
+各 Lore は `## キャラクターLore` と strip 済み本文を持ち、before_char は Card の前、after_char
+（省略時を含む）は後ろへ、各 position 内は `(insertion_order, source_index)` 昇順で配置します。
+0件なら Book がないカードと同じ messages です。Lore は記憶データや memory_reference に変換しません。
+
+Book の token_budget は各 Entry を独立した system message にして、その profile の token counter で数えます。
+省略時は Book 固有の削減なし、0は全除外です。estimate でも推定式を適用します。
+上限超過時は `(effective_priority, insertion_order, source_index)` の小さい Entry から丸ごと除外して再計測し、
+priority 省略時の effective_priority は insertion_order です。Lore 領域・全体予算の削減も同じ除外順です。
+診断は source index・reason code・position・token数・件数だけで、本文・keys・name・id・comment は含みません。
+同梱 Miori の単独質問の選択は従来と同じですが、複数一致が推定700 tokenを超える場合は Entry が外れます
+（[合成検証と回帰の証跡](evidence/2026-10-11-character-book.md)）。
 
 運用設定 `prompt_budget` はtotal/character/lore/memory/caller_instructions/history/current_input/
 post_historyの正の整数です。boolean・文字列・小数は拒否します。

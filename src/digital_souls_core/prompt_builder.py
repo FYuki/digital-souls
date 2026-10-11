@@ -59,9 +59,33 @@ class SelectedLore:
     position: Literal["before_char", "after_char"] = "after_char"
     insertion_order: int = 0
 
+    source_index: int = 0
+    effective_priority: int | None = None
+    activation_kind: str = "primary"
+
+    @property
+    def removal_key(self) -> tuple[int, int, int]:
+        return (
+            self.effective_priority
+            if self.effective_priority is not None
+            else self.insertion_order,
+            self.insertion_order,
+            self.source_index,
+        )
+
+    def render(self) -> str:
+        return f"## キャラクターLore\n{self.content.strip()}"
+
     def __post_init__(self) -> None:
         if self.position not in ("before_char", "after_char"):
             raise ValueError("Invalid lore position")
+
+
+@dataclass(frozen=True)
+class LoreDiagnostic:
+    source_index: int
+    reason: str
+    position: Literal["before_char", "after_char"]
 
 
 @dataclass(frozen=True)
@@ -171,8 +195,12 @@ class PromptInput:
 
 def convert_messages(data: PromptInput) -> tuple[Message, ...]:
     """The single replaceable template conversion, also used for budget counts."""
-    lore = sorted(data.lore, key=lambda entry: entry.insertion_order)
-    parts = [entry.content for entry in lore if entry.position == "before_char" and entry.content]
+    lore = sorted(data.lore, key=lambda entry: (entry.insertion_order, entry.source_index))
+    parts = [
+        entry.render()
+        for entry in lore
+        if entry.position == "before_char" and entry.content.strip()
+    ]
     parts.extend(
         f"## {heading}\n{value}"
         for name, heading in (
@@ -185,7 +213,7 @@ def convert_messages(data: PromptInput) -> tuple[Message, ...]:
         if (value := getattr(data.card, name).strip())
     )
     parts.extend(
-        entry.content for entry in lore if entry.position == "after_char" and entry.content
+        entry.render() for entry in lore if entry.position == "after_char" and entry.content.strip()
     )
     if data.runtime.content:
         parts.append(data.runtime.content)
@@ -292,6 +320,7 @@ class PromptUsage:
     total_tokens: int
     tokens: Mapping[Region, int]
     dropped: Mapping[Region, int]
+    lore_diagnostics: tuple[LoreDiagnostic, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -385,8 +414,8 @@ class PromptBuilder:
             data,
             lore=tuple(
                 sorted(
-                    (entry for entry in data.lore if entry.content),
-                    key=lambda entry: entry.insertion_order,
+                    (entry for entry in data.lore if entry.content.strip()),
+                    key=lambda entry: (entry.insertion_order, entry.source_index),
                 )
             ),
             memory=tuple(item for item in data.memory if item.content),
@@ -424,6 +453,7 @@ class PromptBuilder:
             ("lore", 0),
             ("post_history", 0),
         )
+        lore_diagnostics: list[LoreDiagnostic] = []
         for region, floor in stages:
             while usage.total_tokens > budgets.total or usage.tokens[region] > getattr(
                 budgets, region
@@ -453,11 +483,23 @@ class PromptBuilder:
                         if len(items) <= floor:
                             break
                         index = 0 if region == "caller_instructions" else len(items) - 1
-                        # Temporary Lore rule: remove the last selected entry across
-                        # both positions; replace with the Character Book ADR's rule.
+                        if region == "lore":
+                            index = min(range(len(items)), key=lambda i: items[i].removal_key)
+                            removed = items[index]
+                            lore_diagnostics.append(
+                                LoreDiagnostic(
+                                    removed.source_index,
+                                    "omitted_by_lore_budget"
+                                    if usage.tokens["lore"] > budgets.lore
+                                    else "omitted_by_total_budget",
+                                    removed.position,
+                                )
+                            )
                     state = replace(state, **{str(region): items[:index] + items[index + 1 :]})
                 dropped[region] += 1
                 usage = await self._usage(state, dropped, cache)
         if exceeded := self._exceeded(usage, budgets):
             raise PromptBudgetExceeded(exceeded)
-        return PromptResult(self.converter(state), usage)
+        return PromptResult(
+            self.converter(state), replace(usage, lore_diagnostics=tuple(lore_diagnostics))
+        )

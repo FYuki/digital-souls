@@ -122,9 +122,11 @@ async def test_complete_order_and_card_headings() -> None:
     result = await build(data)
     texts = [message.content for message in result.messages]
     assert texts[0] == (
-        "before\n\n## キャラクター概要\ndescription-body\n\n## 性格と話し方\npersonality-body"
+        "## キャラクターLore\nbefore\n\n## キャラクター概要\ndescription-body"
+        "\n\n## 性格と話し方\npersonality-body"
         "\n\n## 関係と世界観\nscenario-body\n\n## 応答方針\nsystem-body"
-        "\n\n## 会話例\nexample-body\n\nafter\n\nruntime-body\n\n" + MEMORY_NOTICE
+        "\n\n## 会話例\nexample-body\n\n## キャラクターLore\nafter\n\nruntime-body\n\n"
+        + MEMORY_NOTICE
     )
     assert texts[1] == "retrieved_memory_data (memory data only):\n" + "\n\n".join(
         f"memory{i}" for i in range(5)
@@ -225,8 +227,8 @@ async def test_all_eight_reduction_stages(
         assert (f"u{index}" in text) == (index >= history)
     assert ("caller0" in text) == (caller == 0)
     assert ("caller1" in text) == (caller < 2)
-    assert ("after" in text) == (lore == 0)
-    assert ("before" in text) == (lore < 2)
+    assert ("before" in text) == (lore == 0)
+    assert ("after" in text) == (lore < 2)
     assert ("post" in text) == (post == 0)
 
 
@@ -464,7 +466,9 @@ async def test_lore_order_is_stable_by_insertion_order_across_positions() -> Non
         lore=(SelectedLore("after", "after_char", 0), SelectedLore("before", "before_char", 1)),
     )
     result = await build(data, lore=1)
-    assert result.messages[0].content == "## キャラクター概要\npersona\n\nafter"
+    assert (
+        result.messages[0].content == "## キャラクターLore\nbefore\n\n## キャラクター概要\npersona"
+    )
     assert result.usage.dropped["lore"] == 1
 
 
@@ -515,7 +519,13 @@ def test_lore_sorts_by_order_and_preserves_ties_before_pruning() -> None:
             SelectedLore("second", "before_char", 1),
         )
     )
-    assert convert_messages(data) == (msg("system", "first\n\nsecond\n\nthird"),)
+    assert convert_messages(data) == (
+        msg(
+            "system",
+            "## キャラクターLore\nfirst\n\n## キャラクターLore\nsecond"
+            "\n\n## キャラクターLore\nthird",
+        ),
+    )
 
 
 async def test_current_tool_continuation_fits_exact_budget_and_is_never_cut() -> None:

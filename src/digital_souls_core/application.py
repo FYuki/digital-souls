@@ -1,7 +1,7 @@
 """One inference path shared by both HTTP entry points."""
 
 from collections.abc import AsyncGenerator, Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Protocol
 
@@ -13,6 +13,7 @@ from .character import (
     GuardedContextSource,
     Profile,
 )
+from .character_book import select_lore
 from .contracts import CompletionInput
 from .errors import CoreError as CoreError
 from .history import Binding
@@ -24,7 +25,6 @@ from .prompt_builder import (
     PromptBuilder,
     PromptInput,
     PromptUsage,
-    SelectedLore,
     split_messages,
 )
 from .token_count import LlamaCppTokenCounter
@@ -41,7 +41,7 @@ class Provider(Protocol):
 @dataclass(frozen=True)
 class Prepared:
     character: Character
-    payload: dict[str, Any]
+    payload: dict[str, Any] = field(repr=False)
     usage: PromptUsage
     valid: Callable[[], bool] = lambda: True
 
@@ -187,6 +187,12 @@ class Inference:
                 if profile.token_counter == "llamacpp"
                 else ByteTokenCounter()
             )
+            selection = await select_lore(
+                character.character_book,
+                user_text,
+                tuple(message for turn in separated.history for message in turn.messages),
+                counter,
+            )
             result = await PromptBuilder(
                 counter,
                 memory_floor=config.memory_floor,
@@ -194,15 +200,7 @@ class Inference:
             ).build(
                 PromptInput(
                     card=card,
-                    lore=tuple(
-                        SelectedLore(
-                            item.content,
-                            position="after_char",
-                            insertion_order=item.insertion_order,
-                        )
-                        for item in character.lore
-                        if item.matches(user_text)
-                    ),
+                    lore=selection.entries,
                     memory=tuple(
                         MemoryItem(item, json_object=bool(guarded and guarded.items))
                         for item in memory_items
@@ -225,7 +223,19 @@ class Inference:
         if privacy is not self.privacy:
             raise CoreError(403, "privacy_denied", "Privacy policy changed during inference")
 
-        prepared = Prepared(character, payload, result.usage, valid)
+        usage = replace(
+            result.usage,
+            dropped=MappingProxyType(
+                {
+                    **result.usage.dropped,
+                    "lore": result.usage.dropped["lore"]
+                    + sum(
+                        item.reason == "omitted_by_lore_budget" for item in selection.diagnostics
+                    ),
+                }
+            ),
+        )
+        prepared = Prepared(character, payload, usage, valid)
         self.check(prepared)
         return prepared
 
