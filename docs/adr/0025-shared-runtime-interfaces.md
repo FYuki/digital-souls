@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。「外部 Agent が tool 実行を担当する」の記述。会話中のツール利用は Core が持ち、会話外の活動の Agent が使う MCP の入口を Core に置く。共通 runtime と入口の方針は維持）。
+
 日付: 2026-10-10
 
 Accepted日: 2026-10-10（ユーザーとの合意日も同日）

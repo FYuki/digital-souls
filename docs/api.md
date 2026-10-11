@@ -2,7 +2,8 @@
 
 このAPIは人格文脈付きLLMを呼ぶstatelessな推論経路です。単独のチャットUI、配信フロントエンド、
 外部Agentのいずれも同じAPIを利用できます。このAPIではAgentループ、tool実行、記憶の保存、
-自動技能学習は行いません。Coreはtool実行ループを持ちません。Core全体の範囲は
+自動技能学習は行いません。現在のCoreはtool実行ループを持ちません（会話中のツール利用をCoreが持つことは
+[ADR 0027](adr/0027-tool-use-and-activity-runtime.md)で決定済み、実装前）。Core全体の範囲は
 [READMEの「製品の範囲」](../README.md#製品の範囲)を参照してください。履歴・記憶は
 [会話履歴API](history-api.md)・[記憶API](memory.md)の明示経路で扱います。
 この版は**信頼された単一利用者のlocalhost専用**です。認証・tenant隔離・公開配信向けの
@@ -44,7 +45,7 @@ inference profile、provider/modelは別の識別子です。返却JSONの`model
 ## 対応する小範囲
 
 - textのみの`messages`（system/user/assistant/tool、1件以上・件数上限なし）。callerのsystemは
-  人格systemの後に置きます。人格はLLMへの指示であり、セキュリティ境界ではありません。
+  人格systemの後に置きます（[ADR 0026](adr/0026-prompt-assembly.md)で「呼び出し側の指示」の枠へ移すことが決定済み、実装前）。人格はLLMへの指示であり、セキュリティ境界ではありません。
 - 各役割の入力`content`は文字列、または`[{"type":"text","text":"..."}]`の配列を
   受け付けます。入口で各textを`\n`で連結し、1要素ならそのtextそのものになります。
   各要素は`type`・`text`だけを持ち、typeは`text`、textは厳密な文字列です。
@@ -132,6 +133,9 @@ provider失敗は502、timeoutは504。内部例外や入力・キーをerror本
 本APIは要求/応答の保存・本文ログを行いません。運用時にSDKのdebugや外部callbackを有効化しないでください。
 
 ## 文脈・プライバシー
+
+組み立ての順序、呼び出し側の system の扱い、予算は[ADR 0026](adr/0026-prompt-assembly.md)で置き換えることが決まっています（2026-10-11 承認、実装前）。
+以下は現在の実装の挙動です。
 
 元Mioriカードを変更せず、name/description/personality/scenario/system_prompt/mes_exampleを
 systemに組み立てます。Loreは最新user textに対する非再帰の単純key一致で、selective時には

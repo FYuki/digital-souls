@@ -188,7 +188,7 @@ Coreの実装Issueへ移して管理します。
 
 | 論点 | 決定 | 反映先 |
 | --- | --- | --- |
-| 形成jobを実行する主体 | PrivateAgentが実行する。Coreは永続予約・有限のdrain API・正本の検証を提供し、常駐workerを持たない。キャラクターによる判断が必要な処理はCoreのLLMをAPIとして呼ぶ | ADR 0017、ADR 0020 |
+| 形成jobを実行する主体 | PrivateAgentが実行する。Coreは永続予約・有限のdrain API・正本の検証を提供し、常駐workerを持たない。キャラクターによる判断が必要な処理はCoreのLLMをAPIとして呼ぶ。（2026-10-11 のユーザー決定で置き換え：PrivateAgentは使わず、timerがCoreのdrain APIを呼ぶ。重複の防止と再試行はCoreのjobの台帳が持ち、中断したjobは次回に最初からやり直す） | ADR 0017、ADR 0020、[ADR 0027](docs/adr/0027-tool-use-and-activity-runtime.md) |
 | 自然文による保存拒否 | 語を検出し、スレッドをプライベートモードへ切り替えるかをユーザーに確認する。切替は既存の明示APIで行う | ADR 0019 |
 | 会話外の活動でCoreが所有する契約 | 機微情報の流出防止ゲート（送信直前の再判定）と、インジェクション対策 | ADR 0020 |
 | 既存の逐語記憶 | 新形式へ移行せず削除する。dogfoodはCoreへの切替中で運用前 | ADR 0016 |
@@ -217,4 +217,4 @@ Coreの実装Issueへ移して管理します。
 7. 訂正・時間変化・矛盾・管理操作・依存結果の失効
 8. 一般化とReflection、Life State、人格・関係の更新
 9. consolidation、別スレッドのFact統合、永続的な派生index
-10. PrivateAgentから使う機微情報の流出防止ゲートとインジェクション対策の境界
+10. 会話外の活動のAgentがCoreのMCP経由で使う、機微情報の流出防止ゲートとインジェクション対策の境界（ADR 0027）
