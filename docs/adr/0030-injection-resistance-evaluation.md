@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+一部を[ADR 0031](0031-reject-caller-system.md)で置き換えます（2026-10-12 ユーザー承認。§1 の「呼び出し側の system」の経路のうち Chat API の応答の採点。Chat API も呼び出し側の system を拒否するため、両方の入口で構造の検査〔受理されたら `override_channel_open`〕にする。他の決定と下の注記は維持）。
+
 補足と一部の置き換え（2026-10-11 ユーザー決定。本文は変えない）：
 
 - §1 の表で「記憶 context の中の指示」の Chat API を「対象」としたが、本番の stateless の Chat API は記憶を注入しない。

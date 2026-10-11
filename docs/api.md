@@ -50,6 +50,7 @@ Card本文はログ・エラーへ出さず、ハッシュは評価・調査で�
 
 ## 対応する小範囲
 
+- （[ADR 0031](adr/0031-reject-caller-system.md)で、callerのsystemを400 `system_message_unsupported`で拒否することが決定済み、実装前。以下は現在の挙動）
 - textのみの`messages`（system/user/assistant/tool、1件以上・件数上限なし）。callerのsystemは
   どの位置にあっても「呼び出し側の指示」へ移し、記憶の後・履歴の前に元の順序で置きます。
   各messageに人格・応答方針より優先しないことを示す固定の説明枠を付け、予算に応じてmessage単位で削ります。
