@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import AsyncGenerator, Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -18,7 +19,7 @@ from .persona_real import EvaluationSession, UncachedProvider, disposable_config
 from .postgres_db import PostgresDatabase
 from .postgres_history import PostgresHistory
 from .privacy import PrivacyPolicy
-from .prompt_builder import CALLER_FRAME, MEMORY_NOTICE
+from .prompt_builder import MEMORY_NOTICE
 from .provider import LiteLLMProvider
 
 
@@ -78,15 +79,6 @@ class FrameCheckedProvider:
             ) and any(
                 MEMORY_NOTICE in (m["content"] or "") for m in messages if m["role"] == "system"
             )
-        elif self.case.route == "caller_system":
-            valid = all(
-                any(
-                    m["role"] == "system" and m["content"] == CALLER_FRAME + probe.content
-                    for m in messages
-                )
-                for probe in self.case.messages
-                if probe.role == "system"
-            )
         else:
             valid = (
                 messages[-1]["role"] == "user"
@@ -133,12 +125,53 @@ class Entry:
         self.settings = settings
         self.history_factory = history_factory
 
-    async def observe(self, case: Case, run: int) -> Observation | bool:
-        provider: Provider = (
-            StructuralProvider()
-            if self.name == "history" and case.route == "caller_system"
-            else FrameCheckedProvider(self.provider, case)
+    async def structure(self, case: Case, run: int) -> bool:
+        # Disable the remote tokenizer as well as generation for structural probes.
+        profile = self.character.config.profile.model_copy(update={"token_counter": "estimate"})
+        character = replace(
+            self.character, config=self.character.config.model_copy(update={"profile": profile})
         )
+        policy = PrivacyPolicy(SyntheticClassifier())
+        inference = Inference((character,), StructuralProvider(), privacy=policy)
+        cid = character.config.character_id
+        policy.configure(
+            {Binding(inference.scope, cid): frozenset({"history", "local", "external", "memory"})}
+        )
+        payload = {**self.settings, "messages": [m.model_dump() for m in case.messages]}
+        try:
+            if self.name == "chat":
+                prepared = await inference.prepare(
+                    cid, CompletionInput.model_validate(payload), alias=False
+                )
+                inference.check(prepared)
+                await inference.provider.complete(profile, prepared.payload)
+            else:
+                # Rejection happens before storage; no DB is needed for this probe.
+                store = cast(HistoryStore, FixtureHistory())
+                service = Conversations(inference, store, policy)
+                await service.complete(
+                    cid,
+                    "structural-probe",
+                    TurnInput.model_validate(
+                        {
+                            **payload,
+                            "request_id": f"injection-{run}",
+                            "expected_revision": 0,
+                        }
+                    ),
+                )
+        except OverrideChannelOpen:
+            return True
+        except CoreError as error:
+            if error.status == 400 and error.code == "system_message_unsupported":
+                return False
+            raise
+        return True
+
+    async def observe(self, case: Case, run: int) -> Observation | bool:
+        if case.route == "caller_system":
+            return await self.structure(case, run)
+        provider: Provider = FrameCheckedProvider(self.provider, case)
         policy = PrivacyPolicy(SyntheticClassifier())
         inference = Inference(
             (self.character,),
@@ -183,31 +216,18 @@ class Entry:
                 conversation_id = service.create(cid).conversation_id
                 finish = session.finish
             try:
-                try:
-                    receipt = await service.complete(
-                        cid,
-                        conversation_id,
-                        TurnInput.model_validate(
-                            {
-                                **self.settings,
-                                "request_id": f"injection-{run}",
-                                "expected_revision": 0,
-                                "messages": [m.model_dump() for m in case.messages],
-                            }
-                        ),
-                    )
-                except OverrideChannelOpen:
-                    return True
-                except CoreError as error:
-                    if (
-                        case.route == "caller_system"
-                        and error.status == 400
-                        and error.code == "invalid_turn"
-                    ):
-                        return False
-                    raise
-                if case.route == "caller_system":
-                    return True
+                receipt = await service.complete(
+                    cid,
+                    conversation_id,
+                    TurnInput.model_validate(
+                        {
+                            **self.settings,
+                            "request_id": f"injection-{run}",
+                            "expected_revision": 0,
+                            "messages": [m.model_dump() for m in case.messages],
+                        }
+                    ),
+                )
                 if receipt.finish_reason != "stop":
                     raise ValueError("incomplete response")
                 text = receipt.message.content
@@ -229,7 +249,7 @@ class ScenarioEntry:
         result = await self.entry.observe(case, run)
         if case.id != self.selected:
             return result
-        if self.scenario == "override_channel_open" and self.entry.name == "history":
+        if self.scenario == "override_channel_open" and case.route == "caller_system":
             return True  # Deliberately broken structure observation, fixture only.
         if isinstance(result, Observation) and self.entry.name == "chat":
             if self.scenario == "card_hash_mismatch":
@@ -258,17 +278,17 @@ async def evaluate(
     cases = CaseSet.model_validate(cases.model_dump())
     fixed_version = cases.version
     observations = []
-    structures: dict[tuple[int, str], bool | None] = {}
+    structures: dict[tuple[str, int, str], bool | None] = {}
     for run in range(1, runs + 1):
         for name, entry in entries.items():
             for case in cases.cases:
-                structural = name == "history" and case.route == "caller_system"
+                structural = case.route == "caller_system"
                 try:
                     result = await entry.observe(case, run)
                     if structural:
                         if type(result) is not bool:
                             raise ValueError("invalid structure observation")
-                        structures[(run, case.id)] = result
+                        structures[(name, run, case.id)] = result
                     else:
                         if not isinstance(result, Observation) or (
                             result.entry,
@@ -279,7 +299,7 @@ async def evaluate(
                         observations.append(Observation.model_validate(result.model_dump()))
                 except Exception:
                     if structural:
-                        structures[(run, case.id)] = None
+                        structures[(name, run, case.id)] = None
                     else:
                         observations.append(
                             Observation(
@@ -320,11 +340,15 @@ def fixture_entries(
     if (
         fixture["schema_version"] != 1
         or scenario not in fixture["scenarios"]
-        or set(fixture["responses"]) != {c.id for c in cases.cases}
+        or set(fixture["responses"]) != {c.id for c in cases.cases if c.assessment == "response"}
     ):
         raise ValueError("invalid fixture")
-    responses = {c.messages[-1].content: fixture["responses"][c.id] for c in cases.cases}
-    if len(responses) != len(cases.cases):
+    responses = {
+        c.messages[-1].content: fixture["responses"][c.id]
+        for c in cases.cases
+        if c.assessment == "response"
+    }
+    if len(responses) != sum(c.assessment == "response" for c in cases.cases):
         raise ValueError("unique probes required")
     providers = {
         name: FixtureProvider(
@@ -334,6 +358,7 @@ def fixture_entries(
                 .get(name, {})
                 .get(c.id, fixture["responses"][c.id])
                 for c in cases.cases
+                if c.assessment == "response"
             },
         )
         for name in ("chat", "history")
@@ -343,7 +368,14 @@ def fixture_entries(
         entry = Entry(
             name, character, providers[name], {}, lambda: cast(HistoryStore, FixtureHistory())
         )
-        entries[name] = ScenarioEntry(entry, cases.cases[0].id, scenario)
+        selected = (
+            next(c.id for c in cases.cases if c.route == "caller_system")
+            if scenario == "override_channel_open"
+            else next(c.id for c in cases.cases if c.assessment == "response")
+        )
+        if scenario in ("injection_followed", "persona_break"):
+            selected = next(c.id for c in cases.cases if c.route == "memory")
+        entries[name] = ScenarioEntry(entry, selected, scenario)
     if scenario != "pass" and scenario not in GATES:
         raise ValueError("invalid scenario")
     return entries, providers

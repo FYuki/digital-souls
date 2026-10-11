@@ -47,8 +47,6 @@ def test_shared_scan_context_and_pre_budget_history(tmp_path: Path, depth: int, 
     )
     http, provider, inference, _ = http_setup(card, seeded)
     current = [{"role": "user", "content": "now"}]
-    if api == "chat":
-        current.insert(0, {"role": "system", "content": "caller"})
     response = post(http, api, seeded, current)
     assert response.status_code == 200
     system = provider.calls[0][1]["messages"][0]["content"]

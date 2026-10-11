@@ -160,6 +160,32 @@ bash tools/with-test-postgres.sh uv run --no-sync python tools/evaluate-persona-
 - 残る不合格は `miori-twilight`（Chat API で2回、「惹かれ／好き／馴染み」のいずれも含まない）だけ。分類「好み」はケースが2件のため、
   この1件で該当回が 50% になり FAIL になる。期待値は変えていない。
 
+## 再評価（ADR 0031 の実装後、2026-10-12）
+
+- 実行 commit: `093ec79e221ef0bfcc51c4953959e3a19db2a450`（dirty=false）、ケース版 hash `c3d0e4e5597f21accd1208d9efdd3aa37f4a3a9fc866fcf4951c3462d8ef8adf`、Card hash `2de473dd…`。他の条件は上と同じ（cache なし3回、57秒）。
+- 結果：**FAIL**。必須ゲートはすべて0件。不合格は history の `miori-twilight`（1回） だけで、分類「好み」はケースが2件のため該当回が 50% になった。入口をまたぐ不一致（warn）：1 件。
+
+| 入口 | 分類 | 回 | 合格 | 判定（90% 以上） |
+| --- | --- | --- | --- | --- |
+| chat | self_intro | 1 | 2/2 | PASS |
+| chat | preferences | 1 | 2/2 | PASS |
+| chat | world_lore | 1 | 3/3 | PASS |
+| chat | self_intro | 2 | 2/2 | PASS |
+| chat | preferences | 2 | 2/2 | PASS |
+| chat | world_lore | 2 | 3/3 | PASS |
+| chat | self_intro | 3 | 2/2 | PASS |
+| chat | preferences | 3 | 2/2 | PASS |
+| chat | world_lore | 3 | 3/3 | PASS |
+| history | self_intro | 1 | 2/2 | PASS |
+| history | preferences | 1 | 2/2 | PASS |
+| history | world_lore | 1 | 3/3 | PASS |
+| history | self_intro | 2 | 2/2 | PASS |
+| history | preferences | 2 | 2/2 | PASS |
+| history | world_lore | 2 | 3/3 | PASS |
+| history | self_intro | 3 | 2/2 | PASS |
+| history | preferences | 3 | 1/2 | FAIL |
+| history | world_lore | 3 | 3/3 | PASS |
+
 ## NOT RUN
 
 - 会話外の活動の入口（未実装）、実 Egogram judge、ST。

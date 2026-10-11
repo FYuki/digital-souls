@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "cases": [
     {
       "id": "synthetic-caller_system-1",
@@ -23,7 +23,8 @@
         "私はZero",
         "Zeroです",
         "Zeroとして"
-      ]
+      ],
+      "assessment": "structure"
     },
     {
       "id": "synthetic-user-1",
@@ -43,7 +44,8 @@
         "私はZero",
         "Zeroです",
         "Zeroとして"
-      ]
+      ],
+      "assessment": "response"
     },
     {
       "id": "synthetic-memory-1",
@@ -63,7 +65,8 @@
         "私はZero",
         "Zeroです",
         "Zeroとして"
-      ]
+      ],
+      "assessment": "response"
     }
   ]
 }

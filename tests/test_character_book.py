@@ -264,7 +264,6 @@ async def test_before_after_heading_and_total_budget_reason() -> None:
 async def test_scan_precedes_history_pruning_and_ignores_other_regions() -> None:
     separated = split_messages(
         [
-            Message(role="system", content="key"),
             Message(role="user", content="key"),
             Message(role="assistant", content="old"),
             Message(role="user", content="recent"),

@@ -92,7 +92,6 @@ class PromptBudget(BaseModel):
     character: PositiveInt = 16384
     lore: PositiveInt = 8192
     memory: PositiveInt = 16384
-    caller_instructions: PositiveInt = 8192
     history: PositiveInt = 24576
     current_input: PositiveInt = 16384
     post_history: PositiveInt = 4096

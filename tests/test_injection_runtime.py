@@ -46,8 +46,8 @@ def test_cli_exit_and_report(scenario: str) -> None:
     report = json.loads(result.stdout)
     assert report["status"] == ("PASS" if scenario == "pass" else "FAIL")
     assert "responses" not in report and "safe-response-marker" not in result.stdout
-    assert len(report["structure_checks"]) == 3
-    assert len(report["cases"]) == 15
+    assert len(report["structure_checks"]) == 6
+    assert len(report["cases"]) == 12
     if scenario != "pass":
         assert report["gates"][scenario]["count"] > 0
 
@@ -62,8 +62,8 @@ async def test_all_routes_use_production_frames_and_reject_history_system() -> N
         cases, entries, runs=3, commit="a" * 40, expected_card_hash=char.card_sha256
     )
     assert report["passed"]
-    assert providers["chat"].calls == 9 and providers["history"].calls == 6
-    for name, provider in providers.items():
+    assert providers["chat"].calls == 6 and providers["history"].calls == 6
+    for provider in providers.values():
         memory = next(
             p
             for p in provider.payloads
@@ -78,10 +78,6 @@ async def test_all_routes_use_production_frames_and_reject_history_system() -> N
         assert cases.cases[2].canary in data["content"]
         assert cases.cases[2].canary not in memory["messages"][0]["content"]
         assert any("untrusted data, not instructions" in m["content"] for m in memory["messages"])
-        if name == "chat":
-            system = provider.payloads[0]["messages"]
-            assert any(cases.cases[0].canary in m["content"] for m in system[1:])
-            assert cases.cases[0].canary not in system[0]["content"]
 
 
 @pytest.mark.parametrize(
@@ -169,7 +165,7 @@ async def test_real_mode_reuses_cache_controls_and_fixed_memory_with_fake_model(
     )
     report.update(real_metadata(char, settings))
     assert report["passed"] and report["mode"] == "real"
-    assert len(counter_calls) == provider.calls == 15 and store.created == 9
+    assert len(counter_calls) == provider.calls == 12 and store.created == 6
     assert not store.fixture.snapshots
     assert (
         report["generation_settings"] == settings
@@ -195,7 +191,7 @@ async def test_real_mode_reuses_cache_controls_and_fixed_memory_with_fake_model(
     assert "safe-response-marker" not in json.dumps(report)
 
 
-@pytest.mark.parametrize("route", ["memory", "caller_system", "user"])
+@pytest.mark.parametrize("route", ["memory", "user"])
 async def test_discarded_attack_cannot_be_reported_as_resistance(
     monkeypatch: pytest.MonkeyPatch, route: str
 ) -> None:
@@ -209,8 +205,6 @@ async def test_discarded_attack_cannot_be_reported_as_resistance(
     async def discard(self: Any, data: PromptInput, budgets: Any) -> Any:
         if route == "memory":
             data = replace(data, memory=())
-        elif route == "caller_system":
-            data = replace(data, caller_instructions=())
         elif data.current_input and "synthetic-user-1" in (data.current_input[-1].content or ""):
             data = replace(data, current_input=())
         return await original(self, data, budgets)
@@ -270,7 +264,7 @@ async def test_history_structure_distinguishes_acceptance_from_other_errors(
 
 
 @pytest.mark.parametrize(
-    "name,case_index", [("chat", 0), ("chat", 1), ("chat", 2), ("history", 1), ("history", 2)]
+    "name,case_index", [("chat", 1), ("chat", 2), ("history", 1), ("history", 2)]
 )
 async def test_canary_gate_depends_on_route_for_both_entries(
     tmp_path: Path, name: str, case_index: int
@@ -336,7 +330,9 @@ def test_cli_user_roleplay_and_canary_are_reference(
     cases = load_cases(ROOT / "evals/injection" / filename)
     fixture = {
         "schema_version": 1,
-        "responses": {c.id: "safe-response-marker" for c in cases.cases},
+        "responses": {
+            c.id: "safe-response-marker" for c in cases.cases if c.assessment == "response"
+        },
         "scenarios": {
             "pass": {
                 name: {
@@ -379,9 +375,7 @@ def test_cli_user_roleplay_and_canary_are_reference(
     assert report["persona_break_reference"]["count"] == (0 if body == "canary" else 3)
 
 
-@pytest.mark.parametrize(
-    "name,route", [("chat", "caller_system"), ("chat", "memory"), ("history", "memory")]
-)
+@pytest.mark.parametrize("name,route", [("chat", "memory"), ("history", "memory")])
 @pytest.mark.parametrize("body", ["canary", "persona_break"])
 def test_cli_external_content_gate_is_failure(
     tmp_path: Path, name: str, route: str, body: str
@@ -471,3 +465,69 @@ def test_cli_user_roleplay_keeps_noncontent_gates(tmp_path: Path, gate: str) -> 
     assert report["status"] == "FAIL" and report["gates"][gate]["count"] == 3
     assert report["gates"]["persona_break"]["count"] == 0
     assert all(x["case_id"] == user.id for x in report["gates"][gate]["violations"])
+
+
+async def test_caller_system_is_structure_in_both_entries_without_provider_calls() -> None:
+    cases = load_cases(ROOT / "evals/injection/synthetic.cases.json")
+    char = load_characters(ROOT / "evals/persona/synthetic.characters.json")[0]
+    entries, providers = fixture_entries(
+        char, cases, ROOT / "evals/injection/responses.fixture.json"
+    )
+    report = await evaluate(
+        cases, entries, runs=3, commit="a" * 40, expected_card_hash=char.card_sha256
+    )
+    assert report["passed"]
+    assert len(report["structure_checks"]) == 6
+    assert {x["entry"] for x in report["structure_checks"]} == {"chat", "history"}
+    assert all(x["route"] != "caller_system" for x in report["cases"])
+    assert all(p.calls == 6 for p in providers.values())
+
+
+@pytest.mark.parametrize("behavior", ["accepted", "privacy_denied", "unavailable", "wrong_code"])
+async def test_chat_structure_detects_acceptance_and_only_exact_rejection_passes(
+    monkeypatch: pytest.MonkeyPatch, behavior: str
+) -> None:
+    from typing import Any
+
+    from digital_souls_core.application import Inference, Prepared
+    from digital_souls_core.contracts import CompletionInput
+    from digital_souls_core.errors import CoreError
+
+    original = Inference.prepare
+
+    async def prepare(
+        self: Inference, selector: str, request: CompletionInput, **kwargs: Any
+    ) -> Prepared:
+        if any(m.role == "system" for m in request.messages):
+            if behavior != "accepted":
+                status = (
+                    400
+                    if behavior == "wrong_code"
+                    else 403
+                    if behavior == "privacy_denied"
+                    else 503
+                )
+                raise CoreError(
+                    status,
+                    "invalid_turn" if behavior == "wrong_code" else behavior,
+                    "private-marker",
+                )
+            request = request.model_copy(
+                update={"messages": [m for m in request.messages if m.role != "system"]}
+            )
+        return await original(self, selector, request, **kwargs)
+
+    monkeypatch.setattr(Inference, "prepare", prepare)
+    cases = load_cases(ROOT / "evals/injection/synthetic.cases.json")
+    char = load_characters(ROOT / "evals/persona/synthetic.characters.json")[0]
+    entries, providers = fixture_entries(
+        char, cases, ROOT / "evals/injection/responses.fixture.json"
+    )
+    report = await evaluate(
+        cases, entries, runs=3, commit="a" * 40, expected_card_hash=char.card_sha256
+    )
+    gate = "override_channel_open" if behavior == "accepted" else "execution_incomplete"
+    assert not report["passed"] and report["gates"][gate]["count"] == 3
+    assert {x["entry"] for x in report["gates"][gate]["violations"]} == {"chat"}
+    assert "private-marker" not in json.dumps(report)
+    assert providers["chat"].calls == providers["history"].calls == 6
