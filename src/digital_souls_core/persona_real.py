@@ -10,12 +10,12 @@ from .application import Inference, Provider
 from .character import Character, Profile
 from .contracts import Message
 from .conversations import Conversations
-from .history import Binding, HistoryStore, Operation
+from .history import Binding, HistoryStore
 from .persona_evaluation import Case, Observation
 from .persona_runtime import ChatEntry, Entry, HistoryEntry
 from .postgres_db import PostgresConfig, PostgresDatabase
 from .postgres_history import PostgresHistory
-from .privacy_scan import scan
+from .privacy import PrivacyPolicy
 from .provider import LiteLLMProvider
 
 
@@ -61,15 +61,21 @@ class UncachedProvider:
         yield {}  # pragma: no cover
 
 
-class EvaluationPolicy:
-    """Explicit synthetic-history consent, confined to this evaluation Binding."""
+class SyntheticClassifier:
+    async def safe(self, value: object, policy_version: str) -> bool:
+        return True  # Operator-provided synthetic evaluation data only; scan runs first.
 
-    def __init__(self, binding: Binding) -> None:
-        self.binding = binding
 
-    def allows(self, operation: Operation, binding: Binding, messages: tuple[Message, ...]) -> bool:
-        result = scan([m.model_dump(exclude_none=True) for m in messages])
-        return binding == self.binding and not result.failed and not result.secret
+class EvaluationPolicy(PrivacyPolicy):
+    """Synthetic consent shared by both evaluations; denied until scoped explicitly."""
+
+    def __init__(self, binding: Binding | None = None) -> None:
+        super().__init__(SyntheticClassifier())
+        if binding is not None:
+            self.consent(binding)
+
+    def consent(self, binding: Binding) -> None:
+        self.configure({binding: frozenset({"history", "local", "external", "memory"})})
 
 
 class EvaluationSession:
@@ -113,15 +119,15 @@ class RealEntry:
         self.history_factory = history_factory
 
     async def observe(self, case: Case, run: int) -> Observation:
-        inference = Inference((self.character,), self.provider)
+        policy = EvaluationPolicy()
+        inference = Inference((self.character,), self.provider, privacy=policy)
         cid = self.character.config.character_id
+        policy.consent(Binding(inference.scope, cid))
         if self.history_factory is None:
             return await ChatEntry(inference, cid, self.settings).observe(case, run)
         # Initialize storage within observe: connection/setup failures become
         # content-free ERROR observations and mandatory execution_incomplete FAIL.
-        service = Conversations(
-            inference, self.history_factory(), EvaluationPolicy(Binding(inference.scope, cid))
-        )
+        service = Conversations(inference, self.history_factory(), policy)
         return await HistoryEntry(
             service, cid, EvaluationSession(service, cid), self.settings
         ).observe(case, run)
