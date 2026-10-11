@@ -1,8 +1,10 @@
 # ADR 0028: Character Book の解釈と Lore の選択
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-11
+
+Accepted日: 2026-10-11（ユーザーの承認「承認する」も同日。承認対象は PR #160 の head `c1693425fd62966d2977d051aa5d2087a82e1c9d` の本文）
 
 関連: [Epic #150](https://github.com/FYuki/digital-souls-core/issues/150)、[Issue #153](https://github.com/FYuki/digital-souls-core/issues/153)、
 [照合一覧](../evidence/2026-10-11-poc-adr-alignment.md)の P5、[ADR 0026](0026-prompt-assembly.md)

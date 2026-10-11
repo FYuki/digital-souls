@@ -158,7 +158,7 @@ Runtime Contextは現在空であり、人格・関係・生活状態のsnapshot
 `## 見出し`とstrip済み本文で組み立てます。空の要素は見出しごと省き、name/first_mes/
 音声extension/creator_notesは注入しません。post_historyを持つカードも読み込みます。
 Loreは最新user textへの非再帰の単純key一致で、selective時にはsecondary keyも必要です。
-insertion_order順でafter_charへ置きます。これは汎用CCv3実装ではありません。
+insertion_order順でafter_charへ置きます。これは汎用CCv3実装ではありません（Character Bookの解釈は[ADR 0028](adr/0028-character-book.md)で置き換えることが決定済み、実装前）。
 対応しないregex/constant/case-sensitive/配置/scan modeの起動時拒否は維持します。
 
 運用設定 `prompt_budget` はtotal/character/lore/memory/caller_instructions/history/current_input/

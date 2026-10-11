@@ -4,6 +4,8 @@ Status: Proposed
 
 一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。Core は tool 実行ループを持たず Agent framework は不要とする判断と、tool を Core で実行しない記述。会話中のツール利用は Core が持つ。呼び出し側の function tools をそのまま返す動作は互換のため維持）。
 
+一部を[ADR 0028](0028-character-book.md)の Character Book の解釈で置き換えます（2026-10-11 ユーザー承認。Lore を最新の user 発言だけとの単純な key 一致で選び、非対応の field を起動時に拒否する扱い。Lore を記憶と分ける扱いは維持）。
+
 一部を[ADR 0026](0026-prompt-assembly.md)のプロンプトの組み立てで置き換えます（2026-10-11 ユーザー承認。呼び出し側の system を人格の後ろに置く扱い、Card の field の連結方法、Lore を最新の user 発言だけで照合する前提の組み立て、`context_budget_bytes` によるバイト予算。Provider port・送信 policy・parameter の扱いは維持）。
 
 日付: 2026-10-03
