@@ -2,7 +2,8 @@
 
 このAPIは人格文脈付きLLMを呼ぶstatelessな推論経路です。単独のチャットUI、配信フロントエンド、
 外部Agentのいずれも同じAPIを利用できます。このAPIではAgentループ、tool実行、記憶の保存、
-自動技能学習は行いません。Coreはtool実行ループを持ちません。Core全体の範囲は
+自動技能学習は行いません。現在のCoreはtool実行ループを持ちません（会話中のツール利用をCoreが持つことは
+[ADR 0027](adr/0027-tool-use-and-activity-runtime.md)で決定済み、実装前）。Core全体の範囲は
 [READMEの「製品の範囲」](../README.md#製品の範囲)を参照してください。履歴・記憶は
 [会話履歴API](history-api.md)・[記憶API](memory.md)の明示経路で扱います。
 この版は**信頼された単一利用者のlocalhost専用**です。認証・tenant隔離・公開配信向けの

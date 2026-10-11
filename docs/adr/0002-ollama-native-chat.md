@@ -3,6 +3,8 @@
 - Status: Proposed
 - Date: 2026-10-03
 
+一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。Core が tool 実行を追加しないことを前提とした記述。Ollama 経路の制約は維持）。
+
 ## 背景
 
 既存のLiteLLM 1.77.7では、Ollamaのtemplate文字列によるtools能力判定が

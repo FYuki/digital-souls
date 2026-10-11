@@ -2,6 +2,8 @@
 
 Status: Proposed
 
+一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。Core に tool 実行ループを追加しない記述。履歴の保存契約は維持）。
+
 一部を[ADR 0021](0021-postgresql-only-storage.md)のPostgreSQL一本化で置き換えます（SQLite adapter、既定保存先（`history.sqlite3`）、ファイル権限、journal/secure_deleteの設定。保存・復元・削除・scope・revision・policyの契約は維持）。
 
 一部を[ADR 0026](0026-prompt-assembly.md)のプロンプトの組み立てで置き換えます（2026-10-11 ユーザー承認。履歴を自動要約・切捨てせず拒否する扱いのうち、推論へ送る履歴。推論時は領域ごとの token 予算で古い履歴を往復単位で削る。会話履歴の保存上限 1 MiB と 413 は維持）。
