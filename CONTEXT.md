@@ -19,7 +19,9 @@ Coreで共有するドメインの語彙と概念モデルです。製品の範�
 | 会話往復 / turn | user入力と、それに対するassistantの応答・tool往復のまとまり。履歴の削除をユーザーが選べる単位の一つ | 実装済み（削除）：[ADR 0019](docs/adr/0019-memory-correction-invalidation.md) |
 | 保存への同意 | 長期記憶の登録を有効にした状態で会話したこと。候補ごとの確認は行わない | 決定：ADR 0019 |
 | 保存拒否の語 | 「覚えないで」「記録しないで」等。検出した発話は確認が取れるまで記憶形成の対象外とし、プライベートモードと削除機能を案内する。AIは履歴を削除しない | 実装済み：ADR 0019 |
-| PrivateAgent | 記憶の形成jobや会話外の活動を実行する外部の実行基盤。キャラクターの判断が必要な処理はCoreのLLM APIを呼ぶ | 決定：[ADR 0017](docs/adr/0017-memory-formation-admission.md) |
+| PrivateAgent | 記憶の形成jobや会話外の活動を実行する予定だった外部の実行基盤。使わない（開発中止） | 中止：[ADR 0027](docs/adr/0027-tool-use-and-activity-runtime.md)（旧：[ADR 0017](docs/adr/0017-memory-formation-admission.md)） |
+| 会話外の活動の実行基盤 | 会話外の活動のループを回す汎用Agent。使えるツールは許可方式でCoreのMCPだけに限定し、判断と状態はCoreが持つ | 未実装：ADR 0027 |
+| job の台帳 / drain API | 定期処理の永続予約と状態、有限の範囲を処理するAPI。重複の防止と再試行を持ち、中断したjobは冪等性を保って次回に最初からやり直す | 一部（形成jobは未実装）：ADR 0017、ADR 0027 |
 | 流出防止ゲート / インジェクション対策 | 外部へ送る直前の内容の再判定／外部の内容と記憶を命令ではなくデータとして扱う境界。どちらもCoreが所有する | 未実装：[ADR 0020](docs/adr/0020-reflection-personality-relationship.md) |
 | privacy permission | history・local・external・memoryの別許可。Binding単位でoperatorが明示する | 実装済み：[ADR 0005](docs/adr/0005-privacy-boundaries.md) |
 

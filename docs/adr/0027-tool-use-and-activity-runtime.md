@@ -1,8 +1,10 @@
 # ADR 0027: 会話中のツール利用と会話外の活動の実行基盤
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-11
+
+Accepted日: 2026-10-11（ユーザーの承認「ADR 0026・0027・0029を承認します」も同日。承認対象は PR #158 の head `8b2ab1c` の本文）
 
 関連: [Epic #150](https://github.com/FYuki/digital-souls-core/issues/150)、[Issue #155](https://github.com/FYuki/digital-souls-core/issues/155)、
 [照合一覧](../evidence/2026-10-11-poc-adr-alignment.md)の A1・A2・A2'・A2''・D1、[実行基盤の候補の確認](../evidence/2026-10-11-agent-tool-restriction.md)
@@ -89,7 +91,7 @@ MCP の公式 SDK です。採用するライブラリは実装の Epic で決�
 
 ツールの判断に使う推論先は、キャラクターの profile とは別の「ツール判断用 profile」として設定します（J5）。
 構造化出力に対応した profile に限ります。設定がなければ、ツール利用は無効のまま通常の会話を続けます（PoC と同じ）。
-応答の文面はキャラクターの profile で生成し、人格の組み立ては ADR 0026（Proposed、Issue #152）に従います。
+応答の文面はキャラクターの profile で生成し、人格の組み立ては [ADR 0026](0026-prompt-assembly.md) に従います。
 
 呼び出し側（外部クライアント）が渡す function tools をそのまま返す既存の動作（ADR 0001）は、互換のため残します。
 Core が持つツールと呼び出し側のツールを1つの要求で混ぜる扱いは、実装の Epic で決めます。
