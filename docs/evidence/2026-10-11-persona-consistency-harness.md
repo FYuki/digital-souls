@@ -140,3 +140,12 @@ execution_incompleteはいずれも0件。入口間不一致も0件です。応�
 既存のStarlette / Pydantic warning、npmのdeprecated warningは保持しています。
 今回の対象に未対応項目はありません。実モデル・実judge・活動入口・実環境IT2/ST・remote CIは
 **NOT RUN**で、fixtureのPASSから実品質の合格を推定しません。
+
+## 監督側の再実行（2026-10-11）
+
+`f672ed65a7264e4706234838c06753cffbfa5df1` で、差分を読んだうえで同じ固定ツール・`TMPDIR=/dev/shm` により再実行した。
+`uv sync --locked`、`uv lock --check`、ruff check / format --check（新しい CLI を含む）、mypy（132 files）、UT（872 passed）、
+IT1（798 passed）、`uv build --no-build-isolation`、`bash tools/test-postgres.sh`（441 passed）、`npm ci`（offline）、
+Node 必須試験（59 tests）、`node tools/check-docs.mjs`、`git diff --check` はすべて PASS。SKIP は0件。
+標準の評価 CLI（fixture、`--runs 3`）は exit 0・`status: PASS`。必須ゲートの違反は0件、会話外の活動の入口は NOT RUN（未実装）、
+報告 JSON に応答本文は含まれない。Miori のケース（`miori.draft.cases.json`）はユーザー確認前の案で、実モデルの評価は NOT RUN。
