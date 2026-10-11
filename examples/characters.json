@@ -16,7 +16,6 @@
       "character": 16384,
       "lore": 8192,
       "memory": 16384,
-      "caller_instructions": 8192,
       "history": 24576,
       "current_input": 16384,
       "post_history": 4096

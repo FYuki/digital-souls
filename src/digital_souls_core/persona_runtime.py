@@ -14,14 +14,19 @@ class Entry(Protocol):
 
 
 class ChatEntry:
-    def __init__(self, inference: Inference, character_id: str) -> None:
+    def __init__(
+        self, inference: Inference, character_id: str, settings: dict[str, Any] | None = None
+    ) -> None:
         self.inference = inference
         self.character_id = character_id
+        self.settings = dict(settings or {})
 
     async def observe(self, case: Case, run: int) -> Observation:
         prepared = await self.inference.prepare(
             self.character_id,
-            CompletionInput.model_validate({"messages": [m.model_dump() for m in case.messages]}),
+            CompletionInput.model_validate(
+                {**self.settings, "messages": [m.model_dump() for m in case.messages]}
+            ),
             alias=False,
         )
         self.inference.check(prepared)
@@ -31,7 +36,7 @@ class ChatEntry:
         if len(result["choices"]) != 1 or result["choices"][0]["finish_reason"] != "stop":
             raise ValueError("incomplete response")
         text = result["choices"][0]["message"]["content"]
-        if not isinstance(text, str):
+        if not isinstance(text, str) or not text.strip():
             raise ValueError("nontext response")
         return Observation(
             entry="chat",
@@ -50,10 +55,17 @@ class HistorySession(Protocol):
 
 
 class HistoryEntry:
-    def __init__(self, service: Conversations, character_id: str, session: HistorySession) -> None:
+    def __init__(
+        self,
+        service: Conversations,
+        character_id: str,
+        session: HistorySession,
+        settings: dict[str, Any] | None = None,
+    ) -> None:
         self.service = service
         self.character_id = character_id
         self.session = session
+        self.settings = dict(settings or {})
 
     async def observe(self, case: Case, run: int) -> Observation:
         cid, revision = self.session.start(case)
@@ -63,12 +75,19 @@ class HistoryEntry:
                 cid,
                 TurnInput.model_validate(
                     {
+                        **self.settings,
                         "request_id": f"persona-{run}",
                         "expected_revision": revision,
                         "messages": [case.messages[-1].model_dump()],
                     }
                 ),
             )
+            if (
+                receipt.finish_reason != "stop"
+                or not isinstance(receipt.message.content, str)
+                or not receipt.message.content.strip()
+            ):
+                raise ValueError("incomplete response")
             return Observation(
                 entry="history",
                 run=run,

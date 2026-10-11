@@ -152,6 +152,10 @@ class Conversations:
         """Return an authorized retry receipt or atomically save a completed turn."""
         binding = self.binding(character_id)
         incoming = tuple(body.messages)
+        if any(message.role == "system" for message in incoming):
+            raise CoreError(
+                400, "system_message_unsupported", "Caller system messages are unsupported"
+            )
         if any(message.role not in ("user", "tool") for message in incoming):
             raise CoreError(400, "invalid_turn", "Only new user or tool messages are accepted")
         bounded(body.model_dump())

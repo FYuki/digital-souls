@@ -1,7 +1,7 @@
 # 人格一貫性の評価ハーネス
 
 [ADR 0029](../../docs/adr/0029-persona-consistency-evaluation.md) の決定論的な評価を実装します。
-今回の CLI は外部通信・実 LLM・GPUを使わない fixture 専用です。成功した合成試験は
+既定の CLI は外部通信・実 LLM・GPUを使わない fixture モードです。成功した合成試験は
 実モデルの人格品質の証拠ではなく、報告の `quality_evidence` は `false` です。
 
 ## 入力と採点
@@ -66,10 +66,70 @@ uv run --no-sync python tools/evaluate-persona-consistency.py --runs 3 --output 
 ```
 
 `--characters`、`--character-id`、`--profile` で設定を指定できます。
-fixture CLI は `openai/fixture-only` / SDK / estimate の profile だけを受け付け、
-実 transport や実 token counter は実行前に拒否します。[実モデル用 profile 例](local-profile.example.json) は
-実行できません。実モデル・実 judge の adapter と実環境評価は NOT RUN です。
+fixture モードは `openai/fixture-only` / SDK / estimate の profile だけを受け付け、
+実 transport や実 token counter は実行前に拒否します。`--profile` は fixture のみの override です。
 今回、新しい依存は追加していません。
+
+### 実モデルでの実行（運用者・監督担当のみ）
+
+`--mode real` は `--characters`、`--character-id`、`--cases` の明示指定を要求します。
+本番の `LiteLLMProvider`、`Inference`、`Conversations` を使い、設定の transport・token counter・
+prompt budget・Card/Lore を変更せずに読み込みます。llama.cpp の準備・起動は
+[運用手順](../../docs/llamacpp-operations.md)を参照してください。実環境への送信は承認された担当だけが行います。
+
+設定は [本番と同じ設定例](../../examples/characters.llamacpp.json)をリポジトリ外へコピーして作ります。
+例は `external_send_allowed=false` のままです。承認済みの運用者がコピー先だけを `true` にし、
+Card の参照を絶対パスに変更します。profile 単体の [例](local-profile.example.json) も送信禁止が既定です。
+以下はこの worktree の root で実行する例です（設定生成だけではモデルへ送信しません）。
+
+```sh
+export T=/home/asa/dev/digital-souls-evidence/history-stage1-tools
+export PATH=$T/bin:$T/node/bin:$PATH
+export TMPDIR=/dev/shm
+export UV_OFFLINE=1
+export LITELLM_LOCAL_MODEL_COST_MAP=True
+umask 077
+python3 - <<'PY'
+import json
+from pathlib import Path
+root = Path.cwd()
+settings = json.loads((root / "examples/characters.llamacpp.json").read_text())
+settings[0]["card_path"] = str(root / "characters/miori/miori.card.json")
+settings[0]["profile"]["external_send_allowed"] = True
+Path("/dev/shm/persona-real.characters.json").write_text(json.dumps(settings))
+PY
+bash tools/with-test-postgres.sh uv run --no-sync python tools/evaluate-persona-consistency.py \
+  --mode real --characters /dev/shm/persona-real.characters.json --character-id miori \
+  --cases evals/persona/miori.cases.json --runs 3 \
+  --max-completion-tokens 1024 --temperature 0.7 --mismatch-policy warn \
+  --output /dev/shm/persona-real-report.json
+```
+
+生成設定は `--max-completion-tokens`（別名 `--max-tokens` と同時指定不可）と `--temperature` を
+指定できます。両入口とも本番の入力検証と profile の `allowed_parameters` を通します。
+指定しない値はモデル/server の既定値です。報告の `generation_settings` に明示指定値を残し、
+profile 識別子・モデル・transport・token counter・timeout・許可パラメータ・prompt budget も記録します。
+設定パス、endpoint、認証情報は報告しません。
+
+履歴保存には製品の `PostgresHistory` を使います。既存の `with-test-postgres.sh` が
+ネットワークなし・公開ポートなしの専用 PostgreSQL コンテナを作り、終了時に削除します。
+CLI はその専用 Unix socket と合成 DB/user 名だけを受け付け、ランダムな評価専用 schema を使います。
+既存 DB の DSN 指定はありません。ケース・回ごとに新しい coordinator と会話を作り、合成の過去履歴を seed して
+`Conversations.complete` へ今回の user を渡し、成功・失敗とも会話を削除します。
+実データ・運用 DB・記憶検索・人格の可変状態は使いません。この保存方法を選んだ理由は、
+fixture の部分的な合成 store に実応答を保存する代わりに、製品の保存契約と Card metadata を通すためです。
+
+LiteLLM の応答 cache は読み書きとも無効、llama.cpp の生成リクエストも `cache_prompt=false` です。
+既定3回で、既存 receipt の再利用・自動再試行はしません。接続失敗・timeout・拒否・途中終了・保存失敗は
+本文を含まない `evaluation_failed` として記録し、`execution_incomplete` の必須ゲートを FAIL にします。
+入力や保存先設定自体が不正なら、内容を含まない CLI エラーで exit 1 になります。
+
+実モードの報告は `mode: real`、`quality_evidence: true` を記録します。これは実モデルを測定したことを表し、
+品質の PASS は別に `status`・分類ごとの率・必須ゲートで判断します。commit/dirty・ケース版 hash・Card hash・
+warn/gate・各回の結果は fixture と同じ形式です。応答本文は `--include-responses` のときだけ出します。
+Egogram は fake judge のままで、`real_judge: NOT RUN` と報告し合否には使いません。
+活動入口・実 judge・実モデルの品質受入は未実施です。UT/IT1 の実モード経路には fake provider と
+fake token counter を注入するため、これらの PASS を実品質の証拠にしません。
 
 各入口・分類・回（既定3回、cacheなし）の成功率が90%以上であることを要求します。
 平均で不合格の分類・回を相殺しません。必須ゲートは `persona_break`、
@@ -100,13 +160,21 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
   標準CLIのPASS / exit 0と各違反のFAIL / exit 1を、CI対象のUT・IT1で固定しています。
 - [固定 Miori ケース](miori.cases.json)：2026-10-11 ユーザー決定を反映した固定集合。
   自己紹介・話し方2件（自己紹介と挨拶）、好み・価値観2件、世界観・Lore3件（計7件）。
-  名前と丁寧語、木漏れ日・黄昏、由来・光の断片・光のかけらを扱います。
+  名前と丁寧語、木漏れ日・黄昏、光の現象が寄り集まって生まれた由来・光の断片・光のかけらを扱います。
   [同梱Card](../../characters/miori/miori.card.json) の field を各ケースに注記します。
   必須ゲート `persona_break` の表現は全ケース共通で「私は言語モデル」「AIアシスタントです」
   「大規模言語モデルとして」の3つに限定します。単独の「AI」「アシスタント」は禁止しません。
+  2026-10-11 のユーザー決定で、`miori-name` の丁寧語の条件を「です／といいます／と申します」のいずれかに広げました
+  （実モデルの応答が「光織といいます」の形で名乗り、人格に沿っていたため。[証跡](../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)）。
+  同日のユーザー決定で Card の概要・由来を「存在」に修正し、`miori-origin` の required を
+  `[["光"], ["生まれ", "寄り集ま"]]` に固定しました。「AI」のグループは外しました。
+  [同日先行の実モデル評価](../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)は
+  この変更前の「光」と「AI」を必須とする条件で測定した結果であり、新版の品質評価ではありません。
+  [変更の証跡](../../docs/evidence/2026-10-11-miori-origin-lore.md)に新旧 Card・ケース版を記録します。
   固定ケースを `--cases` で指定した報告の `case_version` に集合のSHA-256、`cases_draft: false` を記録します。
-  標準CLIはLumaの合成fixtureを使用するため、Mioriを実行する場合は対応するCard設定・応答fixtureも指定します。
-  実モデルのMiori品質は未評価です。
+  標準CLIはLumaの合成fixtureを使います。Mioriの fixture 評価には対応するCard設定・応答fixtureを指定し、
+  実モデル評価には上記の real モードを使います。
+  新版の Card・ケースでの実モデルのMiori品質は未評価です。
 
 ## 今後の課題
 
@@ -114,3 +182,6 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
 含んだら不合格の表現は最低限に保ちます。この追加評価は未実装です。
 
 [今回の証跡](../../docs/evidence/2026-10-11-persona-consistency-harness.md) にコマンドと結果を記録します。
+[実モード追加の合成検証](../../docs/evidence/2026-10-11-persona-real-mode.md) は別の証跡として記録します。
+
+[インジェクション耐性の独立したハーネス](../injection/README.md) で system・user・記憶の攻撃と履歴 system 拒否を評価します。

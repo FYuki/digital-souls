@@ -126,6 +126,24 @@ def create_app(
     async def validation_error_handler(
         request: Request, error: RequestValidationError
     ) -> JSONResponse:
+        # System rejection also takes precedence when another input field is invalid.
+        body = error.body
+        if request.url.path.endswith("/completions") and isinstance(body, dict):
+            messages = body.get("messages")
+            if isinstance(messages, list) and any(
+                isinstance(message, dict) and message.get("role") == "system"
+                for message in messages
+            ):
+                return JSONResponse(
+                    error_body(
+                        CoreError(
+                            400,
+                            "system_message_unsupported",
+                            "Caller system messages are unsupported",
+                        )
+                    ),
+                    status_code=400,
+                )
         # Never echo caller input or Pydantic's input-bearing validation details.
         return JSONResponse(
             error_body(CoreError(400, "invalid_request", "Invalid or unsupported input")),

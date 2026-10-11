@@ -39,6 +39,9 @@ completion本文の例（合成データ）:
 ```
 
 `messages`には新しいuserまたはtoolのみを1件以上渡します。件数上限はありません。
+systemを含む入力は400 `system_message_unsupported`で拒否します（文字列・text配列、streamとも同じ）。
+それ以外の不正なturnは400 `invalid_turn`、schema不正は400 `invalid_request`です。
+拒否に要求本文を含めず、system拒否はprivacy判定・履歴読み取り・推論より前に行います。
 過去ログを再送しません。保存済み履歴と新規入力の合計にも件数上限はありません。
 入力`content`は文字列、または`[{"type":"text","text":"..."}]`の配列です。
 入口で各textを`\n`で連結し、1要素ならそのtextそのものになります。
@@ -86,7 +89,7 @@ JSONのUTF-8バイト数で検査し、超過は切り捨てず413（`history_li
 送信する古い履歴は往復単位で削減します。tool callと結果を分けず、直前の完了した1往復を保護します。
 固定人格・今回の入力・保護する往復だけで超過する場合は400 `prompt_budget_exceeded`
 （messageは領域名だけ）です。保存済み履歴と1 MiB保存上限は維持します。
-`context_budget_bytes` が残る運用設定は起動時エラーです。会話履歴APIのsystem拒否は変えません。
+`context_budget_bytes` または `prompt_budget.caller_instructions` が残る運用設定は起動時エラーです。
 組み立て・token推定・既定予算は[推論API](api.md#文脈プライバシー)を参照してください。
 推論先の物理context制限も引き続き適用します。
 会話streamのtool call indexは非負の整数（boolean不可）で、新しいindexは0から連続する必要があります。

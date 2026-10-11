@@ -8,7 +8,6 @@ import pytest
 
 from digital_souls_core.contracts import FunctionCall, FunctionDefinition, Message, Tool, ToolCall
 from digital_souls_core.prompt_builder import (
-    CALLER_FRAME,
     MEMORY_NOTICE,
     ByteTokenCounter,
     CharacterCard,
@@ -32,7 +31,6 @@ REGIONS = (
     "character",
     "lore",
     "memory",
-    "caller_instructions",
     "history",
     "current_input",
     "post_history",
@@ -72,7 +70,6 @@ def sample() -> PromptInput:
         card=CharacterCard(description="persona", post_history_instructions="post"),
         lore=(SelectedLore("before", "before_char", 0), SelectedLore("after", "after_char", 1)),
         memory=tuple(MemoryItem(f"memory{i}") for i in range(5)),
-        caller_instructions=("caller0", "caller1"),
         history=tuple(turn(i) for i in range(5)),
         current_input=(msg("user", "current"),),
     )
@@ -89,14 +86,12 @@ class UnitCounter:
             "post",
             "current",
             "runtime",
-            "caller0",
-            "caller1",
             *(f"memory{i}" for i in range(5)),
             *(f"u{i}" for i in range(5)),
             *(f"a{i}" for i in range(5)),
         )
         return sum(
-            (message.content or "").replace(MEMORY_NOTICE, "").replace(CALLER_FRAME, "").count(unit)
+            (message.content or "").replace(MEMORY_NOTICE, "").count(unit)
             for message in messages
             for unit in units
         )
@@ -134,14 +129,10 @@ async def test_complete_order_and_card_headings() -> None:
     assert [message.role for message in result.messages] == [
         "system",
         "user",
-        "system",
-        "system",
         *["user", "assistant"] * 5,
         "system",
         "user",
     ]
-    assert "caller0" in (texts[2] or "") and "caller1" in (texts[3] or "")
-    assert "do not override the character's personality or response policy" in (texts[2] or "")
     assert texts[-2:] == ["post-body", "current"]
     assert not any(word in (texts[0] or "") for word in ("name:", "first_mes:", "creator_notes:"))
 
@@ -155,27 +146,15 @@ async def test_empty_regions_and_empty_card_fields_are_omitted() -> None:
     assert card_only.messages == (msg("system", "## 性格と話し方\npersona"),)
 
 
-def test_system_moves_from_anywhere_and_tool_continuation_stays_current() -> None:
+def test_tool_continuation_stays_current() -> None:
     old_call, old_result = tool_pair("old")
     call, result = tool_pair()
-    messages = (
-        msg("system", "first"),
-        msg("user", "u0"),
-        old_call,
-        msg("system", "middle"),
-        old_result,
-        msg("assistant", "a0"),
-        msg("user", "current"),
-        call,
-        msg("system", "last"),
-        result,
-    )
-    separated = split_messages(messages)
-    assert separated.caller_instructions == ("first", "middle", "last")
-    assert separated.history == (HistoryTurn((messages[1], old_call, old_result, messages[5])),)
+    history = (msg("user", "u0"), old_call, old_result, msg("assistant", "a0"))
+    current = (msg("user", "current"), call, result)
+    separated = split_messages((*history, *current))
+    assert separated.history == (HistoryTurn(history),)
     assert separated.history[0].completed
-    assert separated.current_input == (messages[6], call, result)
-    assert messages[3].role == "system"  # splitting never mutates the caller's sequence
+    assert separated.current_input == current
 
 
 def test_split_history_is_partitioned_at_users_and_has_no_phantom_turn() -> None:
@@ -192,22 +171,22 @@ def test_split_history_is_partitioned_at_users_and_has_no_phantom_turn() -> None
     assert split_messages((msg("user", "current"),)).history == ()
 
 
-# Cumulative deletion at each of ADR 0026's eight stages; later stages must remain intact.
+# Cumulative deletion at all seven ADR 0031 stages, plus exact boundaries.
 @pytest.mark.parametrize(
-    ("total", "memory", "caller", "history", "lore", "post"),
+    ("total", "memory", "history", "lore", "post"),
     [
-        (21, 1, 0, 0, 0, 0),
-        (19, 2, 1, 0, 0, 0),
-        (17, 3, 2, 0, 0, 0),
-        (14, 4, 2, 1, 0, 0),
-        (11, 5, 2, 2, 0, 0),
-        (9, 5, 2, 3, 0, 0),
-        (6, 5, 2, 4, 1, 0),
-        (4, 5, 2, 4, 2, 1),
+        (20, 0, 0, 0, 0),
+        (18, 2, 0, 0, 0),
+        (16, 4, 0, 0, 0),
+        (12, 4, 2, 0, 0),
+        (11, 5, 2, 0, 0),
+        (7, 5, 4, 0, 0),
+        (5, 5, 4, 2, 0),
+        (4, 5, 4, 2, 1),
     ],
 )
-async def test_all_eight_reduction_stages(
-    total: int, memory: int, caller: int, history: int, lore: int, post: int
+async def test_all_seven_reduction_stages(
+    total: int, memory: int, history: int, lore: int, post: int
 ) -> None:
     result = await build(sample(), total)
     assert result.usage.total_tokens == total
@@ -215,7 +194,6 @@ async def test_all_eight_reduction_stages(
         "character": 0,
         "lore": lore,
         "memory": memory,
-        "caller_instructions": caller,
         "history": history,
         "current_input": 0,
         "post_history": post,
@@ -225,31 +203,22 @@ async def test_all_eight_reduction_stages(
     for index in range(5):
         assert (f"memory{index}" in text) == (index < 5 - memory)
         assert (f"u{index}" in text) == (index >= history)
-    assert ("caller0" in text) == (caller == 0)
-    assert ("caller1" in text) == (caller < 2)
     assert ("before" in text) == (lore == 0)
     assert ("after" in text) == (lore < 2)
     assert ("post" in text) == (post == 0)
 
 
 @pytest.mark.parametrize(
-    ("floor", "count", "total", "dropped_memory", "dropped_caller"),
-    [
-        (3, 3, 19, 0, 1),
-        (3, 2, 18, 0, 1),
-        (5, 5, 21, 0, 1),
-        (8, 5, 21, 0, 1),
-        (4, 5, 21, 1, 0),
-        (1, 5, 18, 4, 0),
-    ],
+    ("floor", "count", "total", "dropped_memory"),
+    [(3, 3, 18, 0), (3, 2, 17, 0), (5, 5, 20, 0), (8, 5, 20, 0), (4, 5, 19, 1), (1, 5, 16, 4)],
 )
 async def test_configurable_memory_floor_and_boundary(
-    floor: int, count: int, total: int, dropped_memory: int, dropped_caller: int
+    floor: int, count: int, total: int, dropped_memory: int
 ) -> None:
     data = replace(sample(), memory=sample().memory[:count])
     result = await PromptBuilder(UnitCounter(), memory_floor=floor).build(data, budgets(total))
     assert result.usage.dropped["memory"] == dropped_memory
-    assert result.usage.dropped["caller_instructions"] == dropped_caller
+    assert result.usage.dropped["history"] == 0
 
 
 @pytest.mark.parametrize(
@@ -310,7 +279,6 @@ async def test_protected_total_overflow_and_exact_boundary() -> None:
     ("region", "limit", "dropped"),
     [
         ("memory", 2, 3),
-        ("caller_instructions", 1, 1),
         ("history", 4, 3),
         ("lore", 1, 1),
         ("post_history", 0, 1),
@@ -361,7 +329,6 @@ async def test_usage_and_all_prompt_container_reprs_hide_bodies_and_inputs_are_u
         "character": 1,
         "lore": 2,
         "memory": 0,
-        "caller_instructions": 0,
         "history": 4,
         "current_input": 1,
         "post_history": 1,
@@ -488,7 +455,6 @@ async def test_error_and_reprs_never_echo_any_prompt_body(region: str) -> None:
         lore=(SelectedLore(body),),
         runtime=RuntimeContext(body),
         memory=(MemoryItem(body),),
-        caller_instructions=(body,),
         history=(HistoryTurn((msg("user", body), msg("assistant", body))),),
         current_input=(msg("user", body),),
     )
@@ -565,7 +531,6 @@ async def test_whitespace_card_fields_are_stripped_and_empty_heading_is_omitted(
 @pytest.mark.parametrize(
     "messages",
     [
-        (msg("system", "instruction"),),
         (msg("assistant", "greeting"),),
         (msg("user", "current"), msg("assistant", "answer")),
     ],
@@ -576,7 +541,6 @@ def test_partition_preserves_other_http_accepted_sequences(
     separated = split_messages(messages)
     rebuilt = convert_messages(
         PromptInput(
-            caller_instructions=separated.caller_instructions,
             history=separated.history,
             current_input=separated.current_input,
         )

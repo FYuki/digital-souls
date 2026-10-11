@@ -264,7 +264,6 @@ async def test_before_after_heading_and_total_budget_reason() -> None:
 async def test_scan_precedes_history_pruning_and_ignores_other_regions() -> None:
     separated = split_messages(
         [
-            Message(role="system", content="key"),
             Message(role="user", content="key"),
             Message(role="assistant", content="old"),
             Message(role="user", content="recent"),
@@ -290,16 +289,18 @@ async def test_scan_precedes_history_pruning_and_ignores_other_regions() -> None
 
 async def test_loader_and_miori_pinned_regression() -> None:
     char = load_characters(ROOT / "examples/characters.json")[0]
-    cases = json.loads((ROOT / "tests/fixtures/miori-character-book-c4f142b.json").read_text())
+    cases = json.loads(
+        (ROOT / "tests/fixtures/miori-character-book-2026-10-11-origin-lore.json").read_text()
+    )
     for case in cases:
         result = await select_lore(char.character_book, case["question"], (), ByteTokenCounter())
         if case["estimate_tokens"] <= 700:
             assert [e.source_index for e in result.entries] == case["source_indices"]
             assert result.tokens == case["estimate_tokens"]
         else:
-            assert case["estimate_tokens"] == 2432
+            assert case["estimate_tokens"] == 2436
             assert [e.source_index for e in result.entries] == [0, 4]
-            assert result.tokens == 631
+            assert result.tokens == 635
             assert sum(d.reason == "omitted_by_lore_budget" for d in result.diagnostics) == 5
 
 

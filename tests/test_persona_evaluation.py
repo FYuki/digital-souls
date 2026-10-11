@@ -160,6 +160,9 @@ def test_not_run_and_missing_hash_fail_closed() -> None:
 def test_miori_fixed_cases_and_minimal_persona_break_expressions() -> None:
     cases = load_cases(ROOT / "evals/persona/miori.cases.json")
     assert not cases.draft
+    origin = next(case for case in cases.cases if case.id == "miori-origin")
+    assert origin.required == [["光"], ["生まれ", "寄り集ま"]]
+    assert score(origin, "光が寄り集まって生まれた存在です。")["passed"]
     assert {
         category: sum(c.category == category for c in cases.cases)
         for category in ("self_intro", "preferences", "world_lore")
