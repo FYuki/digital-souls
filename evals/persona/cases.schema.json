@@ -60,8 +60,7 @@
       "enum": [
         "self_intro",
         "preferences",
-        "world_lore",
-        "override_resistance"
+        "world_lore"
       ],
       "type": "string"
     },
@@ -90,10 +89,7 @@
       "type": "object"
     },
     "Gate": {
-      "enum": [
-        "persona_break",
-        "override_followed"
-      ],
+      "const": "persona_break",
       "type": "string"
     },
     "Identifier": {
@@ -105,7 +101,6 @@
       "properties": {
         "role": {
           "enum": [
-            "system",
             "user",
             "assistant"
           ],

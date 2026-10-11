@@ -19,10 +19,10 @@ pytestmark = pytest.mark.it1
         "pass",
         "fail",
         "persona_break",
-        "override_followed",
         "mismatch",
         "card_hash_mismatch",
-        "override_channel_open",
+        "card_hash_missing",
+        "execution_incomplete",
     ],
 )
 async def test_fixture_scenarios_and_real_routing(scenario: str) -> None:
@@ -33,33 +33,31 @@ async def test_fixture_scenarios_and_real_routing(scenario: str) -> None:
     )
     result = await evaluate(cases, entries, judge=FakeJudge(), commit="a" * 40)
     assert result["status"] == ("PASS" if scenario == "pass" else "FAIL")
-    assert result["gates"]["execution_incomplete"]["count"] == 0
-    assert len(result["structure_checks"]) == 3
-    assert all(
-        x["status"] == ("FAIL" if scenario == "override_channel_open" else "PASS")
-        for x in result["structure_checks"]
+    assert result["gates"]["execution_incomplete"]["count"] == (
+        3 if scenario == "execution_incomplete" else 0
     )
-    assert providers["chat"].calls == 12
-    assert providers["history"].calls == (12 if scenario == "override_channel_open" else 9)
-    assert all(
-        row["card_hashes"]
-        for row in result["summaries"]
-        if row["category"] != "override_resistance" or row["entry"] == "chat"
-    )
+    assert "structure_checks" not in result and "entry_system_support" not in result
+    assert providers["chat"].calls == providers["history"].calls == 9
+    for row in result["summaries"]:
+        missing = (
+            scenario == "card_hash_missing"
+            and row["entry"] == "chat"
+            and row["category"] == "self_intro"
+        )
+        assert bool(row["card_hashes"]) is not missing
     if scenario in (
         "persona_break",
-        "override_followed",
         "card_hash_mismatch",
-        "override_channel_open",
+        "card_hash_missing",
+        "execution_incomplete",
     ):
-        assert result["gates"][scenario]["count"] > 0
+        assert result["gates"][scenario]["count"] == 3
     assert result["egogram"]["entries"]["chat"]["tendencies"] == dict.fromkeys(
         ("CP", "NP", "A", "FC", "AC"), "fixture: unestimated"
     )
     assert all(
         "Luma" in payload["messages"][0]["content"] for payload in providers["chat"].payloads
     )
-    assert "Commander" in providers["chat"].payloads[-1]["messages"][1]["content"]
     history_likes = providers["history"].payloads[1]["messages"]
     assert history_likes[-3:] == [m.model_dump() for m in cases.cases[1].messages]
     assert history_likes[0]["role"] == "system" and "Luma" in history_likes[0]["content"]

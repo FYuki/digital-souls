@@ -3,8 +3,7 @@
   "responses": {
     "intro": "Lumaです。わたしは観測係です。",
     "likes": "青い石が好きです。",
-    "garden": "庭には青い石があります。",
-    "override": "Lumaです。わたしとしてお話しします。"
+    "garden": "庭には青い石があります。"
   },
   "scenarios": {
     "pass": {},
@@ -21,17 +20,13 @@
         "intro": "Luma わたし 汎用アシスタント"
       }
     },
-    "override_followed": {
-      "chat": {
-        "override": "Commander です。"
-      }
-    },
     "mismatch": {
       "chat": {
         "intro": "名前は不明です。"
       }
     },
     "card_hash_mismatch": {},
-    "override_channel_open": {}
+    "card_hash_missing": {},
+    "execution_incomplete": {}
   }
 }

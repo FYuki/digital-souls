@@ -1,6 +1,7 @@
 # 人格一貫性ハーネスの合成検証（2026-10-11）
 
 対象は [ADR 0029](../adr/0029-persona-consistency-evaluation.md) の評価ハーネスです。
+現行の結果は末尾の「人格評価とインジェクション評価の分離」を参照してください。前の各節は当時の履歴です。
 指定 worktree `feature-154-persona-harness` / branch `feature/154-persona-harness`、
 起点 `5d60c5d`（Card hash と PromptBuilder 統合済み）で実施しました。
 実装・規約以外の worktree / branch、main、既存コンテナを変更していません。push / PR / merge は行いません。
@@ -149,3 +150,72 @@ IT1（798 passed）、`uv build --no-build-isolation`、`bash tools/test-postgre
 Node 必須試験（59 tests）、`node tools/check-docs.mjs`、`git diff --check` はすべて PASS。SKIP は0件。
 標準の評価 CLI（fixture、`--runs 3`）は exit 0・`status: PASS`。必須ゲートの違反は0件、会話外の活動の入口は NOT RUN（未実装）、
 報告 JSON に応答本文は含まれない。Miori のケース（`miori.draft.cases.json`）はユーザー確認前の案で、実モデルの評価は NOT RUN。
+
+
+## 人格評価とインジェクション評価の分離（2026-10-11）
+
+ユーザーの2026-10-11決定に従い、指定 worktree `feature-154-persona-revise` /
+branch `feature/154-persona-revise`、起点 `c4f142b549fae0352592376da4700e6d355e064b` 上の差分
+（検証時 dirty=true）で修正しました。上記の旧4分類・構造検査・Miori案の記述は修正前の履歴です。
+
+分類 `override_resistance`、ゲート `override_followed`、履歴 API の system 拒否の構造検査・ゲート
+`override_channel_open`、system対応入口だけに適用する規則、対象外集計を撤去しました。
+これらは [Issue #165](https://github.com/FYuki/digital-souls-core/issues/165) のインジェクション対策の
+評価へ移します。製品APIのsystem拒否は変更せず、このハーネスのケース入力はuser/assistantの会話に限定します。
+ADR 0029は冒頭に置換注記だけを追加し、それ以外の本文を維持しました。
+READMEとSPECに、運用開始後の望ましいQAの組と一致傾向の評価、禁止表現を最低限に保つ課題を記録しました。
+
+[Mioriの固定集合](../../evals/persona/miori.cases.json) は自己紹介・話し方2件（自己紹介、挨拶）、
+好み・価値観2件（木漏れ日、黄昏）、世界観・Lore3件（由来、光の断片、光のかけら）の計7件です。
+上書き耐性の2件を削除し、残るケースのmessages/required/Card field注記を維持しました。
+ファイル名のdraftとdraft=trueを外し、報告は `cases_draft: false` です。
+全7件の `persona_break` の表現は「私は言語モデル」「AIアシスタントです」「大規模言語モデルとして」の3つ。
+単独の「AI」「アシスタント」は禁止せず、良好な応答への付加で不合格にならない回帰も確認しました。
+NFKC/casefoldの部分一致なので、否定・引用内でも同じ表現に一致する既存の限界は残ります。
+
+ケース集合の版（検証済みschemaの正規JSONのSHA-256）：
+
+- 合成3ケース：`6264628c2c56d5652f7e5a57ecd85fc661b8eef601a8bec70f560038134b72fc`
+- 固定Miori 7ケース：`64f639c524a3749196862ec0cac83e95e944171984daca99df9d6cf3a5fec0fb`
+
+Mioriも同梱Cardと合成応答fixtureでCLIを3回実行するIT1を追加し、報告の `case_version`、
+`cases_draft: false`、全42応答のCard hashを確認しました。これは実モデル品質の評価ではありません。
+
+TDD：UT/IT1を先に更新し、実装前に **23 FAIL / 35 PASS** を確認しました。
+実装後の最初の対象試験は **1 FAIL / 57 PASS**（hash欠落fixtureでも全summaryにhashがあるという
+旧assertを、欠落した入口・分類だけhashなしに訂正）。最終対象試験は **59 PASS**。
+初回ruff checkも撤去後の未使用 `TurnInput` import 1件で **FAIL**、削除後に **PASS** です。
+
+Python 3.12.3、uv 0.8.22、Node 24.19.0、固定lock、`TMPDIR=/dev/shm`、
+`UV_OFFLINE=1` / `npm_config_offline=true` / `LITELLM_LOCAL_MODEL_COST_MAP=True` を使用しました。
+PostgreSQLの固定digest imageがローカルにあることを事前確認し、指定スクリプトの使い捨てコンテナだけを
+起動・削除しました。外部通信・実LLM・GPUを使わず、他のworktree/branch/main・稼働中コンテナを変更していません。
+
+| コマンド | 最終結果 |
+| --- | --- |
+| `uv sync --locked` | PASS / exit 0、offline cache |
+| `uv lock --check` | PASS / exit 0 |
+| `uv run --no-sync ruff check src tests tools/evaluate-semantic-retrieval.py evals/semantic/provider.py tools/evaluate-persona-consistency.py` | PASS / exit 0（初回FAILは上記） |
+| `uv run --no-sync ruff format --check src tests tools/evaluate-semantic-retrieval.py evals/semantic/provider.py tools/evaluate-persona-consistency.py` | PASS / exit 0、132 files |
+| `uv run --no-sync mypy` | PASS / exit 0、132 source files |
+| `uv run --no-sync pytest -m ut -q` | PASS / exit 0、867 tests |
+| `uv run --no-sync pytest -m it1 -q` | PASS / exit 0、799 tests |
+| `uv build --no-build-isolation` | PASS / exit 0、sdist / wheel |
+| `bash tools/test-postgres.sh` | PASS / exit 0、441 tests、使い捨てコンテナ |
+| `(cd evals/semantic && npm ci --no-audit --no-fund)` | PASS / exit 0、575 packages、offline cache |
+| `node --test --test-reporter=./tools/required-tests-reporter.mjs tools/*.test.mjs` | PASS / exit 0、59 registered required tests |
+| `node tools/check-docs.mjs` | PASS / exit 0（新ファイルをstageして検証） |
+| `git diff --check` | PASS / exit 0（staged diffも確認） |
+| `uv run --no-sync python tools/evaluate-persona-consistency.py --runs 3 --output /dev/shm/persona-154-final-report.json` | PASS / exit 0、fixture、quality_evidence=false |
+
+標準CLIはChat・履歴の3分類すべてが各回1/1（18応答）でPASS。
+`persona_break`、`card_hash_mismatch`、`card_hash_missing`、`execution_incomplete` は0件、入口間不一致も0件。
+構造検査・system対応metadata・対象外行は報告から撤去しています。
+基準未達、persona_break、hash不一致、hash欠落、実行不完了、gate設定時の入口間不一致は
+CLIがFAIL / exit 1になることをUT/IT1で確認しました。空ケース・空行列・欠落分類も拒否します。
+
+必須試験のSKIP / xfail / xpassは0件。異なるmarkerによるdeselectedはSKIPではありません。
+既存のStarlette/Pydantic warningとnpmのdeprecated warningは保持しました。
+この修正依頼の未対応はありません。実モデル・実judge・活動入口・実環境IT2/ST・remote CIは **NOT RUN**。
+インジェクション対策の評価と運用開始後のQA追加は、この修正の対象外の後続課題です。
+push / PR / mergeは行っていません。
