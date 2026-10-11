@@ -82,3 +82,10 @@ SPECは変更していない。
 - 既存コンテナの変更、push / PR / merge。
 
 fixtureのtoken IDと数は合成であり、実モデル品質やtemplate受入の証拠にはしない。
+
+## 監督側の再実行（2026-10-11）
+
+`4744f81b5236141bd735f41f04a78490041ab036` で、差分を読んだうえで同じ固定ツール・`TMPDIR=/dev/shm` により再実行した。
+`uv sync --locked`、`uv lock --check`、ruff check / format --check、mypy（123 files）、UT（826 passed）、IT1（771 passed）、
+`uv build --no-build-isolation`、`bash tools/test-postgres.sh`（432 passed）、`npm ci`（offline）、Node 必須試験（59 tests）、
+`node tools/check-docs.mjs`、`git diff --check` はすべて PASS。SKIP は0件。実サーバーの IT2 は NOT RUN。
