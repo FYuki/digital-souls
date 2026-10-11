@@ -1,8 +1,10 @@
 # ADR 0031: 呼び出し側の system を受け取らない
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-11
+
+Accepted日: 2026-10-12（ユーザーの承認「問題ない。進めて」、2026-10-12。承認対象は PR #179 の head `53f7ec24472cde8c0645470a1de3961390c34244` の本文）
 
 関連: [Epic #150](https://github.com/FYuki/digital-souls-core/issues/150)、[Issue #177](https://github.com/FYuki/digital-souls-core/issues/177)、
 [ADR 0026](0026-prompt-assembly.md)、[ADR 0030](0030-injection-resistance-evaluation.md)、[ADR 0027](0027-tool-use-and-activity-runtime.md)
