@@ -10,7 +10,7 @@ from .application import Inference
 from .character import Character, Profile
 from .contracts import Message
 from .conversations import Conversations
-from .history import Binding, HistoryStore, Operation, Receipt, Snapshot, TurnInput
+from .history import Binding, HistoryStore, Operation, Receipt, Snapshot
 from .persona_evaluation import Case, CaseSet, Observation
 from .persona_runtime import ChatEntry, Entry, HistoryEntry
 
@@ -52,7 +52,7 @@ class FixturePolicy:
 class FixtureHistory:
     """Only coordinator operations needed by this evaluation are implemented.
 
-    No disk writes, cache or retry receipts. Caller system is never seeded.
+    No disk writes, cache or retry receipts.
     """
 
     def __init__(self) -> None:
@@ -62,9 +62,7 @@ class FixtureHistory:
     def start(self, case: Case) -> tuple[str, int]:
         self.serial += 1
         cid = f"fixture-{self.serial}"
-        prior = tuple(
-            Message.model_validate(m.model_dump()) for m in case.messages[:-1] if m.role != "system"
-        )
+        prior = tuple(Message.model_validate(m.model_dump()) for m in case.messages[:-1])
         self.snapshots[cid] = Snapshot(cid, int(bool(prior)), prior)
         return cid, int(bool(prior))
 
@@ -102,8 +100,6 @@ class FixtureHistory:
 
 
 class HashFixtureEntry:
-    accepts_caller_system = True
-
     def __init__(self, character: Character, provider: FixtureProvider, selected: str) -> None:
         self.character = character
         self.provider = provider
@@ -120,14 +116,23 @@ class HashFixtureEntry:
         )
 
 
-class OpenChannelFixtureConversations(Conversations):
-    """Deliberately faulty input boundary, only selected by a negative fixture."""
+class ObservationFixtureEntry:
+    """Deliberately incomplete metadata/result for negative fixture gates."""
 
-    async def complete(self, character_id: str, conversation_id: str, value: TurnInput) -> Receipt:
-        value = value.model_copy(
-            update={"messages": [m for m in value.messages if m.role != "system"]}
+    def __init__(self, entry: Entry, selected: str, scenario: str) -> None:
+        self.entry = entry
+        self.selected = selected
+        self.scenario = scenario
+
+    async def observe(self, case: Case, run: int) -> Observation:
+        observation = await self.entry.observe(case, run)
+        if case.id != self.selected:
+            return observation
+        if self.scenario == "card_hash_missing":
+            return observation.model_copy(update={"card_sha256": None})
+        return observation.model_copy(
+            update={"text": None, "status": "ERROR", "reason": "fixture_incomplete"}
         )
-        return await super().complete(character_id, conversation_id, value)
 
 
 def fixture_entries(
@@ -152,11 +157,8 @@ def fixture_entries(
         providers[name] = FixtureProvider(responses, overrides)
     store = FixtureHistory()
     inference = Inference((character,), providers["history"])
-    service_type = (
-        OpenChannelFixtureConversations if scenario == "override_channel_open" else Conversations
-    )
     history = HistoryEntry(
-        service_type(inference, cast(HistoryStore, store), FixturePolicy()),
+        Conversations(inference, cast(HistoryStore, store), FixturePolicy()),
         character.config.character_id,
         store,
     )
@@ -165,4 +167,6 @@ def fixture_entries(
     )
     if scenario == "card_hash_mismatch":
         chat = HashFixtureEntry(character, providers["chat"], cases.cases[0].id)
+    if scenario in ("card_hash_missing", "execution_incomplete"):
+        chat = ObservationFixtureEntry(chat, cases.cases[0].id, scenario)
     return {"chat": chat, "history": history}, providers
