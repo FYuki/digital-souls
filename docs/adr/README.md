@@ -38,6 +38,7 @@ ADR 0015〜0020は、2026-10-06のユーザー決定とPR #67のレビューを�
 - [ADR 0022: 記憶の検索を Episode・Fact・Semantic の正本へ切り替える](0022-memory-retrieval-from-records.md)
 - [ADR 0023: 本番の記憶検索経路による意味検索・回答評価](0023-semantic-evaluation-contract.md)
 - [ADR 0025: 常駐Coreの共通runtimeと外部インターフェース](0025-shared-runtime-interfaces.md)
+- [ADR 0029: 入口をまたぐ人格の一貫性の評価](0029-persona-consistency-evaluation.md)（Proposed）
 
 ADR 0021のSQLite撤去は Epic #79（[Issue #88](https://github.com/FYuki/digital-souls-core/issues/88)）で完了しました。本文は決定時点の履歴を保持します。
 
