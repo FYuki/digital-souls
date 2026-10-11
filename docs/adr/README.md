@@ -11,7 +11,7 @@ Statusは次の方針で扱います。
 履歴を黙って書き換えず、新しい記録で以前の決定を置き換えます。
 ADR 0001〜0012はレビューの機会がなかったため、Proposedのままです。
 ADR 0015〜0020は、2026-10-06のユーザー決定とPR #67のレビューを根拠に、2026-10-07にAcceptedとしました。
-ADR 0026〜0029は、2026-10-11のユーザーの承認を根拠に、同日にAcceptedとしました。
+ADR 0026〜0030は、2026-10-11のユーザーの承認を根拠に、同日にAcceptedとしました。
 
 - [ADR 0001: キャラクター文脈付き推論API](0001-character-inference-api.md)
 - [ADR 0002: Ollama native Chat経路の明示](0002-ollama-native-chat.md)
@@ -43,7 +43,7 @@ ADR 0026〜0029は、2026-10-11のユーザーの承認を根拠に、同日にA
 - [ADR 0027: 会話中のツール利用と会話外の活動の実行基盤](0027-tool-use-and-activity-runtime.md)
 - [ADR 0028: Character Book の解釈と Lore の選択](0028-character-book.md)
 - [ADR 0029: 入口をまたぐ人格の一貫性の評価](0029-persona-consistency-evaluation.md)
-- [ADR 0030: 人格の上書き（インジェクション）への耐性の評価](0030-injection-resistance-evaluation.md)（Proposed）
+- [ADR 0030: 人格の上書き（インジェクション）への耐性の評価](0030-injection-resistance-evaluation.md)
 
 ADR 0021のSQLite撤去は Epic #79（[Issue #88](https://github.com/FYuki/digital-souls-core/issues/88)）で完了しました。本文は決定時点の履歴を保持します。
 
