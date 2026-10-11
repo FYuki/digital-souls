@@ -67,3 +67,10 @@ ruffの対象（下表の `<対象>`）は
 Pythonの試験には既存Starlette/Pydantic依存のwarningがあります。未実施の実モデル・実judge・活動入口は
 **NOT RUN** のままです。`prompt_builder.py` / `token_count.py`、固定Mioriケースは変更していません。
 push・PR・mergeは行っていません。
+
+## 監督側の再実行（2026-10-11）
+
+`e0d009890aa9555ecf4e4c5cd44f207f39d9309a` に epic `2721ca3` を衝突なく取り込んだ `ca1af77` で、差分を読み、同じ固定ツールで再実行した。
+uv sync --locked・uv lock --check・ruff・mypy（137 files）・UT（952 passed）・IT1（839 passed）・uv build・test-postgres（442 passed）・
+npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。fixture の標準 CLI（3回）も exit 0。
+このモードで行った Miori の実モデル評価は [別の証跡](2026-10-11-persona-real-model-evaluation.md) にある（結果は FAIL）。
