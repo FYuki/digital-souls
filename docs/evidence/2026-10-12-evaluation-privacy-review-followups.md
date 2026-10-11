@@ -59,3 +59,10 @@ Python 試験では既存依存の deprecation/ReadOnly 警告、npm ci では�
 fixture 評価は `quality_evidence=false` であり、実モデル品質の受入ではない。
 人格の活動入口、インジェクションの `tool_results`、実モデル IT2/ST は NOT RUN。
 今回指定されたレビュー指摘の未対応はなし。
+
+## 監督側の再実行（2026-10-12）
+
+`585cb13bea53fb52461c06826cc2a97865cb6c8e` で差分を読み、同じ固定ツールで再実行した。uv sync --locked・uv lock --check・ruff・mypy（143 files）・
+UT（987 passed）・IT1（935 passed）・uv build・test-postgres（442 passed）・npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。
+人格評価とインジェクション評価の CLI（fixture、各3回）は exit 0。実モデルでの再評価は NOT RUN（評価の経路に privacy の認可を足しただけで、
+合成の Miori ケースは秘密を含まないため結果は変わらない想定。確認はしていない）。
