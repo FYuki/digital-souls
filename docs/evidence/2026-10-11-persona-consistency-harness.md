@@ -5,7 +5,7 @@
 起点 `5d60c5d`（Card hash と PromptBuilder 統合済み）で実施しました。
 実装・規約以外の worktree / branch、main、既存コンテナを変更していません。push / PR / merge は行いません。
 
-## 条件と TDD
+## 修正前（起点5d60c5dからaa282c8まで）の条件と TDD
 
 Python 3.12.3、uv 0.8.22、Node 24.19.0、固定lockを使用しました。
 
@@ -30,7 +30,7 @@ strict schema の追加回帰も先に実行し、`schema_version=true/1.0` と�
 実行中にgoldを書き換える回帰も先に **1 FAIL** を確認し、開始時・終了時のケース集合hash照合を実装しました。
 途中の mypy では gate/hash の Optional sort と実行commit型の不一致を検出し、修正しています。
 
-## 実装と測定の解釈
+## 修正前の実装と測定の解釈
 
 [手順と形式](../../evals/persona/README.md) に strict schema、正規化、各回90%境界、
 非相殺ゲート、Card hashの入口内・入口間照合、warn/gate、judgeと入口のinterfaceを記載しました。
@@ -49,7 +49,7 @@ Chat全件と履歴3分類が合格、履歴overrideが各回0/1で **FAIL** で
 実 judge は `NOT RUN`、fake Egogram は各入口のCP/NP/A/FC/ACを `fixture: unestimated` と報告します。
 活動入口は登録interfaceのみで `NOT RUN（未実装の入口）`。実モデル・IT2/STは **NOT RUN** です。
 
-## コマンドと結果
+## 修正前のコマンドと結果
 
 検証時は起点 `5d60c5d74273df016a8fbe1c9ccf1821170843c8` 上の作業差分（dirty=true）です。
 ケース版は `9c195afc39e47e5b63c97edb6086017767da245881ebbbdd6d2207b5d5f346dc`。
@@ -82,3 +82,61 @@ NOT RUN：実モデル、実judge、活動入口、履歴override（各回1件�
 
 ruff 対象 `src tests tools/evaluate-semantic-retrieval.py evals/semantic/provider.py tools/evaluate-persona-consistency.py`
 を CONTRIBUTING と API CI で合わせ、mypy の対象にも新CLIを追加しました。製品依存・lockの追加変更はありません。
+
+
+## 修正ラウンド（aa282c8から）
+
+ユーザー指定の修正を同じworktree / branchで実施しました。前節の履歴overrideのNOT RUNと
+標準CLI FAILは**修正前の結果**です。今回、製品APIの拒否仕様やgold、ケースschema版は変更していません。
+
+選んだ設計は、systemを含むケースをsystem対応入口だけに適用する規則です。
+入口定義の `accepts_caller_system` はChat=true / history=false。対象外の応答行は「対象外」、
+理由は「入口が呼び出し側の system を受け付けない」。分母・分子、NOT RUN、応答hash照合、
+入口間不一致に含めません。0件の分類は「対象なし」・rate=nullで、PASSとして数えません。
+実行した対象ケースが全体で0件ならFAILです。
+
+構造検査名と必須ゲート名は `override_channel_open` です。履歴入口へcaller systemを含む入力を送り、
+本番の `invalid_turn` 拒否をPASSとして記録します。受理は必須ゲート違反、検査欠落や別のエラーは
+`execution_incomplete` の違反です。fixtureの受理違反だけは不正な合成境界を使います。
+
+TDD：変更したUT・IT1を実装前に実行して **28 FAIL / 29 PASS** を確認しました。
+実装後の最初の再試験は **1 FAIL / 56 PASS**（受理違反fixtureだけprovider呼出数も増えるため、
+旧9回のassertを12回へ訂正）。最後の対象試験は **63 PASS**。
+標準CLIの成功、基準未達、persona_break、override_followed、hash不一致、上書き経路の受理、
+90%基準を満たしていてもgate設定時の不一致でFAILになることをUT・IT1で検証します。
+fake judgeの報告は合否に使いません。fixture PASSは実品質の証拠ではありません。
+
+最終検証のrevisionは起点 `aa282c8` 上の作業差分（dirty=true）です。
+ケース版は `9c195afc39e47e5b63c97edb6086017767da245881ebbbdd6d2207b5d5f346dc` のままです。
+固定toolchain、offline cache、`UV_OFFLINE=1` / `npm_config_offline=true` を使い、外部通信なし。
+固定digestのPostgreSQL imageをローカルで確認し、専用コンテナだけを起動・削除しました。
+
+| コマンド | 結果 |
+| --- | --- |
+| `uv sync --locked` | PASS / exit 0、offline cache |
+| `uv lock --check` | PASS / exit 0 |
+| `uv run --no-sync ruff check src tests tools/evaluate-semantic-retrieval.py evals/semantic/provider.py tools/evaluate-persona-consistency.py` | PASS / exit 0 |
+| `uv run --no-sync ruff format --check src tests tools/evaluate-semantic-retrieval.py evals/semantic/provider.py tools/evaluate-persona-consistency.py` | PASS / exit 0、132 files |
+| `uv run --no-sync mypy` | PASS / exit 0、132 source files |
+| `uv run --no-sync pytest -m ut -q` | PASS / exit 0、872 tests |
+| `uv run --no-sync pytest -m it1 -q` | PASS / exit 0、798 tests |
+| `uv build --no-build-isolation` | PASS / exit 0、sdist / wheel |
+| `bash tools/test-postgres.sh` | PASS / exit 0、441 tests、使い捨てコンテナ |
+| `(cd evals/semantic && npm ci --no-audit --no-fund)` | PASS / exit 0、575 packages、offline cache |
+| `node --test --test-reporter=./tools/required-tests-reporter.mjs tools/*.test.mjs` | PASS / exit 0、59 registered tests |
+| `node tools/check-docs.mjs` | PASS / exit 0 |
+| `git diff --check` | PASS / exit 0 |
+| `uv run --no-sync python tools/evaluate-persona-consistency.py --runs 3 --output /dev/shm/persona-b2-fixed-report.json` | **PASS / exit 0**、fixture、quality_evidence=false |
+
+標準CLI：Chatは4分類各回1/1、履歴は3分類各回1/1、履歴overrideは3回とも0対象・rate=null・
+「対象なし」。対象外行は計3件、system拒否の構造検査は3件ともPASS / invalid_turnです。
+persona_break、override_followed、card_hash_mismatch、override_channel_open、card_hash_missing、
+execution_incompleteはいずれも0件。入口間不一致も0件です。応答本文は報告に含めません。
+
+証跡の最終追記直後の `git diff --check` は末尾の余分な空行で **FAIL** でした。
+空行を除去して再実行し、文書検査と差分検査のPASSを確認しました。
+
+必須試験のSKIP / xfail / xpassはありません。pytestのdeselectedは異なるmarkerの試験で、SKIPではありません。
+既存のStarlette / Pydantic warning、npmのdeprecated warningは保持しています。
+今回の対象に未対応項目はありません。実モデル・実judge・活動入口・実環境IT2/ST・remote CIは
+**NOT RUN**で、fixtureのPASSから実品質の合格を推定しません。

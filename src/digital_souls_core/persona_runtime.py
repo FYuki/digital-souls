@@ -7,14 +7,18 @@ from .contracts import CompletionInput
 from .conversations import Conversations
 from .errors import CoreError
 from .history import TurnInput
-from .persona_evaluation import Case, CaseSet, Judge, Observation, aggregate
+from .persona_evaluation import ENTRY_SYSTEM_SUPPORT, Case, CaseSet, Judge, Observation, aggregate
 
 
 class Entry(Protocol):
+    accepts_caller_system: bool
+
     async def observe(self, case: Case, run: int) -> Observation: ...
 
 
 class ChatEntry:
+    accepts_caller_system = ENTRY_SYSTEM_SUPPORT["chat"]
+
     def __init__(self, inference: Inference, character_id: str) -> None:
         self.inference = inference
         self.character_id = character_id
@@ -51,6 +55,8 @@ class HistorySession(Protocol):
 
 
 class HistoryEntry:
+    accepts_caller_system = ENTRY_SYSTEM_SUPPORT["history"]
+
     def __init__(self, service: Conversations, character_id: str, session: HistorySession) -> None:
         self.service = service
         self.character_id = character_id
@@ -73,6 +79,17 @@ class HistoryEntry:
                     }
                 ),
             )
+            if caller:
+                return Observation(
+                    entry="history",
+                    run=run,
+                    case_id=case.id,
+                    text=None,
+                    card_sha256=None,
+                    status="NOT APPLICABLE",
+                    reason="caller_system_unsupported",
+                    channel_check="FAIL",
+                )
             return Observation(
                 entry="history",
                 run=run,
@@ -88,8 +105,10 @@ class HistoryEntry:
                     case_id=case.id,
                     text=None,
                     card_sha256=None,
-                    status="NOT RUN",
+                    status="NOT APPLICABLE",
                     reason="caller_system_unsupported",
+                    channel_check="PASS",
+                    rejection_code=error.code,
                 )
             raise
         finally:
@@ -147,6 +166,7 @@ async def evaluate(
         commit_dirty=commit_dirty,
         mismatch_policy="gate" if mismatch_policy == "gate" else "warn",
         include_responses=include_responses,
+        entry_system_support={name: entry.accepts_caller_system for name, entry in entries.items()},
     )
     if "activity" in entries:
         del report["not_run"]["activity"]

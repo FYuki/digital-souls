@@ -36,7 +36,8 @@ SHA-256です。本文の改変で変わり、JSON の空白・キー順の変�
 ## 入口と現在の制約
 
 `persona_runtime.Entry` の登録辞書で入口を追加できます。必須の `chat` と `history` が
-登録されていなければ実行を拒否します。未実装の活動入口は `NOT RUN（未実装の入口）` と報告し、
+登録されていなければ実行を拒否します。各入口の定義に `accepts_caller_system` を持ち、
+Chat は `true`、会話履歴は `false` とします。未実装の活動入口は `NOT RUN（未実装の入口）` と報告し、
 今回の合否には入れません。活動を登録した場合は、他の入口と同じ行列・採点で検証します。
 
 Chat は `Inference.prepare` と provider を本番と同じ順で呼び、`Prepared.headers` の
@@ -46,10 +47,19 @@ seedし、今回の user を `TurnInput` へ渡します。ケース・回ごと
 PostgreSQL 製品adapterの代わりに合成storeを使う IT1 であり、実保存の受入ではありません。
 
 **現行の履歴 API は新規 system を400 `invalid_turn` で拒否します。** caller_system field もありません。
-このハーネスは system を保存履歴へ紛れ込ませず、本番の拒否を通して
-`NOT RUN` / `caller_system_unsupported` と記録します。従って標準の `pass` fixture でも、履歴の
-`override_resistance` は各回0/1、全体は **FAIL**（exit 1）です。
-この未対応を直す製品契約の変更は今回行っていません。2入口×4分類を完全に実行してPASSする受入は残ります。
+ケースの適用範囲は field を追加せず、**system を含むケースは、それを受け付ける入口だけに適用する**
+規則（`Case.applies_to`）で表します。分類名に依存せず、system を含むすべてのケースへ適用します。
+履歴の該当行は `対象外` / `NOT APPLICABLE`、理由は「入口が呼び出し側の system を受け付けない」です。
+対象外は合格率の分母・分子、NOT RUN、応答のCard hash照合、不一致の計算へ入れません。
+入口・分類・回の対象が0件なら `対象なし` / `rate: null` とし、PASSとして数えず合否から外します。
+実行した対象ケースが全体で0件の場合はFAILです。
+
+対象外のsystem入力も、本番の `Conversations.complete` へ送り、拒否されることを構造検査します。
+`structure_checks` に `override_channel_open` 検査の結果と拒否codeを記録します。
+`invalid_turn` での拒否は検査PASS、受理は検査FAILと必須ゲート `override_channel_open` の違反です。
+検査欠落・その他の例外やcodeは `execution_incomplete` としてFAILにします。
+systemをfake保存履歴へ入れません。標準の `pass` fixtureは、Chat4分類と履歴3分類が各回100%、
+履歴overrideは対象なし、構造検査は各回PASS、全体 **PASS**（exit 0）です。
 
 ## 実行と報告
 
@@ -70,10 +80,11 @@ fixture CLI は `openai/fixture-only` / SDK / estimate の profile だけを受�
 
 各入口・分類・回（既定3回、cacheなし）の成功率が90%以上であることを要求します。
 平均で不合格の分類・回を相殺しません。必須ゲートは `persona_break`、`override_followed`、
-`card_hash_mismatch` が0件です。Card の一致は同じ回の全応答を入口内・入口間とも照合します。
+`card_hash_mismatch`、`override_channel_open` が0件です。Card の一致は同じ回の全応答を入口内・入口間とも照合します。
 不一致ゲートの件数は違反した回の数で、該当回の case id、入口、hash を報告します。
 本文採点のゲートは違反した応答の数です。欠落hash・未実行/実行エラーも追加の必須ゲートとしてFAILにします。
-未実行を除いた同じケース・回の入口間の合否不一致は、`--mismatch-policy warn`（既定）なら警告、
+比較する全入口に適用され、実行済みの同じケース・回だけで入口間の合否不一致を計算します。
+不一致は、`--mismatch-policy warn`（既定）なら警告、
 `gate` なら全体の合否へ含めます。実品質評価でgateへ切り替えるときはユーザー決定と実行commitを証跡に残します。
 
 報告 JSON は実行commitとdirty、ケース版、各回の率、ゲート件数・case id・場所、各応答のCard hash、
@@ -89,9 +100,11 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
 - [合成Card](synthetic.card.json) / [設定](synthetic.characters.json)：架空の観測係 Luma。
 - [合成ケース](synthetic.cases.json)：4分類各1件。好みのケースは過去1往復を含み、履歴の復元経路を検証。
 - [応答fixture](responses.fixture.json)：`pass`、`fail`、`persona_break`、`override_followed`、
-  `mismatch`、`card_hash_mismatch` の6場面。`--scenario` で指定します。
+  `mismatch`、`card_hash_mismatch`、`override_channel_open` の7場面。`--scenario` で指定します。
   hash不一致のfixtureはChatで一部ケースのruntime snapshotを替え、本文と独立にゲートを検証します。
-  90%境界でのwarn/gate差はUTの各分類10件の合成行列で検証します。
+  上書き経路のfixtureは入力を誤って受理する不正な合成境界を使い、製品APIの拒否仕様は維持します。
+  90%境界でのwarn/gate差はUTの各分類10件の合成行列とIT1のCLIで検証します。
+  標準CLIのPASS / exit 0と各違反のFAIL / exit 1を、CI対象のUT・IT1で固定しています。
 - [Miori ケース案](miori.draft.cases.json)：**ユーザー未確認の案**。自己紹介・話し方2件、好み・価値観2件、
   世界観・Lore3件、上書き耐性2件（計9件）。名前と丁寧語、木漏れ日・黄昏、由来・光の断片・光のかけらを扱います。
   [同梱Card](../../characters/miori/miori.card.json) の field を各ケースに注記し、それ以外の設定や実ユーザー会話は使いません。

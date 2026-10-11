@@ -34,8 +34,8 @@ ADRの決定を機能単位に整理します。
 | 機能 | 状態 | 根拠 |
 | --- | --- | --- |
 | 全入口共通のCard・Lore・記憶・呼び出し側指示・履歴・post_history・今回の入力の組み立て、領域token予算、往復/item単位の削減と本文を含まない400拒否 | 一部（ByteTokenCounterによる組み立て・予算・送信前認可は実装済み。推論先token実測・Runtime Contextの状態生成・実モデル受入は未実装/未実施） | [ADR 0026](docs/adr/0026-prompt-assembly.md)、[推論API](docs/api.md#文脈プライバシー) |
-| 応答に使ったCardファイルの生バイト列SHA-256の起動時固定、全completionのheader、会話turnの保存・復元metadata | 実装済み（streamを含む合成試験。旧turnはNULL、再送fingerprint維持。人格評価ハーネスは一部実装、実モデル評価は未実施） | [ADR 0029 §6](docs/adr/0029-persona-consistency-evaluation.md#6-card-のハッシュ)、[履歴API](docs/history-api.md) |
-| 入口をまたぐ人格一貫性の決定論的採点、4分類・各回90%以上、必須ゲート・Card hash照合、不一致warn/gate、質的Egogram報告 | 一部（fake UT/IT1・CLI実装済み。履歴APIのsystem入力非対応でoverrideはNOT RUN、全体FAIL。活動入口・実judge・実モデル評価はNOT RUN） | [ADR 0029](docs/adr/0029-persona-consistency-evaluation.md)、[評価手順](evals/persona/README.md) |
+| 応答に使ったCardファイルの生バイト列SHA-256の起動時固定、全completionのheader、会話turnの保存・復元metadata | 実装済み（streamを含む合成試験。旧turnはNULL、再送fingerprint維持。人格評価ハーネスのfixture検証済み、実モデル評価は未実施） | [ADR 0029 §6](docs/adr/0029-persona-consistency-evaluation.md#6-card-のハッシュ)、[履歴API](docs/history-api.md) |
+| 入口をまたぐ人格一貫性の決定論的採点、4分類・各回90%以上、必須ゲート・Card hash照合、不一致warn/gate、質的Egogram報告 | 一部（fake UT/IT1・CLI検証済み。system非対応入口のケースは対象外、0件の分類は対象なし。履歴のsystem拒否を構造検査し、受理は必須ゲート違反。適用されるケースだけで率・不一致を計算、標準fixtureはPASS。活動入口・実judge・実モデル評価はNOT RUN） | [ADR 0029](docs/adr/0029-persona-consistency-evaluation.md)、[評価手順](evals/persona/README.md) |
 
 送信payloadの履歴削減は、保存済み会話の削除ではありません。固定人格・今回の入力・
 直前の完了した1往復を保護し、tool callと結果の組を分けません。記憶の撤回guardは削減後も保持します。

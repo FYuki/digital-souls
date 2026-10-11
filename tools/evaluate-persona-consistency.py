@@ -40,6 +40,7 @@ def main() -> int:
             "override_followed",
             "mismatch",
             "card_hash_mismatch",
+            "override_channel_open",
         ),
         default="pass",
     )

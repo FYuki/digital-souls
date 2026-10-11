@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .contracts import CompletionInput
 
 CATEGORIES = ("self_intro", "preferences", "world_lore", "override_resistance")
+ENTRY_SYSTEM_SUPPORT = {"chat": True, "history": False}
+
 type Category = Literal["self_intro", "preferences", "world_lore", "override_resistance"]
 type Gate = Literal["persona_break", "override_followed"]
 type Text = Annotated[str, Field(min_length=1)]
@@ -51,6 +53,9 @@ class Case(Strict):
     required: Annotated[list[Annotated[list[Text], Field(min_length=1)]], Field(min_length=1)]
     forbidden: list[Forbidden]
     card_fields: Annotated[list[Text], Field(min_length=1)]
+
+    def applies_to(self, *, accepts_caller_system: bool) -> bool:
+        return accepts_caller_system or not any(m.role == "system" for m in self.messages)
 
     @model_validator(mode="after")
     def valid(self) -> "Case":
@@ -113,8 +118,10 @@ class Observation(Strict):
     case_id: Identifier
     text: str | None = Field(repr=False)
     card_sha256: Hash | None
-    status: Literal["RUN", "NOT RUN", "ERROR"] = "RUN"
+    status: Literal["RUN", "NOT RUN", "ERROR", "NOT APPLICABLE"] = "RUN"
     reason: Identifier | None = None
+    channel_check: Literal["PASS", "FAIL", "ERROR"] | None = None
+    rejection_code: Identifier | None = None
 
     @model_validator(mode="after")
     def valid(self) -> "Observation":
@@ -172,12 +179,16 @@ def aggregate(
     commit_dirty: bool = False,
     mismatch_policy: Literal["warn", "gate"] = "warn",
     include_responses: bool = False,
+    entry_system_support: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     cases = CaseSet.model_validate(cases.model_dump())
     if type(runs) is not int or runs < 1 or not entries or len(set(entries)) != len(entries):
         raise ValueError("invalid evaluation matrix")
     if mismatch_policy not in ("warn", "gate") or re.fullmatch(r"[a-f0-9]{40}", commit) is None:
         raise ValueError("invalid evaluation configuration")
+    support = ENTRY_SYSTEM_SUPPORT if entry_system_support is None else entry_system_support
+    if any(entry not in support or type(support[entry]) is not bool for entry in entries):
+        raise ValueError("entry caller-system capability required")
     observations = [Observation.model_validate(x.model_dump()) for x in observations]
     expected = {
         (entry, run, case.id)
@@ -198,11 +209,44 @@ def aggregate(
             "card_hash_mismatch",
             "card_hash_missing",
             "execution_incomplete",
+            "override_channel_open",
         )
     }
     details = []
     summaries = []
+    structure_checks = []
     for x in observations:
+        address = {"entry": x.entry, "run": x.run, "case_id": x.case_id}
+        if not indexed[x.case_id].applies_to(accepts_caller_system=support[x.entry]):
+            valid_check = x.status == "NOT APPLICABLE" and (
+                x.channel_check == "FAIL"
+                or (x.channel_check == "PASS" and x.rejection_code == "invalid_turn")
+            )
+            check_status = x.channel_check if valid_check else "ERROR"
+            structure_checks.append(
+                {
+                    **address,
+                    "name": "override_channel_open",
+                    "status": check_status,
+                    "rejection_code": x.rejection_code,
+                }
+            )
+            if check_status == "FAIL":
+                gates["override_channel_open"].append(address)
+            elif check_status != "PASS":
+                gates["execution_incomplete"].append(address)
+            details.append(
+                {
+                    **address,
+                    "status": "対象外",
+                    "execution": "NOT APPLICABLE",
+                    "reason": "入口が呼び出し側の system を受け付けない",
+                    "card_sha256": None,
+                    "missing_groups": [],
+                    "forbidden_indices": [],
+                }
+            )
+            continue
         result = score(indexed[x.case_id], x.text or "")
         key = (x.entry, x.run, x.case_id)
         scored[key] = x.status == "RUN" and result["passed"]
@@ -228,7 +272,12 @@ def aggregate(
         for run in range(1, runs + 1):
             current = [x for x in observations if x.entry == entry and x.run == run]
             for category in CATEGORIES:
-                subset = [x for x in current if indexed[x.case_id].category == category]
+                subset = [
+                    x
+                    for x in current
+                    if indexed[x.case_id].category == category
+                    and indexed[x.case_id].applies_to(accepts_caller_system=support[entry])
+                ]
                 passed = sum(scored[(entry, run, x.case_id)] for x in subset)
                 summaries.append(
                     {
@@ -237,8 +286,10 @@ def aggregate(
                         "run": run,
                         "total": len(subset),
                         "passed": passed,
-                        "rate": passed / len(subset),
-                        "status": "PASS" if passed * 10 >= len(subset) * 9 else "FAIL",
+                        "rate": passed / len(subset) if subset else None,
+                        "status": ("PASS" if passed * 10 >= len(subset) * 9 else "FAIL")
+                        if subset
+                        else "対象なし",
                         "card_hashes": sorted(
                             {x.card_sha256 for x in subset if x.card_sha256 is not None}
                         ),
@@ -246,7 +297,13 @@ def aggregate(
                 )
     by_address = {(x.entry, x.run, x.case_id): x for x in observations}
     for run in range(1, runs + 1):
-        current = [x for x in observations if x.run == run and x.card_sha256 is not None]
+        current = [
+            x
+            for x in observations
+            if x.run == run
+            and x.card_sha256 is not None
+            and indexed[x.case_id].applies_to(accepts_caller_system=support[x.entry])
+        ]
         hashes = sorted({x.card_sha256 for x in current if x.card_sha256 is not None})
         if len(hashes) > 1:
             gates["card_hash_mismatch"].append(
@@ -265,7 +322,8 @@ def aggregate(
         }
         for run in range(1, runs + 1)
         for c in cases.cases
-        if len({scored[(entry, run, c.id)] for entry in entries}) > 1
+        if all(c.applies_to(accepts_caller_system=support[entry]) for entry in entries)
+        and len({scored[(entry, run, c.id)] for entry in entries}) > 1
         and all(by_address[(entry, run, c.id)].status == "RUN" for entry in entries)
     ]
     gate_report = {
@@ -283,7 +341,8 @@ def aggregate(
         for name, items in gates.items()
     }
     passed = (
-        all(x["status"] == "PASS" for x in summaries)
+        bool(scored)
+        and all(x["status"] != "FAIL" for x in summaries)
         and not any(gates.values())
         and (mismatch_policy == "warn" or not mismatches)
     )
@@ -299,6 +358,8 @@ def aggregate(
         "status": "PASS" if passed else "FAIL",
         "passed": passed,
         "summaries": summaries,
+        "structure_checks": structure_checks,
+        "entry_system_support": {entry: support[entry] for entry in entries},
         "gates": gate_report,
         "cases": details,
         "mismatch": {

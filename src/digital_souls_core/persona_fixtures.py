@@ -10,7 +10,7 @@ from .application import Inference
 from .character import Character, Profile
 from .contracts import Message
 from .conversations import Conversations
-from .history import Binding, HistoryStore, Operation, Receipt, Snapshot
+from .history import Binding, HistoryStore, Operation, Receipt, Snapshot, TurnInput
 from .persona_evaluation import Case, CaseSet, Observation
 from .persona_runtime import ChatEntry, Entry, HistoryEntry
 
@@ -102,6 +102,8 @@ class FixtureHistory:
 
 
 class HashFixtureEntry:
+    accepts_caller_system = True
+
     def __init__(self, character: Character, provider: FixtureProvider, selected: str) -> None:
         self.character = character
         self.provider = provider
@@ -116,6 +118,16 @@ class HashFixtureEntry:
         return await ChatEntry(Inference((char,), self.provider), char.config.character_id).observe(
             case, run
         )
+
+
+class OpenChannelFixtureConversations(Conversations):
+    """Deliberately faulty input boundary, only selected by a negative fixture."""
+
+    async def complete(self, character_id: str, conversation_id: str, value: TurnInput) -> Receipt:
+        value = value.model_copy(
+            update={"messages": [m for m in value.messages if m.role != "system"]}
+        )
+        return await super().complete(character_id, conversation_id, value)
 
 
 def fixture_entries(
@@ -140,8 +152,11 @@ def fixture_entries(
         providers[name] = FixtureProvider(responses, overrides)
     store = FixtureHistory()
     inference = Inference((character,), providers["history"])
+    service_type = (
+        OpenChannelFixtureConversations if scenario == "override_channel_open" else Conversations
+    )
     history = HistoryEntry(
-        Conversations(inference, cast(HistoryStore, store), FixturePolicy()),
+        service_type(inference, cast(HistoryStore, store), FixturePolicy()),
         character.config.character_id,
         store,
     )

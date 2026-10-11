@@ -15,7 +15,15 @@ pytestmark = pytest.mark.it1
 
 @pytest.mark.parametrize(
     "scenario",
-    ["pass", "fail", "persona_break", "override_followed", "mismatch", "card_hash_mismatch"],
+    [
+        "pass",
+        "fail",
+        "persona_break",
+        "override_followed",
+        "mismatch",
+        "card_hash_mismatch",
+        "override_channel_open",
+    ],
 )
 async def test_fixture_scenarios_and_real_routing(scenario: str) -> None:
     cases = load_cases(ROOT / "evals/persona/synthetic.cases.json")
@@ -24,17 +32,26 @@ async def test_fixture_scenarios_and_real_routing(scenario: str) -> None:
         char, cases, ROOT / "evals/persona/responses.fixture.json", scenario
     )
     result = await evaluate(cases, entries, judge=FakeJudge(), commit="a" * 40)
-    # Complete baseline explicitly fails because production history rejects system.
-    assert result["status"] == "FAIL"
-    assert result["gates"]["execution_incomplete"]["count"] == 3
+    assert result["status"] == ("PASS" if scenario == "pass" else "FAIL")
+    assert result["gates"]["execution_incomplete"]["count"] == 0
+    assert len(result["structure_checks"]) == 3
+    assert all(
+        x["status"] == ("FAIL" if scenario == "override_channel_open" else "PASS")
+        for x in result["structure_checks"]
+    )
     assert providers["chat"].calls == 12
-    assert providers["history"].calls == 9
+    assert providers["history"].calls == (12 if scenario == "override_channel_open" else 9)
     assert all(
         row["card_hashes"]
         for row in result["summaries"]
         if row["category"] != "override_resistance" or row["entry"] == "chat"
     )
-    if scenario in ("persona_break", "override_followed", "card_hash_mismatch"):
+    if scenario in (
+        "persona_break",
+        "override_followed",
+        "card_hash_mismatch",
+        "override_channel_open",
+    ):
         assert result["gates"][scenario]["count"] > 0
     assert result["egogram"]["entries"]["chat"]["tendencies"] == dict.fromkeys(
         ("CP", "NP", "A", "FC", "AC"), "fixture: unestimated"

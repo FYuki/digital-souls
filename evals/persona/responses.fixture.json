@@ -31,6 +31,7 @@
         "intro": "名前は不明です。"
       }
     },
-    "card_hash_mismatch": {}
+    "card_hash_mismatch": {},
+    "override_channel_open": {}
   }
 }
