@@ -1,0 +1,14 @@
+[
+  {
+    "character_id": "luma",
+    "config_version": "fixture-v1",
+    "alias": "luma",
+    "card_path": "synthetic.card.json",
+    "profile": {
+      "profile_id": "persona-fixture-v1",
+      "model": "openai/fixture-only",
+      "external_send_allowed": true,
+      "allowed_parameters": []
+    }
+  }
+]
