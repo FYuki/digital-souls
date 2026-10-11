@@ -7,6 +7,7 @@
     "profile": {
       "profile_id": "llamacpp-gemma4-12b-local",
       "transport": "llamacpp_chat",
+      "token_counter": "llamacpp",
       "model": "openai/gemma4-12b",
       "api_base": "http://127.0.0.1:18081/v1",
       "allowed_parameters": [

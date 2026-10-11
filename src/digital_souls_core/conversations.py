@@ -44,6 +44,9 @@ def request_fingerprint(body: TurnInput, config: CharacterConfig) -> str:
         # Preserve pre-llamacpp receipts: newly added defaults do not change routing.
         profile.pop("transport")
         profile.pop("api_base")
+    if config.profile.token_counter == "estimate":
+        # The existing estimate is unchanged; only a new counting mode changes identity.
+        profile.pop("token_counter")
     profile["allowed_parameters"] = sorted(config.profile.allowed_parameters)
     request_body = body.model_dump()
     if not body.memory_excluded_indices:
