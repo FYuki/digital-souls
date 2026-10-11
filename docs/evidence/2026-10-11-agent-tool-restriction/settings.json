@@ -1,0 +1,47 @@
+{
+ "enableAllProjectMcpServers": false,
+ "enabledMcpjsonServers": [
+  "core"
+ ],
+ "permissions": {
+  "deny": [
+   "Task",
+   "Agent",
+   "Bash",
+   "CronCreate",
+   "CronDelete",
+   "CronList",
+   "DesignSync",
+   "Edit",
+   "EnterWorktree",
+   "ExitWorktree",
+   "ListAgents",
+   "Monitor",
+   "NotebookEdit",
+   "PushNotification",
+   "Read",
+   "RemoteTrigger",
+   "ReportFindings",
+   "ScheduleWakeup",
+   "SendMessage",
+   "Skill",
+   "TaskStop",
+   "ToolSearch",
+   "WebFetch",
+   "WebSearch",
+   "Write",
+   "Glob",
+   "Grep",
+   "TodoWrite",
+   "EnterPlanMode",
+   "ExitPlanMode",
+   "AskUserQuestion",
+   "mcp__takt",
+   "mcp__claude_ai_Claude_Docs",
+   "mcp__claude_ai_Google_Drive"
+  ],
+  "allow": [
+   "mcp__core"
+  ]
+ }
+}
