@@ -18,9 +18,12 @@
           "content": "青石の庭には青い石がある。",
           "enabled": true,
           "insertion_order": 1,
-          "position": "after_char"
+          "position": "after_char",
+          "extensions": {},
+          "use_regex": false
         }
-      ]
+      ],
+      "extensions": {}
     }
   }
 }

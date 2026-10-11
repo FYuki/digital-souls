@@ -43,7 +43,7 @@ def character(name: str = "miori", *, native: bool = False) -> Character:
     return Character(
         config,
         sample.card if name == "miori" else CharacterCard(system_prompt="Synthetic second persona"),
-        sample.lore if name == "miori" else (),
+        character_book=sample.character_book if name == "miori" else None,
         card_sha256=(
             sample.card_sha256
             if name == "miori"

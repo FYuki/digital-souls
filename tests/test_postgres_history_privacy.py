@@ -206,7 +206,8 @@ async def test_stream_secret_split_never_saved(stores: Stores) -> None:
 
 @pytest.mark.parametrize("source", ["system", "lore", "context"])
 async def test_actual_payload_injection_blocked(stores: Stores, source: str) -> None:
-    from digital_souls_core.character import Character, Lore
+    from digital_souls_core.character import Character
+    from digital_souls_core.character_book import BookEntry, CharacterBook
 
     service, provider, classifier, _ = policy_setup(stores, local=False)
     old = service.inference.characters["synthetic"]
@@ -214,7 +215,21 @@ async def test_actual_payload_injection_blocked(stores: Stores, source: str) -> 
     char = Character(
         old.config,
         CharacterCard(system_prompt=marker) if source == "system" else old.card,
-        (Lore(("Synthetic",), (), False, marker),) if source == "lore" else (),
+        character_book=CharacterBook(
+            extensions={},
+            entries=(
+                BookEntry(
+                    keys=("Synthetic",),
+                    content=marker,
+                    extensions={},
+                    enabled=True,
+                    insertion_order=0,
+                    use_regex=False,
+                ),
+            ),
+        )
+        if source == "lore"
+        else None,
         card_sha256=old.card_sha256,
     )
 

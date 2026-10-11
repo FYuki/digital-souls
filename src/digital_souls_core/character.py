@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
+from .character_book import CharacterBook, load_book
 from .prompt_builder import CharacterCard, TokenBudgets
 
 type SupportedParameter = Literal[
@@ -113,26 +114,11 @@ class CharacterConfig(BaseModel):
 
 
 @dataclass(frozen=True)
-class Lore:
-    keys: tuple[str, ...]
-    secondary_keys: tuple[str, ...]
-    selective: bool
-    content: str
-    insertion_order: int = 0
-
-    def matches(self, text: str) -> bool:
-        return any(key.casefold() in text.casefold() for key in self.keys) and (
-            not self.selective
-            or any(key.casefold() in text.casefold() for key in self.secondary_keys)
-        )
-
-
-@dataclass(frozen=True)
 class Character:
     config: CharacterConfig
     card: CharacterCard
-    lore: tuple[Lore, ...] = ()
     card_sha256: str = field(kw_only=True)
+    character_book: CharacterBook | None = field(default=None, kw_only=True, repr=False)
 
 
 @dataclass(frozen=True)
@@ -190,8 +176,7 @@ class EmptyContext:
 def load_characters(path: Path) -> tuple[Character, ...]:
     """Load operator configuration once at startup, not per inference request.
 
-    Import the bundled Miori card's supported text fields. This is not a general
-    Character Card v3 interpreter; unsupported lore semantics fail at startup.
+    Import prompt fields and validate the entire embedded Character Book.
     """
     configs = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(configs, list) or not configs:
@@ -221,25 +206,8 @@ def load_characters(path: Path) -> tuple[Character, ...]:
         prompt_card = CharacterCard(**{key: data.get(key, "") for key in fields})
         if not any(getattr(prompt_card, key).strip() for key in fields[:-1]):
             raise ValueError("empty prompt")
-        book = data.get("character_book", {})
-        if book and (book.get("scan_depth") != 1 or book.get("recursive_scanning") is not False):
-            raise ValueError("only latest-user, nonrecursive lore is supported")
-        lore = []
-        for entry in sorted(book.get("entries", []), key=lambda item: item["insertion_order"]):
-            if not entry.get("enabled", False):
-                continue
-            if any(entry.get(key) for key in ("use_regex", "case_sensitive", "constant")):
-                raise ValueError("unsupported lore matching mode")
-            if entry.get("position") != "after_char":
-                raise ValueError("unsupported lore position")
-            lore.append(
-                Lore(
-                    tuple(entry["keys"]),
-                    tuple(entry.get("secondary_keys", [])),
-                    entry.get("selective", False),
-                    entry["content"],
-                    entry["insertion_order"],
-                )
-            )
-        characters.append(Character(config, prompt_card, tuple(lore), card_sha256=card_sha256))
+        book = load_book(data["character_book"]) if "character_book" in data else None
+        characters.append(
+            Character(config, prompt_card, card_sha256=card_sha256, character_book=book)
+        )
     return tuple(characters)
