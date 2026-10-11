@@ -79,41 +79,36 @@ class MemoryContext:
                 if cid not in conversation_refs:
                     conversation_refs[cid] = f"conversation-{len(conversation_refs) + 1}"
         # Keep immutable memory/source objects in the closure after serialization.
-        text = (
+        items = tuple(
             json.dumps(
-                [
-                    {
-                        "memory_ref": f"memory-{index + 1}",
-                        "kind": "episode" if isinstance(m.record, Episode) else "semantic",
-                        "text": m.record.normalized_text,
-                        **(
-                            {"experience_time": _time(m.record.experience_time)}
-                            if isinstance(m.record, Episode)
-                            else {"applicability": _time(m.record.applicability)}
-                        ),
-                        "facts": [
-                            {"text": f.normalized_text, "target_time": _time(f.target_time)}
-                            for f in m.facts
-                        ],
-                        "sources": [
-                            {
-                                "conversation_ref": conversation_refs[
-                                    source.reference.conversation_id
-                                ],
-                                "turn_revision": source.reference.turn_revision,
-                                "message_index": source.reference.message_index,
-                                "epoch": source.epoch,
-                            }
-                            for source in dict.fromkeys(c.source for c in m.citations)
-                        ],
-                    }
-                    for index, m in enumerate(memories)
-                ],
+                {
+                    "memory_ref": f"memory-{index + 1}",
+                    "kind": "episode" if isinstance(m.record, Episode) else "semantic",
+                    "text": m.record.normalized_text,
+                    **(
+                        {"experience_time": _time(m.record.experience_time)}
+                        if isinstance(m.record, Episode)
+                        else {"applicability": _time(m.record.applicability)}
+                    ),
+                    "facts": [
+                        {"text": f.normalized_text, "target_time": _time(f.target_time)}
+                        for f in m.facts
+                    ],
+                    "sources": [
+                        {
+                            "conversation_ref": conversation_refs[source.reference.conversation_id],
+                            "turn_revision": source.reference.turn_revision,
+                            "message_index": source.reference.message_index,
+                            "epoch": source.epoch,
+                        }
+                        for source in dict.fromkeys(c.source for c in m.citations)
+                    ],
+                },
                 ensure_ascii=False,
             )
-            if memories
-            else ""
+            for index, m in enumerate(memories)
         )
+        text = "[" + ", ".join(items) + "]" if items else ""
 
         def valid() -> bool:
             try:
@@ -139,4 +134,4 @@ class MemoryContext:
             except CoreError:
                 return False
 
-        return GuardedContext(text, valid, policy)
+        return GuardedContext(text, valid, policy, items)

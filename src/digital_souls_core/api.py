@@ -228,7 +228,9 @@ def create_app(
             "provider_model": config.profile.model,
             "allowed_parameters": sorted(config.profile.allowed_parameters),
             "external_send_allowed": config.profile.external_send_allowed,
-            "context_budget_bytes": config.context_budget_bytes,
+            "prompt_budget": config.prompt_budget.model_dump(),
+            "memory_floor": config.memory_floor,
+            "history_floor": config.history_floor,
             "model_context_window_tokens": None,
             "capability_verification": "operator_configured_not_live_verified",
         }

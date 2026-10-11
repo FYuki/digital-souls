@@ -129,9 +129,7 @@ def setup(
     policy.configure({BINDING: frozenset({"history", "local", "external", "memory"})})
     char = character("synthetic")
     if local:
-        char = type(char)(
-            char.config.model_copy(update={"profile": local_profile()}), char.system_prompt
-        )
+        char = type(char)(char.config.model_copy(update={"profile": local_profile()}), char.card)
     provider = FakeProvider()
     inference = Inference((char,), provider, privacy=policy)
     conversation = Conversations(inference, stores.history, policy)

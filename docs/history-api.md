@@ -73,7 +73,13 @@ stream値も再試行fingerprintに含みます。復旧時に切り替えない
 
 履歴のバイト上限は1 MiBです。入力・推論payload・streamバッファ・保存後の履歴を
 JSONのUTF-8バイト数で検査し、超過は切り捨てず413（`history_limit`）で拒否します。
-注入contextの`context_budget_bytes`と推論先のモデルcontext制限も引き続き適用します。
+[ADR 0026](adr/0026-prompt-assembly.md)の `prompt_budget` を共通のPromptBuilderで適用し、
+送信する古い履歴は往復単位で削減します。tool callと結果を分けず、直前の完了した1往復を保護します。
+固定人格・今回の入力・保護する往復だけで超過する場合は400 `prompt_budget_exceeded`
+（messageは領域名だけ）です。保存済み履歴と1 MiB保存上限は維持します。
+`context_budget_bytes` が残る運用設定は起動時エラーです。会話履歴APIのsystem拒否は変えません。
+組み立て・token推定・既定予算は[推論API](api.md#文脈プライバシー)を参照してください。
+推論先の物理context制限も引き続き適用します。
 会話streamのtool call indexは非負の整数（boolean不可）で、新しいindexは0から連続する必要があります。
 既存indexへの後続deltaは受け付け、tool call数の固定上限は設けません。
 policy欠落・判定不能・拒否は403、不明会話は404、不正上流応答は502です。

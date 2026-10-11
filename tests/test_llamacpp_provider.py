@@ -28,7 +28,7 @@ def local_character() -> Character:
         external_send_allowed=True,
         allowed_parameters=sample.config.profile.allowed_parameters,
     )
-    return Character(sample.config.model_copy(update={"profile": profile}), sample.system_prompt)
+    return Character(sample.config.model_copy(update={"profile": profile}), sample.card)
 
 
 @pytest.mark.parametrize(

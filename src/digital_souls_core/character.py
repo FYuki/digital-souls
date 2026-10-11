@@ -4,10 +4,12 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
+
+from .prompt_builder import CharacterCard, TokenBudgets
 
 type SupportedParameter = Literal[
     "stream", "tools", "tool_choice", "temperature", "max_completion_tokens"
@@ -74,6 +76,26 @@ def local_destination_identity(profile: Profile) -> dict[str, str]:
     }
 
 
+type PositiveInt = Annotated[int, Field(strict=True, gt=0)]
+
+
+class PromptBudget(BaseModel):
+    """Conservative defaults for a 32768 context with 4096 reserved output tokens."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    total: PositiveInt = 28672
+    character: PositiveInt = 16384
+    lore: PositiveInt = 8192
+    memory: PositiveInt = 16384
+    caller_instructions: PositiveInt = 8192
+    history: PositiveInt = 24576
+    current_input: PositiveInt = 16384
+    post_history: PositiveInt = 4096
+
+    def budgets(self) -> TokenBudgets:
+        return TokenBudgets(**self.model_dump())
+
+
 class CharacterConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     character_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
@@ -81,7 +103,9 @@ class CharacterConfig(BaseModel):
     alias: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     card_path: str
     profile: Profile
-    context_budget_bytes: int = Field(default=16384, gt=0, le=1048576)
+    prompt_budget: PromptBudget = Field(default_factory=PromptBudget)
+    memory_floor: PositiveInt = 3
+    history_floor: PositiveInt = 3
 
 
 @dataclass(frozen=True)
@@ -90,6 +114,7 @@ class Lore:
     secondary_keys: tuple[str, ...]
     selective: bool
     content: str
+    insertion_order: int = 0
 
     def matches(self, text: str) -> bool:
         return any(key.casefold() in text.casefold() for key in self.keys) and (
@@ -101,7 +126,7 @@ class Lore:
 @dataclass(frozen=True)
 class Character:
     config: CharacterConfig
-    system_prompt: str
+    card: CharacterCard
     lore: tuple[Lore, ...] = ()
 
 
@@ -130,9 +155,12 @@ class ContextSource(Protocol):
 
 @dataclass(frozen=True)
 class GuardedContext:
+    """Full JSON array plus ranked JSON objects; one guard covers the entire lookup."""
+
     text: str = field(repr=False)
     valid: Callable[[], bool] = field(repr=False)
     policy: object = field(repr=False)
+    items: tuple[str, ...] = field(default=(), repr=False)
 
 
 class GuardedContextSource(Protocol):
@@ -170,10 +198,19 @@ def load_characters(path: Path) -> tuple[Character, ...]:
         if card.get("spec") != "chara_card_v3" or card.get("spec_version") != "3.0":
             raise ValueError("unsupported card version")
         data = card["data"]
-        fields = ("name", "description", "personality", "scenario", "system_prompt", "mes_example")
-        prompt = "\n\n".join(f"{key}: {data[key]}" for key in fields if data.get(key))
-        if not prompt or data.get("post_history_instructions"):
-            raise ValueError("empty prompt or unsupported post-history instructions")
+        fields = (
+            "description",
+            "personality",
+            "scenario",
+            "system_prompt",
+            "mes_example",
+            "post_history_instructions",
+        )
+        if any(not isinstance(data.get(key, ""), str) for key in fields):
+            raise ValueError("card prompt fields must be text")
+        prompt_card = CharacterCard(**{key: data.get(key, "") for key in fields})
+        if not any(getattr(prompt_card, key).strip() for key in fields[:-1]):
+            raise ValueError("empty prompt")
         book = data.get("character_book", {})
         if book and (book.get("scan_depth") != 1 or book.get("recursive_scanning") is not False):
             raise ValueError("only latest-user, nonrecursive lore is supported")
@@ -191,7 +228,8 @@ def load_characters(path: Path) -> tuple[Character, ...]:
                     tuple(entry.get("secondary_keys", [])),
                     entry.get("selective", False),
                     entry["content"],
+                    entry["insertion_order"],
                 )
             )
-        characters.append(Character(config, prompt, tuple(lore)))
+        characters.append(Character(config, prompt_card, tuple(lore)))
     return tuple(characters)

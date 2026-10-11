@@ -29,6 +29,7 @@ from .postgres_memory_records import PostgresMemoryRecords
 from .privacy import PrivacyPolicy
 from .privacy_classifier import LocalClassifier
 from .privacy_scan import POLICY_VERSION
+from .prompt_builder import CharacterCard
 from .semantic_evaluation_cases import (
     EvaluationCase,
     EvaluationCases,
@@ -357,7 +358,7 @@ def prepare_case(
                 card_path="synthetic.json",
                 profile=profile,
             ),
-            "Synthetic evaluation",
+            CharacterCard(system_prompt="Synthetic evaluation"),
         ),
     )
     runtime.mutate("before_search")

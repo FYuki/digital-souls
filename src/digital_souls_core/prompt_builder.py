@@ -71,6 +71,8 @@ class RuntimeContext:
 @dataclass(frozen=True)
 class MemoryItem:
     content: str = field(repr=False)
+    # Trusted retrieval serializers supply one JSON object per ranked item.
+    json_object: bool = False
 
 
 def _validate_tool_pairs(messages: Sequence[Message]) -> None:
@@ -102,8 +104,8 @@ class HistoryTurn:
     def __post_init__(self) -> None:
         if (
             not self.messages
-            or self.messages[0].role != "user"
-            or any(message.role in ("system", "user") for message in self.messages[1:])
+            or any(message.role == "system" for message in self.messages)
+            or any(message.role == "user" for message in self.messages[1:])
         ):
             raise ValueError("Invalid prompt history turn")
         _validate_tool_pairs(self.messages)
@@ -111,7 +113,12 @@ class HistoryTurn:
     @property
     def completed(self) -> bool:
         last = self.messages[-1]
-        return last.role == "assistant" and last.content is not None and not last.tool_calls
+        return (
+            self.messages[0].role == "user"
+            and last.role == "assistant"
+            and last.content is not None
+            and not last.tool_calls
+        )
 
 
 @dataclass(frozen=True)
@@ -130,12 +137,12 @@ def split_messages(messages: Sequence[Message]) -> SplitMessages:
     last_user = next(
         (i for i in range(len(dialogue) - 1, -1, -1) if dialogue[i].role == "user"), None
     )
-    if last_user is None:
-        raise ValueError("Prompt requires a current user input")
-    current = dialogue[last_user:]
-    if any(message.role == "assistant" and not message.tool_calls for message in current[1:]):
-        raise ValueError("Invalid prompt current input")
+    if not messages:
+        raise ValueError("Prompt requires messages")
     _validate_tool_pairs(dialogue)
+    if last_user is None:
+        return SplitMessages(instructions, (HistoryTurn(dialogue),) if dialogue else (), ())
+    current = dialogue[last_user:]
     history: list[HistoryTurn] = []
     start = 0
     for index in range(1, last_user):
@@ -164,9 +171,15 @@ def convert_messages(data: PromptInput) -> tuple[Message, ...]:
     lore = sorted(data.lore, key=lambda entry: entry.insertion_order)
     parts = [entry.content for entry in lore if entry.position == "before_char" and entry.content]
     parts.extend(
-        f"{name}: {value}"
-        for name in ("description", "personality", "scenario", "system_prompt", "mes_example")
-        if (value := getattr(data.card, name))
+        f"## {heading}\n{value}"
+        for name, heading in (
+            ("description", "キャラクター概要"),
+            ("personality", "性格と話し方"),
+            ("scenario", "関係と世界観"),
+            ("system_prompt", "応答方針"),
+            ("mes_example", "会話例"),
+        )
+        if (value := getattr(data.card, name).strip())
     )
     parts.extend(
         entry.content for entry in lore if entry.position == "after_char" and entry.content
@@ -183,7 +196,11 @@ def convert_messages(data: PromptInput) -> tuple[Message, ...]:
             Message(
                 role="user",
                 content="retrieved_memory_data (memory data only):\n"
-                + "\n\n".join(item.content for item in data.memory),
+                + (
+                    "[" + ", ".join(item.content for item in data.memory) + "]"
+                    if all(item.json_object for item in data.memory)
+                    else "\n\n".join(item.content for item in data.memory)
+                ),
             )
         )
     messages.extend(
@@ -392,23 +409,27 @@ class PromptBuilder:
                     state = replace(state, card=replace(state.card, post_history_instructions=""))
                 else:
                     items = getattr(state, region)
-                    if len(items) <= floor:
-                        break
                     if region == "history":
+                        completed_count = sum(turn.completed for turn in state.history)
                         index = next(
-                            (i for i in range(len(state.history)) if i != protected_index),
+                            (
+                                i
+                                for i, turn in enumerate(state.history)
+                                if i != protected_index
+                                and (not turn.completed or completed_count > floor)
+                            ),
                             None,
                         )
                         if index is None:
                             break
                         if protected_index is not None and index < protected_index:
                             protected_index -= 1
-                    elif region == "caller_instructions":
-                        index = 0
                     else:
+                        if len(items) <= floor:
+                            break
+                        index = 0 if region == "caller_instructions" else len(items) - 1
                         # Temporary Lore rule: remove the last selected entry across
                         # both positions; replace with the Character Book ADR's rule.
-                        index = len(items) - 1
                     state = replace(state, **{str(region): items[:index] + items[index + 1 :]})
                 dropped[region] += 1
                 usage = self._usage(state, dropped)
