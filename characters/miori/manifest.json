@@ -34,8 +34,8 @@
     },
     {
       "sourcePath": "characters/miori/miori.card.json",
-      "sha256": "faa31050be4cf7142dec3952ab179922e35793063c35c330cf2f2b4ce794c444",
-      "bytes": 12097,
+      "sha256": "2de473dd239e5e6eca5a1aecb65688c0e1ec0a8e964792f34659857f76da3da8",
+      "bytes": 12105,
       "status": "included",
       "path": "miori.card.json"
     },
