@@ -114,10 +114,14 @@ def test_history_saves_restores_and_retries_normalized_text(stream: bool) -> Non
         revision: int,
         messages: tuple[Message, ...],
         finish: str,
+        *,
+        card_sha256: str | None = None,
     ) -> Receipt:
         nonlocal snapshot, receipt
         snapshot = Snapshot(cid, revision + 1, (*snapshot.messages, *messages))
-        receipt = Receipt(fingerprint, snapshot.revision, messages[-1], finish)
+        receipt = Receipt(
+            fingerprint, snapshot.revision, messages[-1], finish, card_sha256=card_sha256
+        )
         return receipt
 
     store.append.side_effect = append

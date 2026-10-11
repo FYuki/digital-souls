@@ -1,4 +1,5 @@
 import copy
+import hashlib
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,11 @@ def character(name: str = "miori", *, native: bool = False) -> Character:
         config,
         sample.card if name == "miori" else CharacterCard(system_prompt="Synthetic second persona"),
         sample.lore if name == "miori" else (),
+        card_sha256=(
+            sample.card_sha256
+            if name == "miori"
+            else hashlib.sha256(b"Synthetic second persona").hexdigest()
+        ),
     )
 
 

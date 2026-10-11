@@ -195,7 +195,9 @@ def test_both_apis_use_server_counts_and_trim_history(
         external_send_allowed=True,
         allowed_parameters=char.config.profile.allowed_parameters,
     )
-    char = type(char)(char.config.model_copy(update={"profile": profile}), char.card)
+    char = type(char)(
+        char.config.model_copy(update={"profile": profile}), char.card, card_sha256=char.card_sha256
+    )
     seeded = seeded_turns()
     http, provider, inference, store = http_setup(char, seeded)
     response = post(http, entry, seeded, [{"role": "user", "content": "now"}])

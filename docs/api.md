@@ -40,6 +40,12 @@ CLI等のOriginなし要求は許可します。別portのブラウザーUIや�
 inference profile、provider/modelは別の識別子です。返却JSONの`model`はSDKが返す実モデル表記を
 保持し、aliasに書き換えません。レスポンスheaderの`X-Character-ID`、
 `X-Character-Config-Version`、`X-Inference-Profile`で固定した設定を確認できます。
+両completion経路の成功応答（stream・非stream）には `X-Character-Card-SHA256` も付きます。
+これは起動時に読み込んだCardファイルの生バイト列のSHA-256（小文字64桁）です。改行・空白を
+正規化せず、解析に使った同じバイト列から計算し、起動後にファイルが変わっても値は変えません。
+`GET /v1/characters/{character_id}` も `card_sha256` を返します。要求とcompletion本文は変更しません。
+Card本文はログ・エラーへ出さず、ハッシュは評価・調査で応答とCardを対応付けるために使います
+（[ADR 0029 §6](adr/0029-persona-consistency-evaluation.md#6-card-のハッシュ)）。
 設定とカードは起動時に一度読み込みます。進行中の要求へ設定更新は入りません。
 
 ## 対応する小範囲
