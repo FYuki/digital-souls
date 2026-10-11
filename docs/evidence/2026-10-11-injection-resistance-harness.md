@@ -70,3 +70,16 @@ commit 前の fixture 報告は `7cca0fbbfd27a85f286c474ebfdf1071851a5ef0` / `di
 - 実モードは本番 provider/counter/設定・cache 無効化・PostgresHistory を使いますが、
   記憶の検索と合成データへの privacy 分類は評価用 fake です。実 privacy 分類器・運用記憶は未評価。
 - push・PR・merge は実施しません。ローカル commit のみです。
+
+## 監督側の再実行（2026-10-11）
+
+`ee75e4773709bbcd66185fc9e49d072045fe655f` で差分を読み、同じ固定ツールで再実行した。製品のコードは変更されておらず、追加は `injection_*` のモジュールと評価データ・CLI だけ。
+uv sync --locked・uv lock --check・ruff（新しい CLI を含む）・mypy（142 files）・UT（975 passed）・IT1（863 passed）・uv build・
+test-postgres（442 passed）・npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。
+インジェクション評価の CLI（fixture、3回）と人格評価の CLI（fixture、3回）はどちらも exit 0。報告 JSON の `"response"` は集計の種類の
+ラベル（`kind`）で、応答本文は含まれない。
+
+補足：本番の stateless の Chat API は記憶を注入しない。Chat API × 記憶 context の経路は、評価専用の合成の会話 ID で記憶の枠を有効にして、
+記憶のデータの枠そのものの耐性を測るもので、本番に存在する経路の評価ではない（会話履歴 API × 記憶 context は本番の経路）。
+
+実モデルの評価は NOT RUN（Miori のケース `miori.draft.cases.json` がユーザー確認前のため）。ツールの結果の経路は NOT RUN（ADR 0027 の実装後）。
