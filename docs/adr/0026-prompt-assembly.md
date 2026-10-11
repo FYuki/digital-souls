@@ -35,6 +35,13 @@ revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）の決定を正として�
 - OpenClaw の内部文脈（最後の user メッセージへの注入）には個別に対応しない。
 - 記憶は PoC の順序（Runtime Context の後、履歴の前）に置き、データとして渡す枠（ADR 0007・0020）は維持する。
 
+同日、この ADR の確認事項にユーザーが次のとおり回答しました。
+
+- 予算が足りないときは、記憶を下限（3件）まで削る → 呼び出し側の指示 → 記憶を1件まで削る → 古い履歴 → Lore →
+  `post_history_instructions` の順に削る。記憶は最大5件（[ADR 0018](0018-memory-retrieval-context.md) の最大取得件数）。
+- `context_budget_bytes` を領域ごとの token 予算に置き換え、古い設定が残っていたら起動時にエラーにする。
+- LLM 側から token 数を取得できる推論先ではその値を使う。取得できない推論先ではバイト数から推定し、マージンを含める。
+
 ## 選択肢
 
 呼び出し側の system について：
@@ -122,23 +129,45 @@ Character Runtime Context は今は中身がありません（[ADR 0020](0020-re
 
 全体が上限を超える場合は、任意の領域を次の順に、途中で切らずに単位ごとに削ります。
 
-1. 呼び出し側の指示（古い message から）
-2. 記憶 context（順位の低い記憶から）
-3. 古い会話履歴（往復単位。tool call と結果の組を分けない）
-4. Character Lore（Character Book の ADR の除外順）
-5. `post_history_instructions`
+1. 記憶 context を下限の件数まで（順位の低い記憶から。下限は設定値で既定は3件）
+2. 呼び出し側の指示（古い message から）
+3. 記憶 context を1件まで（順位の低い記憶から）
+4. 古い会話履歴（往復単位。tool call と結果の組を分けない）
+5. Character Lore（Character Book の ADR の除外順）
+6. `post_history_instructions`
 
-PoC の削減順（記憶 → 古い履歴 → Lore → `post_history_instructions`）を維持し、ユーザーの決定に従って
-呼び出し側の指示を最初に削ります。固定人格と Runtime Context は予算の都合で削りません。
+記憶は最大5件（[ADR 0018](0018-memory-retrieval-context.md) の最大取得件数）なので、1 で最大2件、3 で最大2件を削ります。
+最も関連の高い記憶1件は、削る対象に残しません（全体が収まらない場合は、上の順で他を削ったうえで拒否します）。
+下限が最大件数以上のときは 1 で削らず、1件未満にはしません。
+PoC の削減順（記憶 → 古い履歴 → Lore → `post_history_instructions`）を基本に、ユーザーの決定に従って
+記憶を2段階に分け、その間で呼び出し側の指示を削ります。固定人格と Runtime Context は予算の都合で削りません。
 Runtime Context の中身が入ったら、途中で切らずに項目数を減らして調整します（PoC と同じ）。
 
 ### 5. token の数え方
 
 token の数え方は port にし、profile ごとに選びます。
 
-- llama.cpp 経路では、固定したサーバーの chat template の適用と tokenize で数えます（ライブラリ・サーバーの機能を使う。R2）。
-- そのほかの経路では、UTF-8 のバイト数に message ごとの余裕を足した、保守的な推定を使います。
-- UT・IT1 は fake の数え方で、選択と境界値を固定します。
+- 推論先が token 数を返す手段を持つ場合は、その値を使います（ライブラリ・サーバーの機能を使う。R2）。
+  たとえば llama.cpp は、固定したサーバーの chat template の適用と tokenize で、送る messages の token 数を得られます。
+  手段の有無は推論先ごとに確認し、profile で明示します。暗黙に推定へ切り替えません。
+- 取得できない推論先では、次の式で上限を推定します。
+
+  ```text
+  推定 token 数 = 全 message の本文（tool call・tool 定義を含む）の UTF-8 バイト数
+                 + message 数 × 16 + 16
+  ```
+
+  根拠は次のとおりです。
+
+  - byte-level BPE（GPT 系・Llama 3 系等）と、byte fallback を持つ SentencePiece（Gemma 等）では、1 token は本文の1バイト以上に対応します。
+    未知の文字を1 token にまとめる方式でも、1 token が1バイト未満になることはありません。したがって本文の token 数はバイト数を超えません。
+  - 本文以外に、chat template が message ごとに役割と区切りの token を足します（Gemma・ChatML・Llama 3 の形式で5〜8 token 程度）。
+    SentencePiece の先頭の空白記号で1 token 増える場合もあります。これを2倍に見積もり、message ごとに 16 token とします。
+  - 先頭の特殊 token と、応答を始める合図（Gemma の `<start_of_turn>model` 等）の分として、全体に 16 token を足します。
+
+  日本語では1文字が3バイトなので、実際より2〜3倍多く数えます。予算を超えない側に倒れる代わりに、
+  削る履歴が実際より多くなります。token 数を取得できる推論先では取得した値を使ってください。
+- UT・IT1 は fake の数え方で、選択と境界値を固定します。推定式自体も UT で固定します。
 
 `context_budget_bytes`（注入する system と記憶のバイト予算）は、この token 予算で置き換えます。
 設定に残っている場合は起動時に分かるエラーにし、黙って無視しません。会話履歴の保存上限（1 MiB、413）は
