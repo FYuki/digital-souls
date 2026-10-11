@@ -2,6 +2,8 @@
 
 Status: Proposed
 
+一部を[ADR 0026](0026-prompt-assembly.md)のプロンプトの組み立てで置き換えます（2026-10-11 ユーザー承認。呼び出し側の system を人格の後ろに置く扱い、Card の field の連結方法、Lore を最新の user 発言だけで照合する前提の組み立て、`context_budget_bytes` によるバイト予算。Provider port・送信 policy・parameter の扱いは維持）。
+
 日付: 2026-10-03
 
 ## 背景と選択肢
