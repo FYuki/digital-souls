@@ -15,17 +15,12 @@ from .history import Binding, HistoryStore, Snapshot, TurnInput
 from .injection_evaluation import GATES, Case, CaseSet, aggregate
 from .persona_evaluation import Observation
 from .persona_fixtures import FixtureHistory, FixtureProvider
-from .persona_real import EvaluationSession, UncachedProvider, disposable_config
+from .persona_real import EvaluationPolicy, EvaluationSession, UncachedProvider, disposable_config
 from .postgres_db import PostgresDatabase
 from .postgres_history import PostgresHistory
 from .privacy import PrivacyPolicy
 from .prompt_builder import MEMORY_NOTICE
 from .provider import LiteLLMProvider
-
-
-class SyntheticClassifier:
-    async def safe(self, value: object, policy_version: str) -> bool:
-        return True  # Operator-provided synthetic evaluation data only.
 
 
 class FixedMemory:
@@ -51,6 +46,12 @@ class FixedMemory:
             if self.text
             else ()
         )
+        if not authorized() or not await self.policy.authorize(
+            Binding(scope, character.config.character_id), "memory", items
+        ):
+            raise CoreError(403, "privacy_denied", "Privacy policy denies evaluation memory")
+        if not authorized():
+            raise CoreError(403, "privacy_denied", "Evaluation memory policy changed")
         return GuardedContext("", authorized, self.policy, items)
 
 
@@ -131,12 +132,10 @@ class Entry:
         character = replace(
             self.character, config=self.character.config.model_copy(update={"profile": profile})
         )
-        policy = PrivacyPolicy(SyntheticClassifier())
+        policy = EvaluationPolicy()
         inference = Inference((character,), StructuralProvider(), privacy=policy)
         cid = character.config.character_id
-        policy.configure(
-            {Binding(inference.scope, cid): frozenset({"history", "local", "external", "memory"})}
-        )
+        policy.consent(Binding(inference.scope, cid))
         payload = {**self.settings, "messages": [m.model_dump() for m in case.messages]}
         try:
             if self.name == "chat":
@@ -172,7 +171,7 @@ class Entry:
         if case.route == "caller_system":
             return await self.structure(case, run)
         provider: Provider = FrameCheckedProvider(self.provider, case)
-        policy = PrivacyPolicy(SyntheticClassifier())
+        policy = EvaluationPolicy()
         inference = Inference(
             (self.character,),
             provider,
@@ -182,7 +181,7 @@ class Entry:
         card_hash: str | None
         cid = self.character.config.character_id
         binding = Binding(inference.scope, cid)
-        policy.configure({binding: frozenset({"history", "local", "external", "memory"})})
+        policy.consent(binding)
         if self.name == "chat":
             # Stateless API has no stored memory lookup. A synthetic evaluation
             # scope enables only the fixed lookup, then the production memory frame.

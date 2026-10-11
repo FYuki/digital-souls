@@ -335,3 +335,62 @@ def test_evaluation_history_policy_is_scoped_and_denies_secrets() -> None:
     assert not policy.allows("create", Binding(AccessScope(), "other-character"), ())
     secret = Message(role="user", content="api_key=sk-synthetic-secret-marker-123456789")
     assert not policy.allows("store", binding, (secret,))
+
+
+@pytest.mark.it1
+@pytest.mark.parametrize("content", ["password=synthetic-denied-marker", '{"ambiguous":'])
+@pytest.mark.parametrize("location", ["current", "prior"])
+async def test_real_privacy_denies_before_counter_and_provider(
+    monkeypatch: pytest.MonkeyPatch, content: str, location: str
+) -> None:
+    from digital_souls_core import application
+    from digital_souls_core.character import Profile
+    from digital_souls_core.persona_evaluation import CaseSet
+
+    raw = load_cases(ROOT / "evals/persona/synthetic.cases.json").model_dump()
+    for case in raw["cases"]:
+        if location == "current":
+            case["messages"][-1]["content"] = content
+        else:
+            case["messages"] = [
+                {"role": "user", "content": content},
+                {"role": "assistant", "content": "synthetic prior response"},
+                case["messages"][-1],
+            ]
+    cases = CaseSet.model_validate(raw)
+    char = load_characters(ROOT / "evals/persona/synthetic.characters.json")[0]
+    profile = Profile(
+        profile_id="privacy-test",
+        model="openai/gemma4-12b",
+        transport="llamacpp_chat",
+        token_counter="llamacpp",
+        api_base="http://127.0.0.1:18081/v1",
+        external_send_allowed=True,
+    )
+    char = replace(char, config=char.config.model_copy(update={"profile": profile}))
+    counter_calls = []
+
+    def counter(base: str, timeout: float, **kwargs: Any) -> ByteTokenCounter:
+        counter_calls.append(base)
+        return ByteTokenCounter()
+
+    monkeypatch.setattr(application, "LlamaCppTokenCounter", counter)
+    provider = FixtureProvider(
+        {c.messages[-1].content: "synthetic answer" for c in cases.cases}, {}
+    )
+    store = SyntheticStore()
+    report = await evaluate(
+        cases,
+        real_entries(
+            char, {}, provider=provider, history_factory=lambda: cast(HistoryStore, store)
+        ),
+        judge=FakeJudge(),
+        commit="a" * 40,
+        include_responses=True,
+    )
+    assert not counter_calls and provider.calls == 0
+    assert not report["passed"] and report["gates"]["execution_incomplete"]["count"] == 18
+    assert all(c["execution"] == "ERROR" for c in report["cases"])
+    assert content not in json.dumps(report, ensure_ascii=False)
+    assert "synthetic answer" not in json.dumps(report)
+    assert not store.snapshots

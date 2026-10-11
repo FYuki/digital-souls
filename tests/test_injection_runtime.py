@@ -15,6 +15,137 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.it1
 
 
+@pytest.mark.parametrize("content", ["password=synthetic-denied-marker", '{"ambiguous":'])
+async def test_real_privacy_denies_before_counter_and_provider(
+    monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    from dataclasses import replace
+    from typing import Any, cast
+
+    from digital_souls_core import application
+    from digital_souls_core.character import Profile
+    from digital_souls_core.history import HistoryStore
+    from digital_souls_core.injection_evaluation import CaseSet
+    from digital_souls_core.injection_runtime import real_entries
+    from digital_souls_core.persona_fixtures import FixtureHistory, FixtureProvider
+    from digital_souls_core.prompt_builder import ByteTokenCounter
+
+    raw = load_cases(ROOT / "evals/injection/synthetic.cases.json").model_dump()
+    for case in raw["cases"]:
+        if case["assessment"] == "response":
+            original = case["messages"][-1]["content"]
+            case["messages"][-1]["content"] = (
+                original + "\n" + content
+                if content.startswith("password")
+                else '{"attack":' + json.dumps(original) + ","
+            )
+    cases = CaseSet.model_validate(raw)
+    char = load_characters(ROOT / "evals/persona/synthetic.characters.json")[0]
+    profile = Profile(
+        profile_id="privacy-test",
+        model="openai/gemma4-12b",
+        transport="llamacpp_chat",
+        token_counter="llamacpp",
+        api_base="http://127.0.0.1:18081/v1",
+        external_send_allowed=True,
+    )
+    char = replace(char, config=char.config.model_copy(update={"profile": profile}))
+    counter_calls = []
+
+    def counter(base: str, timeout: float, **kwargs: Any) -> ByteTokenCounter:
+        counter_calls.append(base)
+        return ByteTokenCounter()
+
+    monkeypatch.setattr(application, "LlamaCppTokenCounter", counter)
+    provider = FixtureProvider(
+        {c.messages[-1].content: "synthetic answer" for c in cases.cases}, {}
+    )
+    store = FixtureHistory()
+    report = await evaluate(
+        cases,
+        real_entries(
+            char, {}, provider=provider, history_factory=lambda: cast(HistoryStore, store)
+        ),
+        runs=3,
+        commit="a" * 40,
+        expected_card_hash=char.card_sha256,
+        include_responses=True,
+    )
+    assert not counter_calls and provider.calls == 0
+    assert not report["passed"] and report["gates"]["execution_incomplete"]["count"] == 12
+    assert "synthetic-denied-marker" not in json.dumps(report)
+    assert "synthetic answer" not in json.dumps(report)
+    assert not store.snapshots
+
+
+@pytest.mark.parametrize("name", ["chat", "history"])
+@pytest.mark.parametrize("content", ["password=synthetic-denied-marker", '{"ambiguous":'])
+async def test_real_memory_privacy_precedes_tokenizer_send(
+    monkeypatch: pytest.MonkeyPatch, name: str, content: str
+) -> None:
+    from collections.abc import Awaitable, Callable, Sequence
+    from dataclasses import replace
+    from typing import Any, cast
+
+    from digital_souls_core import application
+    from digital_souls_core.character import Profile
+    from digital_souls_core.contracts import Message, Tool
+    from digital_souls_core.errors import CoreError
+    from digital_souls_core.history import HistoryStore
+    from digital_souls_core.injection_runtime import real_entries
+    from digital_souls_core.persona_fixtures import FixtureHistory, FixtureProvider
+    from digital_souls_core.prompt_builder import ByteTokenCounter
+
+    sent: list[dict[str, Any]] = []
+
+    class Counter:
+        def __init__(
+            self,
+            base: str,
+            timeout: float,
+            *,
+            before_send: Callable[[dict[str, Any]], Awaitable[None]],
+            **kwargs: Any,
+        ) -> None:
+            self.before_send = before_send
+
+        async def __call__(self, messages: Sequence[Message], *, tools: Sequence[Tool] = ()) -> int:
+            payload = {"messages": [m.model_dump(exclude_none=True) for m in messages]}
+            await self.before_send(payload)
+            sent.append(payload)
+            return ByteTokenCounter()(messages, tools=tools)
+
+    monkeypatch.setattr(application, "LlamaCppTokenCounter", Counter)
+    cases = load_cases(ROOT / "evals/injection/synthetic.cases.json")
+    case = next(c for c in cases.cases if c.route == "memory")
+    attack = (
+        (case.memory_text or "") + "\n" + content
+        if content.startswith("password")
+        else '{"attack":' + json.dumps(case.memory_text) + ","
+    )
+    case = case.model_copy(update={"memory_text": attack})
+    char = load_characters(ROOT / "evals/persona/synthetic.characters.json")[0]
+    profile = Profile(
+        profile_id="privacy-test",
+        model="openai/gemma4-12b",
+        transport="llamacpp_chat",
+        token_counter="llamacpp",
+        api_base="http://127.0.0.1:18081/v1",
+        external_send_allowed=True,
+    )
+    char = replace(char, config=char.config.model_copy(update={"profile": profile}))
+    provider = FixtureProvider({case.messages[-1].content: "synthetic answer"}, {})
+    store = FixtureHistory()
+    entries = real_entries(
+        char, {}, provider=provider, history_factory=lambda: cast(HistoryStore, store)
+    )
+    with pytest.raises(CoreError) as error:
+        await entries[name].observe(case, 1)
+    assert error.value.code == "privacy_denied"
+    assert provider.calls == 0 and not store.snapshots
+    assert not sent
+
+
 @pytest.mark.parametrize(
     "scenario",
     [
@@ -217,9 +348,7 @@ async def test_discarded_attack_cannot_be_reported_as_resistance(
         cases, entries, runs=3, commit="a" * 40, expected_card_hash=char.card_sha256
     )
     assert not report["passed"]
-    assert report["gates"]["execution_incomplete"]["count"] == (
-        3 if route == "caller_system" else 6
-    )
+    assert report["gates"]["execution_incomplete"]["count"] == 6
 
 
 @pytest.mark.parametrize("behavior", ["accepted", "privacy_denied", "unavailable"])
@@ -409,8 +538,15 @@ def test_cli_external_content_gate_is_failure(
 
 
 def test_cli_empty_cases_cannot_pass(tmp_path: Path) -> None:
+    from pydantic import ValidationError
+
+    from digital_souls_core.injection_evaluation import CaseSet
+
     path = tmp_path / "empty.cases.json"
-    path.write_text(json.dumps({"schema_version": 1, "cases": []}))
+    path.write_text(json.dumps({"schema_version": 2, "cases": []}))
+    with pytest.raises(ValidationError) as error:
+        CaseSet.model_validate_json(path.read_bytes())
+    assert [(e["loc"], e["type"]) for e in error.value.errors()] == [(("cases",), "too_short")]
     result = subprocess.run(
         [
             sys.executable,
