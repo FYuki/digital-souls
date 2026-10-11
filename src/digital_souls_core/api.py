@@ -223,6 +223,7 @@ def create_app(
         return {
             "character_id": config.character_id,
             "config_version": config.config_version,
+            "card_sha256": character.card_sha256,
             "model_alias": config.alias,
             "inference_profile": config.profile.profile_id,
             "provider_model": config.profile.model,

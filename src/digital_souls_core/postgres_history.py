@@ -22,6 +22,7 @@ from .history import (
     TurnDeletion,
     TurnDeletionInput,
     TurnDeletionResult,
+    TurnMetadata,
     as_utc,
     current_utc,
 )
@@ -73,12 +74,14 @@ class PostgresHistory:
             messages: list[Message] = []
             sources: list[SourceState] = []
             confirmations: list[SourceReference] = []
+            turns: list[TurnMetadata] = []
             for turn in db.execute(
                 "SELECT messages,revision,memory_excluded,private_mode,stated_at,"
-                "memory_confirmation FROM turns "
+                "memory_confirmation,card_sha256 FROM turns "
                 "WHERE binding=%s AND conversation=%s ORDER BY revision",
                 (_key(binding), conversation_id),
             ):
+                turns.append(TurnMetadata(turn[1], turn[6]))
                 excluded = json.loads(turn[2])
                 state = decode(turn[5])
                 confirmations.extend(
@@ -106,6 +109,7 @@ class PostgresHistory:
                 bool(row[2]),
                 tuple(sources),
                 tuple(confirmations),
+                tuple(turns),
             )
 
     def receipt(self, binding: Binding, conversation_id: str, request_id: str) -> Receipt | None:
@@ -125,7 +129,8 @@ class PostgresHistory:
         ).fetchone():
             raise CoreError(409, "request_deleted", "Request was deleted")
         row = db.execute(
-            "SELECT fingerprint, revision, messages, finish, memory_confirmation FROM turns "
+            "SELECT fingerprint, revision, messages, finish, memory_confirmation,card_sha256 "
+            "FROM turns "
             "WHERE binding=%s AND conversation=%s AND request=%s",
             (_key(binding), conversation_id, request_id),
         ).fetchone()
@@ -137,6 +142,7 @@ class PostgresHistory:
             Message.model_validate(json.loads(row[2])[-1]),
             row[3],
             tuple(int(index) for index in decode(row[4])),
+            row[5],
         )
 
     def append(
@@ -151,6 +157,7 @@ class PostgresHistory:
         *,
         memory_excluded_indices: tuple[int, ...] = (),
         memory_confirmation_indices: tuple[int, ...] = (),
+        card_sha256: str | None = None,
     ) -> Receipt:
         with self._connection(binding) as db:
             prior = self._receipt(db, binding, conversation_id, request_id)
@@ -205,8 +212,8 @@ class PostgresHistory:
             db.execute(
                 "INSERT INTO turns (binding,conversation,request,fingerprint,revision,"
                 "messages,finish,"
-                "memory_excluded,private_mode,stated_at,memory_confirmation) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "memory_excluded,private_mode,stated_at,memory_confirmation,card_sha256) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     _key(binding),
                     conversation_id,
@@ -219,6 +226,7 @@ class PostgresHistory:
                     private,
                     stated_at,
                     json.dumps(state),
+                    card_sha256,
                 ),
             )
             return Receipt(
@@ -227,6 +235,7 @@ class PostgresHistory:
                 messages[-1],
                 finish_reason,
                 memory_confirmation_indices,
+                card_sha256,
             )
 
     def delete(self, binding: Binding, conversation_id: str) -> None:

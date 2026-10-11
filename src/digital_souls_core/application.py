@@ -51,6 +51,7 @@ class Prepared:
         return {
             "X-Character-ID": config.character_id,
             "X-Character-Config-Version": config.config_version,
+            "X-Character-Card-SHA256": self.character.card_sha256,
             "X-Inference-Profile": config.profile.profile_id,
         }
 

@@ -38,7 +38,11 @@ def policy_setup(
     policy.configure({BINDING: frozenset({"history", "local", "external", "memory"})})
     char = character("synthetic")
     if local:
-        char = type(char)(char.config.model_copy(update={"profile": local_profile()}), char.card)
+        char = type(char)(
+            char.config.model_copy(update={"profile": local_profile()}),
+            char.card,
+            card_sha256=char.card_sha256,
+        )
     inference = Inference((char,), provider, privacy=policy)
     return (
         Conversations(inference, history(stores), policy),
@@ -211,6 +215,7 @@ async def test_actual_payload_injection_blocked(stores: Stores, source: str) -> 
         old.config,
         CharacterCard(system_prompt=marker) if source == "system" else old.card,
         (Lore(("Synthetic",), (), False, marker),) if source == "lore" else (),
+        card_sha256=old.card_sha256,
     )
 
     class Context:

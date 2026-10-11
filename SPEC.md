@@ -34,6 +34,7 @@ ADRの決定を機能単位に整理します。
 | 機能 | 状態 | 根拠 |
 | --- | --- | --- |
 | 全入口共通のCard・Lore・記憶・呼び出し側指示・履歴・post_history・今回の入力の組み立て、領域token予算、往復/item単位の削減と本文を含まない400拒否 | 一部（ByteTokenCounterによる組み立て・予算・送信前認可は実装済み。推論先token実測・Runtime Contextの状態生成・実モデル受入は未実装/未実施） | [ADR 0026](docs/adr/0026-prompt-assembly.md)、[推論API](docs/api.md#文脈プライバシー) |
+| 応答に使ったCardファイルの生バイト列SHA-256の起動時固定、全completionのheader、会話turnの保存・復元metadata | 実装済み（streamを含む合成試験。旧turnはNULL、再送fingerprint維持。人格評価ハーネス・実モデル評価は未実装/未実施） | [ADR 0029 §6](docs/adr/0029-persona-consistency-evaluation.md#6-card-のハッシュ)、[履歴API](docs/history-api.md) |
 
 送信payloadの履歴削減は、保存済み会話の削除ではありません。固定人格・今回の入力・
 直前の完了した1往復を保護し、tool callと結果の組を分けません。記憶の撤回guardは削減後も保持します。

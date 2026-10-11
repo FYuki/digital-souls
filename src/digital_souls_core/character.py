@@ -1,5 +1,6 @@
 """Immutable runtime snapshots and the small bundled-card context importer."""
 
+import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -131,6 +132,7 @@ class Character:
     config: CharacterConfig
     card: CharacterCard
     lore: tuple[Lore, ...] = ()
+    card_sha256: str = field(kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -197,7 +199,12 @@ def load_characters(path: Path) -> tuple[Character, ...]:
     characters = []
     for value in configs:
         config = CharacterConfig.model_validate(value)
-        card = json.loads((path.parent / config.card_path).read_text(encoding="utf-8"))
+        card_bytes = (path.parent / config.card_path).read_bytes()
+        try:
+            card = json.loads(card_bytes.decode("utf-8"))
+        except (ValueError, UnicodeError):
+            raise ValueError("invalid card encoding or JSON") from None
+        card_sha256 = hashlib.sha256(card_bytes).hexdigest()
         if card.get("spec") != "chara_card_v3" or card.get("spec_version") != "3.0":
             raise ValueError("unsupported card version")
         data = card["data"]
@@ -234,5 +241,5 @@ def load_characters(path: Path) -> tuple[Character, ...]:
                     entry["insertion_order"],
                 )
             )
-        characters.append(Character(config, prompt_card, tuple(lore)))
+        characters.append(Character(config, prompt_card, tuple(lore), card_sha256=card_sha256))
     return tuple(characters)

@@ -52,6 +52,15 @@ tools/tool_choice/temperature/max_tokens/max_completion_tokensの条件は既存
 request_idは1〜64文字の英数字・`_`・`-`、期待revisionは0以上の整数です。
 成功は`conversation_id`、`request_id`、確定`revision`、公開assistant `message`、
 `finish_reason`（stop/tool_calls）を返します。OpenAIのresponse envelopeとは異なります。
+成功応答（stream・非stream）の `X-Character-Card-SHA256` headerは、その保存済み応答の
+組み立てに使ったCardファイルのSHA-256です。`turns.card_sha256` にassistant応答を含む
+turn単位で保存し、receiptの `card_sha256` へ復元します。会話復元の `turns` 配列はrevision順の
+`{"turn_revision": 1, "card_sha256": "..."}` metadataを返します。会話ID一覧から各会話を
+復元して確認できます。空の会話は `turns: []`、削除したturnのmetadataも同時に消えます。
+このmetadataはproviderのmessagesへ含めません。要求・completion本文・fingerprintは変えません。
+再送と同時要求の後着は、保存済みreceiptのハッシュを返します。再起動後にCardが変わっても
+現在値で上書きしません。旧turnのハッシュは不明なNULL（復元時はJSONのnull）のままとし、
+そのreceiptの再送ではheaderを省略します。現在のCardから補完せず、再推論もしません。
 
 tool_callsを受け取ったら外部Agentが実行し、次のrequest IDで対応する全tool resultを渡します。
 Coreは実行しません。不正な往復は400です。入力・設定が同じrequest IDの再送は同じreceiptを返し、
@@ -139,9 +148,10 @@ scope違いの通知は取得・ackできません。通知のHTTP ackは公開�
 同じPostgreSQL schemaにある派生memory本文も同一transactionで消去します。再構成の完了とは別です。
 source参照自体は削除直後から無効です。
 
-PostgreSQL schema v1〜v5からv6へ段階的に原子的移行します。schemaとversionを同じtransactionで
+PostgreSQL schema v1〜v6からv7へ段階的に原子的移行します。schemaとversionを同じtransactionで
 更新し、途中失敗はrollbackして再実行できます。履歴・receipt・fingerprintは保持し、旧turnの
 日時はNULLのままです。v5→v6で旧逐語3表を削除し、確認状態・通知・正本表は保持します。
+v6→v7でnullableな `turns.card_sha256` を追加し、既存turnはNULLのまま補完しません。
 [移行の詳細](postgresql.md#初期化と復旧境界)を参照してください。未知versionは引き続き拒否します。
 過去発話への後付け除外変更は未実装で、指定はcompletionの入力配列に対して行います。
 

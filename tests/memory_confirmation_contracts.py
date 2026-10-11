@@ -39,7 +39,11 @@ def make_harness(history: HistoryStore, records: MemoryRecordStore) -> Harness:
     policy = PrivacyPolicy(LocalClassifier(classifier, local_profile(), model_digest="synthetic"))
     policy.configure({BINDING: frozenset({"history", "local", "external", "memory"})})
     char = character("synthetic")
-    char = type(char)(char.config.model_copy(update={"profile": local_profile()}), char.card)
+    char = type(char)(
+        char.config.model_copy(update={"profile": local_profile()}),
+        char.card,
+        card_sha256=char.card_sha256,
+    )
     inference = Inference((char,), provider, privacy=policy)
     conversation = Conversations(inference, history, policy)
     return Harness(

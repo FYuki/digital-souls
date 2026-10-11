@@ -229,6 +229,7 @@ class Conversations:
             snapshot.revision,
             stored,
             finish,
+            card_sha256=prepared.character.card_sha256,
             **(
                 {"memory_confirmation_indices": tuple(confirmation_indices)}
                 if confirmation_indices

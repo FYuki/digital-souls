@@ -155,8 +155,16 @@ def http_setup(
     store.read.return_value = Snapshot("synthetic", 1, seeded)
     store.receipt.return_value = None
     store.append.side_effect = (
-        lambda binding, cid, request_id, fingerprint, revision, messages, finish: Receipt(
-            fingerprint, revision + 1, messages[-1], finish
+        lambda binding,
+        cid,
+        request_id,
+        fingerprint,
+        revision,
+        messages,
+        finish,
+        *,
+        card_sha256: Receipt(
+            fingerprint, revision + 1, messages[-1], finish, card_sha256=card_sha256
         )
     )
     http = TestClient(
