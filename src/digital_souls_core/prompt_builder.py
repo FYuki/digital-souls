@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from types import MappingProxyType
-from typing import Literal, Protocol
+from typing import Literal, Protocol, runtime_checkable
 
 from .contracts import Message, Tool
 
@@ -252,6 +252,13 @@ class TokenCounter(Protocol):
     ) -> int | Awaitable[int]: ...
 
 
+@runtime_checkable
+class RegionTokenCounter(TokenCounter, Protocol):
+    """Optional tokenizer capability for counting dialogue in a valid context."""
+
+    def region_messages(self, messages: Sequence[Message]) -> tuple[Message, ...]: ...
+
+
 class ByteTokenCounter:
     """UTF-8 bytes + 16 per message + 16, without contacting a tokenizer.
 
@@ -311,7 +318,7 @@ class PromptBudgetExceeded(Exception):
 
 @dataclass(frozen=True)
 class PromptUsage:
-    """Region costs include isolated template overhead, so need not sum to total.
+    """Region costs may use isolated overhead or context deltas, and need not sum to total.
 
     The full converted prompt determines total. Memory includes its guard and
     data frame; tool definitions are protected and charged to current_input.
@@ -366,11 +373,29 @@ class PromptBuilder:
         messages = self.converter(data)
         if region and not messages and not data.tools:
             return 0
+        if (
+            region
+            and isinstance(self.counter, RegionTokenCounter)
+            and (data.tools or any(message.role != "system" for message in messages))
+        ):
+            # Count dialogue inside the adapter's valid template context, then
+            # remove only that context's cost. Never alter the full prompt count.
+            wrapped = await self._count_messages(
+                self.counter.region_messages(messages), data.tools, cache
+            )
+            baseline = await self._count_messages(self.counter.region_messages(()), (), cache)
+            # Template merging/token boundaries can make a delta non-monotonic.
+            return max(0, wrapped - baseline)
+        return await self._count_messages(messages, data.tools, cache)
+
+    async def _count_messages(
+        self, messages: Sequence[Message], tools: Sequence[Tool], cache: dict[bytes, int]
+    ) -> int:
         key = sha256(
             json.dumps(
                 {
                     "messages": [m.model_dump(exclude_none=True) for m in messages],
-                    "tools": [t.model_dump(exclude_none=True) for t in data.tools],
+                    "tools": [t.model_dump(exclude_none=True) for t in tools],
                 },
                 ensure_ascii=False,
                 sort_keys=True,
@@ -379,7 +404,7 @@ class PromptBuilder:
         ).digest()
         if key in cache:
             return cache[key]
-        counted = self.counter(messages, tools=data.tools)
+        counted = self.counter(messages, tools=tools)
         value = await counted if inspect.isawaitable(counted) else counted
         if type(value) is not int or value < 0:
             raise ValueError("Invalid prompt token count")
