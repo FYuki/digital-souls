@@ -12,6 +12,7 @@ from digital_souls_core.conversations import Conversations
 from digital_souls_core.history import Binding, SourceReference
 from digital_souls_core.privacy import PrivacyPolicy
 from digital_souls_core.privacy_classifier import LocalClassifier
+from digital_souls_core.prompt_builder import CharacterCard
 
 from . import test_postgres_stores
 from .conversation_support import turn
@@ -38,7 +39,9 @@ def policy_setup(
     char = character("synthetic")
     if local:
         char = type(char)(
-            char.config.model_copy(update={"profile": local_profile()}), char.system_prompt
+            char.config.model_copy(update={"profile": local_profile()}),
+            char.card,
+            card_sha256=char.card_sha256,
         )
     inference = Inference((char,), provider, privacy=policy)
     return (
@@ -203,15 +206,31 @@ async def test_stream_secret_split_never_saved(stores: Stores) -> None:
 
 @pytest.mark.parametrize("source", ["system", "lore", "context"])
 async def test_actual_payload_injection_blocked(stores: Stores, source: str) -> None:
-    from digital_souls_core.character import Character, Lore
+    from digital_souls_core.character import Character
+    from digital_souls_core.character_book import BookEntry, CharacterBook
 
     service, provider, classifier, _ = policy_setup(stores, local=False)
     old = service.inference.characters["synthetic"]
     marker = "password: SYNTHETIC_ONLY"
     char = Character(
         old.config,
-        marker if source == "system" else old.system_prompt,
-        (Lore(("Synthetic",), (), False, marker),) if source == "lore" else (),
+        CharacterCard(system_prompt=marker) if source == "system" else old.card,
+        character_book=CharacterBook(
+            extensions={},
+            entries=(
+                BookEntry(
+                    keys=("Synthetic",),
+                    content=marker,
+                    extensions={},
+                    enabled=True,
+                    insertion_order=0,
+                    use_regex=False,
+                ),
+            ),
+        )
+        if source == "lore"
+        else None,
+        card_sha256=old.card_sha256,
     )
 
     class Context:

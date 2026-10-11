@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。§4 のうち、PrivateAgent が drain の起動・スケジュール・再試行・待機と再開を担う記述。PrivateAgent は使わず、timer が Core の drain API を呼ぶ。重複の防止と再試行は Core の job の台帳が持ち、中断した job は途中から再開せず、冪等性を保って次回に最初からやり直す。Core が永続予約・drain API・正本の検証を持つことと、キャラクターの判断に Core の LLM を使うことは維持）。
+
 置換注記（2026-10-08）: [ADR 0022](0022-memory-retrieval-from-records.md)と[逐語記憶撤去の実施](../evidence/2026-10-08-verbatim-memory-removal.md)により、背景および後続境界で言及したMemoryService.extractと逐語の有限batch抽出は撤去済みです。構造化抽出・保存判定・形成jobは本ADRの後続実装として未実装のままです。
 
 日付: 2026-10-06

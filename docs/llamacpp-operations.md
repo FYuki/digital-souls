@@ -57,7 +57,14 @@ CORE_CHARACTER_CONFIG=examples/characters.llamacpp.local.json uv run --no-sync u
 
 Coreの`/v1/character/completions`にはcharacter_id=miori、互換入口にはmodel=mioriを指定する。
 実provider modelはopenai/gemma4-12b、返却modelはサーバーのgemma4-12bで、character aliasとは別物。
-profile/api_baseの変更はCoreを再起動して反映する。
+profile/api_base/token_counterの変更はCoreを再起動して反映する。
+サンプルは `token_counter: "llamacpp"` を明示する。固定revisionの `/apply-template` と `/tokenize` を
+同じloopbackサーバーで使うため、これらのendpointが必要となる。tool定義とtool_choiceもtemplateへ渡す。
+Chat Completionsと同じサーバー側のtemplate・Jinja設定を使い、Coreからtemplateを上書きしない。
+endpointの失敗時は502、timeoutは504の `token_count_failed` とし、推定へ切り替えない。
+`estimate` を選ぶ場合は運用者が設定を明示して再起動する。
+今回の合成試験は実モデルのtoken数やGemma templateの受入を保証しない。
+実サーバーでのIT2は[計数の証跡](evidence/2026-10-11-llamacpp-token-count.md)のNOT RUN範囲に残す。
 
 ## 常駐の判断
 

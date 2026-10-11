@@ -29,6 +29,21 @@ ADRの決定を機能単位に整理します。
 
 ## 2. 機能と実装状況
 
+### プロンプトの組み立て
+
+| 機能 | 状態 | 根拠 |
+| --- | --- | --- |
+| 全入口共通のCard・Lore・記憶・呼び出し側指示・履歴・post_history・今回の入力の組み立て、領域token予算、往復/item単位の削減と本文を含まない400拒否 | 一部（profile別token counterによる組み立て・予算・送信前認可は実装済み。Runtime Contextの状態生成は未実装、推論先token実測と実モデルの実環境受入は未実施） | [ADR 0026](docs/adr/0026-prompt-assembly.md)、[推論API](docs/api.md#文脈プライバシー) |
+| embedded Character Book の厳密validation・未知field保持、privacy処理済み履歴のliteral scan、constant/selective・配置・Book/Lore/全体token予算のEntry単位削減、本文を含まない診断 | 実装済み（合成UT・両HTTP APIのIT1・同梱Mioriの固定回帰。regex・再帰scan・Decorator実行・standalone Lorebook・実モデル受入は対象外/未実施） | [ADR 0028](docs/adr/0028-character-book.md)、[推論API](docs/api.md#文脈プライバシー)、[証跡](docs/evidence/2026-10-11-character-book.md) |
+| 応答に使ったCardファイルの生バイト列SHA-256の起動時固定、全completionのheader、会話turnの保存・復元metadata | 実装済み（streamを含む合成試験。旧turnはNULL、再送fingerprint維持。人格評価ハーネスのfixture検証済み、実モデル評価は未実施） | [ADR 0029 §6](docs/adr/0029-persona-consistency-evaluation.md#6-card-のハッシュ)、[履歴API](docs/history-api.md) |
+| 入口をまたぐ人格一貫性の決定論的採点、3分類（自己紹介・好み・世界観）・各回90%以上、必須ゲート・Card hash照合、不一致warn/gate、質的Egogram報告 | 一部（fake UT/IT1・CLI検証済み。人格を外れる表現・Card hash不一致/欠落・実行不完了を必須ゲートとし、標準fixtureはPASS。Mioriの7ケースは固定済み。上書き耐性・system拒否の構造検査はインジェクション対策の評価へ分離。活動入口・実judge・実モデル評価はNOT RUN） | [ADR 0029](docs/adr/0029-persona-consistency-evaluation.md)、[評価手順](evals/persona/README.md) |
+
+人格評価の今後の課題：運用開始後に、望ましい QA の組（質問と望ましい応答の例）を追加し、
+一致傾向の評価を加えます。含んだら不合格の表現は最低限に保ちます。この追加評価は未実装です。
+
+送信payloadの履歴削減は、保存済み会話の削除ではありません。固定人格・今回の入力・
+直前の完了した1往復を保護し、tool callと結果の組を分けません。記憶の撤回guardは削減後も保持します。
+
 ### 2.1 会話履歴と記憶の操作
 
 | 機能 | 状態 | 根拠 |
@@ -188,7 +203,7 @@ Coreの実装Issueへ移して管理します。
 
 | 論点 | 決定 | 反映先 |
 | --- | --- | --- |
-| 形成jobを実行する主体 | PrivateAgentが実行する。Coreは永続予約・有限のdrain API・正本の検証を提供し、常駐workerを持たない。キャラクターによる判断が必要な処理はCoreのLLMをAPIとして呼ぶ | ADR 0017、ADR 0020 |
+| 形成jobを実行する主体 | PrivateAgentが実行する。Coreは永続予約・有限のdrain API・正本の検証を提供し、常駐workerを持たない。キャラクターによる判断が必要な処理はCoreのLLMをAPIとして呼ぶ。（2026-10-11 のユーザー決定で置き換え：PrivateAgentは使わず、timerがCoreのdrain APIを呼ぶ。重複の防止と再試行はCoreのjobの台帳が持ち、中断したjobは次回に最初からやり直す） | ADR 0017、ADR 0020、[ADR 0027](docs/adr/0027-tool-use-and-activity-runtime.md) |
 | 自然文による保存拒否 | 語を検出し、スレッドをプライベートモードへ切り替えるかをユーザーに確認する。切替は既存の明示APIで行う | ADR 0019 |
 | 会話外の活動でCoreが所有する契約 | 機微情報の流出防止ゲート（送信直前の再判定）と、インジェクション対策 | ADR 0020 |
 | 既存の逐語記憶 | 新形式へ移行せず削除する。dogfoodはCoreへの切替中で運用前 | ADR 0016 |
@@ -217,4 +232,4 @@ Coreの実装Issueへ移して管理します。
 7. 訂正・時間変化・矛盾・管理操作・依存結果の失効
 8. 一般化とReflection、Life State、人格・関係の更新
 9. consolidation、別スレッドのFact統合、永続的な派生index
-10. PrivateAgentから使う機微情報の流出防止ゲートとインジェクション対策の境界
+10. 会話外の活動のAgentがCoreのMCP経由で使う、機微情報の流出防止ゲートとインジェクション対策の境界（ADR 0027）

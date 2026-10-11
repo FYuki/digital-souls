@@ -223,12 +223,15 @@ def create_app(
         return {
             "character_id": config.character_id,
             "config_version": config.config_version,
+            "card_sha256": character.card_sha256,
             "model_alias": config.alias,
             "inference_profile": config.profile.profile_id,
             "provider_model": config.profile.model,
             "allowed_parameters": sorted(config.profile.allowed_parameters),
             "external_send_allowed": config.profile.external_send_allowed,
-            "context_budget_bytes": config.context_budget_bytes,
+            "prompt_budget": config.prompt_budget.model_dump(),
+            "memory_floor": config.memory_floor,
+            "history_floor": config.history_floor,
             "model_context_window_tokens": None,
             "capability_verification": "operator_configured_not_live_verified",
         }

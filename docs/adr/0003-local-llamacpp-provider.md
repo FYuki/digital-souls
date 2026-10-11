@@ -3,6 +3,8 @@
 - Status: Proposed
 - Date: 2026-10-03
 
+一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。tools の実行ループを追加しない記述。llama.cpp の接続契約は維持）。
+
 一部を[Issue #147](https://github.com/FYuki/digital-souls-core/issues/147)のcontext拡張で置き換えます（2026-10-10 ユーザー決定。context 4096を32768へ変更し、KV型はK/Vともf16を維持。[実測証跡](../evidence/2026-10-10-llamacpp-context.md)）。
 
 ## 背景
