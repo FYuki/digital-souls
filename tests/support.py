@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from digital_souls_core.character import Character, Profile, SupportedParameter, load_characters
+from digital_souls_core.prompt_builder import CharacterCard
 
 ROOT = Path(__file__).resolve().parents[1]
 PARAMETERS: frozenset[SupportedParameter] = frozenset(
@@ -40,7 +41,7 @@ def character(name: str = "miori", *, native: bool = False) -> Character:
     )
     return Character(
         config,
-        sample.system_prompt if name == "miori" else "Synthetic second persona",
+        sample.card if name == "miori" else CharacterCard(system_prompt="Synthetic second persona"),
         sample.lore if name == "miori" else (),
     )
 

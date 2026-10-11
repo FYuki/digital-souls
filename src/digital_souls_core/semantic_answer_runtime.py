@@ -84,16 +84,16 @@ async def complete_answer(
         )
         if runtime.retrieval.failed or len(runtime.retrieval.results) != 1:
             raise ValueError("Retrieval failed")
-        context_empty = not runtime.retrieval.results[0]
+        selected = runtime.retrieval.results[0]
+        retained = selected[: len(selected) - prepared.usage.dropped["memory"]]
+        context_empty = not retained
         runtime.mutate("after_search")
         valid = prepared.valid()
         observation = {
             "id": runtime.case.id,
             "answer": None,
             "dispatch_valid": valid,
-            "dispatch_memory_ids": [c.identifier for c in runtime.retrieval.results[0]]
-            if valid
-            else [],
+            "dispatch_memory_ids": [c.identifier for c in retained] if valid else [],
             "dispatched": False,
             "discarded": False,
             "context_empty": context_empty,

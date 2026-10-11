@@ -4,15 +4,32 @@
     "config_version": "miori-llamacpp-1",
     "alias": "miori",
     "card_path": "../characters/miori/miori.card.json",
-    "context_budget_bytes": 16384,
     "profile": {
       "profile_id": "llamacpp-gemma4-12b-local",
       "transport": "llamacpp_chat",
       "model": "openai/gemma4-12b",
       "api_base": "http://127.0.0.1:18081/v1",
-      "allowed_parameters": ["tools", "tool_choice", "stream", "temperature", "max_completion_tokens"],
+      "allowed_parameters": [
+        "tools",
+        "tool_choice",
+        "stream",
+        "temperature",
+        "max_completion_tokens"
+      ],
       "external_send_allowed": false,
       "timeout_seconds": 60
-    }
+    },
+    "prompt_budget": {
+      "total": 28672,
+      "character": 16384,
+      "lore": 8192,
+      "memory": 16384,
+      "caller_instructions": 8192,
+      "history": 24576,
+      "current_input": 16384,
+      "post_history": 4096
+    },
+    "memory_floor": 3,
+    "history_floor": 3
   }
 ]

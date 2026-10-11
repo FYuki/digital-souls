@@ -8,6 +8,7 @@ from digital_souls_core.api import create_app
 from digital_souls_core.application import Inference
 from digital_souls_core.contracts import Message
 from digital_souls_core.history import Binding, HistoryStore, Receipt, Snapshot
+from digital_souls_core.prompt_builder import CALLER_FRAME
 
 from .content_parts_support import INVALID_CONTENT, parts
 from .conversation_support import SyntheticPolicy
@@ -53,7 +54,7 @@ def test_openclaw_tool_roundtrip_normalizes_provider_input(
     assert response.status_code == 200
     sent = provider.calls[0][1]
     assert [m.get("content") for m in sent["messages"][1:]] == [
-        "Synthetic system",
+        CALLER_FRAME + "Synthetic system",
         "Synthetic user",
         None,
         "Synthetic result",
