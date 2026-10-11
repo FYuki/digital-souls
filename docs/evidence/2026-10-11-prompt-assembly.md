@@ -150,3 +150,10 @@ PASS（62ケース×3回、cacheなし、実モデル品質の証拠ではない
 実LLM・GPU・外部通信、llama.cpp/Gemma 4の実chat templateによるIT2、tokenize実測、人格の実モデル評価・STはNOT RUN。
 この版はByteTokenCounter固定。Runtime Contextの状態生成、Book解釈/選択の拡張は今回の実装対象外。
 未確認の物理context上限を確認済みとしていない。push・PR・mergeは実行していない。
+
+## 監督側の再実行（2026-10-11）
+
+`f43f403c15ab4da2b7c8865a7b5cbdcc83e443e7` で、差分を読んだうえで同じ固定ツール・`TMPDIR=/dev/shm` により再実行した。
+`uv sync --locked`、`uv lock --check`、ruff check / format --check、mypy（120 files）、UT（812 passed）、IT1（739 passed）、
+`uv build --no-build-isolation`、`bash tools/test-postgres.sh`（432 passed）、`npm ci`（offline）、Node 必須試験（59 tests）、
+`node tools/check-docs.mjs`、`git diff --check` はすべて PASS。SKIP は0件。合成回答評価の再実行は NOT RUN。
