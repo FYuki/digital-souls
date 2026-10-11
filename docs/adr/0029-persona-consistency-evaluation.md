@@ -1,8 +1,10 @@
 # ADR 0029: 入口をまたぐ人格の一貫性の評価
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-11
+
+Accepted日: 2026-10-11（ユーザーの承認「ADR 0026・0027・0029を承認します」も同日。承認対象は PR #159 の head `0e335c7` の本文）
 
 関連: [Epic #150](https://github.com/FYuki/digital-souls-core/issues/150)、[Issue #154](https://github.com/FYuki/digital-souls-core/issues/154)、
 [照合一覧](../evidence/2026-10-11-poc-adr-alignment.md)の P4・P4'
@@ -42,13 +44,13 @@ PoC では、評価の指標と合否基準は未決でした。
 
 ### 1. 評価する入口
 
-同じケースを、次の入口から本番と同じ組み立て（ADR 0026、Proposed）で投げます。
+同じケースを、次の入口から本番と同じ組み立て（[ADR 0026](0026-prompt-assembly.md)）で投げます。
 
 | 入口 | 状態 |
 | --- | --- |
 | stateless の Chat API | 対象 |
 | 会話履歴 API | 対象 |
-| 会話外の活動の入口（ADR 0027、Proposed） | 入口の実装後に追加する。ハーネスには入口を足せる枠だけを用意する |
+| 会話外の活動の入口（[ADR 0027](0027-tool-use-and-activity-runtime.md)） | 入口の実装後に追加する。ハーネスには入口を足せる枠だけを用意する |
 
 評価は HTTP を通さず、本番と同じ共通 runtime（[ADR 0025](0025-shared-runtime-interfaces.md)）を直接呼んでかまいません。
 ただし、入口ごとの入力の分け方（呼び出し側の system の扱い等）は本番と同じ経路を通します。
