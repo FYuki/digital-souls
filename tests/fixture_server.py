@@ -47,7 +47,7 @@ def create_token_fixture_app() -> FastAPI:
     """Synthetic chat template/tokenizer HTTP fixture; no model is loaded."""
     import json
 
-    from fastapi import Request
+    from fastapi import HTTPException, Request
 
     app = FastAPI()
     app.state.templates = []
@@ -57,6 +57,13 @@ def create_token_fixture_app() -> FastAPI:
     async def apply_template(request: Request) -> dict[str, str]:
         body = await request.json()
         app.state.templates.append(body)
+        messages = body["messages"]
+        # Gemma 4 rejects dialogue without a user, but accepts system-only input.
+        if not messages or (
+            any(message["role"] != "system" for message in messages)
+            and not any(message["role"] == "user" for message in messages)
+        ):
+            raise HTTPException(500, "Unsupported synthetic dialogue")
         return {"prompt": json.dumps(body, ensure_ascii=False)}
 
     @app.post("/tokenize")
