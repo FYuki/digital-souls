@@ -179,3 +179,5 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
 
 [今回の証跡](../../docs/evidence/2026-10-11-persona-consistency-harness.md) にコマンドと結果を記録します。
 [実モード追加の合成検証](../../docs/evidence/2026-10-11-persona-real-mode.md) は別の証跡として記録します。
+
+[インジェクション耐性の独立したハーネス](../injection/README.md) で system・user・記憶の攻撃と履歴 system 拒否を評価します。
