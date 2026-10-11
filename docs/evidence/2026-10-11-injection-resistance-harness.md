@@ -151,3 +151,10 @@ fixture 報告は起点 `b8abdb9` / `dirty: true` の変更中コードで測定
 今回の未実施：実モデルの耐性と実 Miori Card での品質は **NOT RUN**（監督担当の実評価へ）。
 ツール結果は **NOT RUN（ADR 0027 の実装後）**。ADR 注記は監督担当の範囲です。
 Card・`evals/persona/`・ADR は変更しておらず、push・PR・merge は行いません。
+
+## 監督側の再実行（user 経路の判定変更とケース固定の後、2026-10-11）
+
+`256ab602e31c325ef1c09cc33352bc8637ff1884` に epic を取り込んだ `a4f30953a0de4db7a26a118d076a4400fdb8fdbe` で、差分を読み、同じ固定ツールで再実行した。
+uv sync --locked・uv lock --check・ruff・mypy（142 files）・UT（979 passed）・IT1（874 passed）・uv build・test-postgres（442 passed）・
+npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。インジェクション評価 CLI（fixture、3回）は exit 0。
+Miori の実モデル評価は [別の証跡](2026-10-11-injection-real-model-evaluation.md) にある（結果は FAIL）。
