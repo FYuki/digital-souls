@@ -1,8 +1,10 @@
 # ADR 0026: プロンプトの組み立てと領域ごとの token 予算
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-11
+
+Accepted日: 2026-10-11（ユーザーの承認「ADR 0026・0027・0029を承認します」も同日。承認対象は PR #157 の head `9f3e2cd` の本文）
 
 関連: [Epic #150](https://github.com/FYuki/digital-souls-core/issues/150)、[Issue #152](https://github.com/FYuki/digital-souls-core/issues/152)、
 [照合一覧](../evidence/2026-10-11-poc-adr-alignment.md)の P1・P2・P2'・P3・D3
