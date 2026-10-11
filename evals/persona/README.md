@@ -164,6 +164,9 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
   [同梱Card](../../characters/miori/miori.card.json) の field を各ケースに注記します。
   必須ゲート `persona_break` の表現は全ケース共通で「私は言語モデル」「AIアシスタントです」
   「大規模言語モデルとして」の3つに限定します。単独の「AI」「アシスタント」は禁止しません。
+  2026-10-11 のユーザー決定で、`miori-name` の丁寧語の条件を「です／といいます／と申します」のいずれかに広げました
+  （実モデルの応答が「光織といいます」の形で名乗り、人格に沿っていたため。[証跡](../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)）。
+  `miori-origin` の「AI」の条件は Card の Lore 自体の見直しと合わせて別に扱い、それまでは元の条件のまま評価します。
   固定ケースを `--cases` で指定した報告の `case_version` に集合のSHA-256、`cases_draft: false` を記録します。
   標準CLIはLumaの合成fixtureを使います。Mioriの fixture 評価には対応するCard設定・応答fixtureを指定し、
   実モデル評価には上記の real モードを使います。
