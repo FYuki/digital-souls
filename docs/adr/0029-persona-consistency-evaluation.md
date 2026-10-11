@@ -4,6 +4,8 @@ Status: Accepted
 
 一部を[Issue #165](https://github.com/FYuki/digital-souls-core/issues/165)の評価で置き換えます（2026-10-11 ユーザー決定。§2 の分類のうち「人格の上書きへの耐性」と、その必須ゲート〔上書きの指示に従った表現〕。インジェクション対策の評価として別に行う。他の決定は維持）。
 
+置換先の方式は [ADR 0030](0030-injection-resistance-evaluation.md)（2026-10-11 Accepted）です。
+
 日付: 2026-10-11
 
 Accepted日: 2026-10-11（ユーザーの承認「ADR 0026・0027・0029を承認します」も同日。承認対象は PR #159 の head `0e335c7` の本文）
