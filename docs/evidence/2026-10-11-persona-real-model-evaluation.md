@@ -76,6 +76,51 @@ bash tools/with-test-postgres.sh uv run --no-sync python tools/evaluate-persona-
   評価の結果に合わせて期待値を変えていない。期待値を見直すかはユーザーが判断する。
 - それ以外の不合格（`miori-tone` の Chat 1回、`miori-twilight` の会話履歴 1回）は回ごとのばらつき。
 
+## 再評価（miori-name の見直し後、2026-10-11）
+
+2026-10-11 のユーザー決定（原文「名前は広げ、由来はLoreを直します。AIであることを入れた認識でいなかったため、別issueで治します。」）により、
+`miori-name` の2つ目のグループを「です／といいます／と申します」に広げて新しい版として固定した。見直しの理由は、上の分析のとおり
+実応答が「光織といいます」の形で名乗り、人格に沿っていたこと。`miori-origin` は Card の Lore 自体が作者の意図と違っていた
+（「AI」の規定は意図外）ため、別の Issue（#171）で Card・ケース・回帰を直す。それまでは元の条件のまま評価し、FAIL として記録する。
+
+- 実行 commit: `5887b24a0127dd63dd68f66ef8079ccfd001f8da`（dirty=false）、ケース版 hash `457fef7d48be3e4576b97f3eca3959d491b669087c8ed8c017da6ddf9ab133db`。他の条件は上と同じ（cache なし3回、59秒）。
+- 結果：**FAIL**。必須ゲートはすべて0件（`persona_break` 0、Card hash の不一致 0・欠落 0、実行不完了 0）。
+
+| 入口 | 分類 | 回 | 合格 | 判定（90% 以上） |
+| --- | --- | --- | --- | --- |
+| chat | self_intro | 1 | 2/2 | PASS |
+| chat | preferences | 1 | 2/2 | PASS |
+| chat | world_lore | 1 | 2/3 | FAIL |
+| chat | self_intro | 2 | 2/2 | PASS |
+| chat | preferences | 2 | 1/2 | FAIL |
+| chat | world_lore | 2 | 2/3 | FAIL |
+| chat | self_intro | 3 | 2/2 | PASS |
+| chat | preferences | 3 | 2/2 | PASS |
+| chat | world_lore | 3 | 2/3 | FAIL |
+| history | self_intro | 1 | 2/2 | PASS |
+| history | preferences | 1 | 2/2 | PASS |
+| history | world_lore | 1 | 2/3 | FAIL |
+| history | self_intro | 2 | 2/2 | PASS |
+| history | preferences | 2 | 2/2 | PASS |
+| history | world_lore | 2 | 2/3 | FAIL |
+| history | self_intro | 3 | 1/2 | FAIL |
+| history | preferences | 3 | 2/2 | PASS |
+| history | world_lore | 3 | 2/3 | FAIL |
+
+| 入口 | ケース | 欠けたグループ | 回数 |
+| --- | --- | --- | --- |
+| chat | `miori-origin` | [1] | 3/3 |
+| chat | `miori-twilight` | [0] | 1/3 |
+| history | `miori-origin` | [1] | 3/3 |
+| history | `miori-tone` | [0] | 1/3 |
+
+入口をまたぐ不一致（warn）: 2 件（miori-tone, miori-twilight）。
+
+- `miori-name` は両入口で3回とも合格した。
+- `miori-origin` は両入口で3回とも「AI」が欠けて不合格（#171 の完了まで FAIL のまま）。
+- 残りの不合格は回ごとのばらつき（`miori-twilight` の Chat 1回、`miori-tone` の会話履歴 1回）。分類ごとのケースが2件なので、
+  1件のばらつきでその回の分類が 50% になり不合格になる。ケースの件数を増やすかは、今後の課題（望ましい QA の組の追加）と合わせて扱う。
+
 ## NOT RUN
 
 - 会話外の活動の入口（未実装）、実 Egogram judge、ST。
