@@ -201,8 +201,15 @@ profile の `token_counter` は `estimate`（既定）または `llamacpp` を�
 profile の検証済みloopback `api_base` と同じサーバーの `/apply-template` へmessages・tools・tool_choiceを送り、
 返ったpromptを `/tokenize`（add_special/parse_special=true、with_pieces=false）へ送ってtoken ID配列の長さを使います。
 固定サーバーのChat Completionsと同じtemplate parserを使い、tool定義はtemplateに含めます。
-領域別の計数も同じtemplateを適用するので、領域の合計と全体は一致しません。
-計数はasyncで、同一build内の同一messages/toolsの成功結果だけをキャッシュします。
+全体のtoken数は、推論へ送る完成したmessages・toolsを変更せず正確に数えます。
+領域別では、会話またはtoolsを含む領域を空のuserメッセージで前後から包み、同じ空枠だけ
+（toolsなし）を数えた値との差を領域のtoken数にします。履歴がassistantから始まる場合も、
+assistantだけ・userを含まない会話を領域単独でtemplateへ送りません。
+空枠は計数専用で、推論や保存履歴には加えません。toolsの費用はcurrent_inputに含めます。
+空の領域は0、systemだけの領域とBookのtoken_budgetは従来どおりsystemだけで数えます。
+領域の上限はこのtemplateによる増分に対して判定し、推定への切替は行いません。
+templateの結合やtoken境界の影響で差が負になる場合は0にします。領域の合計と全体は一致しません。
+計数はasyncで、空枠の基準値も含め、同一build内の同一messages/toolsの成功結果だけをキャッシュします。
 接続失敗・不正な応答・redirectは502 `token_count_failed`、timeoutは504 `token_count_failed`です。
 推定へ切り替えず、推論と会話履歴のappendを行いません。cancelは伝播します。
 proxy環境変数を無視し、redirectを追跡せず、計数前にも実際の本文と権限を検査します。

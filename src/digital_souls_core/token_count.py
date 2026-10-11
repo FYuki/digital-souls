@@ -25,6 +25,15 @@ class LlamaCppTokenCounter:
         self.tool_choice = tool_choice
         self.before_send = before_send
 
+    @staticmethod
+    def region_messages(messages: Sequence[Message]) -> tuple[Message, ...]:
+        """Bracket regional dialogue with users for Gemma's chat template.
+
+        These empty boundaries are only tokenizer context, never inference input.
+        Their template cost is subtracted by PromptBuilder using the same counter.
+        """
+        return (Message(role="user", content=""), *messages, Message(role="user", content=""))
+
     async def __call__(self, messages: Sequence[Message], *, tools: Sequence[Tool] = ()) -> int:
         body: dict[str, Any] = {
             "messages": [message.model_dump(exclude_none=True) for message in messages]
