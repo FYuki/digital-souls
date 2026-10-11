@@ -219,3 +219,9 @@ CLIがFAIL / exit 1になることをUT/IT1で確認しました。空ケース�
 この修正依頼の未対応はありません。実モデル・実judge・活動入口・実環境IT2/ST・remote CIは **NOT RUN**。
 インジェクション対策の評価と運用開始後のQA追加は、この修正の対象外の後続課題です。
 push / PR / mergeは行っていません。
+
+## 監督側の再実行（修正後、2026-10-11）
+
+`0862a7b7f4a1b51d60e33ca2072151b824e71dd7` で差分を読み、同じ固定ツールで再実行した。uv sync --locked・uv lock --check・ruff・mypy（132 files）・
+UT（867 passed）・IT1（799 passed）・uv build・test-postgres（441 passed）・npm ci＋Node（59 tests）・check-docs・diff --check は PASS、SKIP 0。
+標準の評価 CLI（fixture、3回）は exit 0。実モデルの評価は NOT RUN（このあと別に実施）。
