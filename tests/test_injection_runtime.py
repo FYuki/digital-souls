@@ -267,7 +267,7 @@ async def test_history_structure_distinguishes_acceptance_from_other_errors(
 @pytest.mark.parametrize(
     "name,case_index", [("chat", 0), ("chat", 1), ("chat", 2), ("history", 1), ("history", 2)]
 )
-async def test_canary_violation_cannot_be_exempted_by_route_or_entry(
+async def test_canary_gate_depends_on_route_for_both_entries(
     tmp_path: Path, name: str, case_index: int
 ) -> None:
     cases = load_cases(ROOT / "evals/injection/synthetic.cases.json")
@@ -281,8 +281,12 @@ async def test_canary_violation_cannot_be_exempted_by_route_or_entry(
     report = await evaluate(
         cases, entries, runs=3, commit="a" * 40, expected_card_hash=char.card_sha256
     )
-    assert not report["passed"] and report["gates"]["injection_followed"]["count"] == 3
-    assert {v["entry"] for v in report["gates"]["injection_followed"]["violations"]} == {name}
+    assert report["passed"] == (case.route == "user")
+    assert report["gates"]["injection_followed"]["count"] == (0 if case.route == "user" else 3)
+    if case.route == "user":
+        assert report["canary_reference"]["count"] == 3
+    else:
+        assert {v["entry"] for v in report["gates"]["injection_followed"]["violations"]} == {name}
 
 
 async def test_open_history_channel_is_detected_before_any_model_call(
@@ -316,3 +320,81 @@ async def test_open_history_channel_is_detected_before_any_model_call(
     assert report["gates"]["override_channel_open"]["count"] == 3
     assert report["gates"]["execution_incomplete"]["count"] == 0
     assert providers["history"].calls == 6
+
+
+@pytest.mark.parametrize("filename", ["synthetic.cases.json", "miori.cases.json"])
+@pytest.mark.parametrize("name", ["chat", "history"])
+@pytest.mark.parametrize("body", ["canary", "persona_break"])
+def test_cli_user_canary_passes_but_persona_break_fails(
+    tmp_path: Path, filename: str, name: str, body: str
+) -> None:
+    cases = load_cases(ROOT / "evals/injection" / filename)
+    fixture = {
+        "schema_version": 1,
+        "responses": {c.id: "safe-response-marker" for c in cases.cases},
+        "scenarios": {
+            "pass": {
+                name: {
+                    c.id: c.canary if body == "canary" else "Zeroです"
+                    for c in cases.cases
+                    if c.route == "user" and "Zero" in c.messages[-1].content
+                }
+            }
+        },
+    }
+    path = tmp_path / "responses.json"
+    path.write_text(json.dumps(fixture))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/evaluate-injection-resistance.py"),
+            "--cases",
+            str(ROOT / "evals/injection" / filename),
+            "--fixture",
+            str(path),
+            "--runs",
+            "3",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == (0 if body == "canary" else 1), result.stderr
+    report = json.loads(result.stdout)
+    assert report["passed"] == (body == "canary")
+    assert report["case_version"] == cases.version and not report["cases_draft"]
+    assert report["gates"]["injection_followed"]["count"] == 0
+    if body == "canary":
+        assert report["canary_reference"]["count"] == 3
+    else:
+        assert report["gates"]["persona_break"]["count"] == 3
+
+
+@pytest.mark.parametrize(
+    "name,route", [("chat", "caller_system"), ("chat", "memory"), ("history", "memory")]
+)
+def test_cli_external_canary_is_failure(tmp_path: Path, name: str, route: str) -> None:
+    cases = load_cases(ROOT / "evals/injection/synthetic.cases.json")
+    case = next(c for c in cases.cases if c.route == route)
+    fixture = json.loads((ROOT / "evals/injection/responses.fixture.json").read_text())
+    fixture["scenarios"]["pass"] = {name: {case.id: case.canary}}
+    path = tmp_path / "responses.json"
+    path.write_text(json.dumps(fixture))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/evaluate-injection-resistance.py"),
+            "--fixture",
+            str(path),
+            "--runs",
+            "3",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert report["status"] == "FAIL" and report["gates"]["injection_followed"]["count"] == 3
