@@ -40,7 +40,7 @@
         "reason": "一般知識の確認を一律 NONE とする旧抽出器の期待値は Core の Semantic 範囲と対応が未確定。期待値を変更せず要確認。"
       }
     ],
-    "version": "7a0ca5a5c405212a5d90e2e72e810ec6a645142e072198f943956f63b625ea9b"
+    "version": "c0838d37b3a6c13cefa52d8a7b992e1a2645aeb4e22eccb9181d9f3acd3aac44"
   },
   "episodic_quality": {
     "file": "episodic_quality.jsonl",
@@ -57,6 +57,26 @@
       "selection-08",
       "selection-09",
       "selection-10",
+      "episode_boundary-01",
+      "episode_boundary-02",
+      "episode_boundary-03",
+      "episode_boundary-04",
+      "episode_boundary-05",
+      "episode_boundary-06",
+      "episode_boundary-07",
+      "episode_boundary-08",
+      "episode_boundary-09",
+      "episode_boundary-10",
+      "fact_operation-01",
+      "fact_operation-02",
+      "fact_operation-03",
+      "fact_operation-04",
+      "fact_operation-05",
+      "fact_operation-06",
+      "fact_operation-07",
+      "fact_operation-08",
+      "fact_operation-09",
+      "fact_operation-10",
       "what_where_why-01",
       "what_where_why-02",
       "what_where_why-03",
@@ -67,6 +87,11 @@
       "what_where_why-08",
       "what_where_why-09",
       "what_where_why-10",
+      "temporal-01",
+      "temporal-02",
+      "temporal-03",
+      "temporal-04",
+      "temporal-05",
       "temporal-06",
       "temporal-07",
       "temporal-08",
@@ -88,112 +113,39 @@
       "evidence-02",
       "evidence-03",
       "evidence-04",
-      "evidence-05"
+      "evidence-05",
+      "catalog-01",
+      "catalog-02",
+      "catalog-03",
+      "catalog-04",
+      "catalog-05",
+      "catalog-09",
+      "catalog-10",
+      "same_event-01",
+      "same_event-02",
+      "same_event-03",
+      "same_event-04",
+      "same_event-05",
+      "same_event-06",
+      "same_event-07",
+      "same_event-08",
+      "same_event-09",
+      "same_event-10",
+      "merge_proposal-01",
+      "merge_proposal-02",
+      "merge_proposal-03",
+      "merge_proposal-04",
+      "merge_proposal-05",
+      "merge_proposal-06",
+      "merge_proposal-07",
+      "merge_proposal-08",
+      "merge_proposal-09",
+      "merge_proposal-10"
     ],
     "deferred": [
       {
-        "id": "episode_boundary-01",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-02",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-03",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-04",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-05",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-06",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-07",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-08",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-09",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "episode_boundary-10",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-01",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-02",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-03",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-04",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-05",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-06",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-07",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-08",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-09",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "fact_operation-10",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "temporal-01",
-        "reason": "相対日時の発言基準時刻が元入力にない、または年不明の月。Core PartialDateTime に推測補完なしで写せない。"
-      },
-      {
-        "id": "temporal-02",
-        "reason": "相対日時の発言基準時刻が元入力にない、または年不明の月。Core PartialDateTime に推測補完なしで写せない。"
-      },
-      {
-        "id": "temporal-03",
-        "reason": "相対日時の発言基準時刻が元入力にない、または年不明の月。Core PartialDateTime に推測補完なしで写せない。"
-      },
-      {
-        "id": "temporal-04",
-        "reason": "相対日時の発言基準時刻が元入力にない、または年不明の月。Core PartialDateTime に推測補完なしで写せない。"
-      },
-      {
-        "id": "temporal-05",
-        "reason": "相対日時の発言基準時刻が元入力にない、または年不明の月。Core PartialDateTime に推測補完なしで写せない。"
-      },
-      {
         "id": "temporal-09",
-        "reason": "相対日時の発言基準時刻が元入力にない、または年不明の月。Core PartialDateTime に推測補完なしで写せない。"
+        "reason": "年不明の9月は元発言日時があっても年が確定しない。Core PartialDateTime は year 必須。推測補完せず保留。"
       },
       {
         "id": "context-01",
@@ -225,103 +177,35 @@
       },
       {
         "id": "evidence-06",
-        "reason": "primary/context_before の抽出所有範囲が必須。turn 列だけでは所有範囲を保持できず、引用検査だけへ緩めない。"
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
       },
       {
         "id": "evidence-07",
-        "reason": "primary/context_before の抽出所有範囲が必須。turn 列だけでは所有範囲を保持できず、引用検査だけへ緩めない。"
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
       },
       {
         "id": "evidence-08",
-        "reason": "primary/context_before の抽出所有範囲が必須。turn 列だけでは所有範囲を保持できず、引用検査だけへ緩めない。"
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
       },
       {
         "id": "evidence-09",
-        "reason": "primary/context_before の抽出所有範囲が必須。turn 列だけでは所有範囲を保持できず、引用検査だけへ緩めない。"
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
       },
       {
         "id": "evidence-10",
-        "reason": "primary/context_before の抽出所有範囲が必須。turn 列だけでは所有範囲を保持できず、引用検査だけへ緩めない。"
-      },
-      {
-        "id": "catalog-01",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "catalog-02",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "catalog-03",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "catalog-04",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "catalog-05",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
       },
       {
         "id": "catalog-06",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
+        "reason": "catalog 段の UPDATE/POSSIBLE の全候補列・確度は最終形成結果から同じ厳密さで観測できない。確定 target/更新だけへ緩めず保留。"
       },
       {
         "id": "catalog-07",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
+        "reason": "catalog 段の UPDATE/POSSIBLE の全候補列・確度は最終形成結果から同じ厳密さで観測できない。確定 target/更新だけへ緩めず保留。"
       },
       {
         "id": "catalog-08",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "catalog-09",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "catalog-10",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-01",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-02",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-03",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-04",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-05",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-06",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-07",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-08",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-09",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "same_event-10",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
+        "reason": "catalog 段の UPDATE/POSSIBLE の全候補列・確度は最終形成結果から同じ厳密さで観測できない。確定 target/更新だけへ緩めず保留。"
       },
       {
         "id": "privacy-semantic-01-ja",
@@ -562,49 +446,9 @@
       {
         "id": "privacy-semantic-30-en",
         "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
-      },
-      {
-        "id": "merge_proposal-01",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-02",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-03",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-04",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-05",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-06",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-07",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-08",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-09",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
-      },
-      {
-        "id": "merge_proposal-10",
-        "reason": "既存記録・catalog fixture と対象 ID/版/操作が必須。turn 列だけでは前提を保持できない。Core の照合/訂正評価への fixture 移行を保留。"
       }
     ],
-    "version": "7be0e6c1a8c98a9865fde18ce193d9caf3ddd5e491776d8622733e3941499282"
+    "version": "f8c6f25c79f4cb0b556587b029d7b8d68683900c8b6e679a85be6603a34d5c53"
   },
   "episodic_actor": {
     "file": "episodic_actor.jsonl",
@@ -713,7 +557,7 @@
       "user_first_person-10"
     ],
     "deferred": [],
-    "version": "10ba9cfdc9ef58dd128cbcae57a6623d6929d1b03a2badd4b109fb70cc9e0cb6"
+    "version": "ea0cb630dca53efd3b9680787140d155290336369504e3a39df3add9a0ccd14b"
   },
   "semantic_memory": {
     "file": "semantic_memory.jsonl",
@@ -750,6 +594,16 @@
       "confirmation-08",
       "confirmation-09",
       "confirmation-10",
+      "reaffirm-01",
+      "reaffirm-02",
+      "reaffirm-03",
+      "reaffirm-04",
+      "reaffirm-05",
+      "reaffirm-06",
+      "reaffirm-07",
+      "reaffirm-08",
+      "reaffirm-09",
+      "reaffirm-10",
       "grounding_exclusion-01",
       "grounding_exclusion-02",
       "grounding_exclusion-03",
@@ -764,253 +618,188 @@
       "safety-02",
       "safety-03",
       "safety-04",
-      "safety-05"
+      "safety-05",
+      "safety-06",
+      "safety-07",
+      "safety-08",
+      "safety-09",
+      "safety-10"
     ],
     "deferred": [
       {
-        "id": "reaffirm-01",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-02",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-03",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-04",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-05",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-06",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-07",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-08",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-09",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "reaffirm-10",
-        "reason": "既存 Semantic の再言及/REAFFIRMには既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
         "id": "change-01",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-02",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-03",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-04",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-05",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-06",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-07",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-08",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-09",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "change-10",
-        "reason": "ADR 0019 の時間変化には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
       },
       {
         "id": "correction-01",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-01",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-02",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-02",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-03",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-03",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-04",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-04",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-05",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-05",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-06",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-06",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-07",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-07",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-08",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-08",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-09",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-09",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "correction-10",
-        "reason": "ADR 0019 の Semantic 訂正には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
       },
       {
         "id": "fixed_conflict-10",
-        "reason": "ADR 0019 の固定属性矛盾には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
       },
       {
         "id": "self_report_priority-01",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-02",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-03",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-04",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-05",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-06",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-07",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-08",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-09",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       },
       {
         "id": "self_report_priority-10",
-        "reason": "EXPERIENCE_DERIVED との共存/自己申告優先には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "safety-06",
-        "reason": "別 Binding の既存記録の隔離には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "safety-07",
-        "reason": "別 Binding の既存記録の隔離には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "safety-08",
-        "reason": "別 Binding の既存記録の隔離には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "safety-09",
-        "reason": "別 Binding の既存記録の隔離には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "safety-10",
-        "reason": "別 Binding の既存記録の隔離には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
       }
     ],
-    "version": "41455cfbdfe33d4b628d917e437ce888a9dacbb302d02de7319ecf96f77bf3d9"
+    "version": "0499a32cdbe2c3b4c580e3909d551e091126b0a02723be42c539c70835d0a8ca"
   },
   "semantic_boundary": {
     "file": "semantic_boundary.jsonl",
     "source_path": "backend/evals/semantic_memory/boundary-cases.jsonl",
     "sha256": "d2546ace86fcdf6f86d4309dc393cfdc47b6bba5c0cdaddd49a2e0a80cdd1df7",
     "migrated": [
-      "boundary-03"
+      "boundary-01",
+      "boundary-02",
+      "boundary-03",
+      "boundary-04"
     ],
-    "deferred": [
-      {
-        "id": "boundary-01",
-        "reason": "既存の否定的好みと出来事の境界には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "boundary-02",
-        "reason": "既存の否定的好みと出来事の境界には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      },
-      {
-        "id": "boundary-04",
-        "reason": "既存の否定的好みと出来事の境界には既存知識 fixture・旧状態の検査が必須。turn だけへ縮小せず保留。"
-      }
-    ],
-    "version": "47d8a1083af4aaba3872ff7ff3c90615b2917623e1c9ef7fd5936f0ad7b818c6"
+    "deferred": [],
+    "version": "03c3924aa08dbfcadd8720bec959e0c993947b7009e8a9822ae092d0596a797c"
   }
 }

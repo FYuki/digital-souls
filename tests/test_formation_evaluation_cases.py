@@ -19,33 +19,33 @@ pytestmark = pytest.mark.ut
 DATA = Path(__file__).resolve().parents[1] / "evals/formation"
 COUNTS = {
     "memory_extraction": (30, 29),
-    "episodic_quality": (170, 42),
+    "episodic_quality": (170, 94),
     "episodic_actor": (100, 100),
-    "semantic_memory": (100, 45),
-    "semantic_boundary": (4, 1),
+    "semantic_memory": (100, 60),
+    "semantic_boundary": (4, 4),
 }
 
 
 PINNED = {
     "memory_extraction": (
         "36fea6dde28493aee6827d3224508a6f833b0d08583321d21490b4c5c5287d13",
-        "7a0ca5a5c405212a5d90e2e72e810ec6a645142e072198f943956f63b625ea9b",
+        "c0838d37b3a6c13cefa52d8a7b992e1a2645aeb4e22eccb9181d9f3acd3aac44",
     ),
     "episodic_quality": (
         "a7d37f67abd205ec558658c554204a73cd8a636a443485f3c632ad8da76cf1d2",
-        "7be0e6c1a8c98a9865fde18ce193d9caf3ddd5e491776d8622733e3941499282",
+        "f8c6f25c79f4cb0b556587b029d7b8d68683900c8b6e679a85be6603a34d5c53",
     ),
     "episodic_actor": (
         "130967b63c373080180f7e2c46fe3c972db6006c1b1795c3da3837dcdf105289",
-        "10ba9cfdc9ef58dd128cbcae57a6623d6929d1b03a2badd4b109fb70cc9e0cb6",
+        "ea0cb630dca53efd3b9680787140d155290336369504e3a39df3add9a0ccd14b",
     ),
     "semantic_memory": (
         "1603788df455b6598ab328468c9fe048692efce51c851b87ab0749efc6fdd676",
-        "41455cfbdfe33d4b628d917e437ce888a9dacbb302d02de7319ecf96f77bf3d9",
+        "0499a32cdbe2c3b4c580e3909d551e091126b0a02723be42c539c70835d0a8ca",
     ),
     "semantic_boundary": (
         "d2546ace86fcdf6f86d4309dc393cfdc47b6bba5c0cdaddd49a2e0a80cdd1df7",
-        "47d8a1083af4aaba3872ff7ff3c90615b2917623e1c9ef7fd5936f0ad7b818c6",
+        "03c3924aa08dbfcadd8720bec959e0c993947b7009e8a9822ae092d0596a797c",
     ),
 }
 
@@ -93,10 +93,18 @@ def test_fixed_counts_ids_bodies_and_original_gold(dataset: str) -> None:
                 if turn.get(role)
             ]
             expected = row["expected"]
-        assert [t.model_dump(exclude_none=True) for t in case.turns] == turns
+        assert [{"role": t.role, "text": t.text} for t in case.turns] == turns
         encoded = json.dumps(expected, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         assert gold[case.id].poc_gold_sha256 == hashlib.sha256(encoded.encode()).hexdigest()
-        assert set(case.model_dump()) == {"id", "turns"}
+        assert set(case.model_dump()) == {
+            "id",
+            "turns",
+            "binding",
+            "conversation_id",
+            "seed",
+            "clock_source",
+            "timezone",
+        }
 
 
 @pytest.mark.parametrize(
@@ -277,6 +285,23 @@ def test_translated_gold_preserves_every_source_operator(dataset: str) -> None:
             }
         elif dataset == "episodic_quality":
             truth = json.loads(row["vars"]["expected_json"])
+            if expected.category in {"catalog", "same_event", "merge_proposal"}:
+                assert expected.count is None and not expected.records
+                if "matches" in truth:
+                    assert expected.matches is not None
+                    assert [
+                        [m.target.record_id, m.target.version, m.operation, m.certainty]
+                        for m in expected.matches
+                    ] == truth["matches"]
+                else:
+                    assert [t.record_id for t in expected.merge_targets] == truth.get(
+                        "merge_targets", []
+                    )
+                    assert all(t.version == 1 for t in expected.merge_targets)
+                    assert expected.no_merges == truth.get("no_merges", False)
+                    assert expected.merge_count == (0 if truth.get("no_merges") else 1)
+                    assert expected.nonempty_fact == truth.get("nonempty_fact", False)
+                continue
             assert expected.count == truth.get("count", 1)
             assert expected.evidence_tokens == truth.get("evidence_tokens", [])
             assert expected.linked == truth.get("linked", False)
@@ -286,6 +311,20 @@ def test_translated_gold_preserves_every_source_operator(dataset: str) -> None:
                 fields = truth["fields"]
                 if "five_w.when" in fields:
                     assert time.start is None and time.end is None
+                elif fields.get("five_w.when.relative_unit"):
+                    assert time.timezone == "UTC" and time.start is not None
+                    unit = fields["five_w.when.relative_unit"]
+                    offset = fields["five_w.when.relative_offset"]
+                    assert (
+                        time.start.year,
+                        time.start.month,
+                        time.start.day,
+                        time.start.precision,
+                    ) == {
+                        "DAY": (2026, 9, 13 + offset, "day"),
+                        "MONTH": (2026, 9 + offset, None, "month"),
+                        "YEAR": (2026 + offset, None, None, "year"),
+                    }[unit]
                 else:
                     assert time.start is not None
                     for part in ("year", "month", "day"):
@@ -306,6 +345,19 @@ def test_translated_gold_preserves_every_source_operator(dataset: str) -> None:
                     for key, val in spec.items():
                         if key == "operation":
                             assert expected.operation == val
+                            continue
+                        if key == "target.id":
+                            assert expected.target is not None
+                            assert expected.target.record_id == val and expected.target.version == 1
+                            continue
+                        if key == "target":
+                            assert val is None and expected.target_null
+                            continue
+                        if key == "changes":
+                            assert expected.changes == val
+                            continue
+                        if key == "five_w":
+                            assert val is None and expected.content_absent
                             continue
                         core_path = (
                             key.replace("five_w.what.object", "five_w.object")
@@ -329,9 +381,214 @@ def test_translated_gold_preserves_every_source_operator(dataset: str) -> None:
             if expected.count:
                 assert expected.operation == truth["operation"]
                 assert expected.formation_type == "direct_extraction"
+                if expected.category == "reaffirm":
+                    assert expected.target is not None
+                    assert (
+                        expected.target.record_id == truth["target"]
+                        and expected.target.version == 1
+                    )
+                    assert expected.required_user_turn == 0
+                    continue
                 assert truth["self_report"] is True
                 assert expected.required_user_turn == truth.get("source_turn", 0) * 2
                 fields = {f.path: f.match for f in expected.records[0].fields}
                 assert fields["proposition.value"].values == [truth["value_contains"]]
                 assert fields["proposition.value"].mode == "contains_any"
                 assert fields["proposition.subject"].values == ["ユーザー"]
+
+
+def test_foreign_binding_seed_is_input_and_never_gold() -> None:
+    fixed = corpus("semantic_memory")
+    case = next(c for c in fixed.cases.cases if c.id == "safety-06")
+    assert case.seed[0].binding.character_id == "other-character"
+    assert case.binding.character_id == "miori"
+    assert case.seed[0].normalized_text == "別ユーザーの合成知識"
+    gold = next(g for g in fixed.expectations.expectations if g.id == case.id)
+    assert gold.forbidden_save and gold.count == 0
+
+
+@pytest.mark.parametrize("change", ["binding", "version", "state", "gold", "clock", "clock-source"])
+def test_seed_and_clock_fail_closed(change: str) -> None:
+    raw = corpus().model_dump()
+    case = next(c for c in raw["cases"]["cases"] if c["id"] == "fact_operation-01")
+    seed = case["seed"][0]
+    if change == "binding":
+        seed["binding"]["character_id"] = "other-character"
+    elif change == "version":
+        seed["version"] = 2
+    elif change == "state":
+        seed["state"] = "suspended"
+    elif change == "gold":
+        seed["expected_operation"] = "UPDATE"
+    elif change == "clock":
+        case["turns"][0]["stated_at"] = "2026-10-13T00:00:00+00:00"
+    else:
+        case["clock_source"] = "backend/evals/episodic_quality/provider.py:44"
+    with pytest.raises(ValidationError):
+        EvaluationCases.model_validate(raw)
+
+
+@pytest.mark.parametrize("dataset", COUNTS)
+def test_seed_projection_and_clock_preserve_only_provider_input(dataset: str) -> None:
+    rows = {
+        r["id"]: r
+        for r in map(json.loads, (DATA / "source" / f"{dataset}.jsonl").read_text().splitlines())
+    }
+    for case in corpus(dataset).cases.cases:
+        row = rows[case.id]
+        if dataset == "episodic_quality":
+            data = json.loads(row["vars"]["input_json"])
+            known = data.get("known", [])
+            assert len(case.seed) == len(known)
+            assert case.clock_source == "backend/evals/episodic_quality/provider.py:43"
+            assert case.timezone == "UTC"
+            assert all(t.stated_at == "2026-09-13T00:00:00+00:00" for t in case.turns)
+            for seed, original in zip(case.seed, known, strict=True):
+                assert seed.record_id == original["id"]
+                assert seed.kind == original["kind"].lower()
+                assert seed.version == original["content_version"]
+                assert seed.state == original["status"].lower()
+                assert seed.binding.character_id == original["character_id"]
+                assert seed.binding.scope.client == case.binding.scope.client == "formation-fixture"
+                assert seed.binding.scope.subject == case.binding.scope.subject == "fixture-user"
+                assert seed.conversation_id == original["conversation_id"] == case.conversation_id
+                assert seed.created_at == original["created_at"]
+                assert seed.updated_at == original["updated_at"]
+                assert seed.source_summary.model_dump() == original["source_summary"]
+                assert not seed.sources and original["sources"] == []
+                assert seed.normalized_text is None and seed.proposition is None
+                w, source = seed.five_w, original["five_w"]
+                assert w is not None
+                assert [p.model_dump() for p in w.who] == source["who"]
+                assert w.predicate == source["what"]["predicate"]
+                assert w.object == source["what"]["object"]
+                assert w.polarity == source["what"]["polarity"]
+                assert w.actuality == source["what"]["actuality"]
+                assert w.context == source["context"] and w.why == source["why"]
+                assert (w.where.model_dump() if w.where else None) == source["where"]
+                if source["when"] is None:
+                    assert w.when is None
+                else:
+                    assert w.when is not None and w.when.start is not None
+                    for part, value in source["when"]["parts"].items():
+                        assert getattr(w.when.start, part) == value
+                    assert w.when.end == source["when"]["end"]
+                    assert w.when.timezone == source["when"]["timezone"]
+                    assert w.when.reference_at == source["when"]["reference_at"]
+                    assert w.when.range_kind == source["when"]["range_kind"]
+        elif dataset in {"semantic_memory", "semantic_boundary"}:
+            assert case.clock_source == "backend/evals/semantic_memory/fixtures.py:24"
+            assert case.timezone == "Asia/Tokyo"
+            assert all(t.stated_at == "2026-09-15T00:00:00+00:00" for t in case.turns)
+            assert len(case.seed) == len(row["existing"])
+            for seed, original in zip(case.seed, row["existing"], strict=True):
+                assert seed.record_id == original["key"]
+                assert seed.kind == "semantic" and seed.version == 1 and seed.state == "active"
+                assert seed.binding.character_id == original.get("character_id", "miori")
+                assert seed.normalized_text == original["content"]
+                assert seed.formation_type == original["formation_type"].lower()
+                assert seed.proposition is not None
+                assert seed.proposition.model_dump() == {
+                    "subject": original["subject"],
+                    "attribute": original["predicate"],
+                    "value": original["value"],
+                    "mutability": original["mutability"],
+                    "self_report": original["self_report"],
+                }
+                assert len(seed.sources) == 1
+                assert seed.sources[0].role == "user"
+                assert seed.sources[0].text == original["content"]
+                assert (
+                    seed.sources[0].stated_at
+                    == seed.created_at
+                    == seed.updated_at
+                    == "2026-09-15T00:00:00+00:00"
+                )
+        else:
+            assert not case.seed and case.clock_source is None and case.timezone is None
+            assert all(t.stated_at is None for t in case.turns)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "duplicate",
+        "version-zero",
+        "version-bool",
+        "unknown-state",
+        "body-kind",
+        "missing-user",
+        "summary",
+        "nested-gold",
+        "scope-missing",
+    ],
+)
+def test_invalid_seed_state_is_rejected_without_inference(change: str) -> None:
+    raw = corpus("semantic_memory").model_dump()
+    case = next(c for c in raw["cases"]["cases"] if c["id"] == "safety-06")
+    seed = case["seed"][0]
+    if change == "duplicate":
+        case["seed"].append(seed)
+    elif change == "version-zero":
+        seed["version"] = 0
+    elif change == "version-bool":
+        seed["version"] = True
+    elif change == "unknown-state":
+        seed["state"] = "deleted"
+    elif change == "body-kind":
+        seed["kind"] = "fact"
+    elif change == "missing-user":
+        seed["sources"][0]["role"] = "assistant"
+    elif change == "summary":
+        seed["source_summary"]["count"] = 0
+    elif change == "nested-gold":
+        seed["proposition"]["expected_value"] = "gold"
+    else:
+        del seed["binding"]["scope"]["subject"]
+    with pytest.raises(ValidationError):
+        EvaluationCases.model_validate(raw)
+
+
+@pytest.mark.parametrize("part", ["subject", "client", "character_id"])
+def test_other_binding_components_can_be_seeded_without_becoming_gold_targets(part: str) -> None:
+    raw = corpus("semantic_memory").model_dump()
+    case = next(c for c in raw["cases"]["cases"] if c["id"] == "safety-06")
+    seed = case["seed"][0]
+    seed["binding"] = dict(case["binding"], scope=dict(case["binding"]["scope"]))
+    if part == "character_id":
+        seed["binding"][part] = "other-character"
+    else:
+        seed["binding"]["scope"][part] = "other-fixture"
+    fixed = EvaluationCases.model_validate(raw)
+    other = next(c for c in fixed.cases.cases if c.id == case["id"])
+    assert other.seed[0].binding != other.binding
+
+
+def test_seed_identity_is_scoped_even_when_foreign_id_collides() -> None:
+    raw = corpus().model_dump()
+    case = next(c for c in raw["cases"]["cases"] if c["id"] == "fact_operation-01")
+    foreign = dict(case["seed"][0], binding=dict(case["binding"], character_id="other-character"))
+    case["seed"].append(foreign)
+    assert EvaluationCases.model_validate(raw)
+    case["seed"].pop(0)
+    with pytest.raises(ValidationError):
+        EvaluationCases.model_validate(raw)
+
+
+@pytest.mark.parametrize("change", ["missing", "wrong-provider"])
+def test_clock_provenance_is_required_for_its_original_dataset(change: str) -> None:
+    raw = corpus().model_dump()
+    case = raw["cases"]["cases"][0]
+    case["clock_source"] = (
+        None if change == "missing" else "backend/evals/semantic_memory/fixtures.py:24"
+    )
+    if change == "missing":
+        case["timezone"] = None
+        for turn in case["turns"]:
+            turn["stated_at"] = None
+    else:
+        case["timezone"] = "Asia/Tokyo"
+        for turn in case["turns"]:
+            turn["stated_at"] = "2026-09-15T00:00:00+00:00"
+    with pytest.raises(ValidationError):
+        EvaluationCases.model_validate(raw)

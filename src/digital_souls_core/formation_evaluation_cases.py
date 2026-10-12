@@ -45,6 +45,12 @@ type Category = Literal[
     "grounding_exclusion",
     "safety",
     "event_existing_boundary",
+    "episode_boundary",
+    "fact_operation",
+    "catalog",
+    "same_event",
+    "merge_proposal",
+    "reaffirm",
 ]
 type Text = Annotated[str, Field(min_length=1, repr=False)]
 type Nonnegative = Annotated[int, Field(ge=0)]
@@ -66,22 +72,6 @@ class Turn(Strict):
                 raise ValueError("invalid source time") from None
             if value.utcoffset() is None:
                 raise ValueError("aware source time required")
-        return self
-
-
-class Case(Strict):
-    id: Identifier
-    turns: Annotated[list[Turn], Field(min_length=1)]
-
-
-class CaseSet(Versioned):
-    dataset: Dataset
-    cases: Annotated[list[Case], Field(min_length=1)]
-
-    @model_validator(mode="after")
-    def unique(self) -> "CaseSet":
-        if len({c.id for c in self.cases}) != len(self.cases):
-            raise ValueError("duplicate formation input id")
         return self
 
 
@@ -171,6 +161,184 @@ class TimeMatch(Strict):
         return self
 
 
+# Frozen provenance is evaluation input, never the wall clock of the Core run.
+type ClockSource = Literal[
+    "backend/evals/episodic_quality/provider.py:43",
+    "backend/evals/semantic_memory/fixtures.py:24",
+]
+CLOCKS: dict[ClockSource, tuple[str, str]] = {
+    "backend/evals/episodic_quality/provider.py:43": ("2026-09-13T00:00:00+00:00", "UTC"),
+    "backend/evals/semantic_memory/fixtures.py:24": ("2026-09-15T00:00:00+00:00", "Asia/Tokyo"),
+}
+
+
+class SeedScope(Strict):
+    model_config = {**Strict.model_config, "frozen": True}
+    subject: Identifier
+    client: Identifier
+    audience: Literal["local-private"]
+
+
+class SeedBinding(Strict):
+    model_config = {**Strict.model_config, "frozen": True}
+    scope: SeedScope
+    character_id: Identifier
+
+
+class SeedPerson(Strict):
+    name: Text
+    entity_id: Text
+    role: Literal["ACTOR", "LISTENER", "SPEAKER"]
+
+
+class SeedPlace(Strict):
+    name: Text
+    entity_id: Text
+
+
+class SeedTime(TimeMatch):
+    reference_at: str
+    range_kind: Literal["POINT"]
+
+
+class SeedFiveW(Strict):
+    predicate: Text
+    object: Text | None
+    who: list[SeedPerson]
+    where: SeedPlace | None
+    why: Text | None
+    when: SeedTime | None
+    # PoC qualifiers have no equivalent product enums; retain them as input metadata.
+    polarity: Literal["AFFIRMED", "NEGATED"]
+    actuality: Literal["OCCURRED", "PLANNED", "CONDITIONAL"]
+    context: Literal["REPORTED", "FICTIONAL", "HYPOTHETICAL"]
+
+
+class SeedSummary(Strict):
+    count: Nonnegative
+    first_stated_at: str | None
+    last_stated_at: str | None
+
+    @model_validator(mode="after")
+    def ordered(self) -> "SeedSummary":
+        if (self.count == 0) != (self.first_stated_at is None and self.last_stated_at is None):
+            raise ValueError("seed summary count differs from times")
+        if self.count:
+            if self.first_stated_at is None or self.last_stated_at is None:
+                raise ValueError("seed summary times missing")
+            first, last = (
+                datetime.fromisoformat(self.first_stated_at),
+                datetime.fromisoformat(self.last_stated_at),
+            )
+            if first.utcoffset() is None or last.utcoffset() is None or first > last:
+                raise ValueError("invalid seed source times")
+        return self
+
+
+class SeedProposition(Strict):
+    subject: Text
+    attribute: Text
+    value: Text
+    mutability: Literal["FIXED", "CHANGEABLE"]
+    self_report: bool
+
+
+class SeedRecord(Strict):
+    """Known-state projection, not a fabricated full canonical store snapshot.
+
+    Missing PoC citations remain missing. The later harness must not silently
+    invent them, nor use known content as a citation for the current assertion.
+    """
+
+    record_id: Identifier
+    kind: Literal["episode", "fact", "semantic"]
+    binding: SeedBinding
+    conversation_id: Identifier
+    version: Annotated[int, Field(ge=1)]
+    state: Literal["active", "suspended"]
+    created_at: str
+    updated_at: str
+    normalized_text: Text | None = None
+    five_w: SeedFiveW | None = None
+    proposition: SeedProposition | None = None
+    formation_type: Literal["direct_extraction"] | None = None
+    source_summary: SeedSummary
+    sources: list[Turn] = Field(repr=False)
+
+    @model_validator(mode="after")
+    def coherent(self) -> "SeedRecord":
+        first, last = (
+            datetime.fromisoformat(self.created_at),
+            datetime.fromisoformat(self.updated_at),
+        )
+        if first.utcoffset() is None or last.utcoffset() is None or first > last:
+            raise ValueError("invalid seed record times")
+        semantic = self.kind == "semantic"
+        if semantic != (self.proposition is not None) or semantic == (self.five_w is not None):
+            raise ValueError("seed kind differs from body")
+        if semantic != (self.formation_type is not None):
+            raise ValueError("seed formation type differs from kind")
+        if semantic and (
+            self.normalized_text is None
+            or not any(t.role == "user" and t.text == self.normalized_text for t in self.sources)
+        ):
+            raise ValueError("seed Semantic user source required")
+        return self
+
+
+class TargetRef(Strict):
+    record_id: Identifier
+    version: Annotated[int, Field(ge=1)]
+
+
+class MatchOutcome(Strict):
+    target: TargetRef
+    operation: Literal["REFERENCE", "UPDATE"]
+    certainty: Literal["CONFIRMED"]
+
+
+class Case(Strict):
+    id: Identifier
+    turns: Annotated[list[Turn], Field(min_length=1)]
+    binding: SeedBinding
+    conversation_id: Identifier
+    seed: list[SeedRecord] = Field(default_factory=list, repr=False)
+    clock_source: ClockSource | None = None
+    timezone: Literal["UTC", "Asia/Tokyo"] | None = None
+
+    @model_validator(mode="after")
+    def seed_consistent(self) -> "Case":
+        keys = [(r.binding, r.kind, r.record_id) for r in self.seed]
+        if len(keys) != len(set(keys)):
+            raise ValueError("duplicate seed identity")
+        if self.clock_source is None:
+            if self.timezone is not None or any(t.stated_at is not None for t in self.turns):
+                raise ValueError("source clock provenance required")
+        else:
+            time, timezone = CLOCKS[self.clock_source]
+            if self.timezone != timezone or any(t.stated_at != time for t in self.turns):
+                raise ValueError("source clock differs from pinned provider")
+        return self
+
+
+class CaseSet(Versioned):
+    dataset: Dataset
+    cases: Annotated[list[Case], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def unique(self) -> "CaseSet":
+        if len({c.id for c in self.cases}) != len(self.cases):
+            raise ValueError("duplicate formation input id")
+        source: ClockSource | None = None
+        if self.dataset == "episodic_quality":
+            source = "backend/evals/episodic_quality/provider.py:43"
+        elif self.dataset in {"semantic_memory", "semantic_boundary"}:
+            source = "backend/evals/semantic_memory/fixtures.py:24"
+        if any(c.clock_source != source for c in self.cases):
+            raise ValueError("clock provenance differs from dataset provider")
+        return self
+
+
 class Actor(Strict):
     """PoC identity correspondence for Who; product FiveW.who remains text."""
 
@@ -204,13 +372,6 @@ class RecordMatch(Strict):
                 raise ValueError("duplicate actor identity")
             if "five_w.who" in paths:
                 raise ValueError("conflicting Who constraints")
-        if (
-            not self.fields
-            and self.target_time is None
-            and self.episode_context is None
-            and self.who is None
-        ):
-            raise ValueError("empty record constraint")
         return self
 
 
@@ -243,12 +404,29 @@ class Target(Strict):
 class Expectation(Strict):
     id: Identifier
     category: Category
-    scope: Literal["type_and_topic", "fact_extraction", "fact_actor", "semantic_admission"]
+    scope: Literal[
+        "type_and_topic",
+        "fact_extraction",
+        "fact_actor",
+        "semantic_admission",
+        "episode_operation",
+        "fact_matching",
+        "fact_merge",
+    ]
     selector: Target | None = None
     record_kind: Literal["episode", "fact", "semantic"]
     count: Nonnegative | None = None
     count_scope: Literal["selected_kind", "all_records"] = "selected_kind"
-    operation: Literal["NEW"] | None = None
+    operation: Literal["NEW", "UPDATE", "REFERENCE", "CONTINUE", "REAFFIRM"] | None = None
+    target: TargetRef | None = None
+    target_null: bool = False
+    changes: list[Literal["what", "where", "when", "who", "why"]] = Field(default_factory=list)
+    content_absent: bool = False
+    matches: list[MatchOutcome] | None = None
+    merge_targets: list[TargetRef] = Field(default_factory=list)
+    merge_count: Nonnegative | None = None
+    no_merges: bool = False
+    nonempty_fact: bool = False
     formation_type: Literal["direct_extraction"] | None = None
     records: list[RecordMatch]
     citations: list[CitationRange]
@@ -261,17 +439,81 @@ class Expectation(Strict):
 
     @model_validator(mode="after")
     def consistent(self) -> "Expectation":
+        if self.target is not None and self.target_null:
+            raise ValueError("contradictory target")
+        if (
+            self.operation in {"UPDATE", "REFERENCE", "CONTINUE", "REAFFIRM"}
+            and self.target is None
+        ):
+            raise ValueError("existing operation requires target")
+        if self.operation == "NEW" and self.target is not None:
+            raise ValueError("new operation cannot target seed")
+        if self.changes and self.operation != "UPDATE":
+            raise ValueError("changes require update")
+        if len(self.changes) != len(set(self.changes)):
+            raise ValueError("duplicate changes")
+        if self.content_absent and self.operation != "REFERENCE":
+            raise ValueError("absent candidate content requires reference")
+        if (self.scope == "fact_matching") != (self.matches is not None):
+            raise ValueError("matching outcome scope mismatch")
+        if self.scope in {"fact_matching", "fact_merge"} and (
+            self.count is not None or self.records
+        ):
+            raise ValueError("component outcome must not invent a record count")
+        if self.scope == "fact_merge" and self.merge_count != (0 if self.no_merges else 1):
+            raise ValueError("exact merge relation count required")
+        if self.scope != "fact_merge" and self.merge_count is not None:
+            raise ValueError("merge count scope mismatch")
+        if self.merge_targets and (len(self.merge_targets) != 2 or self.no_merges):
+            raise ValueError("invalid exact merge targets")
+        if self.scope == "fact_merge" and not (
+            self.merge_targets or (self.no_merges and self.nonempty_fact)
+        ):
+            raise ValueError("merge outcome required")
+        for record in self.records:
+            if not any(
+                (
+                    record.fields,
+                    record.target_time is not None,
+                    record.episode_context,
+                    record.who is not None,
+                    self.operation,
+                )
+            ):
+                raise ValueError("empty record constraint")
         if self.count_scope == "all_records" and self.count != 0:
             raise ValueError("all-record zero expectation required")
-        if self.scope != "type_and_topic" and self.count is None:
+        if (
+            self.scope not in {"type_and_topic", "fact_matching", "fact_merge"}
+            and self.count is None
+        ):
             raise ValueError("component count required")
-        if self.scope in {"fact_extraction", "fact_actor"} and self.record_kind != "fact":
+        if (
+            self.scope in {"fact_extraction", "fact_actor", "fact_matching", "fact_merge"}
+            and self.record_kind != "fact"
+        ):
             raise ValueError("Fact component kind mismatch")
         if self.scope == "semantic_admission" and self.record_kind != "semantic":
             raise ValueError("Semantic component kind mismatch")
+        if self.scope == "episode_operation" and self.record_kind != "episode":
+            raise ValueError("Episode operation kind mismatch")
+        if (
+            self.merge_targets or self.no_merges or self.nonempty_fact
+        ) and self.scope != "fact_merge":
+            raise ValueError("merge outcome scope mismatch")
+        if self.matches is not None and len({m.target.record_id for m in self.matches}) != len(
+            self.matches
+        ):
+            raise ValueError("duplicate matching target")
+        if self.target is not None and self.operation is None:
+            raise ValueError("target requires operation")
         if self.count == 0:
             if (
-                self.records
+                self.target
+                or self.target_null
+                or self.changes
+                or self.content_absent
+                or self.records
                 or self.operation
                 or self.formation_type
                 or self.required_user_turn is not None
@@ -280,7 +522,11 @@ class Expectation(Strict):
                 raise ValueError("zero count contradicts positive gold")
         elif self.count is not None and self.count != len(self.records):
             raise ValueError("count differs from record constraints")
-        if self.count != 0 and not self.records:
+        if (
+            self.count != 0
+            and not self.records
+            and self.scope not in {"fact_matching", "fact_merge"}
+        ):
             raise ValueError("positive gold requires record constraints")
         if self.forbidden_save and self.count != 0:
             raise ValueError("forbidden save requires zero count")
@@ -346,6 +592,19 @@ class EvaluationCases(Strict):
             raise ValueError("formation input and gold id sets differ")
         for case in self.cases.cases:
             expected = gold[case.id]
+            targets = ([expected.target] if expected.target else []) + expected.merge_targets
+            targets += [m.target for m in expected.matches or []]
+            seeds = {(r.record_id, r.binding, r.kind): r for r in case.seed}
+            if len({(t.record_id, t.version) for t in expected.merge_targets}) != len(
+                expected.merge_targets
+            ):
+                raise ValueError("duplicate merge target")
+            for target in targets:
+                record = seeds.get((target.record_id, case.binding, expected.record_kind))
+                if record is None or record.version != target.version or record.state != "active":
+                    raise ValueError("gold target differs from active seed version")
+                if record.binding != case.binding or record.kind != expected.record_kind:
+                    raise ValueError("gold target Binding or kind mismatch")
             for citation in expected.citations:
                 if citation.turn >= len(case.turns):
                     raise ValueError("citation addresses missing turn")

@@ -3,6 +3,54 @@
   "dataset": "semantic_boundary",
   "expectations": [
     {
+      "id": "boundary-01",
+      "category": "event_existing_boundary",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 27
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c"
+    },
+    {
+      "id": "boundary-02",
+      "category": "event_existing_boundary",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c"
+    },
+    {
       "id": "boundary-03",
       "category": "event_existing_boundary",
       "scope": "semantic_admission",
@@ -29,6 +77,30 @@
       "forbidden_save": true,
       "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c",
       "count_scope": "selected_kind"
+    },
+    {
+      "id": "boundary-04",
+      "category": "event_existing_boundary",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c"
     }
   ]
 }

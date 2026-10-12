@@ -13,14 +13,63 @@
           "minItems": 1,
           "title": "Turns",
           "type": "array"
+        },
+        "binding": {
+          "$ref": "#/$defs/SeedBinding"
+        },
+        "conversation_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "seed": {
+          "items": {
+            "$ref": "#/$defs/SeedRecord"
+          },
+          "title": "Seed",
+          "type": "array"
+        },
+        "clock_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClockSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "enum": [
+                "UTC",
+                "Asia/Tokyo"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
         }
       },
       "required": [
         "id",
-        "turns"
+        "turns",
+        "binding",
+        "conversation_id"
       ],
       "title": "Case",
       "type": "object"
+    },
+    "ClockSource": {
+      "enum": [
+        "backend/evals/episodic_quality/provider.py:43",
+        "backend/evals/semantic_memory/fixtures.py:24"
+      ],
+      "type": "string"
     },
     "Dataset": {
       "enum": [
@@ -35,6 +84,516 @@
     "Identifier": {
       "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
       "type": "string"
+    },
+    "Nonnegative": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "PartialTime": {
+      "additionalProperties": false,
+      "properties": {
+        "precision": {
+          "enum": [
+            "year",
+            "month",
+            "day",
+            "hour",
+            "minute",
+            "second"
+          ],
+          "title": "Precision",
+          "type": "string"
+        },
+        "year": {
+          "title": "Year",
+          "type": "integer"
+        },
+        "month": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Month"
+        },
+        "day": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Day"
+        },
+        "hour": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hour"
+        },
+        "minute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minute"
+        },
+        "second": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Second"
+        }
+      },
+      "required": [
+        "precision",
+        "year"
+      ],
+      "title": "PartialTime",
+      "type": "object"
+    },
+    "SeedBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/SeedScope"
+        },
+        "character_id": {
+          "$ref": "#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "scope",
+        "character_id"
+      ],
+      "title": "SeedBinding",
+      "type": "object"
+    },
+    "SeedFiveW": {
+      "additionalProperties": false,
+      "properties": {
+        "predicate": {
+          "$ref": "#/$defs/Text"
+        },
+        "object": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Text"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "who": {
+          "items": {
+            "$ref": "#/$defs/SeedPerson"
+          },
+          "title": "Who",
+          "type": "array"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeedPlace"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "why": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Text"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeedTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "polarity": {
+          "enum": [
+            "AFFIRMED",
+            "NEGATED"
+          ],
+          "title": "Polarity",
+          "type": "string"
+        },
+        "actuality": {
+          "enum": [
+            "OCCURRED",
+            "PLANNED",
+            "CONDITIONAL"
+          ],
+          "title": "Actuality",
+          "type": "string"
+        },
+        "context": {
+          "enum": [
+            "REPORTED",
+            "FICTIONAL",
+            "HYPOTHETICAL"
+          ],
+          "title": "Context",
+          "type": "string"
+        }
+      },
+      "required": [
+        "predicate",
+        "object",
+        "who",
+        "where",
+        "why",
+        "when",
+        "polarity",
+        "actuality",
+        "context"
+      ],
+      "title": "SeedFiveW",
+      "type": "object"
+    },
+    "SeedPerson": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Text"
+        },
+        "entity_id": {
+          "$ref": "#/$defs/Text"
+        },
+        "role": {
+          "enum": [
+            "ACTOR",
+            "LISTENER",
+            "SPEAKER"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "entity_id",
+        "role"
+      ],
+      "title": "SeedPerson",
+      "type": "object"
+    },
+    "SeedPlace": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Text"
+        },
+        "entity_id": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "name",
+        "entity_id"
+      ],
+      "title": "SeedPlace",
+      "type": "object"
+    },
+    "SeedProposition": {
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/Text"
+        },
+        "attribute": {
+          "$ref": "#/$defs/Text"
+        },
+        "value": {
+          "$ref": "#/$defs/Text"
+        },
+        "mutability": {
+          "enum": [
+            "FIXED",
+            "CHANGEABLE"
+          ],
+          "title": "Mutability",
+          "type": "string"
+        },
+        "self_report": {
+          "title": "Self Report",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "subject",
+        "attribute",
+        "value",
+        "mutability",
+        "self_report"
+      ],
+      "title": "SeedProposition",
+      "type": "object"
+    },
+    "SeedRecord": {
+      "additionalProperties": false,
+      "description": "Known-state projection, not a fabricated full canonical store snapshot.\n\nMissing PoC citations remain missing. The later harness must not silently\ninvent them, nor use known content as a citation for the current assertion.",
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "kind": {
+          "enum": [
+            "episode",
+            "fact",
+            "semantic"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "binding": {
+          "$ref": "#/$defs/SeedBinding"
+        },
+        "conversation_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "suspended"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        },
+        "normalized_text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Text"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "five_w": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeedFiveW"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "proposition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeedProposition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "formation_type": {
+          "anyOf": [
+            {
+              "const": "direct_extraction",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Formation Type"
+        },
+        "source_summary": {
+          "$ref": "#/$defs/SeedSummary"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/Turn"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "record_id",
+        "kind",
+        "binding",
+        "conversation_id",
+        "version",
+        "state",
+        "created_at",
+        "updated_at",
+        "source_summary",
+        "sources"
+      ],
+      "title": "SeedRecord",
+      "type": "object"
+    },
+    "SeedScope": {
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "client": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "audience": {
+          "const": "local-private",
+          "title": "Audience",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "client",
+        "audience"
+      ],
+      "title": "SeedScope",
+      "type": "object"
+    },
+    "SeedSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "$ref": "#/$defs/Nonnegative"
+        },
+        "first_stated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Stated At"
+        },
+        "last_stated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Stated At"
+        }
+      },
+      "required": [
+        "count",
+        "first_stated_at",
+        "last_stated_at"
+      ],
+      "title": "SeedSummary",
+      "type": "object"
+    },
+    "SeedTime": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartialTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartialTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        },
+        "reference_at": {
+          "title": "Reference At",
+          "type": "string"
+        },
+        "range_kind": {
+          "const": "POINT",
+          "title": "Range Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_at",
+        "range_kind"
+      ],
+      "title": "SeedTime",
+      "type": "object"
     },
     "Text": {
       "minLength": 1,

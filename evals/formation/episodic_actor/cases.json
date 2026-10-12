@@ -13,7 +13,17 @@
           "role": "assistant",
           "text": "あなたが本を借りたのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-01",
+      "seed": []
     },
     {
       "id": "assistant_retelling-02",
@@ -26,7 +36,17 @@
           "role": "assistant",
           "text": "あなたがパンを焼いたのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-02",
+      "seed": []
     },
     {
       "id": "assistant_retelling-03",
@@ -39,7 +59,17 @@
           "role": "assistant",
           "text": "あなたが鍵を見つけたのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-03",
+      "seed": []
     },
     {
       "id": "assistant_retelling-04",
@@ -52,7 +82,17 @@
           "role": "assistant",
           "text": "あなたが花を植えたのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-04",
+      "seed": []
     },
     {
       "id": "assistant_retelling-05",
@@ -65,7 +105,17 @@
           "role": "assistant",
           "text": "あなたが写真を撮ったのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-05",
+      "seed": []
     },
     {
       "id": "assistant_retelling-06",
@@ -78,7 +128,17 @@
           "role": "assistant",
           "text": "あなたが椅子を直したのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-06",
+      "seed": []
     },
     {
       "id": "assistant_retelling-07",
@@ -91,7 +151,17 @@
           "role": "assistant",
           "text": "あなたが手紙を書いたのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-07",
+      "seed": []
     },
     {
       "id": "assistant_retelling-08",
@@ -104,7 +174,17 @@
           "role": "assistant",
           "text": "あなたが部屋を掃除したのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-08",
+      "seed": []
     },
     {
       "id": "assistant_retelling-09",
@@ -117,7 +197,17 @@
           "role": "assistant",
           "text": "あなたが荷物を運んだのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-09",
+      "seed": []
     },
     {
       "id": "assistant_retelling-10",
@@ -130,7 +220,17 @@
           "role": "assistant",
           "text": "あなたが切符を買ったのですね。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_retelling-10",
+      "seed": []
     },
     {
       "id": "assistant_self-01",
@@ -143,7 +243,17 @@
           "role": "assistant",
           "text": "私が本を借りたのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-01",
+      "seed": []
     },
     {
       "id": "assistant_self-02",
@@ -156,7 +266,17 @@
           "role": "assistant",
           "text": "私がパンを焼いたのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-02",
+      "seed": []
     },
     {
       "id": "assistant_self-03",
@@ -169,7 +289,17 @@
           "role": "assistant",
           "text": "私が鍵を見つけたのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-03",
+      "seed": []
     },
     {
       "id": "assistant_self-04",
@@ -182,7 +312,17 @@
           "role": "assistant",
           "text": "私が花を植えたのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-04",
+      "seed": []
     },
     {
       "id": "assistant_self-05",
@@ -195,7 +335,17 @@
           "role": "assistant",
           "text": "私が写真を撮ったのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-05",
+      "seed": []
     },
     {
       "id": "assistant_self-06",
@@ -208,7 +358,17 @@
           "role": "assistant",
           "text": "私が椅子を直したのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-06",
+      "seed": []
     },
     {
       "id": "assistant_self-07",
@@ -221,7 +381,17 @@
           "role": "assistant",
           "text": "私が手紙を書いたのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-07",
+      "seed": []
     },
     {
       "id": "assistant_self-08",
@@ -234,7 +404,17 @@
           "role": "assistant",
           "text": "私が部屋を掃除したのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-08",
+      "seed": []
     },
     {
       "id": "assistant_self-09",
@@ -247,7 +427,17 @@
           "role": "assistant",
           "text": "私が荷物を運んだのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-09",
+      "seed": []
     },
     {
       "id": "assistant_self-10",
@@ -260,7 +450,17 @@
           "role": "assistant",
           "text": "私が切符を買ったのです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-assistant_self-10",
+      "seed": []
     },
     {
       "id": "multiple_actors-01",
@@ -269,7 +469,17 @@
           "role": "user",
           "text": "葵と悠の二人が、一緒に本を借りた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-01",
+      "seed": []
     },
     {
       "id": "multiple_actors-02",
@@ -278,7 +488,17 @@
           "role": "user",
           "text": "律と咲の二人が、一緒にパンを焼いた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-02",
+      "seed": []
     },
     {
       "id": "multiple_actors-03",
@@ -287,7 +507,17 @@
           "role": "user",
           "text": "凛と陸の二人が、一緒に鍵を見つけた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-03",
+      "seed": []
     },
     {
       "id": "multiple_actors-04",
@@ -296,7 +526,17 @@
           "role": "user",
           "text": "蓮と結の二人が、一緒に花を植えた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-04",
+      "seed": []
     },
     {
       "id": "multiple_actors-05",
@@ -305,7 +545,17 @@
           "role": "user",
           "text": "楓と碧の二人が、一緒に写真を撮った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-05",
+      "seed": []
     },
     {
       "id": "multiple_actors-06",
@@ -314,7 +564,17 @@
           "role": "user",
           "text": "湊と鈴の二人が、一緒に椅子を直した。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-06",
+      "seed": []
     },
     {
       "id": "multiple_actors-07",
@@ -323,7 +583,17 @@
           "role": "user",
           "text": "澪と優の二人が、一緒に手紙を書いた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-07",
+      "seed": []
     },
     {
       "id": "multiple_actors-08",
@@ -332,7 +602,17 @@
           "role": "user",
           "text": "晴と紬の二人が、一緒に部屋を掃除した。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-08",
+      "seed": []
     },
     {
       "id": "multiple_actors-09",
@@ -341,7 +621,17 @@
           "role": "user",
           "text": "栞と颯の二人が、一緒に荷物を運んだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-09",
+      "seed": []
     },
     {
       "id": "multiple_actors-10",
@@ -350,7 +640,17 @@
           "role": "user",
           "text": "樹と杏の二人が、一緒に切符を買った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-multiple_actors-10",
+      "seed": []
     },
     {
       "id": "named_third_person-01",
@@ -359,7 +659,17 @@
           "role": "user",
           "text": "友人の葵が本を借りたと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-01",
+      "seed": []
     },
     {
       "id": "named_third_person-02",
@@ -368,7 +678,17 @@
           "role": "user",
           "text": "友人の律がパンを焼いたと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-02",
+      "seed": []
     },
     {
       "id": "named_third_person-03",
@@ -377,7 +697,17 @@
           "role": "user",
           "text": "友人の凛が鍵を見つけたと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-03",
+      "seed": []
     },
     {
       "id": "named_third_person-04",
@@ -386,7 +716,17 @@
           "role": "user",
           "text": "友人の蓮が花を植えたと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-04",
+      "seed": []
     },
     {
       "id": "named_third_person-05",
@@ -395,7 +735,17 @@
           "role": "user",
           "text": "友人の楓が写真を撮ったと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-05",
+      "seed": []
     },
     {
       "id": "named_third_person-06",
@@ -404,7 +754,17 @@
           "role": "user",
           "text": "友人の湊が椅子を直したと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-06",
+      "seed": []
     },
     {
       "id": "named_third_person-07",
@@ -413,7 +773,17 @@
           "role": "user",
           "text": "友人の澪が手紙を書いたと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-07",
+      "seed": []
     },
     {
       "id": "named_third_person-08",
@@ -422,7 +792,17 @@
           "role": "user",
           "text": "友人の晴が部屋を掃除したと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-08",
+      "seed": []
     },
     {
       "id": "named_third_person-09",
@@ -431,7 +811,17 @@
           "role": "user",
           "text": "友人の栞が荷物を運んだと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-09",
+      "seed": []
     },
     {
       "id": "named_third_person-10",
@@ -440,7 +830,17 @@
           "role": "user",
           "text": "友人の樹が切符を買ったと話してくれた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-named_third_person-10",
+      "seed": []
     },
     {
       "id": "quoted_first_person-01",
@@ -449,7 +849,17 @@
           "role": "user",
           "text": "友人の葵が「私は本を借りた」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-01",
+      "seed": []
     },
     {
       "id": "quoted_first_person-02",
@@ -458,7 +868,17 @@
           "role": "user",
           "text": "友人の律が「私はパンを焼いた」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-02",
+      "seed": []
     },
     {
       "id": "quoted_first_person-03",
@@ -467,7 +887,17 @@
           "role": "user",
           "text": "友人の凛が「私は鍵を見つけた」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-03",
+      "seed": []
     },
     {
       "id": "quoted_first_person-04",
@@ -476,7 +906,17 @@
           "role": "user",
           "text": "友人の蓮が「私は花を植えた」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-04",
+      "seed": []
     },
     {
       "id": "quoted_first_person-05",
@@ -485,7 +925,17 @@
           "role": "user",
           "text": "友人の楓が「私は写真を撮った」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-05",
+      "seed": []
     },
     {
       "id": "quoted_first_person-06",
@@ -494,7 +944,17 @@
           "role": "user",
           "text": "友人の湊が「私は椅子を直した」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-06",
+      "seed": []
     },
     {
       "id": "quoted_first_person-07",
@@ -503,7 +963,17 @@
           "role": "user",
           "text": "友人の澪が「私は手紙を書いた」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-07",
+      "seed": []
     },
     {
       "id": "quoted_first_person-08",
@@ -512,7 +982,17 @@
           "role": "user",
           "text": "友人の晴が「私は部屋を掃除した」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-08",
+      "seed": []
     },
     {
       "id": "quoted_first_person-09",
@@ -521,7 +1001,17 @@
           "role": "user",
           "text": "友人の栞が「私は荷物を運んだ」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-09",
+      "seed": []
     },
     {
       "id": "quoted_first_person-10",
@@ -530,7 +1020,17 @@
           "role": "user",
           "text": "友人の樹が「私は切符を買った」と言っていた。私はその話を聞いただけ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_first_person-10",
+      "seed": []
     },
     {
       "id": "quoted_second_person-01",
@@ -539,7 +1039,17 @@
           "role": "user",
           "text": "葵が悠に「あなたが本を借りたんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-01",
+      "seed": []
     },
     {
       "id": "quoted_second_person-02",
@@ -548,7 +1058,17 @@
           "role": "user",
           "text": "律が咲に「あなたがパンを焼いたんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-02",
+      "seed": []
     },
     {
       "id": "quoted_second_person-03",
@@ -557,7 +1077,17 @@
           "role": "user",
           "text": "凛が陸に「あなたが鍵を見つけたんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-03",
+      "seed": []
     },
     {
       "id": "quoted_second_person-04",
@@ -566,7 +1096,17 @@
           "role": "user",
           "text": "蓮が結に「あなたが花を植えたんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-04",
+      "seed": []
     },
     {
       "id": "quoted_second_person-05",
@@ -575,7 +1115,17 @@
           "role": "user",
           "text": "楓が碧に「あなたが写真を撮ったんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-05",
+      "seed": []
     },
     {
       "id": "quoted_second_person-06",
@@ -584,7 +1134,17 @@
           "role": "user",
           "text": "湊が鈴に「あなたが椅子を直したんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-06",
+      "seed": []
     },
     {
       "id": "quoted_second_person-07",
@@ -593,7 +1153,17 @@
           "role": "user",
           "text": "澪が優に「あなたが手紙を書いたんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-07",
+      "seed": []
     },
     {
       "id": "quoted_second_person-08",
@@ -602,7 +1172,17 @@
           "role": "user",
           "text": "晴が紬に「あなたが部屋を掃除したんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-08",
+      "seed": []
     },
     {
       "id": "quoted_second_person-09",
@@ -611,7 +1191,17 @@
           "role": "user",
           "text": "栞が颯に「あなたが荷物を運んだんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-09",
+      "seed": []
     },
     {
       "id": "quoted_second_person-10",
@@ -620,7 +1210,17 @@
           "role": "user",
           "text": "樹が杏に「あなたが切符を買ったんだね」と言った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-quoted_second_person-10",
+      "seed": []
     },
     {
       "id": "third_person_reference-01",
@@ -637,7 +1237,17 @@
           "role": "user",
           "text": "その人が本を借りたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-01",
+      "seed": []
     },
     {
       "id": "third_person_reference-02",
@@ -654,7 +1264,17 @@
           "role": "user",
           "text": "その人がパンを焼いたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-02",
+      "seed": []
     },
     {
       "id": "third_person_reference-03",
@@ -671,7 +1291,17 @@
           "role": "user",
           "text": "その人が鍵を見つけたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-03",
+      "seed": []
     },
     {
       "id": "third_person_reference-04",
@@ -688,7 +1318,17 @@
           "role": "user",
           "text": "その人が花を植えたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-04",
+      "seed": []
     },
     {
       "id": "third_person_reference-05",
@@ -705,7 +1345,17 @@
           "role": "user",
           "text": "その人が写真を撮ったんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-05",
+      "seed": []
     },
     {
       "id": "third_person_reference-06",
@@ -722,7 +1372,17 @@
           "role": "user",
           "text": "その人が椅子を直したんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-06",
+      "seed": []
     },
     {
       "id": "third_person_reference-07",
@@ -739,7 +1399,17 @@
           "role": "user",
           "text": "その人が手紙を書いたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-07",
+      "seed": []
     },
     {
       "id": "third_person_reference-08",
@@ -756,7 +1426,17 @@
           "role": "user",
           "text": "その人が部屋を掃除したんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-08",
+      "seed": []
     },
     {
       "id": "third_person_reference-09",
@@ -773,7 +1453,17 @@
           "role": "user",
           "text": "その人が荷物を運んだんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-09",
+      "seed": []
     },
     {
       "id": "third_person_reference-10",
@@ -790,7 +1480,17 @@
           "role": "user",
           "text": "その人が切符を買ったんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-third_person_reference-10",
+      "seed": []
     },
     {
       "id": "unknown_actor-01",
@@ -799,7 +1499,17 @@
           "role": "user",
           "text": "誰かが本を借りたらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-01",
+      "seed": []
     },
     {
       "id": "unknown_actor-02",
@@ -808,7 +1518,17 @@
           "role": "user",
           "text": "誰かがパンを焼いたらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-02",
+      "seed": []
     },
     {
       "id": "unknown_actor-03",
@@ -817,7 +1537,17 @@
           "role": "user",
           "text": "誰かが鍵を見つけたらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-03",
+      "seed": []
     },
     {
       "id": "unknown_actor-04",
@@ -826,7 +1556,17 @@
           "role": "user",
           "text": "誰かが花を植えたらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-04",
+      "seed": []
     },
     {
       "id": "unknown_actor-05",
@@ -835,7 +1575,17 @@
           "role": "user",
           "text": "誰かが写真を撮ったらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-05",
+      "seed": []
     },
     {
       "id": "unknown_actor-06",
@@ -844,7 +1594,17 @@
           "role": "user",
           "text": "誰かが椅子を直したらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-06",
+      "seed": []
     },
     {
       "id": "unknown_actor-07",
@@ -853,7 +1613,17 @@
           "role": "user",
           "text": "誰かが手紙を書いたらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-07",
+      "seed": []
     },
     {
       "id": "unknown_actor-08",
@@ -862,7 +1632,17 @@
           "role": "user",
           "text": "誰かが部屋を掃除したらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-08",
+      "seed": []
     },
     {
       "id": "unknown_actor-09",
@@ -871,7 +1651,17 @@
           "role": "user",
           "text": "誰かが荷物を運んだらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-09",
+      "seed": []
     },
     {
       "id": "unknown_actor-10",
@@ -880,7 +1670,17 @@
           "role": "user",
           "text": "誰かが切符を買ったらしい。でも、誰がしたのかは一切分からない。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-unknown_actor-10",
+      "seed": []
     },
     {
       "id": "user_context-01",
@@ -897,7 +1697,17 @@
           "role": "user",
           "text": "それで、本を借りたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-01",
+      "seed": []
     },
     {
       "id": "user_context-02",
@@ -914,7 +1724,17 @@
           "role": "user",
           "text": "それで、パンを焼いたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-02",
+      "seed": []
     },
     {
       "id": "user_context-03",
@@ -931,7 +1751,17 @@
           "role": "user",
           "text": "それで、鍵を見つけたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-03",
+      "seed": []
     },
     {
       "id": "user_context-04",
@@ -948,7 +1778,17 @@
           "role": "user",
           "text": "それで、花を植えたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-04",
+      "seed": []
     },
     {
       "id": "user_context-05",
@@ -965,7 +1805,17 @@
           "role": "user",
           "text": "それで、写真を撮ったんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-05",
+      "seed": []
     },
     {
       "id": "user_context-06",
@@ -982,7 +1832,17 @@
           "role": "user",
           "text": "それで、椅子を直したんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-06",
+      "seed": []
     },
     {
       "id": "user_context-07",
@@ -999,7 +1859,17 @@
           "role": "user",
           "text": "それで、手紙を書いたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-07",
+      "seed": []
     },
     {
       "id": "user_context-08",
@@ -1016,7 +1886,17 @@
           "role": "user",
           "text": "それで、部屋を掃除したんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-08",
+      "seed": []
     },
     {
       "id": "user_context-09",
@@ -1033,7 +1913,17 @@
           "role": "user",
           "text": "それで、荷物を運んだんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-09",
+      "seed": []
     },
     {
       "id": "user_context-10",
@@ -1050,7 +1940,17 @@
           "role": "user",
           "text": "それで、切符を買ったんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_context-10",
+      "seed": []
     },
     {
       "id": "user_first_person-01",
@@ -1059,7 +1959,17 @@
           "role": "user",
           "text": "私は図書館で本を借りた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-01",
+      "seed": []
     },
     {
       "id": "user_first_person-02",
@@ -1068,7 +1978,17 @@
           "role": "user",
           "text": "僕が台所でパンを焼いたんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-02",
+      "seed": []
     },
     {
       "id": "user_first_person-03",
@@ -1077,7 +1997,17 @@
           "role": "user",
           "text": "私が鍵を見つけたよ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-03",
+      "seed": []
     },
     {
       "id": "user_first_person-04",
@@ -1086,7 +2016,17 @@
           "role": "user",
           "text": "その作業をしたのは私です。花を植えたんです。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-04",
+      "seed": []
     },
     {
       "id": "user_first_person-05",
@@ -1095,7 +2035,17 @@
           "role": "user",
           "text": "私自身が写真を撮った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-05",
+      "seed": []
     },
     {
       "id": "user_first_person-06",
@@ -1104,7 +2054,17 @@
           "role": "user",
           "text": "私の話だけど、椅子を直したんだ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-06",
+      "seed": []
     },
     {
       "id": "user_first_person-07",
@@ -1113,7 +2073,17 @@
           "role": "user",
           "text": "私が自分で手紙を書いた。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-07",
+      "seed": []
     },
     {
       "id": "user_first_person-08",
@@ -1122,7 +2092,17 @@
           "role": "user",
           "text": "僕は休憩のあとで部屋を掃除したよ。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-08",
+      "seed": []
     },
     {
       "id": "user_first_person-09",
@@ -1131,7 +2111,17 @@
           "role": "user",
           "text": "荷物を運んだのは私です。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-09",
+      "seed": []
     },
     {
       "id": "user_first_person-10",
@@ -1140,7 +2130,17 @@
           "role": "user",
           "text": "私が窓口で切符を買った。"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-user_first_person-10",
+      "seed": []
     }
   ]
 }

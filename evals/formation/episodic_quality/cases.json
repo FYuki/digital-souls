@@ -7,378 +7,5465 @@
       "turns": [
         {
           "role": "user",
-          "text": "私は本を読んだ。"
+          "text": "私は本を読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-01",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-02",
       "turns": [
         {
           "role": "user",
-          "text": "私はパンを焼いた。"
+          "text": "私はパンを焼いた。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-02",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-03",
       "turns": [
         {
           "role": "user",
-          "text": "私は椅子を直した。"
+          "text": "私は椅子を直した。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-03",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-04",
       "turns": [
         {
           "role": "user",
-          "text": "私は写真を撮った。"
+          "text": "私は写真を撮った。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-04",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-05",
       "turns": [
         {
           "role": "user",
-          "text": "私は荷物を運んだ。"
+          "text": "私は荷物を運んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-05",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-06",
       "turns": [
         {
           "role": "user",
-          "text": "こんにちは。"
+          "text": "こんにちは。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-06",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-07",
       "turns": [
         {
           "role": "user",
-          "text": "うん。"
+          "text": "うん。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-07",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-08",
       "turns": [
         {
           "role": "user",
-          "text": "なるほど。"
+          "text": "なるほど。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-08",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-09",
       "turns": [
         {
           "role": "user",
-          "text": "こんばんは。"
+          "text": "こんばんは。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-09",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "selection-10",
       "turns": [
         {
           "role": "user",
-          "text": "わかりました。"
+          "text": "わかりました。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-selection-10",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今話している本の体験の続きだけど、とても楽しかった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "本を読んだ話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週話した本を読んだ体験を、今日あらためて最初から語り直すね。本を読んだんだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "本を読んだ話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今話しているパンの体験の続きだけど、とても楽しかった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "パンを焼いた話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "焼いた",
+            "object": "パン",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週話したパンを焼いた体験を、今日あらためて最初から語り直すね。パンを焼いたんだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "パンを焼いた話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "焼いた",
+            "object": "パン",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今話している椅子の体験の続きだけど、とても楽しかった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "椅子を直した話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "直した",
+            "object": "椅子",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週話した椅子を直した体験を、今日あらためて最初から語り直すね。椅子を直したんだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "椅子を直した話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "直した",
+            "object": "椅子",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今話している写真の体験の続きだけど、とても楽しかった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "写真を撮った話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "撮った",
+            "object": "写真",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週話した写真を撮った体験を、今日あらためて最初から語り直すね。写真を撮ったんだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "写真を撮った話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "撮った",
+            "object": "写真",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今話している荷物の体験の続きだけど、とても楽しかった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "荷物を運んだ話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "運んだ",
+            "object": "荷物",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "episode_boundary-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週話した荷物を運んだ体験を、今日あらためて最初から語り直すね。荷物を運んだんだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000065",
+          "kind": "episode",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "聞いた",
+            "object": "荷物を運んだ話",
+            "who": [
+              {
+                "name": "光織",
+                "entity_id": "character:miori",
+                "role": "LISTENER"
+              },
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "SPEAKER"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "運んだ",
+            "object": "荷物",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき食べたのはうどんと言ったけれど訂正。そばを食べたんだった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "食べた",
+            "object": "うどん",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき食べたのは紅茶と言ったけれど訂正。緑茶を食べたんだった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "食べた",
+            "object": "紅茶",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき食べたのはリンゴと言ったけれど訂正。みかんを食べたんだった。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "食べた",
+            "object": "リンゴ",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき話した、本を読んだ件の補足。読んだ場所は図書館だよ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき話した、本を読んだ件の補足。読んだ場所は公園だよ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき話した同じ本を読んだ件だよ。新しい出来事でも訂正でもなく、内容もそのまま。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき話した同じパンを焼いた件だよ。新しい出来事でも訂正でもなく、内容もそのまま。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "焼いた",
+            "object": "パン",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき話した同じ椅子を直した件だよ。新しい出来事でも訂正でもなく、内容もそのまま。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "直した",
+            "object": "椅子",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "本を読んだ場所は公園。ただし以前話した二回のうちどちらかは思い出せない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "fact_operation-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "雑誌を読んだ場所は公園。ただし以前話した二回のうちどちらかは思い出せない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "雑誌",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "雑誌",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-01",
       "turns": [
         {
           "role": "user",
-          "text": "私は図書館で本を読んだ。理由は試験の準備です。"
+          "text": "私は図書館で本を読んだ。理由は試験の準備です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-01",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-02",
       "turns": [
         {
           "role": "user",
-          "text": "私は本を読んだ。場所・日時・理由は話していません。"
+          "text": "私は本を読んだ。場所・日時・理由は話していません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-02",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-03",
       "turns": [
         {
           "role": "user",
-          "text": "私は自宅でパンを焼いた。理由は朝食の準備です。"
+          "text": "私は自宅でパンを焼いた。理由は朝食の準備です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-03",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-04",
       "turns": [
         {
           "role": "user",
-          "text": "私はパンを焼いた。場所・日時・理由は話していません。"
+          "text": "私はパンを焼いた。場所・日時・理由は話していません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-04",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-05",
       "turns": [
         {
           "role": "user",
-          "text": "私は工房で椅子を直した。理由は修理の練習です。"
+          "text": "私は工房で椅子を直した。理由は修理の練習です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-05",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-06",
       "turns": [
         {
           "role": "user",
-          "text": "私は椅子を直した。場所・日時・理由は話していません。"
+          "text": "私は椅子を直した。場所・日時・理由は話していません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-06",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-07",
       "turns": [
         {
           "role": "user",
-          "text": "私は公園で写真を撮った。理由は記録です。"
+          "text": "私は公園で写真を撮った。理由は記録です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-07",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-08",
       "turns": [
         {
           "role": "user",
-          "text": "私は写真を撮った。場所・日時・理由は話していません。"
+          "text": "私は写真を撮った。場所・日時・理由は話していません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-08",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-09",
       "turns": [
         {
           "role": "user",
-          "text": "私は倉庫で荷物を運んだ。理由は引っ越しです。"
+          "text": "私は倉庫で荷物を運んだ。理由は引っ越しです。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-09",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "what_where_why-10",
       "turns": [
         {
           "role": "user",
-          "text": "私は荷物を運んだ。場所・日時・理由は話していません。"
+          "text": "私は荷物を運んだ。場所・日時・理由は話していません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-what_where_why-10",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "temporal-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は今日、本を読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-01",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "temporal-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は昨日、本を読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-02",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "temporal-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は一昨日、本を読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-03",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "temporal-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は先月、本を読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-04",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "temporal-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は去年、本を読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-05",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "temporal-06",
       "turns": [
         {
           "role": "user",
-          "text": "私は2025年に本を読んだ。それ以上細かい日時は言っていない。"
+          "text": "私は2025年に本を読んだ。それ以上細かい日時は言っていない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-06",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "temporal-07",
       "turns": [
         {
           "role": "user",
-          "text": "私は2026年8月に本を読んだ。それ以上細かい日時は言っていない。"
+          "text": "私は2026年8月に本を読んだ。それ以上細かい日時は言っていない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-07",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "temporal-08",
       "turns": [
         {
           "role": "user",
-          "text": "私は2026年9月2日に本を読んだ。それ以上細かい日時は言っていない。"
+          "text": "私は2026年9月2日に本を読んだ。それ以上細かい日時は言っていない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-08",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "temporal-10",
       "turns": [
         {
           "role": "user",
-          "text": "私は本を読んだ。いつのことかは不明。"
+          "text": "私は本を読んだ。いつのことかは不明。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-temporal-10",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "context-04",
       "turns": [
         {
           "role": "user",
-          "text": "私が書いた創作物語の中で、主人公は空の城へ行った。現実の出来事ではありません。"
+          "text": "私が書いた創作物語の中で、主人公は空の城へ行った。現実の出来事ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-context-04",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "context-05",
       "turns": [
         {
           "role": "user",
-          "text": "私が書いた創作物語の中で、主人公は竜の島へ行った。現実の出来事ではありません。"
+          "text": "私が書いた創作物語の中で、主人公は竜の島へ行った。現実の出来事ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-context-05",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "context-06",
       "turns": [
         {
           "role": "user",
-          "text": "私が書いた創作物語の中で、主人公は架空の王国へ行った。現実の出来事ではありません。"
+          "text": "私が書いた創作物語の中で、主人公は架空の王国へ行った。現実の出来事ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-context-06",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-01",
       "turns": [
         {
           "role": "user",
-          "text": "私は本を読んだ。それから雑誌も読んだ。"
+          "text": "私は本を読んだ。それから雑誌も読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-01",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-02",
       "turns": [
         {
           "role": "user",
-          "text": "私はうどんを食べた。それからそばも食べた。"
+          "text": "私はうどんを食べた。それからそばも食べた。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-02",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-03",
       "turns": [
         {
           "role": "user",
-          "text": "私は写真を撮った。それから動画も撮った。"
+          "text": "私は写真を撮った。それから動画も撮った。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-03",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-04",
       "turns": [
         {
           "role": "user",
-          "text": "私は椅子を直した。それから机も直した。"
+          "text": "私は椅子を直した。それから机も直した。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-04",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-05",
       "turns": [
         {
           "role": "user",
-          "text": "私はリンゴを買った。それからみかんも買った。"
+          "text": "私はリンゴを買った。それからみかんも買った。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-05",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-06",
       "turns": [
         {
           "role": "user",
-          "text": "一つ目の話は本を読んだこと。話題を変えて、二つ目は雑誌を読んだこと。"
+          "text": "一つ目の話は本を読んだこと。話題を変えて、二つ目は雑誌を読んだこと。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-06",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-07",
       "turns": [
         {
           "role": "user",
-          "text": "一つ目の話はうどんを食べたこと。話題を変えて、二つ目はそばを食べたこと。"
+          "text": "一つ目の話はうどんを食べたこと。話題を変えて、二つ目はそばを食べたこと。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-07",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-08",
       "turns": [
         {
           "role": "user",
-          "text": "一つ目の話は写真を撮ったこと。話題を変えて、二つ目は動画を撮ったこと。"
+          "text": "一つ目の話は写真を撮ったこと。話題を変えて、二つ目は動画を撮ったこと。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-08",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-09",
       "turns": [
         {
           "role": "user",
-          "text": "一つ目の話は椅子を直したこと。話題を変えて、二つ目は机を直したこと。"
+          "text": "一つ目の話は椅子を直したこと。話題を変えて、二つ目は机を直したこと。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-09",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "links-10",
       "turns": [
         {
           "role": "user",
-          "text": "一つ目の話はリンゴを買ったこと。話題を変えて、二つ目はみかんを買ったこと。"
+          "text": "一つ目の話はリンゴを買ったこと。話題を変えて、二つ目はみかんを買ったこと。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-links-10",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "evidence-01",
       "turns": [
         {
           "role": "user",
-          "text": "挨拶はこんにちは。ここから体験の話。私は本を読んだ。これが伝えたい出来事です。"
+          "text": "挨拶はこんにちは。ここから体験の話。私は本を読んだ。これが伝えたい出来事です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-evidence-01",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "evidence-02",
       "turns": [
         {
           "role": "user",
-          "text": "挨拶はこんにちは。ここから体験の話。私はパンを焼いた。これが伝えたい出来事です。"
+          "text": "挨拶はこんにちは。ここから体験の話。私はパンを焼いた。これが伝えたい出来事です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-evidence-02",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "evidence-03",
       "turns": [
         {
           "role": "user",
-          "text": "挨拶はこんにちは。ここから体験の話。私は椅子を直した。これが伝えたい出来事です。"
+          "text": "挨拶はこんにちは。ここから体験の話。私は椅子を直した。これが伝えたい出来事です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-evidence-03",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "evidence-04",
       "turns": [
         {
           "role": "user",
-          "text": "挨拶はこんにちは。ここから体験の話。私は写真を撮った。これが伝えたい出来事です。"
+          "text": "挨拶はこんにちは。ここから体験の話。私は写真を撮った。これが伝えたい出来事です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-evidence-04",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     },
     {
       "id": "evidence-05",
       "turns": [
         {
           "role": "user",
-          "text": "挨拶はこんにちは。ここから体験の話。私は荷物を運んだ。これが伝えたい出来事です。"
+          "text": "挨拶はこんにちは。ここから体験の話。私は荷物を運んだ。これが伝えたい出来事です。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
         }
-      ]
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-evidence-05",
+      "seed": [],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "catalog-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "以前の本を読んだ件と同じ出来事について再び話している。内容は変更しない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "植えた",
+            "object": "花",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "catalog-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "以前のパンを焼いた件と同じ出来事について再び話している。内容は変更しない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "焼いた",
+            "object": "パン",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "植えた",
+            "object": "花",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "catalog-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "以前の椅子を直した件と同じ出来事について再び話している。内容は変更しない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "直した",
+            "object": "椅子",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "植えた",
+            "object": "花",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "catalog-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "以前の写真を撮った件と同じ出来事について再び話している。内容は変更しない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "撮った",
+            "object": "写真",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "植えた",
+            "object": "花",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "catalog-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "以前の荷物を運んだ件と同じ出来事について再び話している。内容は変更しない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "運んだ",
+            "object": "荷物",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "植えた",
+            "object": "花",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "catalog-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は本を読んだ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "植えた",
+            "object": "花",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "catalog-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私はパンを焼いた。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "植えた",
+            "object": "花",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に話した本を読んだのと全く同一の一回の出来事だよ。別の回ではない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に話した雑誌を読んだのと全く同一の一回の出来事だよ。別の回ではない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "雑誌",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に話した新聞を読んだのと全く同一の一回の出来事だよ。別の回ではない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "新聞",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に話した絵本を読んだのと全く同一の一回の出来事だよ。別の回ではない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "絵本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に話した小説を読んだのと全く同一の一回の出来事だよ。別の回ではない。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "小説",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "同じ本を読んだけれど、前とは別の回だよ。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "同じ日に同じ本を二回読んだ。今回の話は前に話した回とは別の回。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前回は実際に読んだ話。今回は、もし同じ本を読んだら、という仮定の話。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前回は現実の話。今回は私が書いた創作物語の中で本を読んだ話。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "same_event-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前回は読んだ話。今回は同じ本を今後また読むという予定の話。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": null,
+            "why": null,
+            "when": null,
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために本を読んだ件。二つの記録は同じ一回の出来事を重複して記録したものだよ。別の回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために雑誌を読んだ件。二つの記録は同じ一回の出来事を重複して記録したものだよ。別の回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "雑誌",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "雑誌",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために新聞を読んだ件。二つの記録は同じ一回の出来事を重複して記録したものだよ。別の回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "新聞",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "新聞",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために絵本を読んだ件。二つの記録は同じ一回の出来事を重複して記録したものだよ。別の回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "絵本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "絵本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために小説を読んだ件。二つの記録は同じ一回の出来事を重複して記録したものだよ。別の回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "小説",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "小説",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために本を読んだ件。同じ日に同じ場所で同じ理由で二回読んだので、二つの記録は別々の出来事です。同じ一回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために雑誌を読んだ件。同じ日に同じ場所で同じ理由で二回読んだので、二つの記録は別々の出来事です。同じ一回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "雑誌",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "雑誌",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために新聞を読んだ件。同じ日に同じ場所で同じ理由で二回読んだので、二つの記録は別々の出来事です。同じ一回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "新聞",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "新聞",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために絵本を読んだ件。同じ日に同じ場所で同じ理由で二回読んだので、二つの記録は別々の出来事です。同じ一回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "絵本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "絵本",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
+    },
+    {
+      "id": "merge_proposal-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "前に二度話した、私が2026年9月12日に公園で試験の準備のために小説を読んだ件。同じ日に同じ場所で同じ理由で二回読んだので、二つの記録は別々の出来事です。同じ一回ではありません。",
+          "stated_at": "2026-09-13T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "00000000-0000-4000-8000-000000000063",
+      "seed": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "小説",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "kind": "fact",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "00000000-0000-4000-8000-000000000063",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-12T03:00:00Z",
+          "updated_at": "2026-09-12T03:00:00Z",
+          "five_w": {
+            "predicate": "読んだ",
+            "object": "小説",
+            "who": [
+              {
+                "name": "ユーザー",
+                "entity_id": "speaker:user",
+                "role": "ACTOR"
+              }
+            ],
+            "where": {
+              "name": "公園",
+              "entity_id": "place:park"
+            },
+            "why": "試験の準備",
+            "when": {
+              "start": {
+                "precision": "day",
+                "year": 2026,
+                "month": 9,
+                "day": 12,
+                "hour": null,
+                "minute": null,
+                "second": null
+              },
+              "end": null,
+              "timezone": "Asia/Tokyo",
+              "reference_at": "2026-09-12T03:00:00Z",
+              "range_kind": "POINT"
+            },
+            "polarity": "AFFIRMED",
+            "actuality": "OCCURRED",
+            "context": "REPORTED"
+          },
+          "sources": [],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-12T03:00:00Z",
+            "last_stated_at": "2026-09-12T03:00:00Z"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/episodic_quality/provider.py:43",
+      "timezone": "UTC"
     }
   ]
 }

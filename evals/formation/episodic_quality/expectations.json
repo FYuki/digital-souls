@@ -298,6 +298,605 @@
       "count_scope": "selected_kind"
     },
     {
+      "id": "episode_boundary-01",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 26
+        }
+      ],
+      "poc_gold_sha256": "667793b97727a60ad442c28d74ff3614b208e810c0c495fdfd0e516dae0ed60c",
+      "operation": "CONTINUE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000065",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-02",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 39
+        }
+      ],
+      "poc_gold_sha256": "85b149c45f99478d1c1ea5627a130d20bb38f25d086e6de265aca72b399e4d0f",
+      "operation": "NEW",
+      "target": null,
+      "target_null": true,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-03",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 27
+        }
+      ],
+      "poc_gold_sha256": "667793b97727a60ad442c28d74ff3614b208e810c0c495fdfd0e516dae0ed60c",
+      "operation": "CONTINUE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000065",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-04",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 41
+        }
+      ],
+      "poc_gold_sha256": "85b149c45f99478d1c1ea5627a130d20bb38f25d086e6de265aca72b399e4d0f",
+      "operation": "NEW",
+      "target": null,
+      "target_null": true,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-05",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 27
+        }
+      ],
+      "poc_gold_sha256": "667793b97727a60ad442c28d74ff3614b208e810c0c495fdfd0e516dae0ed60c",
+      "operation": "CONTINUE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000065",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-06",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 41
+        }
+      ],
+      "poc_gold_sha256": "85b149c45f99478d1c1ea5627a130d20bb38f25d086e6de265aca72b399e4d0f",
+      "operation": "NEW",
+      "target": null,
+      "target_null": true,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-07",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 27
+        }
+      ],
+      "poc_gold_sha256": "667793b97727a60ad442c28d74ff3614b208e810c0c495fdfd0e516dae0ed60c",
+      "operation": "CONTINUE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000065",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-08",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 41
+        }
+      ],
+      "poc_gold_sha256": "85b149c45f99478d1c1ea5627a130d20bb38f25d086e6de265aca72b399e4d0f",
+      "operation": "NEW",
+      "target": null,
+      "target_null": true,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-09",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 27
+        }
+      ],
+      "poc_gold_sha256": "667793b97727a60ad442c28d74ff3614b208e810c0c495fdfd0e516dae0ed60c",
+      "operation": "CONTINUE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000065",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "episode_boundary-10",
+      "category": "episode_boundary",
+      "scope": "episode_operation",
+      "record_kind": "episode",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 41
+        }
+      ],
+      "poc_gold_sha256": "85b149c45f99478d1c1ea5627a130d20bb38f25d086e6de265aca72b399e4d0f",
+      "operation": "NEW",
+      "target": null,
+      "target_null": true,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "fact_operation-01",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "そば"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 32
+        }
+      ],
+      "poc_gold_sha256": "2b22511b8d2a488c64ce13444d1408503e74cd605a6d00d50d8248f475d54512",
+      "operation": "UPDATE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [
+        "what"
+      ],
+      "content_absent": false
+    },
+    {
+      "id": "fact_operation-02",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "緑茶"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "poc_gold_sha256": "95fc5914b1817e11aa042889d878d08e39d4ecff0f7395b6494d0dc77a9fe944",
+      "operation": "UPDATE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [
+        "what"
+      ],
+      "content_absent": false
+    },
+    {
+      "id": "fact_operation-03",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "みかん"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 33
+        }
+      ],
+      "poc_gold_sha256": "68d269fae223856a9e8e0393f350105f1a0ce3a4005f5a91c12e68db5fc7eff3",
+      "operation": "UPDATE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [
+        "what"
+      ],
+      "content_absent": false
+    },
+    {
+      "id": "fact_operation-04",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 29
+        }
+      ],
+      "poc_gold_sha256": "5f7200abe18db852afe48ad01f23cb0817724d4b403f0051d7feb595beea9ff4",
+      "operation": "UPDATE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [
+        "where"
+      ],
+      "content_absent": false
+    },
+    {
+      "id": "fact_operation-05",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 28
+        }
+      ],
+      "poc_gold_sha256": "5f7200abe18db852afe48ad01f23cb0817724d4b403f0051d7feb595beea9ff4",
+      "operation": "UPDATE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [
+        "where"
+      ],
+      "content_absent": false
+    },
+    {
+      "id": "fact_operation-06",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 40
+        }
+      ],
+      "poc_gold_sha256": "e4d659dbd75ef8b2e0c5b831a5601596674cf8a7d960384593198dfca4f8ff0f",
+      "operation": "REFERENCE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": true
+    },
+    {
+      "id": "fact_operation-07",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 41
+        }
+      ],
+      "poc_gold_sha256": "e4d659dbd75ef8b2e0c5b831a5601596674cf8a7d960384593198dfca4f8ff0f",
+      "operation": "REFERENCE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": true
+    },
+    {
+      "id": "fact_operation-08",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 41
+        }
+      ],
+      "poc_gold_sha256": "e4d659dbd75ef8b2e0c5b831a5601596674cf8a7d960384593198dfca4f8ff0f",
+      "operation": "REFERENCE",
+      "target": {
+        "record_id": "00000000-0000-4000-8000-000000000066",
+        "version": 1
+      },
+      "target_null": false,
+      "changes": [],
+      "content_absent": true
+    },
+    {
+      "id": "fact_operation-09",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 36
+        }
+      ],
+      "poc_gold_sha256": "3e674660ef6933ecb3dd7ed5072b72eba72ec5a2bbe84fc86ece960e006f3a54",
+      "operation": "NEW",
+      "target": null,
+      "target_null": true,
+      "changes": [],
+      "content_absent": false
+    },
+    {
+      "id": "fact_operation-10",
+      "category": "fact_operation",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 37
+        }
+      ],
+      "poc_gold_sha256": "3e674660ef6933ecb3dd7ed5072b72eba72ec5a2bbe84fc86ece960e006f3a54",
+      "operation": "NEW",
+      "target": null,
+      "target_null": true,
+      "changes": [],
+      "content_absent": false
+    },
+    {
       "id": "what_where_why-01",
       "category": "what_where_why",
       "scope": "fact_extraction",
@@ -891,6 +1490,148 @@
       "forbidden_save": false,
       "poc_gold_sha256": "f9cfc4e436d3a684c95be650cca0fe901f4f8d97521df6f734e16b430265f295",
       "count_scope": "selected_kind"
+    },
+    {
+      "id": "temporal-01",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "target_time": {
+            "start": {
+              "precision": "day",
+              "year": 2026,
+              "month": 9,
+              "day": 13
+            },
+            "timezone": "UTC"
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "poc_gold_sha256": "402d965dfc9bb4da1a78dcfc96b95a2ad619de217dac3f75d60886a8fa13455e"
+    },
+    {
+      "id": "temporal-02",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "target_time": {
+            "start": {
+              "precision": "day",
+              "year": 2026,
+              "month": 9,
+              "day": 12
+            },
+            "timezone": "UTC"
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "poc_gold_sha256": "9bfa0f793e8d5882327c18e5aaa702516d23db8cea51933dabff7a7b423b8225"
+    },
+    {
+      "id": "temporal-03",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "target_time": {
+            "start": {
+              "precision": "day",
+              "year": 2026,
+              "month": 9,
+              "day": 11
+            },
+            "timezone": "UTC"
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "poc_gold_sha256": "e7818eb853c177ad0494d55da097498b575eca1cdbec59290afd0a742a5d5414"
+    },
+    {
+      "id": "temporal-04",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "target_time": {
+            "start": {
+              "precision": "month",
+              "year": 2026,
+              "month": 8
+            },
+            "timezone": "UTC"
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "poc_gold_sha256": "4c41821333335114d88fa7b2cc328b1a80dfa66b32227e8c19d9f1a7defe047f"
+    },
+    {
+      "id": "temporal-05",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "target_time": {
+            "start": {
+              "precision": "year",
+              "year": 2025
+            },
+            "timezone": "UTC"
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "poc_gold_sha256": "c4f055e5db11cf1a3e8884122c505d8b027faddccd1a8a910f2da71c29c3af56"
     },
     {
       "id": "temporal-06",
@@ -1836,6 +2577,657 @@
       "forbidden_save": false,
       "poc_gold_sha256": "986b466ae4104625819c83e015838b795f40ffd624db0043b223dcc52ffa56de",
       "count_scope": "selected_kind"
+    },
+    {
+      "id": "catalog-01",
+      "category": "catalog",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 36
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "catalog-02",
+      "category": "catalog",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 37
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "catalog-03",
+      "category": "catalog",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 37
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "catalog-04",
+      "category": "catalog",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 37
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "catalog-05",
+      "category": "catalog",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 37
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "catalog-09",
+      "category": "catalog",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "poc_gold_sha256": "1329bed5a664bbf035723754d90023adf1034d44b942c070a37741a1b762d35c",
+      "matches": []
+    },
+    {
+      "id": "catalog-10",
+      "category": "catalog",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "poc_gold_sha256": "1329bed5a664bbf035723754d90023adf1034d44b942c070a37741a1b762d35c",
+      "matches": []
+    },
+    {
+      "id": "same_event-01",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "same_event-02",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 35
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "same_event-03",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 35
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "same_event-04",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 35
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "same_event-05",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 35
+        }
+      ],
+      "poc_gold_sha256": "6e9e7140c7c138452f8171aeeee35fe2e206abe5e9abd7bf17975c6105434e28",
+      "matches": [
+        {
+          "target": {
+            "record_id": "00000000-0000-4000-8000-000000000066",
+            "version": 1
+          },
+          "operation": "REFERENCE",
+          "certainty": "CONFIRMED"
+        }
+      ]
+    },
+    {
+      "id": "same_event-06",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 20
+        }
+      ],
+      "poc_gold_sha256": "1329bed5a664bbf035723754d90023adf1034d44b942c070a37741a1b762d35c",
+      "matches": []
+    },
+    {
+      "id": "same_event-07",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "poc_gold_sha256": "1329bed5a664bbf035723754d90023adf1034d44b942c070a37741a1b762d35c",
+      "matches": []
+    },
+    {
+      "id": "same_event-08",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "poc_gold_sha256": "1329bed5a664bbf035723754d90023adf1034d44b942c070a37741a1b762d35c",
+      "matches": []
+    },
+    {
+      "id": "same_event-09",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 30
+        }
+      ],
+      "poc_gold_sha256": "1329bed5a664bbf035723754d90023adf1034d44b942c070a37741a1b762d35c",
+      "matches": []
+    },
+    {
+      "id": "same_event-10",
+      "category": "same_event",
+      "scope": "fact_matching",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 29
+        }
+      ],
+      "poc_gold_sha256": "1329bed5a664bbf035723754d90023adf1034d44b942c070a37741a1b762d35c",
+      "matches": []
+    },
+    {
+      "id": "merge_proposal-01",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 79
+        }
+      ],
+      "poc_gold_sha256": "7afe9f87508e265817dba2e225b37185f51a88279f42e2b422ab963fbbc6eb0c",
+      "merge_targets": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "version": 1
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "version": 1
+        }
+      ],
+      "no_merges": false,
+      "nonempty_fact": false,
+      "merge_count": 1
+    },
+    {
+      "id": "merge_proposal-02",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 80
+        }
+      ],
+      "poc_gold_sha256": "7afe9f87508e265817dba2e225b37185f51a88279f42e2b422ab963fbbc6eb0c",
+      "merge_targets": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "version": 1
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "version": 1
+        }
+      ],
+      "no_merges": false,
+      "nonempty_fact": false,
+      "merge_count": 1
+    },
+    {
+      "id": "merge_proposal-03",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 80
+        }
+      ],
+      "poc_gold_sha256": "7afe9f87508e265817dba2e225b37185f51a88279f42e2b422ab963fbbc6eb0c",
+      "merge_targets": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "version": 1
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "version": 1
+        }
+      ],
+      "no_merges": false,
+      "nonempty_fact": false,
+      "merge_count": 1
+    },
+    {
+      "id": "merge_proposal-04",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 80
+        }
+      ],
+      "poc_gold_sha256": "7afe9f87508e265817dba2e225b37185f51a88279f42e2b422ab963fbbc6eb0c",
+      "merge_targets": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "version": 1
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "version": 1
+        }
+      ],
+      "no_merges": false,
+      "nonempty_fact": false,
+      "merge_count": 1
+    },
+    {
+      "id": "merge_proposal-05",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 80
+        }
+      ],
+      "poc_gold_sha256": "7afe9f87508e265817dba2e225b37185f51a88279f42e2b422ab963fbbc6eb0c",
+      "merge_targets": [
+        {
+          "record_id": "00000000-0000-4000-8000-000000000066",
+          "version": 1
+        },
+        {
+          "record_id": "00000000-0000-4000-8000-000000000067",
+          "version": 1
+        }
+      ],
+      "no_merges": false,
+      "nonempty_fact": false,
+      "merge_count": 1
+    },
+    {
+      "id": "merge_proposal-06",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 89
+        }
+      ],
+      "poc_gold_sha256": "2556c77c4f78395638383f039586d934d6a6b40939513a6b56901420ee7d86ac",
+      "merge_targets": [],
+      "no_merges": true,
+      "nonempty_fact": true,
+      "merge_count": 0
+    },
+    {
+      "id": "merge_proposal-07",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 90
+        }
+      ],
+      "poc_gold_sha256": "2556c77c4f78395638383f039586d934d6a6b40939513a6b56901420ee7d86ac",
+      "merge_targets": [],
+      "no_merges": true,
+      "nonempty_fact": true,
+      "merge_count": 0
+    },
+    {
+      "id": "merge_proposal-08",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 90
+        }
+      ],
+      "poc_gold_sha256": "2556c77c4f78395638383f039586d934d6a6b40939513a6b56901420ee7d86ac",
+      "merge_targets": [],
+      "no_merges": true,
+      "nonempty_fact": true,
+      "merge_count": 0
+    },
+    {
+      "id": "merge_proposal-09",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 90
+        }
+      ],
+      "poc_gold_sha256": "2556c77c4f78395638383f039586d934d6a6b40939513a6b56901420ee7d86ac",
+      "merge_targets": [],
+      "no_merges": true,
+      "nonempty_fact": true,
+      "merge_count": 0
+    },
+    {
+      "id": "merge_proposal-10",
+      "category": "merge_proposal",
+      "scope": "fact_merge",
+      "record_kind": "fact",
+      "count": null,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 90
+        }
+      ],
+      "poc_gold_sha256": "2556c77c4f78395638383f039586d934d6a6b40939513a6b56901420ee7d86ac",
+      "merge_targets": [],
+      "no_merges": true,
+      "nonempty_fact": true,
+      "merge_count": 0
     }
   ]
 }
