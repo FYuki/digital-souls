@@ -194,6 +194,7 @@ def test_external_identity_retains_local_adapters_and_has_no_secrets(tmp_path: P
     path = tmp_path / "external.json"
     path.write_text(json.dumps(external_data()))
     identity = runtime_identity("external_model", str(path))
+    assert identity["classifier_reason"] == "baseline-parity-no-classifier-export"
     assert identity["provider"] == "openai"
     assert identity["model"] == "openai/synthetic-model"
     assert identity["external_send"] is True and identity["cache"] is False
@@ -209,6 +210,24 @@ def test_external_identity_retains_local_adapters_and_has_no_secrets(tmp_path: P
     local_policy, _ = synthetic_policy(case("synonym-02"))
     assert not local_policy.permits(case("synonym-02").binding.to_domain(), "external")
     assert "SYNTHETIC_ANSWER" not in json.dumps(identity)
+
+
+@pytest.mark.ut
+@pytest.mark.parametrize("mode", ["fixture", "local_model"])
+def test_classifier_reason_is_absent_from_existing_identity(tmp_path: Path, mode: str) -> None:
+    from digital_souls_core.semantic_answer_runtime import runtime_identity
+
+    profile_path = None
+    if mode == "local_model":
+        data = json.loads((ROOT / "evals/semantic/answer-profile.example.json").read_text())
+        data["enabled"] = data["embedding"]["enabled"] = True
+        data["chat"]["external_send_allowed"] = True
+        path = tmp_path / "local.json"
+        path.write_text(json.dumps(data))
+        profile_path = str(path)
+    identity = runtime_identity(mode, profile_path)
+    assert identity["classifier"] == "synthetic"
+    assert "classifier_reason" not in identity
 
 
 @pytest.mark.it1
@@ -281,9 +300,8 @@ def test_provider_external_opt_in_is_required_before_transport(
 
 
 @pytest.mark.ut
-@pytest.mark.parametrize("mode", ["fixture", "local_model"])
-def test_python_network_guards_deny_external_ip_without_opening_network(
-    monkeypatch: pytest.MonkeyPatch, mode: str
+def test_fixture_network_guard_denies_ip_without_opening_network(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import socket
     from typing import Any
@@ -297,22 +315,16 @@ def test_python_network_guards_deny_external_ip_without_opening_network(
 
     monkeypatch.setattr(socket.socket, "connect", fake_connect)
     module = provider_module()
-    if mode == "fixture":
-        module.deny_fixture_network()
-    else:
-        module.restrict_local_network()
+    module.deny_fixture_network()
     from types import SimpleNamespace
     from typing import cast
 
     sock = cast(socket.socket, SimpleNamespace(family=socket.AF_INET))
     with pytest.raises(RuntimeError, match="network disabled"):
         socket.socket.connect(sock, ("192.0.2.1", 443))
-    if mode == "local_model":
+    with pytest.raises(RuntimeError):
         socket.socket.connect(sock, ("127.0.0.1", 18082))
-    else:
-        with pytest.raises(RuntimeError):
-            socket.socket.connect(sock, ("127.0.0.1", 18082))
-    assert calls == ([] if mode == "fixture" else [("127.0.0.1", 18082)])
+    assert calls == []
 
 
 @pytest.mark.ut

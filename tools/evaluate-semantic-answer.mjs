@@ -120,11 +120,12 @@ export async function main(argv = process.argv.slice(2)) {
       }
     }
     if (!['fixture','local_model','external_model'].includes(options.mode) || !Number.isSafeInteger(options.runs) || options.runs < 1) throw new Error('arguments');
+    if (options.dryRun && options.executeExternal) throw new Error('arguments');
     if (options.mode === 'local_model' && (!options.execute || !options.profile)) {
       process.stdout.write('{"status":"NOT RUN","reason":"explicit execution and profile required"}\n');
       return 3;
     }
-    if (options.mode === 'external_model' && (!options.executeExternal || !options.profile)) {
+    if (options.mode === 'external_model' && ((!options.dryRun && !options.executeExternal) || !options.profile)) {
       process.stdout.write('{"status":"NOT RUN","reason":"explicit external execution and profile required"}\n');
       return 3;
     }

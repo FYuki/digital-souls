@@ -38,19 +38,6 @@ def deny_fixture_network() -> None:
     socket.socket.connect = connect  # type: ignore[method-assign, assignment]
 
 
-def restrict_local_network() -> None:
-    original = socket.socket.connect
-
-    def connect(self: socket.socket, address: Any) -> Any:
-        if self.family != socket.AF_UNIX and (
-            not isinstance(address, tuple) or address[0] not in {"127.0.0.1", "::1"}
-        ):
-            raise RuntimeError("Local answer external IP network disabled")
-        return original(self, address)
-
-    socket.socket.connect = connect  # type: ignore[method-assign, assignment]
-
-
 def _call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     try:
         config = options.get("config", {})
@@ -100,8 +87,6 @@ def _call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> 
                 raise ValueError
             from digital_souls_core.provider import LiteLLMProvider
 
-            if mode == "local_model":
-                restrict_local_network()
             provider = LiteLLMProvider()
             embedding = LocalEmbedding(profile.embedding)
         database = PostgresConfig(

@@ -203,6 +203,7 @@ def runtime_identity(mode: str, profile_path: str | None) -> dict[str, Any]:
     if mode == "external_model":
         assert chat is not None
         identity.update(
+            classifier_reason="baseline-parity-no-classifier-export",
             provider=chat.model.split("/", 1)[0],
             model=chat.model,
             transport=chat.transport,

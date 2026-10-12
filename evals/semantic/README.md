@@ -247,6 +247,11 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 この mode だけです。embedding は `LocalEmbedding` の管理 loopback、分類器は既存の
 synthetic 応答と本番 `LocalClassifier` の管理 loopback profile を維持します。
 
+external の manifest/identity には `classifier_reason="baseline-parity-no-classifier-export"` を記録します。
+比較基準の gemma4-12b 評価（[2026-10-10 証跡](../../docs/evidence/2026-10-10-semantic-real-model-answer-bge-m3.json)）も synthetic で条件をそろえるためです。
+分類器は外部モデルへ送らずローカルのまま維持し、実分類器での受入は Issue #128 の範囲です。
+fixture/local_model の report にはこのフィールドを追加しません。
+
 [無効な例](external-answer-profile.example.json)を参考に、git 管理外・リポジトリ外の絶対パスへ
 JSON profile を用意します。トップレベルと embedding の `enabled=true`、chat の
 `transport="sdk"` / `external_send_allowed=true` が必須です。今回対応する LiteLLM provider は
@@ -262,7 +267,7 @@ runner は指名した値だけを子へ転送し、Python provider が `OPENAI_
 外部送信なしの見積もり（キー不要。ローカル embedding と使い捨て PostgreSQL は使用）：
 
 ```sh
-bash tools/evaluate-semantic-answer.sh --mode external_model --execute-external-model \
+bash tools/evaluate-semantic-answer.sh --mode external_model \
   --profile /absolute/private/external-answer.json --dry-run --runs 3 \
   --output-tokens-per-call 512 --input-price-per-million 1 --output-price-per-million 2 \
   --output /dev/shm/external-answer-plan.json
@@ -274,8 +279,9 @@ bash tools/evaluate-semantic-answer.sh --mode external_model --execute-external-
 任意指定し、指定した項目だけ金額を計算します（通貨換算なし・価格の既定値なし）。
 report の `status="DRY RUN"` / `external_send=false` / `quality_evidence=false` は品質合格ではありません。
 
-#199 で実送信する際は上記から `--dry-run` と見積もり用引数を外します。
-`--execute-external-model` と profile が欠けると NOT RUN（exit 3）。実送信 report は
+#199 で実送信する際は `--execute-external-model` と profile を明示した別コマンドを使います。
+`--dry-run` と `--execute-external-model` の同時指定は引数エラー（FAIL、送信なし）。
+dry-run 以外では実行 flag または profile が欠けると NOT RUN（exit 3）。実送信 report は
 provider / model / transport / `external_send=true` / `cache=false` / run_count / commit を記録します。
 公開 report・stdout・stderr はキー・URL・環境変数値・ケース本文・query・回答全文を含めません。
 本文を含む promptfoo raw export は既存どおり private 一時領域で扱い、通常終了時に削除します。
