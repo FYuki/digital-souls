@@ -1,0 +1,702 @@
+{
+  "$defs": {
+    "Actor": {
+      "additionalProperties": false,
+      "description": "PoC identity correspondence for Who; product FiveW.who remains text.",
+      "properties": {
+        "entity_id": {
+          "anyOf": [
+            {
+              "enum": [
+                "speaker:user",
+                "character:miori"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity Id"
+        },
+        "names": {
+          "items": {
+            "$ref": "#/$defs/Text"
+          },
+          "minItems": 1,
+          "title": "Names",
+          "type": "array"
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "title": "Actor",
+      "type": "object"
+    },
+    "Category": {
+      "enum": [
+        "episodic_event",
+        "user_preference",
+        "interaction_preference",
+        "none",
+        "selection",
+        "what_where_why",
+        "temporal",
+        "context",
+        "links",
+        "evidence",
+        "assistant_retelling",
+        "assistant_self",
+        "multiple_actors",
+        "named_third_person",
+        "quoted_first_person",
+        "quoted_second_person",
+        "third_person_reference",
+        "unknown_actor",
+        "user_context",
+        "user_first_person",
+        "direct",
+        "event_exclusion",
+        "confirmation",
+        "grounding_exclusion",
+        "safety",
+        "event_existing_boundary",
+        "episode_boundary",
+        "fact_operation",
+        "catalog",
+        "same_event",
+        "merge_proposal",
+        "reaffirm"
+      ],
+      "type": "string"
+    },
+    "CitationRange": {
+      "additionalProperties": false,
+      "description": "Eligible character interval, not a requirement to quote an entire turn.",
+      "properties": {
+        "turn": {
+          "$ref": "#/$defs/Nonnegative"
+        },
+        "speaker": {
+          "enum": [
+            "user",
+            "assistant"
+          ],
+          "title": "Speaker",
+          "type": "string"
+        },
+        "start": {
+          "$ref": "#/$defs/Nonnegative"
+        },
+        "end": {
+          "$ref": "#/$defs/Nonnegative"
+        }
+      },
+      "required": [
+        "turn",
+        "speaker",
+        "start",
+        "end"
+      ],
+      "title": "CitationRange",
+      "type": "object"
+    },
+    "Dataset": {
+      "enum": [
+        "memory_extraction",
+        "episodic_quality",
+        "episodic_actor",
+        "semantic_memory",
+        "semantic_boundary"
+      ],
+      "type": "string"
+    },
+    "Expectation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "category": {
+          "$ref": "#/$defs/Category"
+        },
+        "scope": {
+          "enum": [
+            "type_and_topic",
+            "fact_extraction",
+            "fact_actor",
+            "semantic_admission",
+            "episode_operation",
+            "fact_matching",
+            "fact_merge"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "selector": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "record_kind": {
+          "enum": [
+            "episode",
+            "fact",
+            "semantic"
+          ],
+          "title": "Record Kind",
+          "type": "string"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Nonnegative"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "count_scope": {
+          "default": "selected_kind",
+          "enum": [
+            "selected_kind",
+            "all_records"
+          ],
+          "title": "Count Scope",
+          "type": "string"
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "enum": [
+                "NEW",
+                "UPDATE",
+                "REFERENCE",
+                "CONTINUE",
+                "REAFFIRM"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TargetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target_null": {
+          "default": false,
+          "title": "Target Null",
+          "type": "boolean"
+        },
+        "changes": {
+          "items": {
+            "enum": [
+              "what",
+              "where",
+              "when",
+              "who",
+              "why"
+            ],
+            "type": "string"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "content_absent": {
+          "default": false,
+          "title": "Content Absent",
+          "type": "boolean"
+        },
+        "matches": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/MatchOutcome"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matches"
+        },
+        "merge_targets": {
+          "items": {
+            "$ref": "#/$defs/TargetRef"
+          },
+          "title": "Merge Targets",
+          "type": "array"
+        },
+        "merge_count": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Nonnegative"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "no_merges": {
+          "default": false,
+          "title": "No Merges",
+          "type": "boolean"
+        },
+        "nonempty_fact": {
+          "default": false,
+          "title": "Nonempty Fact",
+          "type": "boolean"
+        },
+        "formation_type": {
+          "anyOf": [
+            {
+              "const": "direct_extraction",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Formation Type"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/RecordMatch"
+          },
+          "title": "Records",
+          "type": "array"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/CitationRange"
+          },
+          "title": "Citations",
+          "type": "array"
+        },
+        "required_user_turn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Nonnegative"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "evidence_tokens": {
+          "items": {
+            "$ref": "#/$defs/Text"
+          },
+          "title": "Evidence Tokens",
+          "type": "array"
+        },
+        "linked": {
+          "default": false,
+          "title": "Linked",
+          "type": "boolean"
+        },
+        "link_topics": {
+          "items": {
+            "$ref": "#/$defs/Text"
+          },
+          "title": "Link Topics",
+          "type": "array"
+        },
+        "forbidden_save": {
+          "default": false,
+          "title": "Forbidden Save",
+          "type": "boolean"
+        },
+        "poc_gold_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Poc Gold Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "scope",
+        "record_kind",
+        "records",
+        "citations",
+        "poc_gold_sha256"
+      ],
+      "title": "Expectation",
+      "type": "object"
+    },
+    "FieldMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "enum": [
+            "five_w.predicate",
+            "five_w.object",
+            "five_w.who",
+            "five_w.where",
+            "five_w.why.text",
+            "five_w.when",
+            "proposition.subject",
+            "proposition.attribute",
+            "proposition.value",
+            "normalized_text"
+          ],
+          "title": "Path",
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/$defs/TextMatch"
+        }
+      },
+      "required": [
+        "path",
+        "match"
+      ],
+      "title": "FieldMatch",
+      "type": "object"
+    },
+    "Identifier": {
+      "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+      "type": "string"
+    },
+    "MatchOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/TargetRef"
+        },
+        "operation": {
+          "enum": [
+            "REFERENCE",
+            "UPDATE"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "certainty": {
+          "const": "CONFIRMED",
+          "title": "Certainty",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "operation",
+        "certainty"
+      ],
+      "title": "MatchOutcome",
+      "type": "object"
+    },
+    "Nonnegative": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "PartialTime": {
+      "additionalProperties": false,
+      "properties": {
+        "precision": {
+          "enum": [
+            "year",
+            "month",
+            "day",
+            "hour",
+            "minute",
+            "second"
+          ],
+          "title": "Precision",
+          "type": "string"
+        },
+        "year": {
+          "title": "Year",
+          "type": "integer"
+        },
+        "month": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Month"
+        },
+        "day": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Day"
+        },
+        "hour": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hour"
+        },
+        "minute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minute"
+        },
+        "second": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Second"
+        }
+      },
+      "required": [
+        "precision",
+        "year"
+      ],
+      "title": "PartialTime",
+      "type": "object"
+    },
+    "RecordMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FieldMatch"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "target_time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeMatch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "episode_context": {
+          "anyOf": [
+            {
+              "enum": [
+                "actual",
+                "hypothetical",
+                "fiction"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Episode Context"
+        },
+        "who": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Actor"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Who"
+        }
+      },
+      "title": "RecordMatch",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "predicate": {
+          "$ref": "#/$defs/Text"
+        },
+        "object": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "predicate",
+        "object"
+      ],
+      "title": "Target",
+      "type": "object"
+    },
+    "TargetRef": {
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "record_id",
+        "version"
+      ],
+      "title": "TargetRef",
+      "type": "object"
+    },
+    "Text": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "TextMatch": {
+      "additionalProperties": false,
+      "description": "Fixed PoC operator, not a new choice of free-text scoring.",
+      "properties": {
+        "mode": {
+          "enum": [
+            "equals_any",
+            "contains_any",
+            "null",
+            "rubric_topic"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "$ref": "#/$defs/Text"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "mode",
+        "values"
+      ],
+      "title": "TextMatch",
+      "type": "object"
+    },
+    "TimeMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartialTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartialTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        }
+      },
+      "title": "TimeMatch",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "dataset": {
+      "$ref": "#/$defs/Dataset"
+    },
+    "expectations": {
+      "items": {
+        "$ref": "#/$defs/Expectation"
+      },
+      "minItems": 1,
+      "title": "Expectations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "dataset",
+    "expectations"
+  ],
+  "title": "ExpectationSet",
+  "type": "object"
+}

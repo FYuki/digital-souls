@@ -1,0 +1,805 @@
+{
+  "memory_extraction": {
+    "file": "memory_extraction.jsonl",
+    "source_path": "backend/evals/memory_extraction/cases.jsonl",
+    "sha256": "36fea6dde28493aee6827d3224508a6f833b0d08583321d21490b4c5c5287d13",
+    "migrated": [
+      "episodic_achievement",
+      "episodic_decision",
+      "episodic_outcome",
+      "episodic_change",
+      "episodic_shared",
+      "preference_like_tea",
+      "preference_like_music",
+      "preference_dislike",
+      "preference_over",
+      "preference_place",
+      "interaction_tone",
+      "interaction_length",
+      "interaction_language",
+      "interaction_format",
+      "interaction_address",
+      "none_question",
+      "none_greeting",
+      "none_command",
+      "none_assistant",
+      "episodic_exam",
+      "episodic_move",
+      "episodic_job",
+      "preference_food",
+      "preference_color",
+      "preference_dislike_noise",
+      "interaction_detail",
+      "interaction_casual",
+      "none_ack",
+      "none_lookup"
+    ],
+    "deferred": [
+      {
+        "id": "none_fact",
+        "reason": "一般知識の確認を一律 NONE とする旧抽出器の期待値は Core の Semantic 範囲と対応が未確定。期待値を変更せず要確認。"
+      }
+    ],
+    "version": "c0838d37b3a6c13cefa52d8a7b992e1a2645aeb4e22eccb9181d9f3acd3aac44"
+  },
+  "episodic_quality": {
+    "file": "episodic_quality.jsonl",
+    "source_path": "backend/evals/episodic_quality/cases.jsonl",
+    "sha256": "a7d37f67abd205ec558658c554204a73cd8a636a443485f3c632ad8da76cf1d2",
+    "migrated": [
+      "selection-01",
+      "selection-02",
+      "selection-03",
+      "selection-04",
+      "selection-05",
+      "selection-06",
+      "selection-07",
+      "selection-08",
+      "selection-09",
+      "selection-10",
+      "episode_boundary-01",
+      "episode_boundary-02",
+      "episode_boundary-03",
+      "episode_boundary-04",
+      "episode_boundary-05",
+      "episode_boundary-06",
+      "episode_boundary-07",
+      "episode_boundary-08",
+      "episode_boundary-09",
+      "episode_boundary-10",
+      "fact_operation-01",
+      "fact_operation-02",
+      "fact_operation-03",
+      "fact_operation-04",
+      "fact_operation-05",
+      "fact_operation-06",
+      "fact_operation-07",
+      "fact_operation-08",
+      "fact_operation-09",
+      "fact_operation-10",
+      "what_where_why-01",
+      "what_where_why-02",
+      "what_where_why-03",
+      "what_where_why-04",
+      "what_where_why-05",
+      "what_where_why-06",
+      "what_where_why-07",
+      "what_where_why-08",
+      "what_where_why-09",
+      "what_where_why-10",
+      "temporal-01",
+      "temporal-02",
+      "temporal-03",
+      "temporal-04",
+      "temporal-05",
+      "temporal-06",
+      "temporal-07",
+      "temporal-08",
+      "temporal-10",
+      "context-04",
+      "context-05",
+      "context-06",
+      "links-01",
+      "links-02",
+      "links-03",
+      "links-04",
+      "links-05",
+      "links-06",
+      "links-07",
+      "links-08",
+      "links-09",
+      "links-10",
+      "evidence-01",
+      "evidence-02",
+      "evidence-03",
+      "evidence-04",
+      "evidence-05",
+      "catalog-01",
+      "catalog-02",
+      "catalog-03",
+      "catalog-04",
+      "catalog-05",
+      "catalog-09",
+      "catalog-10",
+      "same_event-01",
+      "same_event-02",
+      "same_event-03",
+      "same_event-04",
+      "same_event-05",
+      "same_event-06",
+      "same_event-07",
+      "same_event-08",
+      "same_event-09",
+      "same_event-10",
+      "merge_proposal-01",
+      "merge_proposal-02",
+      "merge_proposal-03",
+      "merge_proposal-04",
+      "merge_proposal-05",
+      "merge_proposal-06",
+      "merge_proposal-07",
+      "merge_proposal-08",
+      "merge_proposal-09",
+      "merge_proposal-10"
+    ],
+    "deferred": [
+      {
+        "id": "temporal-09",
+        "reason": "年不明の9月は元発言日時があっても年が確定しない。Core PartialDateTime は year 必須。推測補完せず保留。"
+      },
+      {
+        "id": "context-01",
+        "reason": "PoC の CONDITIONAL/NEGATED/PLANNED enum を Core の型で同じ厳密さで表せない。context だけの照合へ緩めず保留。"
+      },
+      {
+        "id": "context-02",
+        "reason": "PoC の CONDITIONAL/NEGATED/PLANNED enum を Core の型で同じ厳密さで表せない。context だけの照合へ緩めず保留。"
+      },
+      {
+        "id": "context-03",
+        "reason": "PoC の CONDITIONAL/NEGATED/PLANNED enum を Core の型で同じ厳密さで表せない。context だけの照合へ緩めず保留。"
+      },
+      {
+        "id": "context-07",
+        "reason": "PoC の CONDITIONAL/NEGATED/PLANNED enum を Core の型で同じ厳密さで表せない。context だけの照合へ緩めず保留。"
+      },
+      {
+        "id": "context-08",
+        "reason": "PoC の CONDITIONAL/NEGATED/PLANNED enum を Core の型で同じ厳密さで表せない。context だけの照合へ緩めず保留。"
+      },
+      {
+        "id": "context-09",
+        "reason": "PoC の CONDITIONAL/NEGATED/PLANNED enum を Core の型で同じ厳密さで表せない。context だけの照合へ緩めず保留。"
+      },
+      {
+        "id": "context-10",
+        "reason": "PoC の CONDITIONAL/NEGATED/PLANNED enum を Core の型で同じ厳密さで表せない。context だけの照合へ緩めず保留。"
+      },
+      {
+        "id": "evidence-06",
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
+      },
+      {
+        "id": "evidence-07",
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
+      },
+      {
+        "id": "evidence-08",
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
+      },
+      {
+        "id": "evidence-09",
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
+      },
+      {
+        "id": "evidence-10",
+        "reason": "primary/context_before の抽出所有範囲が必須。seed・固定時刻だけでは抽出所有範囲を表せない。後続の範囲入力契約待ちとし、引用検査だけへ緩めず保留。"
+      },
+      {
+        "id": "catalog-06",
+        "reason": "catalog 段の UPDATE/POSSIBLE の全候補列・確度は最終形成結果から同じ厳密さで観測できない。確定 target/更新だけへ緩めず保留。"
+      },
+      {
+        "id": "catalog-07",
+        "reason": "catalog 段の UPDATE/POSSIBLE の全候補列・確度は最終形成結果から同じ厳密さで観測できない。確定 target/更新だけへ緩めず保留。"
+      },
+      {
+        "id": "catalog-08",
+        "reason": "catalog 段の UPDATE/POSSIBLE の全候補列・確度は最終形成結果から同じ厳密さで観測できない。確定 target/更新だけへ緩めず保留。"
+      },
+      {
+        "id": "privacy-semantic-01-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-01-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-02-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-02-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-03-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-03-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-04-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-04-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-05-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-05-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-06-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-06-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-07-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-07-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-08-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-08-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-09-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-09-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-10-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-10-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-11-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-11-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-12-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-12-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-13-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-13-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-14-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-14-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-15-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-15-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-16-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-16-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-17-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-17-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-18-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-18-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-19-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-19-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-20-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-20-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-21-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-21-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-22-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-22-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-23-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-23-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-24-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-24-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-25-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-25-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-26-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-26-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-27-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-27-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-28-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-28-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-29-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-29-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-30-ja",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      },
+      {
+        "id": "privacy-semantic-30-en",
+        "reason": "保存前分類器単体の classification gold。NOT_SENSITIVE を保存許可へ読み替えられず、ABSTAIN の扱いは ADR 0032 と異なる。既存 privacy 評価との分担を要確認。"
+      }
+    ],
+    "version": "f8c6f25c79f4cb0b556587b029d7b8d68683900c8b6e679a85be6603a34d5c53"
+  },
+  "episodic_actor": {
+    "file": "episodic_actor.jsonl",
+    "source_path": "backend/evals/episodic_actor/cases.jsonl",
+    "sha256": "130967b63c373080180f7e2c46fe3c972db6006c1b1795c3da3837dcdf105289",
+    "migrated": [
+      "assistant_retelling-01",
+      "assistant_retelling-02",
+      "assistant_retelling-03",
+      "assistant_retelling-04",
+      "assistant_retelling-05",
+      "assistant_retelling-06",
+      "assistant_retelling-07",
+      "assistant_retelling-08",
+      "assistant_retelling-09",
+      "assistant_retelling-10",
+      "assistant_self-01",
+      "assistant_self-02",
+      "assistant_self-03",
+      "assistant_self-04",
+      "assistant_self-05",
+      "assistant_self-06",
+      "assistant_self-07",
+      "assistant_self-08",
+      "assistant_self-09",
+      "assistant_self-10",
+      "multiple_actors-01",
+      "multiple_actors-02",
+      "multiple_actors-03",
+      "multiple_actors-04",
+      "multiple_actors-05",
+      "multiple_actors-06",
+      "multiple_actors-07",
+      "multiple_actors-08",
+      "multiple_actors-09",
+      "multiple_actors-10",
+      "named_third_person-01",
+      "named_third_person-02",
+      "named_third_person-03",
+      "named_third_person-04",
+      "named_third_person-05",
+      "named_third_person-06",
+      "named_third_person-07",
+      "named_third_person-08",
+      "named_third_person-09",
+      "named_third_person-10",
+      "quoted_first_person-01",
+      "quoted_first_person-02",
+      "quoted_first_person-03",
+      "quoted_first_person-04",
+      "quoted_first_person-05",
+      "quoted_first_person-06",
+      "quoted_first_person-07",
+      "quoted_first_person-08",
+      "quoted_first_person-09",
+      "quoted_first_person-10",
+      "quoted_second_person-01",
+      "quoted_second_person-02",
+      "quoted_second_person-03",
+      "quoted_second_person-04",
+      "quoted_second_person-05",
+      "quoted_second_person-06",
+      "quoted_second_person-07",
+      "quoted_second_person-08",
+      "quoted_second_person-09",
+      "quoted_second_person-10",
+      "third_person_reference-01",
+      "third_person_reference-02",
+      "third_person_reference-03",
+      "third_person_reference-04",
+      "third_person_reference-05",
+      "third_person_reference-06",
+      "third_person_reference-07",
+      "third_person_reference-08",
+      "third_person_reference-09",
+      "third_person_reference-10",
+      "unknown_actor-01",
+      "unknown_actor-02",
+      "unknown_actor-03",
+      "unknown_actor-04",
+      "unknown_actor-05",
+      "unknown_actor-06",
+      "unknown_actor-07",
+      "unknown_actor-08",
+      "unknown_actor-09",
+      "unknown_actor-10",
+      "user_context-01",
+      "user_context-02",
+      "user_context-03",
+      "user_context-04",
+      "user_context-05",
+      "user_context-06",
+      "user_context-07",
+      "user_context-08",
+      "user_context-09",
+      "user_context-10",
+      "user_first_person-01",
+      "user_first_person-02",
+      "user_first_person-03",
+      "user_first_person-04",
+      "user_first_person-05",
+      "user_first_person-06",
+      "user_first_person-07",
+      "user_first_person-08",
+      "user_first_person-09",
+      "user_first_person-10"
+    ],
+    "deferred": [],
+    "version": "ea0cb630dca53efd3b9680787140d155290336369504e3a39df3add9a0ccd14b"
+  },
+  "semantic_memory": {
+    "file": "semantic_memory.jsonl",
+    "source_path": "backend/evals/semantic_memory/cases.jsonl",
+    "sha256": "1603788df455b6598ab328468c9fe048692efce51c851b87ab0749efc6fdd676",
+    "migrated": [
+      "direct-01",
+      "direct-02",
+      "direct-03",
+      "direct-04",
+      "direct-05",
+      "direct-06",
+      "direct-07",
+      "direct-08",
+      "direct-09",
+      "direct-10",
+      "event_exclusion-01",
+      "event_exclusion-02",
+      "event_exclusion-03",
+      "event_exclusion-04",
+      "event_exclusion-05",
+      "event_exclusion-06",
+      "event_exclusion-07",
+      "event_exclusion-08",
+      "event_exclusion-09",
+      "event_exclusion-10",
+      "confirmation-01",
+      "confirmation-02",
+      "confirmation-03",
+      "confirmation-04",
+      "confirmation-05",
+      "confirmation-06",
+      "confirmation-07",
+      "confirmation-08",
+      "confirmation-09",
+      "confirmation-10",
+      "reaffirm-01",
+      "reaffirm-02",
+      "reaffirm-03",
+      "reaffirm-04",
+      "reaffirm-05",
+      "reaffirm-06",
+      "reaffirm-07",
+      "reaffirm-08",
+      "reaffirm-09",
+      "reaffirm-10",
+      "grounding_exclusion-01",
+      "grounding_exclusion-02",
+      "grounding_exclusion-03",
+      "grounding_exclusion-04",
+      "grounding_exclusion-05",
+      "grounding_exclusion-06",
+      "grounding_exclusion-07",
+      "grounding_exclusion-08",
+      "grounding_exclusion-09",
+      "grounding_exclusion-10",
+      "safety-01",
+      "safety-02",
+      "safety-03",
+      "safety-04",
+      "safety-05",
+      "safety-06",
+      "safety-07",
+      "safety-08",
+      "safety-09",
+      "safety-10"
+    ],
+    "deferred": [
+      {
+        "id": "change-01",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-02",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-03",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-04",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-05",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-06",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-07",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-08",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-09",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "change-10",
+        "reason": "ADR 0019 の時間変化（CHANGE）と旧状態管理はこの Epic の直接抽出・保存判定の実装範囲外。seed は表現可能だが未実装機能の評価として保留。"
+      },
+      {
+        "id": "correction-01",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-01",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-02",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-02",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-03",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-03",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-04",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-04",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-05",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-05",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-06",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-06",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-07",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-07",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-08",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-08",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-09",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-09",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "correction-10",
+        "reason": "ADR 0019 の Semantic 訂正（CORRECT）と旧状態管理はこの Epic の Fact 訂正とは別の未実装機能。期待操作を NEW へ緩めず保留。"
+      },
+      {
+        "id": "fixed_conflict-10",
+        "reason": "ADR 0019 の固定属性矛盾（CONFLICT）と旧状態管理はこの Epic の実装範囲外。seed 不足ではなく未実装機能として保留。"
+      },
+      {
+        "id": "self_report_priority-01",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-02",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-03",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-04",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-05",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-06",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-07",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-08",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-09",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      },
+      {
+        "id": "self_report_priority-10",
+        "reason": "EXPERIENCE_DERIVED と直接自己申告の共存/優先（SELF_REPORT）・旧記録を active に保つ条件は ADR 0019 の未実装範囲。保留。"
+      }
+    ],
+    "version": "0499a32cdbe2c3b4c580e3909d551e091126b0a02723be42c539c70835d0a8ca"
+  },
+  "semantic_boundary": {
+    "file": "semantic_boundary.jsonl",
+    "source_path": "backend/evals/semantic_memory/boundary-cases.jsonl",
+    "sha256": "d2546ace86fcdf6f86d4309dc393cfdc47b6bba5c0cdaddd49a2e0a80cdd1df7",
+    "migrated": [
+      "boundary-01",
+      "boundary-02",
+      "boundary-03",
+      "boundary-04"
+    ],
+    "deferred": [],
+    "version": "03c3924aa08dbfcadd8720bec959e0c993947b7009e8a9822ae092d0596a797c"
+  }
+}

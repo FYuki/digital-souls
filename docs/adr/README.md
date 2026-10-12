@@ -47,6 +47,7 @@ ADR 0026〜0030は、2026-10-11のユーザーの承認を根拠に、同日にA
 - [ADR 0030: 人格の上書き（インジェクション）への耐性の評価](0030-injection-resistance-evaluation.md)
 - [ADR 0031: 呼び出し側の system を受け取らない](0031-reject-caller-system.md)
 - [ADR 0032: privacy 分類器の評価と PoC ケースの移行](0032-privacy-classifier-evaluation.md)（Accepted、ABSTAIN の扱いは決定 C〈別集計〉、2026-10-12 ユーザー決定）
+- [ADR 0033: 会話からの記憶形成の評価契約と PoC ケース移行](0033-memory-formation-evaluation.md) — Proposed
 - [ADR 0034: 記憶の共有範囲と保存時の個人名の置き換え](0034-memory-sharing-and-name-replacement.md)（Proposed、ユーザー決定と未承認の AI 提案・要確認事項を区別）
 
 ADR 0021のSQLite撤去は Epic #79（[Issue #88](https://github.com/FYuki/digital-souls-core/issues/88)）で完了しました。本文は決定時点の履歴を保持します。

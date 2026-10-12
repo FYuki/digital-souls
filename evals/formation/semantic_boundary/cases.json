@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "dataset": "semantic_boundary",
+  "cases": [
+    {
+      "id": "boundary-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "昨日の夕方、別の喫茶店でもコーヒーを選んで飲みました。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        },
+        {
+          "role": "assistant",
+          "text": "そうでしたか。また、飲まれたのですね。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-boundary-01",
+      "seed": [
+        {
+          "record_id": "coffee",
+          "kind": "semantic",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "seed-conversation-coffee",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-15T00:00:00+00:00",
+          "updated_at": "2026-09-15T00:00:00+00:00",
+          "normalized_text": "ユーザーのコーヒーの好みは好きではない",
+          "formation_type": "direct_extraction",
+          "proposition": {
+            "subject": "ユーザー",
+            "attribute": "コーヒーの好み",
+            "value": "好きではない",
+            "mutability": "CHANGEABLE",
+            "self_report": true
+          },
+          "sources": [
+            {
+              "role": "user",
+              "text": "ユーザーのコーヒーの好みは好きではない",
+              "stated_at": "2026-09-15T00:00:00+00:00"
+            }
+          ],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-15T00:00:00+00:00",
+            "last_stated_at": "2026-09-15T00:00:00+00:00"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/semantic_memory/fixtures.py:24",
+      "timezone": "Asia/Tokyo"
+    },
+    {
+      "id": "boundary-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今日も喫茶店でコーヒーを選んで飲みました。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        },
+        {
+          "role": "assistant",
+          "text": "そうでしたか。また、飲まれたのですね。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-boundary-02",
+      "seed": [
+        {
+          "record_id": "coffee",
+          "kind": "semantic",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "seed-conversation-coffee",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-15T00:00:00+00:00",
+          "updated_at": "2026-09-15T00:00:00+00:00",
+          "normalized_text": "ユーザーのコーヒーの好みは好きではない",
+          "formation_type": "direct_extraction",
+          "proposition": {
+            "subject": "ユーザー",
+            "attribute": "コーヒーの好み",
+            "value": "好きではない",
+            "mutability": "CHANGEABLE",
+            "self_report": true
+          },
+          "sources": [
+            {
+              "role": "user",
+              "text": "ユーザーのコーヒーの好みは好きではない",
+              "stated_at": "2026-09-15T00:00:00+00:00"
+            }
+          ],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-15T00:00:00+00:00",
+            "last_stated_at": "2026-09-15T00:00:00+00:00"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/semantic_memory/fixtures.py:24",
+      "timezone": "Asia/Tokyo"
+    },
+    {
+      "id": "boundary-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "昨日の朝、喫茶店でコーヒーを選んで飲みました。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        },
+        {
+          "role": "assistant",
+          "text": "そうでしたか。また、飲まれたのですね。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-boundary-03",
+      "seed": [],
+      "clock_source": "backend/evals/semantic_memory/fixtures.py:24",
+      "timezone": "Asia/Tokyo"
+    },
+    {
+      "id": "boundary-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "昨日紅茶を飲みました。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        },
+        {
+          "role": "assistant",
+          "text": "そうでしたか。また、飲まれたのですね。",
+          "stated_at": "2026-09-15T00:00:00+00:00"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-boundary-04",
+      "seed": [
+        {
+          "record_id": "coffee",
+          "kind": "semantic",
+          "binding": {
+            "scope": {
+              "subject": "fixture-user",
+              "client": "formation-fixture",
+              "audience": "local-private"
+            },
+            "character_id": "miori"
+          },
+          "conversation_id": "seed-conversation-coffee",
+          "version": 1,
+          "state": "active",
+          "created_at": "2026-09-15T00:00:00+00:00",
+          "updated_at": "2026-09-15T00:00:00+00:00",
+          "normalized_text": "ユーザーの紅茶の好みは好きではない",
+          "formation_type": "direct_extraction",
+          "proposition": {
+            "subject": "ユーザー",
+            "attribute": "紅茶の好み",
+            "value": "好きではない",
+            "mutability": "CHANGEABLE",
+            "self_report": true
+          },
+          "sources": [
+            {
+              "role": "user",
+              "text": "ユーザーの紅茶の好みは好きではない",
+              "stated_at": "2026-09-15T00:00:00+00:00"
+            }
+          ],
+          "source_summary": {
+            "count": 1,
+            "first_stated_at": "2026-09-15T00:00:00+00:00",
+            "last_stated_at": "2026-09-15T00:00:00+00:00"
+          }
+        }
+      ],
+      "clock_source": "backend/evals/semantic_memory/fixtures.py:24",
+      "timezone": "Asia/Tokyo"
+    }
+  ]
+}

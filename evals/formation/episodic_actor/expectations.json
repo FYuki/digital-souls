@@ -1,0 +1,6176 @@
+{
+  "schema_version": 1,
+  "dataset": "episodic_actor",
+  "expectations": [
+    {
+      "id": "assistant_retelling-01",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 14
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-02",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 15
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-03",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 15
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-04",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 14
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-05",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 15
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-06",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 15
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-07",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 15
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-08",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-09",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 15
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_retelling-10",
+      "category": "assistant_retelling",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 15
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-01",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-02",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-03",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-04",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-05",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-06",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-07",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-08",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-09",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "assistant_self-10",
+      "category": "assistant_self",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "character:miori",
+              "names": [
+                "光織"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9dbfd427aa70d318c2c45316cda67800ccf7696183f6325d26fbef86c2f6bcab",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-01",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "葵",
+                "葵さん",
+                "友人の葵",
+                "友人の葵さん"
+              ]
+            },
+            {
+              "names": [
+                "悠",
+                "悠さん",
+                "友人の悠",
+                "友人の悠さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 17
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "66611baed40d530eb89ed3d4230a85fa20997af22773d6fa5c913c4b17be8eac",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-02",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "律",
+                "律さん",
+                "友人の律",
+                "友人の律さん"
+              ]
+            },
+            {
+              "names": [
+                "咲",
+                "咲さん",
+                "友人の咲",
+                "友人の咲さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "c1570ac459cf6e922642f042edc0abf399e094a23c666cae613b6fcf9b3386cc",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-03",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "凛",
+                "凛さん",
+                "友人の凛",
+                "友人の凛さん"
+              ]
+            },
+            {
+              "names": [
+                "陸",
+                "陸さん",
+                "友人の陸",
+                "友人の陸さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "04973b7469b8764e7e68161f94edeb55d0fec33d18fa20c39c1971c66a670f69",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-04",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "蓮",
+                "蓮さん",
+                "友人の蓮",
+                "友人の蓮さん"
+              ]
+            },
+            {
+              "names": [
+                "結",
+                "結さん",
+                "友人の結",
+                "友人の結さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 17
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "fc293ebbdb33a8b913b377e56fc465038849451b44ddffb6fe761d37277f1fc5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-05",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "楓",
+                "楓さん",
+                "友人の楓",
+                "友人の楓さん"
+              ]
+            },
+            {
+              "names": [
+                "碧",
+                "碧さん",
+                "友人の碧",
+                "友人の碧さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "c57b5e7c8af041a127060bafcb65784636f0448bb7f8f45d72841c66a493de30",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-06",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "湊",
+                "湊さん",
+                "友人の湊",
+                "友人の湊さん"
+              ]
+            },
+            {
+              "names": [
+                "鈴",
+                "鈴さん",
+                "友人の鈴",
+                "友人の鈴さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "02600b9cfb53a5580e865a6ba79e37c71b8982ec802814840f336a1733524eb7",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-07",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "澪",
+                "澪さん",
+                "友人の澪",
+                "友人の澪さん"
+              ]
+            },
+            {
+              "names": [
+                "優",
+                "優さん",
+                "友人の優",
+                "友人の優さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "3605603b8aa817d9018a92749cd20d41ddf76b5a6c278653769c4d2cdd7a6730",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-08",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "晴",
+                "晴さん",
+                "友人の晴",
+                "友人の晴さん"
+              ]
+            },
+            {
+              "names": [
+                "紬",
+                "紬さん",
+                "友人の紬",
+                "友人の紬さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "62325df861c7cc0ba94218d036414edc992b92dcd42780e4bbdee61293a4361c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-09",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "栞",
+                "栞さん",
+                "友人の栞",
+                "友人の栞さん"
+              ]
+            },
+            {
+              "names": [
+                "颯",
+                "颯さん",
+                "友人の颯",
+                "友人の颯さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4ed354e9dd7f1b66079400a375a4e978ac1519340f517f7bb4371c1559ae6253",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "multiple_actors-10",
+      "category": "multiple_actors",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "樹",
+                "樹さん",
+                "友人の樹",
+                "友人の樹さん"
+              ]
+            },
+            {
+              "names": [
+                "杏",
+                "杏さん",
+                "友人の杏",
+                "友人の杏さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "a92127657be1e26245bc90eaaf7a397e2b340cb3a6acf71ae39a42e0ecb1ed2f",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-01",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "葵",
+                "葵さん",
+                "友人の葵",
+                "友人の葵さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9a28eac3e94845c0beae2d7e5e1113b9dd9d645ebc31d6576eaf053a71b989b1",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-02",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "律",
+                "律さん",
+                "友人の律",
+                "友人の律さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "e2ecc18ad7dc6b8a2538aed6ac4f09eb0ac33cc772a14fc6730d4b66f7aa7be5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-03",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "凛",
+                "凛さん",
+                "友人の凛",
+                "友人の凛さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "448d1822ef004a7e0738b01353495537765f41461f19480d6970d4d4172474a0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-04",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "蓮",
+                "蓮さん",
+                "友人の蓮",
+                "友人の蓮さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "f5ecc6960012b7b6b51cc102f7ea445be62c58761a75716ac0d6d0d189d46e4c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-05",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "楓",
+                "楓さん",
+                "友人の楓",
+                "友人の楓さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "93c93cd0448384de6e5bf55fb0af283ad7a2921dc28f44387d14ca22675aa029",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-06",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "湊",
+                "湊さん",
+                "友人の湊",
+                "友人の湊さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "80089ec136a54757b922f6dd388acaf2d6176e5c82c2bc748caea62bd5d6f894",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-07",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "澪",
+                "澪さん",
+                "友人の澪",
+                "友人の澪さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "005d3dded55a97a3c94e393f1014040ede2a857ecb8533718d8ce98edd8a0e16",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-08",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "晴",
+                "晴さん",
+                "友人の晴",
+                "友人の晴さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 20
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "8797d1eaa1d0fb18a86714746c0194d5be038916aacb412ad90ee52faa17f4da",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-09",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "栞",
+                "栞さん",
+                "友人の栞",
+                "友人の栞さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "8ed2641cd88fdb39a31af90101475fcb3db1826fd6bbc3bbe54543b3612bc75a",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "named_third_person-10",
+      "category": "named_third_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "樹",
+                "樹さん",
+                "友人の樹",
+                "友人の樹さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "687a9d16a6a178d85708e5ced4ce86885006c66fbbffe42b7213001c2709e6f9",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-01",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "葵",
+                "葵さん",
+                "友人の葵",
+                "友人の葵さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 33
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9a28eac3e94845c0beae2d7e5e1113b9dd9d645ebc31d6576eaf053a71b989b1",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-02",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "律",
+                "律さん",
+                "友人の律",
+                "友人の律さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "e2ecc18ad7dc6b8a2538aed6ac4f09eb0ac33cc772a14fc6730d4b66f7aa7be5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-03",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "凛",
+                "凛さん",
+                "友人の凛",
+                "友人の凛さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "448d1822ef004a7e0738b01353495537765f41461f19480d6970d4d4172474a0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-04",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "蓮",
+                "蓮さん",
+                "友人の蓮",
+                "友人の蓮さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 33
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "f5ecc6960012b7b6b51cc102f7ea445be62c58761a75716ac0d6d0d189d46e4c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-05",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "楓",
+                "楓さん",
+                "友人の楓",
+                "友人の楓さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "93c93cd0448384de6e5bf55fb0af283ad7a2921dc28f44387d14ca22675aa029",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-06",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "湊",
+                "湊さん",
+                "友人の湊",
+                "友人の湊さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "80089ec136a54757b922f6dd388acaf2d6176e5c82c2bc748caea62bd5d6f894",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-07",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "澪",
+                "澪さん",
+                "友人の澪",
+                "友人の澪さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "005d3dded55a97a3c94e393f1014040ede2a857ecb8533718d8ce98edd8a0e16",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-08",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "晴",
+                "晴さん",
+                "友人の晴",
+                "友人の晴さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 35
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "8797d1eaa1d0fb18a86714746c0194d5be038916aacb412ad90ee52faa17f4da",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-09",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "栞",
+                "栞さん",
+                "友人の栞",
+                "友人の栞さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "8ed2641cd88fdb39a31af90101475fcb3db1826fd6bbc3bbe54543b3612bc75a",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_first_person-10",
+      "category": "quoted_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "樹",
+                "樹さん",
+                "友人の樹",
+                "友人の樹さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "687a9d16a6a178d85708e5ced4ce86885006c66fbbffe42b7213001c2709e6f9",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-01",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "悠",
+                "悠さん",
+                "友人の悠",
+                "友人の悠さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 23
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "f755e470d0a13ab4708cf4ed92137d808c332bfa9cadd527a95f309aed6c11b1",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-02",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "咲",
+                "咲さん",
+                "友人の咲",
+                "友人の咲さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 24
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "1d535dea0c748b776945af0529de98f520cb56e20113e78db223c6574dae84dd",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-03",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "陸",
+                "陸さん",
+                "友人の陸",
+                "友人の陸さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 24
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "dc4134672c805c156cac902452165cf0290bc438f55ff60d5d892525c4fb234a",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-04",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "結",
+                "結さん",
+                "友人の結",
+                "友人の結さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 23
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0651bf14496b99db4221dddc5e77230b2ea86e9b7cd057b6dcc239d7e31406a0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-05",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "碧",
+                "碧さん",
+                "友人の碧",
+                "友人の碧さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 24
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "55e82f58f673a1441ec5c043757afa93c5adb95595f125915ead61c0b12cabdd",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-06",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "鈴",
+                "鈴さん",
+                "友人の鈴",
+                "友人の鈴さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 24
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "fdc7c56d26eb3138c5cdc83e5a20c9bb0a26fb30b94503235c0bf99cf80bd0bd",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-07",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "優",
+                "優さん",
+                "友人の優",
+                "友人の優さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 24
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "64635fefc132372f418a2735879bbc90ba96e6cb676cd99a3662c86f98b077df",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-08",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "紬",
+                "紬さん",
+                "友人の紬",
+                "友人の紬さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 25
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "ca2b1a76f549af334a8ff1cf95dcfff5f64ee8c1f669e51c97959ecc7b9d7fb8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-09",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "颯",
+                "颯さん",
+                "友人の颯",
+                "友人の颯さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 24
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9c4529ead64f99f6ee138c8239b5a43961fc08cac61da3fe16591ae0bdea2ac7",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "quoted_second_person-10",
+      "category": "quoted_second_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "杏",
+                "杏さん",
+                "友人の杏",
+                "友人の杏さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 24
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "538d69ae71e0dbbfb3f685d22f24163bca8192cf012ced7a87e1922f8d066475",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-01",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "葵",
+                "葵さん",
+                "友人の葵",
+                "友人の葵さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9a28eac3e94845c0beae2d7e5e1113b9dd9d645ebc31d6576eaf053a71b989b1",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-02",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "律",
+                "律さん",
+                "友人の律",
+                "友人の律さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "e2ecc18ad7dc6b8a2538aed6ac4f09eb0ac33cc772a14fc6730d4b66f7aa7be5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-03",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "凛",
+                "凛さん",
+                "友人の凛",
+                "友人の凛さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "448d1822ef004a7e0738b01353495537765f41461f19480d6970d4d4172474a0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-04",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "蓮",
+                "蓮さん",
+                "友人の蓮",
+                "友人の蓮さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "f5ecc6960012b7b6b51cc102f7ea445be62c58761a75716ac0d6d0d189d46e4c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-05",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "楓",
+                "楓さん",
+                "友人の楓",
+                "友人の楓さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "93c93cd0448384de6e5bf55fb0af283ad7a2921dc28f44387d14ca22675aa029",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-06",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "湊",
+                "湊さん",
+                "友人の湊",
+                "友人の湊さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "80089ec136a54757b922f6dd388acaf2d6176e5c82c2bc748caea62bd5d6f894",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-07",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "澪",
+                "澪さん",
+                "友人の澪",
+                "友人の澪さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "005d3dded55a97a3c94e393f1014040ede2a857ecb8533718d8ce98edd8a0e16",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-08",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "晴",
+                "晴さん",
+                "友人の晴",
+                "友人の晴さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 14
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "8797d1eaa1d0fb18a86714746c0194d5be038916aacb412ad90ee52faa17f4da",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-09",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "栞",
+                "栞さん",
+                "友人の栞",
+                "友人の栞さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "8ed2641cd88fdb39a31af90101475fcb3db1826fd6bbc3bbe54543b3612bc75a",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "third_person_reference-10",
+      "category": "third_person_reference",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "names": [
+                "樹",
+                "樹さん",
+                "友人の樹",
+                "友人の樹さん"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "687a9d16a6a178d85708e5ced4ce86885006c66fbbffe42b7213001c2709e6f9",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-01",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 30
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-02",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-03",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-04",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 30
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-05",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-06",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-07",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-08",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 32
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-09",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "unknown_actor-10",
+      "category": "unknown_actor",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": []
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-01",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-02",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-03",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-04",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-05",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-06",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-07",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-08",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 14
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-09",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_context-10",
+      "category": "user_context",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-01",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "借りた",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "借りた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-02",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "焼いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 14
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-03",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "見つけた",
+        "object": "鍵"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "見つけた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "鍵"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-04",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "植えた",
+        "object": "花"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "植えた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "花"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 22
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-05",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "撮った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-06",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "直した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 16
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-07",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "書いた",
+        "object": "手紙"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "書いた"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "手紙"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-08",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "掃除した",
+        "object": "部屋"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "掃除した"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "部屋"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 17
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-09",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "運んだ"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "user_first_person-10",
+      "category": "user_first_person",
+      "scope": "fact_actor",
+      "selector": {
+        "predicate": "買った",
+        "object": "切符"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.predicate",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "買った"
+                ]
+              }
+            },
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "切符"
+                ]
+              }
+            }
+          ],
+          "who": [
+            {
+              "entity_id": "speaker:user",
+              "names": [
+                "ユーザー"
+              ]
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "01854abe98b457abe2a77fa7f38a8f9ac458dc8d2da503bb5cd2772fc0bd69e8",
+      "count_scope": "selected_kind"
+    }
+  ]
+}

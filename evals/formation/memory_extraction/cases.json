@@ -1,0 +1,557 @@
+{
+  "schema_version": 1,
+  "dataset": "memory_extraction",
+  "cases": [
+    {
+      "id": "episodic_achievement",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今日、資格試験に合格した"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_achievement",
+      "seed": []
+    },
+    {
+      "id": "episodic_decision",
+      "turns": [
+        {
+          "role": "user",
+          "text": "来月から転職活動を始めると決めた"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_decision",
+      "seed": []
+    },
+    {
+      "id": "episodic_outcome",
+      "turns": [
+        {
+          "role": "user",
+          "text": "引っ越し先が決まった"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_outcome",
+      "seed": []
+    },
+    {
+      "id": "episodic_change",
+      "turns": [
+        {
+          "role": "user",
+          "text": "仕事がリモート勤務になった"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_change",
+      "seed": []
+    },
+    {
+      "id": "episodic_shared",
+      "turns": [
+        {
+          "role": "user",
+          "text": "一緒に旅行の計画を立てた"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_shared",
+      "seed": []
+    },
+    {
+      "id": "preference_like_tea",
+      "turns": [
+        {
+          "role": "user",
+          "text": "紅茶が好き"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_like_tea",
+      "seed": []
+    },
+    {
+      "id": "preference_like_music",
+      "turns": [
+        {
+          "role": "user",
+          "text": "ジャズを聴くのが好き"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_like_music",
+      "seed": []
+    },
+    {
+      "id": "preference_dislike",
+      "turns": [
+        {
+          "role": "user",
+          "text": "辛い食べ物は苦手"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_dislike",
+      "seed": []
+    },
+    {
+      "id": "preference_over",
+      "turns": [
+        {
+          "role": "user",
+          "text": "コーヒーより紅茶が好き"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_over",
+      "seed": []
+    },
+    {
+      "id": "preference_place",
+      "turns": [
+        {
+          "role": "user",
+          "text": "静かな場所が好き"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_place",
+      "seed": []
+    },
+    {
+      "id": "interaction_tone",
+      "turns": [
+        {
+          "role": "user",
+          "text": "穏やかな口調で話してほしい"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-interaction_tone",
+      "seed": []
+    },
+    {
+      "id": "interaction_length",
+      "turns": [
+        {
+          "role": "user",
+          "text": "返事は短めがいい"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-interaction_length",
+      "seed": []
+    },
+    {
+      "id": "interaction_language",
+      "turns": [
+        {
+          "role": "user",
+          "text": "日本語で答えて"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-interaction_language",
+      "seed": []
+    },
+    {
+      "id": "interaction_format",
+      "turns": [
+        {
+          "role": "user",
+          "text": "箇条書きで説明して"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-interaction_format",
+      "seed": []
+    },
+    {
+      "id": "interaction_address",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私を先生と呼んで"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-interaction_address",
+      "seed": []
+    },
+    {
+      "id": "none_question",
+      "turns": [
+        {
+          "role": "user",
+          "text": "明日の天気は？"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-none_question",
+      "seed": []
+    },
+    {
+      "id": "none_greeting",
+      "turns": [
+        {
+          "role": "user",
+          "text": "こんにちは"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-none_greeting",
+      "seed": []
+    },
+    {
+      "id": "none_command",
+      "turns": [
+        {
+          "role": "user",
+          "text": "タイマーを5分にして"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-none_command",
+      "seed": []
+    },
+    {
+      "id": "none_assistant",
+      "turns": [
+        {
+          "role": "user",
+          "text": "それについて教えて"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-none_assistant",
+      "seed": []
+    },
+    {
+      "id": "episodic_exam",
+      "turns": [
+        {
+          "role": "user",
+          "text": "大学に入学した"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_exam",
+      "seed": []
+    },
+    {
+      "id": "episodic_move",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週大阪へ引っ越した"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_move",
+      "seed": []
+    },
+    {
+      "id": "episodic_job",
+      "turns": [
+        {
+          "role": "user",
+          "text": "新しい仕事に就いた"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-episodic_job",
+      "seed": []
+    },
+    {
+      "id": "preference_food",
+      "turns": [
+        {
+          "role": "user",
+          "text": "寿司が好き"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_food",
+      "seed": []
+    },
+    {
+      "id": "preference_color",
+      "turns": [
+        {
+          "role": "user",
+          "text": "青色が好き"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_color",
+      "seed": []
+    },
+    {
+      "id": "preference_dislike_noise",
+      "turns": [
+        {
+          "role": "user",
+          "text": "大きな音が嫌い"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-preference_dislike_noise",
+      "seed": []
+    },
+    {
+      "id": "interaction_detail",
+      "turns": [
+        {
+          "role": "user",
+          "text": "詳しく説明してほしい"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-interaction_detail",
+      "seed": []
+    },
+    {
+      "id": "interaction_casual",
+      "turns": [
+        {
+          "role": "user",
+          "text": "敬語を使わず話して"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-interaction_casual",
+      "seed": []
+    },
+    {
+      "id": "none_ack",
+      "turns": [
+        {
+          "role": "user",
+          "text": "わかった、ありがとう"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-none_ack",
+      "seed": []
+    },
+    {
+      "id": "none_lookup",
+      "turns": [
+        {
+          "role": "user",
+          "text": "この言葉の意味を教えて"
+        }
+      ],
+      "binding": {
+        "scope": {
+          "subject": "fixture-user",
+          "client": "formation-fixture",
+          "audience": "local-private"
+        },
+        "character_id": "miori"
+      },
+      "conversation_id": "input-conversation-none_lookup",
+      "seed": []
+    }
+  ]
+}
