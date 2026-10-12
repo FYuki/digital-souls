@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "dataset": "semantic_boundary",
+  "cases": [
+    {
+      "id": "boundary-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "昨日の朝、喫茶店でコーヒーを選んで飲みました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうでしたか。また、飲まれたのですね。"
+        }
+      ]
+    }
+  ]
+}

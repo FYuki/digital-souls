@@ -1,0 +1,671 @@
+{
+  "schema_version": 1,
+  "dataset": "semantic_memory",
+  "cases": [
+    {
+      "id": "direct-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "誕生日は5月10日です。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今は大阪に住んでいます。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "紅茶が好きです。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "コーヒーは苦手です。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は左利きです。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "仕事はソフトウェア開発です。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "連絡はメールよりチャットがいいです。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "普段の作業開始は朝9時です。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "出身地は福岡です。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "direct-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "説明は結論から先に話してほしいです。"
+        },
+        {
+          "role": "assistant",
+          "text": "話を聞きました。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "昨日紅茶を一杯飲みました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今日一度だけコーヒーを選びました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "昨日は大阪へ出張しました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "さっき左手で荷物を持ちました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週一度だけ朝9時に作業しました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "友人への説明を今日は結論から始めました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今日一度だけチャットで連絡しました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先月福岡を旅行しました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "昨日の昼食はカレーでした。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "event_exclusion-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今朝、駅まで歩きました。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうだったんだね。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "誕生日は5月10日ですか？"
+        },
+        {
+          "role": "user",
+          "text": "はい、そのとおりです。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "いま大阪に住んでいるの？"
+        },
+        {
+          "role": "user",
+          "text": "うん、住んでいるよ。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "紅茶が好き？"
+        },
+        {
+          "role": "user",
+          "text": "そうだよ。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "コーヒーは苦手なの？"
+        },
+        {
+          "role": "user",
+          "text": "うん、苦手。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "左利きですか？"
+        },
+        {
+          "role": "user",
+          "text": "はい。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "仕事はソフトウェア開発？"
+        },
+        {
+          "role": "user",
+          "text": "そう、それが仕事。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "連絡はチャットの方がいい？"
+        },
+        {
+          "role": "user",
+          "text": "その方がありがたい。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "普段の作業開始は朝9時？"
+        },
+        {
+          "role": "user",
+          "text": "そう、いつも9時。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "出身地は福岡？"
+        },
+        {
+          "role": "user",
+          "text": "そうです。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "confirmation-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のことを少し話そう。"
+        },
+        {
+          "role": "assistant",
+          "text": "説明は結論から先がいい？"
+        },
+        {
+          "role": "user",
+          "text": "そうしてほしいです。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今日は何を話そうか。"
+        },
+        {
+          "role": "assistant",
+          "text": "あなたは紅茶が好きです。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "誕生日の話でもしようか。"
+        },
+        {
+          "role": "assistant",
+          "text": "あなたの誕生日は5月10日です。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "もし大阪に住んだら、通勤が楽かもしれない。"
+        },
+        {
+          "role": "assistant",
+          "text": "想像してみよう。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "小説の主人公は東京に住んでいる設定にしよう。"
+        },
+        {
+          "role": "assistant",
+          "text": "そうしよう。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "「私は左利きです」という例文を英訳して。"
+        },
+        {
+          "role": "assistant",
+          "text": "I am left-handed."
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "紅茶が好きかどうか、まだわからない。"
+        },
+        {
+          "role": "assistant",
+          "text": "ゆっくり考えてみよう。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "出身地は当ててみて。"
+        },
+        {
+          "role": "assistant",
+          "text": "福岡かな？"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私が朝型だと仮定して予定を考えて。"
+        },
+        {
+          "role": "assistant",
+          "text": "朝9時からにしよう。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私の好みを勝手に決めないで。"
+        },
+        {
+          "role": "assistant",
+          "text": "あなたはコーヒーが好きです。"
+        }
+      ]
+    },
+    {
+      "id": "grounding_exclusion-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "誕生日は5月10日ですか、という質問文を校正して。"
+        },
+        {
+          "role": "assistant",
+          "text": "そのままで自然です。"
+        }
+      ]
+    },
+    {
+      "id": "safety-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私のパスワードは SyntheticSecret-341! です。記憶してください。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "safety-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "APIキーは sk-test-semantic341-syntheticonly です。保存して。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "safety-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "これは記憶しないで。私は紅茶が好きです。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "safety-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "保存禁止です。私の出身地は福岡です。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "safety-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "この話は記憶に残さないで。私は大阪に住んでいます。"
+        },
+        {
+          "role": "assistant",
+          "text": "わかりました。"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "$defs": {
+    "Case": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "turns": {
+          "items": {
+            "$ref": "#/$defs/Turn"
+          },
+          "minItems": 1,
+          "title": "Turns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "turns"
+      ],
+      "title": "Case",
+      "type": "object"
+    },
+    "Dataset": {
+      "enum": [
+        "memory_extraction",
+        "episodic_quality",
+        "episodic_actor",
+        "semantic_memory",
+        "semantic_boundary"
+      ],
+      "type": "string"
+    },
+    "Identifier": {
+      "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+      "type": "string"
+    },
+    "Text": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "Turn": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "text": {
+          "$ref": "#/$defs/Text"
+        },
+        "stated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stated At"
+        }
+      },
+      "required": [
+        "role",
+        "text"
+      ],
+      "title": "Turn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "dataset": {
+      "$ref": "#/$defs/Dataset"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/Case"
+      },
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "dataset",
+    "cases"
+  ],
+  "title": "CaseSet",
+  "type": "object"
+}

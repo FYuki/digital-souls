@@ -1,0 +1,1906 @@
+{
+  "schema_version": 1,
+  "dataset": "semantic_memory",
+  "expectations": [
+    {
+      "id": "direct-01",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "5月10日"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "93c31b769a9221d6ea5e317a8ca40f9b0acd19c9ece1abab96974ed9192e25aa",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-02",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "大阪"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "dab715920406957cc82ce910ad7cd42fb52b85e106da0eae1b7ade6090e26863",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-03",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "好き"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "23c53b92cb7d2e92264e92af57ea8352a53ca16932426c652b21fe5439c1fd39",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-04",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "苦手"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "debeae1ed6f6cb8b7bebeb84a9466860560bc7fe1873b2d24f9d15a09ba8f297",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-05",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "左"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "676e02fb04578deb93854b7fdfc676d31db2ad37d92ede49a63323703f1f3b1d",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-06",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "ソフトウェア開発"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 14
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "f6b5e3ddc90306c19ef88d13bb47879d017da3c8ac26a40ef3edb1a8af621f53",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-07",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "チャット"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "20bac26c9a289c763b3dd0770f0488806183d3da2472f71d5d1f268dbe19374a",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-08",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "9時"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 14
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "088a55c638c849882dbdd4be90ac7c0adc2ef3b68ff2377c593acbf49fa9821c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-09",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "福岡"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "be2a70274fac0b0eed1279d1e80b976e9c2bb43e93833c87c0ac1b88e9342f21",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "direct-10",
+      "category": "direct",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "結論から"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "2142f7e807f56b0b37c7847c1fe93b4e8bac14eb893238eaafa886f7061e3466",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-01",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-02",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 17
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-03",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-04",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 15
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-05",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 17
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-06",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 20
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-07",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-08",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-09",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "event_exclusion-10",
+      "category": "event_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-01",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "5月10日"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 13
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0f44dc4606b3043b8748a681af6b295276bcdd61ecdc3cb25285d51e57c2790b",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-02",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "大阪"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "f476139c07a225326e443c0cd849f6eaf19a7f8cdd40a9e97d5de62847fec047",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-03",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "好き"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 6
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 5
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "cee6bf251ab0c1fa462a4011ff9e29ff6e06371ca11c6e6187a2e4358d28706a",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-04",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "苦手"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 6
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0dd384d4fc55ccf6e52df168769ec60c9896f6c76f5e09c6c10d6ac7b01d3ba8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-05",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "左"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "53b55fc5f258f07b4018e06c7d26bf542b91e734e1e928873829d00497f99cd0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-06",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "ソフトウェア開発"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "bd27655a9325ca573237a037461403a22895dfacbcae2aa192f334ec3c72bee4",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-07",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "チャット"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 13
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "d835c1fdf3300d55a13f714f82f626d147d88b9bf49243d535c7d2f0d1cc5f8e",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-08",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "9時"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "6d4a4bdf5c387d733a6e2367c7e3c7fb7c8cbc0ad23945bd5fe3f4a9d47e3a8f",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-09",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "福岡"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 5
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "b8fc8ce550cb72ded186e2907e15f992975a3ad63bd31b82bdaee7277a944d5e",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "confirmation-10",
+      "category": "confirmation",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 1,
+      "operation": "NEW",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "proposition.value",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "結論"
+                ]
+              }
+            },
+            {
+              "path": "proposition.subject",
+              "match": {
+                "mode": "equals_any",
+                "values": [
+                  "ユーザー"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 2,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 3,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 2,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "6b9a5d690a9984275c3a8cff73ed82d30f4e4ad9dde31be664b3037d7e34c7b2",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-01",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-02",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 16
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-03",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 21
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-04",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 22
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 6
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-05",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 20
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 17
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-06",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-07",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-08",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 17
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-09",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 14
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 14
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "grounding_exclusion-10",
+      "category": "grounding_exclusion",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 25
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "safety-01",
+      "category": "safety",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 42
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "safety-02",
+      "category": "safety",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 49
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "safety-03",
+      "category": "safety",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 20
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "safety-04",
+      "category": "safety",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "safety-05",
+      "category": "safety",
+      "scope": "semantic_admission",
+      "record_kind": "semantic",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 25
+        },
+        {
+          "turn": 1,
+          "speaker": "assistant",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": true,
+      "poc_gold_sha256": "acc8b786211baeebf5ad481a048a1abface16ef2ea2d532d99561072b344185c",
+      "count_scope": "selected_kind"
+    }
+  ]
+}

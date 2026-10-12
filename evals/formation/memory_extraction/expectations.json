@@ -1,0 +1,973 @@
+{
+  "schema_version": 1,
+  "dataset": "memory_extraction",
+  "expectations": [
+    {
+      "id": "episodic_achievement",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "資格試験への合格"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "8449213d9b1172f7e31ff7774589cf8ba5a10c327fee6d63d1266ce71325e655",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "episodic_decision",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "転職活動の開始"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 16
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "27d4caf53edde36f8a8cb2f5dca48f8fa3b85bda4289a132ec216f03f96eddc4",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "episodic_outcome",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "引っ越し先の決定"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "d248dd8b2e4c7aa0278e192fe388765ea0e97d73649b3cbbb94b3ce1db38db3e",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "episodic_change",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "リモート勤務への変更"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "10380a3fdbd9e27673bb53b4f093c7b743990b13c741fde20eca42b2e72a4861",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "episodic_shared",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "旅行計画"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 12
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "701dd9f828487ac0151d021d480826b229c8a3dc46fb567e950f8df5990454bd",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_like_tea",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "紅茶"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "373bfcf1beb3f2f97d97529388a1ec31efb65678092c64f6450826d20a0dcb33",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_like_music",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "ジャズ"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "e3729d230705479dfbf5c21f2043cf430e6ff1bde4071925b4203eeadf1013af",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_dislike",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "辛い食べ物"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "d98a0385864985c11f3a894f474e32590ec361e16cdc1adfb31cb5dfffc98087",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_over",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "紅茶"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "373bfcf1beb3f2f97d97529388a1ec31efb65678092c64f6450826d20a0dcb33",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_place",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "静かな場所"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "621d9767ccc0d6f098842e272207b00ab57d5cbaa65d9057677a1d36f76fa40a",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "interaction_tone",
+      "category": "interaction_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "穏やかな口調"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 13
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "e0aaec6f8e48dbe647aaebd7f86d83920f5dc38f60ebe6f083c81bae47b23422",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "interaction_length",
+      "category": "interaction_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "短い返答"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "d1b04404cd3ef9d78035cc7a760391cb9439f0e93065b795433ef33a7a318c43",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "interaction_language",
+      "category": "interaction_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "日本語"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "014c25dd12dba56ee3427c4ffc7fb559ea1cfeb78c5d8f881491d65974de1750",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "interaction_format",
+      "category": "interaction_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "箇条書き"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "c24036efa52917053599c8961ab65ea93e658f79474f50f34cbc9e8bee713ccb",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "interaction_address",
+      "category": "interaction_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "先生"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "80aa6bfb249fea656e9e65e48612b5dad5233de0682c404cf5929d1f84b0e947",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "none_question",
+      "category": "none",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0133fe2e226f6673e87366766ca9a0105dc03ee65d354e9b6bafd373ab95a816",
+      "count_scope": "all_records"
+    },
+    {
+      "id": "none_greeting",
+      "category": "none",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0133fe2e226f6673e87366766ca9a0105dc03ee65d354e9b6bafd373ab95a816",
+      "count_scope": "all_records"
+    },
+    {
+      "id": "none_command",
+      "category": "none",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0133fe2e226f6673e87366766ca9a0105dc03ee65d354e9b6bafd373ab95a816",
+      "count_scope": "all_records"
+    },
+    {
+      "id": "none_assistant",
+      "category": "none",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0133fe2e226f6673e87366766ca9a0105dc03ee65d354e9b6bafd373ab95a816",
+      "count_scope": "all_records"
+    },
+    {
+      "id": "episodic_exam",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "大学への入学"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "b3dc6b70c008cb0397cfacfd960475736051beda702baa53d639bd0016d7a4e0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "episodic_move",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "大阪への引っ越し"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "47b8eef9b6705ea4a9979741b524249ada80d6e0d1ef159f4649f29b7902ce7e",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "episodic_job",
+      "category": "episodic_event",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "新しい仕事への就職"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "ac0cc6231c01250ee16424152ec10e27bdd7677dc34c32044a5cadaa2ca9e837",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_food",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "寿司"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "81e7f12641b36ca454147d9c149205c9985d0cb87643c8e54cceef2c8aa4ba40",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_color",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "青色"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "97af5c0b9bf748466732bce8859b31d9fa4b0c8f5b27d3743da78c24fe823771",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "preference_dislike_noise",
+      "category": "user_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "大きな音"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "780362af69ba9f30de9edb7e280841ea69788f120e5f7fb80c9b13fe917bcd08",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "interaction_detail",
+      "category": "interaction_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "詳しい説明"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "a532038a3ead20dfe193c7cb26ca0be6c895ac46217336a681069ba78d094deb",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "interaction_casual",
+      "category": "interaction_preference",
+      "scope": "type_and_topic",
+      "record_kind": "semantic",
+      "formation_type": "direct_extraction",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "normalized_text",
+              "match": {
+                "mode": "rubric_topic",
+                "values": [
+                  "カジュアルな口調"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "required_user_turn": 0,
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "6e36d88bb55163a32f309fefa7a31d3c1c3186c045d46182321e41defde3b535",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "none_ack",
+      "category": "none",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 10
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0133fe2e226f6673e87366766ca9a0105dc03ee65d354e9b6bafd373ab95a816",
+      "count_scope": "all_records"
+    },
+    {
+      "id": "none_lookup",
+      "category": "none",
+      "scope": "type_and_topic",
+      "record_kind": "episode",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 11
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0133fe2e226f6673e87366766ca9a0105dc03ee65d354e9b6bafd373ab95a816",
+      "count_scope": "all_records"
+    }
+  ]
+}

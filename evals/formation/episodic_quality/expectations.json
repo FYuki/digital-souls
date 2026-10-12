@@ -1,0 +1,1841 @@
+{
+  "schema_version": 1,
+  "dataset": "episodic_quality",
+  "expectations": [
+    {
+      "id": "selection-01",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "operation": "NEW",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 8
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "69cd6e24a93e73b202d6b7b07ee7d02d52ffc51324448624881e774425ec3b8e",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-02",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "operation": "NEW",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "6fc1d08967c986bf22c9034c35c34177fd9375c3fc410ba529316e1f6bafea75",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-03",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "operation": "NEW",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "1bc4734a7be105d0a0d89e2fd792215c57da0a80bb3f0acc5f32bc192162c2e5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-04",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "operation": "NEW",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "a096c9f5e54cc60f33c001827ab455095a0772be169681dd861980b09d9f4cf5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-05",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "operation": "NEW",
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 9
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9c9d41869d40a3d117941e0c6ab18f3050c0403507fdd4735bc35e1e613965f5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-06",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 6
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-07",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 3
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-08",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 5
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-09",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 6
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "selection-10",
+      "category": "selection",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 0,
+      "records": [],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 7
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "618de7d9f46f3f697d827a1b6d84974760d5deda62e4e592adaa3c646602a94c",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-01",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "読んだ",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "本"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "図書館"
+                ]
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "試験の準備"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 23
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "98915d2eac0a9beaa53799c428e614b4ef426dfaf0b5599cf476bb4b5bb14025",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-02",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "読んだ",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "本"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.when",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 25
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "cf7f692dd632b10ea4f90e2f3e1a8db686b63b3c154e22d0ca055a258c223fd3",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-03",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "自宅"
+                ]
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "朝食の準備"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 23
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "265617576f13ce6c21fd470369daaafa500abd198cd88571e88c24a6150e8bc7",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-04",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "焼いた",
+        "object": "パン"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.when",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 26
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "119ec699cdac2f3af8133521ac7bbdc12f2999dcf157939360100ec75d5e2e43",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-05",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "工房"
+                ]
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "修理の練習"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 23
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "6f037b9595dc1175e08c6db9320d8b1b0b245454e401b950761c0aea878731b1",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-06",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "直した",
+        "object": "椅子"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.when",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 26
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "6457bf692c6d99dcae53b81cbd168f6de43510be325bcb4fa71848f12a622d70",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-07",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "公園"
+                ]
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "記録"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 20
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "afcacc1da71123a21bb34939a56fbfb90028520740fdf5ebe19c58305bd2bc18",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-08",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "撮った",
+        "object": "写真"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.when",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 26
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "6c70a3d15c03d1826310228d5a7247c2d7bf0a58219dab008a96e54f22315e5d",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-09",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "倉庫"
+                ]
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "引っ越し"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 22
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "925bb03efd39e67d87ea0231525fa529c8a600c5efdb5209bff2dd079546a864",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "what_where_why-10",
+      "category": "what_where_why",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "運んだ",
+        "object": "荷物"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            },
+            {
+              "path": "five_w.where",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.when",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            },
+            {
+              "path": "five_w.why.text",
+              "match": {
+                "mode": "null",
+                "values": []
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 26
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "f9cfc4e436d3a684c95be650cca0fe901f4f8d97521df6f734e16b430265f295",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "temporal-06",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "読んだ",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [],
+          "target_time": {
+            "start": {
+              "precision": "year",
+              "year": 2025
+            }
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 31
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "be23d801234b5c420607e0538689a9a500c11e5ba07ecdabebedb366c79c403d",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "temporal-07",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "読んだ",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [],
+          "target_time": {
+            "start": {
+              "precision": "month",
+              "year": 2026,
+              "month": 8
+            }
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 33
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "245e9f4c7416489844093874b068287d9f7d6a2f40ebf4bbd3f4178f2b3d9d30",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "temporal-08",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "読んだ",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [],
+          "target_time": {
+            "start": {
+              "precision": "day",
+              "year": 2026,
+              "month": 9,
+              "day": 2
+            }
+          }
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 35
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "40fc23687dad1c704b719a2a9718bfc196a31e6297fbf484c81e7a87e35f3224",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "temporal-10",
+      "category": "temporal",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "読んだ",
+        "object": "本"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [],
+          "target_time": {}
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 18
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "ebb8dd1df78c125315a5d99455317bc375ed0c30750323aeac600698e0033ef8",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "context-04",
+      "category": "context",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "行った",
+        "object": "空の城"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [],
+          "episode_context": "fiction"
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 39
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "da8269ab3d111e78304969200bbce101922008a4dd4de7a5d0f90f7d7ebbf1f7",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "context-05",
+      "category": "context",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "行った",
+        "object": "竜の島"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [],
+          "episode_context": "fiction"
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 39
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "da8269ab3d111e78304969200bbce101922008a4dd4de7a5d0f90f7d7ebbf1f7",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "context-06",
+      "category": "context",
+      "scope": "fact_extraction",
+      "selector": {
+        "predicate": "行った",
+        "object": "架空の王国"
+      },
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [],
+          "episode_context": "fiction"
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 41
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "da8269ab3d111e78304969200bbce101922008a4dd4de7a5d0f90f7d7ebbf1f7",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-01",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "雑誌"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "本",
+        "雑誌"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4d3b5e7923607b294901116974f51be1acf5ad8afa414ed8f243196f92930521",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-02",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "うどん"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "そば"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 21
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "うどん",
+        "そば"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "162aa6cff07f6f86ab1a7e7a880efb9ed1a1aa1daf17904d895ee7173429faa0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-03",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "動画"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 20
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "写真",
+        "動画"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "fb9329f00115bb3c41d7495d7353303d099fd6953fe5ad56422e3877229a320d",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-04",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "机"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 19
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "椅子",
+        "机"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "cc9e716b7346a3efdffb7e1720d194454c4a4c2d2473680c66b46342d4af7d62",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-05",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "リンゴ"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "みかん"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 22
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "リンゴ",
+        "みかん"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f9a8d59e14e3c928c1b1bbb377041cd231b08fe7045b38f51afc24c4997c311",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-06",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "雑誌"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "本",
+        "雑誌"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4d3b5e7923607b294901116974f51be1acf5ad8afa414ed8f243196f92930521",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-07",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "うどん"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "そば"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 36
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "うどん",
+        "そば"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "162aa6cff07f6f86ab1a7e7a880efb9ed1a1aa1daf17904d895ee7173429faa0",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-08",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "動画"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 35
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "写真",
+        "動画"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "fb9329f00115bb3c41d7495d7353303d099fd6953fe5ad56422e3877229a320d",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-09",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "机"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 34
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "椅子",
+        "机"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "cc9e716b7346a3efdffb7e1720d194454c4a4c2d2473680c66b46342d4af7d62",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "links-10",
+      "category": "links",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 2,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "リンゴ"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "みかん"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 37
+        }
+      ],
+      "evidence_tokens": [],
+      "linked": true,
+      "link_topics": [
+        "リンゴ",
+        "みかん"
+      ],
+      "forbidden_save": false,
+      "poc_gold_sha256": "4f9a8d59e14e3c928c1b1bbb377041cd231b08fe7045b38f51afc24c4997c311",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "evidence-01",
+      "category": "evidence",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "本"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 39
+        }
+      ],
+      "evidence_tokens": [
+        "本"
+      ],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "3c0946a0a3aee428f476d2acbf1cf507c882d6190b8f0a524a5ed486114063fd",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "evidence-02",
+      "category": "evidence",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "パン"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 40
+        }
+      ],
+      "evidence_tokens": [
+        "パン"
+      ],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "354847d277ef7692ee8386e03b34f392fa203c5d80b7e307867a934917d8c3d5",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "evidence-03",
+      "category": "evidence",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "椅子"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 40
+        }
+      ],
+      "evidence_tokens": [
+        "椅子"
+      ],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "0a81aa6113a4ade6c74f103f47a015021900f8d710d708afbccf841982e344c2",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "evidence-04",
+      "category": "evidence",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "写真"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 40
+        }
+      ],
+      "evidence_tokens": [
+        "写真"
+      ],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "9375eaed5cd94cf097b4ffe59db53333bc87989128961c0959e4df6df1e24538",
+      "count_scope": "selected_kind"
+    },
+    {
+      "id": "evidence-05",
+      "category": "evidence",
+      "scope": "fact_extraction",
+      "record_kind": "fact",
+      "count": 1,
+      "records": [
+        {
+          "fields": [
+            {
+              "path": "five_w.object",
+              "match": {
+                "mode": "contains_any",
+                "values": [
+                  "荷物"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "turn": 0,
+          "speaker": "user",
+          "start": 0,
+          "end": 40
+        }
+      ],
+      "evidence_tokens": [
+        "荷物"
+      ],
+      "linked": false,
+      "link_topics": [],
+      "forbidden_save": false,
+      "poc_gold_sha256": "986b466ae4104625819c83e015838b795f40ffd624db0043b223dcc52ffa56de",
+      "count_scope": "selected_kind"
+    }
+  ]
+}

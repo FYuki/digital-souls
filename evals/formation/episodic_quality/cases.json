@@ -1,0 +1,384 @@
+{
+  "schema_version": 1,
+  "dataset": "episodic_quality",
+  "cases": [
+    {
+      "id": "selection-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は本を読んだ。"
+        }
+      ]
+    },
+    {
+      "id": "selection-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私はパンを焼いた。"
+        }
+      ]
+    },
+    {
+      "id": "selection-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は椅子を直した。"
+        }
+      ]
+    },
+    {
+      "id": "selection-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は写真を撮った。"
+        }
+      ]
+    },
+    {
+      "id": "selection-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は荷物を運んだ。"
+        }
+      ]
+    },
+    {
+      "id": "selection-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "こんにちは。"
+        }
+      ]
+    },
+    {
+      "id": "selection-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "うん。"
+        }
+      ]
+    },
+    {
+      "id": "selection-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "なるほど。"
+        }
+      ]
+    },
+    {
+      "id": "selection-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "こんばんは。"
+        }
+      ]
+    },
+    {
+      "id": "selection-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "わかりました。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は図書館で本を読んだ。理由は試験の準備です。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は本を読んだ。場所・日時・理由は話していません。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は自宅でパンを焼いた。理由は朝食の準備です。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私はパンを焼いた。場所・日時・理由は話していません。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は工房で椅子を直した。理由は修理の練習です。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は椅子を直した。場所・日時・理由は話していません。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は公園で写真を撮った。理由は記録です。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は写真を撮った。場所・日時・理由は話していません。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は倉庫で荷物を運んだ。理由は引っ越しです。"
+        }
+      ]
+    },
+    {
+      "id": "what_where_why-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は荷物を運んだ。場所・日時・理由は話していません。"
+        }
+      ]
+    },
+    {
+      "id": "temporal-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は2025年に本を読んだ。それ以上細かい日時は言っていない。"
+        }
+      ]
+    },
+    {
+      "id": "temporal-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は2026年8月に本を読んだ。それ以上細かい日時は言っていない。"
+        }
+      ]
+    },
+    {
+      "id": "temporal-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は2026年9月2日に本を読んだ。それ以上細かい日時は言っていない。"
+        }
+      ]
+    },
+    {
+      "id": "temporal-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は本を読んだ。いつのことかは不明。"
+        }
+      ]
+    },
+    {
+      "id": "context-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私が書いた創作物語の中で、主人公は空の城へ行った。現実の出来事ではありません。"
+        }
+      ]
+    },
+    {
+      "id": "context-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私が書いた創作物語の中で、主人公は竜の島へ行った。現実の出来事ではありません。"
+        }
+      ]
+    },
+    {
+      "id": "context-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私が書いた創作物語の中で、主人公は架空の王国へ行った。現実の出来事ではありません。"
+        }
+      ]
+    },
+    {
+      "id": "links-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は本を読んだ。それから雑誌も読んだ。"
+        }
+      ]
+    },
+    {
+      "id": "links-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私はうどんを食べた。それからそばも食べた。"
+        }
+      ]
+    },
+    {
+      "id": "links-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は写真を撮った。それから動画も撮った。"
+        }
+      ]
+    },
+    {
+      "id": "links-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私は椅子を直した。それから机も直した。"
+        }
+      ]
+    },
+    {
+      "id": "links-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私はリンゴを買った。それからみかんも買った。"
+        }
+      ]
+    },
+    {
+      "id": "links-06",
+      "turns": [
+        {
+          "role": "user",
+          "text": "一つ目の話は本を読んだこと。話題を変えて、二つ目は雑誌を読んだこと。"
+        }
+      ]
+    },
+    {
+      "id": "links-07",
+      "turns": [
+        {
+          "role": "user",
+          "text": "一つ目の話はうどんを食べたこと。話題を変えて、二つ目はそばを食べたこと。"
+        }
+      ]
+    },
+    {
+      "id": "links-08",
+      "turns": [
+        {
+          "role": "user",
+          "text": "一つ目の話は写真を撮ったこと。話題を変えて、二つ目は動画を撮ったこと。"
+        }
+      ]
+    },
+    {
+      "id": "links-09",
+      "turns": [
+        {
+          "role": "user",
+          "text": "一つ目の話は椅子を直したこと。話題を変えて、二つ目は机を直したこと。"
+        }
+      ]
+    },
+    {
+      "id": "links-10",
+      "turns": [
+        {
+          "role": "user",
+          "text": "一つ目の話はリンゴを買ったこと。話題を変えて、二つ目はみかんを買ったこと。"
+        }
+      ]
+    },
+    {
+      "id": "evidence-01",
+      "turns": [
+        {
+          "role": "user",
+          "text": "挨拶はこんにちは。ここから体験の話。私は本を読んだ。これが伝えたい出来事です。"
+        }
+      ]
+    },
+    {
+      "id": "evidence-02",
+      "turns": [
+        {
+          "role": "user",
+          "text": "挨拶はこんにちは。ここから体験の話。私はパンを焼いた。これが伝えたい出来事です。"
+        }
+      ]
+    },
+    {
+      "id": "evidence-03",
+      "turns": [
+        {
+          "role": "user",
+          "text": "挨拶はこんにちは。ここから体験の話。私は椅子を直した。これが伝えたい出来事です。"
+        }
+      ]
+    },
+    {
+      "id": "evidence-04",
+      "turns": [
+        {
+          "role": "user",
+          "text": "挨拶はこんにちは。ここから体験の話。私は写真を撮った。これが伝えたい出来事です。"
+        }
+      ]
+    },
+    {
+      "id": "evidence-05",
+      "turns": [
+        {
+          "role": "user",
+          "text": "挨拶はこんにちは。ここから体験の話。私は荷物を運んだ。これが伝えたい出来事です。"
+        }
+      ]
+    }
+  ]
+}

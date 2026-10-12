@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "dataset": "memory_extraction",
+  "cases": [
+    {
+      "id": "episodic_achievement",
+      "turns": [
+        {
+          "role": "user",
+          "text": "今日、資格試験に合格した"
+        }
+      ]
+    },
+    {
+      "id": "episodic_decision",
+      "turns": [
+        {
+          "role": "user",
+          "text": "来月から転職活動を始めると決めた"
+        }
+      ]
+    },
+    {
+      "id": "episodic_outcome",
+      "turns": [
+        {
+          "role": "user",
+          "text": "引っ越し先が決まった"
+        }
+      ]
+    },
+    {
+      "id": "episodic_change",
+      "turns": [
+        {
+          "role": "user",
+          "text": "仕事がリモート勤務になった"
+        }
+      ]
+    },
+    {
+      "id": "episodic_shared",
+      "turns": [
+        {
+          "role": "user",
+          "text": "一緒に旅行の計画を立てた"
+        }
+      ]
+    },
+    {
+      "id": "preference_like_tea",
+      "turns": [
+        {
+          "role": "user",
+          "text": "紅茶が好き"
+        }
+      ]
+    },
+    {
+      "id": "preference_like_music",
+      "turns": [
+        {
+          "role": "user",
+          "text": "ジャズを聴くのが好き"
+        }
+      ]
+    },
+    {
+      "id": "preference_dislike",
+      "turns": [
+        {
+          "role": "user",
+          "text": "辛い食べ物は苦手"
+        }
+      ]
+    },
+    {
+      "id": "preference_over",
+      "turns": [
+        {
+          "role": "user",
+          "text": "コーヒーより紅茶が好き"
+        }
+      ]
+    },
+    {
+      "id": "preference_place",
+      "turns": [
+        {
+          "role": "user",
+          "text": "静かな場所が好き"
+        }
+      ]
+    },
+    {
+      "id": "interaction_tone",
+      "turns": [
+        {
+          "role": "user",
+          "text": "穏やかな口調で話してほしい"
+        }
+      ]
+    },
+    {
+      "id": "interaction_length",
+      "turns": [
+        {
+          "role": "user",
+          "text": "返事は短めがいい"
+        }
+      ]
+    },
+    {
+      "id": "interaction_language",
+      "turns": [
+        {
+          "role": "user",
+          "text": "日本語で答えて"
+        }
+      ]
+    },
+    {
+      "id": "interaction_format",
+      "turns": [
+        {
+          "role": "user",
+          "text": "箇条書きで説明して"
+        }
+      ]
+    },
+    {
+      "id": "interaction_address",
+      "turns": [
+        {
+          "role": "user",
+          "text": "私を先生と呼んで"
+        }
+      ]
+    },
+    {
+      "id": "none_question",
+      "turns": [
+        {
+          "role": "user",
+          "text": "明日の天気は？"
+        }
+      ]
+    },
+    {
+      "id": "none_greeting",
+      "turns": [
+        {
+          "role": "user",
+          "text": "こんにちは"
+        }
+      ]
+    },
+    {
+      "id": "none_command",
+      "turns": [
+        {
+          "role": "user",
+          "text": "タイマーを5分にして"
+        }
+      ]
+    },
+    {
+      "id": "none_assistant",
+      "turns": [
+        {
+          "role": "user",
+          "text": "それについて教えて"
+        }
+      ]
+    },
+    {
+      "id": "episodic_exam",
+      "turns": [
+        {
+          "role": "user",
+          "text": "大学に入学した"
+        }
+      ]
+    },
+    {
+      "id": "episodic_move",
+      "turns": [
+        {
+          "role": "user",
+          "text": "先週大阪へ引っ越した"
+        }
+      ]
+    },
+    {
+      "id": "episodic_job",
+      "turns": [
+        {
+          "role": "user",
+          "text": "新しい仕事に就いた"
+        }
+      ]
+    },
+    {
+      "id": "preference_food",
+      "turns": [
+        {
+          "role": "user",
+          "text": "寿司が好き"
+        }
+      ]
+    },
+    {
+      "id": "preference_color",
+      "turns": [
+        {
+          "role": "user",
+          "text": "青色が好き"
+        }
+      ]
+    },
+    {
+      "id": "preference_dislike_noise",
+      "turns": [
+        {
+          "role": "user",
+          "text": "大きな音が嫌い"
+        }
+      ]
+    },
+    {
+      "id": "interaction_detail",
+      "turns": [
+        {
+          "role": "user",
+          "text": "詳しく説明してほしい"
+        }
+      ]
+    },
+    {
+      "id": "interaction_casual",
+      "turns": [
+        {
+          "role": "user",
+          "text": "敬語を使わず話して"
+        }
+      ]
+    },
+    {
+      "id": "none_ack",
+      "turns": [
+        {
+          "role": "user",
+          "text": "わかった、ありがとう"
+        }
+      ]
+    },
+    {
+      "id": "none_lookup",
+      "turns": [
+        {
+          "role": "user",
+          "text": "この言葉の意味を教えて"
+        }
+      ]
+    }
+  ]
+}
