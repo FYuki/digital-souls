@@ -1,9 +1,9 @@
 {
-  "profile_id": "synthetic-embedding-disabled",
-  "model": "synthetic-embedding-model",
-  "model_digest": "synthetic-review-only",
-  "dimensions": 3,
-  "api_base": "http://127.0.0.1:18081/v1",
+  "profile_id": "bge-m3-q8-0-example",
+  "model": "bge-m3",
+  "model_digest": "aa473d51f451a22f0fcf39ba3330c14bed38a385712b1113440f69df4047a173",
+  "dimensions": 1024,
+  "api_base": "http://127.0.0.1:18082/v1",
   "timeout_seconds": 15.0,
   "enabled": false
 }

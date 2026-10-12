@@ -85,20 +85,32 @@ async def test_fake_synonym_embedding_preserves_original_memory_and_provenance()
     assert "synthetic tea" not in repr(result)
 
 
-def test_poc_defaults_match_digital_souls_memory_policy() -> None:
+def test_defaults_match_adr_0024_and_preserve_poc_ranking() -> None:
     assert (
         POLICY.max_retrieved_memories,
         POLICY.candidate_pool_size,
         POLICY.relevance_threshold,
         POLICY.equivalence_margin,
-    ) == (5, 20, 0.54, 0.002)
+    ) == (5, 20, 0.52, 0.002)
 
 
 def test_relevance_threshold_uses_poc_l2_mapping() -> None:
     # relevance = 1 / (1 + sqrt(squared L2)); unit vectors make L2 = 2 - 2 cosine.
     above, below = memory("above"), memory("below")
-    vectors = ((1.0, 0.0), at_cosine(0.65), at_cosine(0.62))
+    vectors = ((1.0, 0.0), at_cosine(0.58), at_cosine(0.57))
     assert rank_records((above, below), vectors, SPACE, POLICY) == (above,)
+
+
+@pytest.mark.parametrize("score,accepted", [(0.52, True), (0.52 - 1e-9, False)])
+def test_default_threshold_is_inclusive_at_052(score: float, accepted: bool) -> None:
+    item = memory("boundary")
+    cosine = 1 - (1 / score - 1) ** 2 / 2
+    vector = at_cosine(cosine)
+    measured = 1 / (1 + math.dist((1.0, 0.0), vector))
+    assert measured == score
+    assert rank_records((item,), ((1.0, 0.0), vector), SPACE, POLICY) == (
+        (item,) if accepted else ()
+    )
 
 
 def test_returns_at_most_max_retrieved_memories_by_relevance() -> None:
@@ -227,7 +239,7 @@ def test_invalid_vectors_fail_without_content_or_exception_chain(vectors: Any) -
     assert "private synthetic content" not in repr(error)
 
 
-@pytest.mark.parametrize("policy", [None, 5, (5, 20, 0.54, 0.002), "policy"])
+@pytest.mark.parametrize("policy", [None, 5, (5, 20, 0.52, 0.002), "policy"])
 def test_invalid_policy_fails_closed(policy: Any) -> None:
     with pytest.raises(CoreError, match="^Memory embedding failed$"):
         rank_records((memory("synthetic"),), ((1.0, 0.0), (1.0, 0.0)), SPACE, policy)

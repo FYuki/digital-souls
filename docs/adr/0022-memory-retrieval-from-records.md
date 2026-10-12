@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+置換注記（2026-10-10）: §2 の relevance 閾値0.54は、[ADR 0024](0024-multilingual-memory-embedding.md)（2026-10-10 のユーザー決定）により0.52へ変更しました。embedding モデルは bge-m3 です。候補20件・同等帯0.002・順位・最大5件は維持します。
+
 実施注記（2026-10-08）: [Issue #104](https://github.com/FYuki/digital-souls-core/issues/104)の[実施証跡](../evidence/2026-10-08-verbatim-memory-removal.md)により、schema版6で旧逐語3表の削除、書込・抽出・再構成経路の撤去、評価ツールの最小追従は完了しました。背景と「影響と後続」は決定時点の作業分担として保持します。構造化形成と評価再設計、実モデル・実環境の受入は後続です。
 
 日付: 2026-10-08

@@ -2,6 +2,8 @@
 
 合成のみ。実会話・私的ログ・認証情報は含めません。決定は [ADR 0023](../../docs/adr/0023-semantic-evaluation-contract.md)、本番契約は [ADR 0022](../../docs/adr/0022-memory-retrieval-from-records.md)です。
 
+[調整専用の独立した合成ケースとローカル補助データ](tuning/README.md)は、合否判定用の62ケースと分けて使います。
+
 ## 分類と件数
 
 | category | 件数 |
@@ -83,7 +85,15 @@
 
 ### 偽embeddingと品質評価
 
-queryと全normalized_text（Fact各版を含む）には共通4次元の有限・非ゼロvectorがあります。同一本文は全ケースで同じvectorです。queryと候補をunit vectorにし、二乗L2距離から `relevance = 1/(1+sqrt(distance))` を計算します。本番の候補20・閾値0.54・同等帯0.002・最大5を使います。Factのvectorは本文対応の完全性用で、Factを独立候補にしません。
+queryと全normalized_text（Fact各版を含む）には共通4次元の有限・非ゼロvectorがあります。同一本文は全ケースで同じvectorです。queryと候補をunit vectorにし、二乗L2距離から `relevance = 1/(1+sqrt(distance))` を計算します。本番の候補20・閾値0.52・同等帯0.002・最大5を使います。Factのvectorは本文対応の完全性用で、Factを独立候補にしません。
+
+[ADR 0024](../../docs/adr/0024-multilingual-memory-embedding.md) のユーザー承認済み Q3 例外として、
+`below-threshold` の `below-threshold-record` の偽vectorだけを
+`[0.63, 0.7765951326141569, 0.0, 0.0]`（relevance約0.53757）から
+`[0.5565557545480253, 0.8308102623821387, 0.0, 0.0]`（relevance 0.515）へ変更しました。
+閾値0.52の直下で「該当なし」を検証する意図を保つためです。本文・gold・他の61ケース・
+この記録以外のvectorは変更していません。この本文は他ケースと共有されていません。
+実モデル評価は偽vectorを使わず、bge-m3 Q8_0（CLS、1024次元、接頭辞なし）を使います。
 
 偽vectorはCIで道具を検証するためのものです。**モデルの品質証拠ではありません**。実モデル評価は手動・cacheなし3回、各回各分類90%以上、必須ゲート全件合格で判定します。平均で相殺せず、結果に合わせて期待値・閾値を緩めません。
 
@@ -220,7 +230,11 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 
 実行flagまたはprofileが欠ければNOT RUN（exit 3）、無効profileや通信失敗はFAILです。
 このツールはサーバー・GPU・モデルを起動しません。
-ローカルnomic / gemma4-12bで上位5件包含の基準による検索・回答各3回の実モデル再評価を実施済みです。
-いずれもFAILで品質は未受入です。分類品質と必須ゲートを分けた
-[実モデル証跡](../../docs/evidence/2026-10-09-semantic-real-model-evaluation-top5.md)と
+採用したbge-m3 Q8_0（CLS、1024次元、接頭辞なし）・閾値0.52 / gemma4-12bで、
+上位5件包含の基準による検索・回答各3回の実モデル再評価を実施済みです。
+各回とも検索品質/全条件53/62、回答品質61/62・全条件53/62でFAIL、品質は未受入です。
+日英は検索・回答とも10/10ですが、検索は無関係3/10・長文0/1・閾値0/1、回答は長文0/1が品質未達です。
+必須ゲートは検索top_one 1件/no_match 8件、回答dispatch 1件/no_memory 8件の違反が残ります。
+分類品質と必須ゲートを分け、前回nomic/0.54との比較も記録した
+[実モデル証跡](../../docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)と
 [利用手順](../../docs/memory-evaluation.md)を参照してください。

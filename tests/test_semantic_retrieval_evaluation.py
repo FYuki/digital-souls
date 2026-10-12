@@ -71,7 +71,7 @@ def test_mandatory_gates_cannot_be_offset(violation: str) -> None:
         data["scores"][g.forbidden_ids[0]] = 1.0
         data["fact_ids"][g.forbidden_ids[0]] = ()
     elif violation == "threshold":
-        data["scores"][g.relevant_ids[0]] = 0.53999
+        data["scores"][g.relevant_ids[0]] = 0.51999
     elif violation == "unverified":
         data["verified_ids"] = ()
     elif violation == "order":
@@ -356,7 +356,7 @@ def test_ninety_percent_boundary_is_inclusive_but_one_gate_failure_is_global() -
     assert not summary.passed and summary.categories["synonym"].rate == 0.9
     assert not summary.gates_passed  # Missing top-one is now a mandatory failure.
     index = next(i for i, row in enumerate(rows) if row.id == "synonym-03")
-    o = observation(rows[index].id).model_copy(update={"scores": {"target": 0.53}})
+    o = observation(rows[index].id).model_copy(update={"scores": {"target": 0.51}})
     rows[index] = score_case(gold(rows[index].id), o)
     summary = aggregate_run(DATA, tuple(rows))
     assert summary.categories["synonym"].rate == 0.9

@@ -27,7 +27,9 @@ inference.memory_context = MemoryContext(retrieval)
 ```
 
 設定例は[PostgreSQL](../examples/storage.postgresql.example.json)と
-[embedding](../examples/embedding.example.json)に分離しています。例の接続先・モデル・次元は合成値です。
+[embedding](../examples/embedding.example.json)に分離しています。embedding例は [ADR 0024](adr/0024-multilingual-memory-embedding.md) の bge-m3 Q8_0
+（alias `bge-m3`、実ファイルのSHA-256、1024次元、loopback 18082）です。
+CLS pooling・接頭辞なし・relevance閾値0.52で使い、候補20・最大5・同等帯0.002は維持します。
 embedding profile は既定無効であり、実モデルと endpoint の確認なしに有効化しません。
 `StorageConfig` の読込みや保存先の変更だけで、正本履歴を自動抽出しません。
 
@@ -44,7 +46,8 @@ vector は呼出し内だけの一時値で、pgvector、永続 index、共有 c
 2. 既存 role で対象 DB の CONNECT と専用 schema の作成・利用ができるかを確認する。新しい role・資格情報・権限が必要なら、その変更を別途承認してから用意する。
 3. trusted 起動側で `StorageConfig` を明示注入し、PG* の暗黙設定やホームの `.pgpass` に依存しない接続を構成する。
 4. 履歴保存とmemory/local permission、分類器を同じ現行policyに結び付ける。正本登録はtrusted callerの保存判定が前提で、履歴保存だけで形成を始めない。
-5. embedding 対応モデル・digest・alias・次元・pooling・専用 endpoint と資源割当を決め、明示 profile を構成する。
+5. bge-m3 Q8_0 のdigest・alias・1024次元・CLS pooling・専用loopback endpointと資源割当を確認し、明示 profile を構成する。
+   [llama.cpp運用](llamacpp-operations.md) の手順で手動作成の旧nomicコンテナを停止して切り替える。
 6. 実モデルによる[検索・回答品質評価](memory-evaluation.md)は合成正本で各3回実施済み、いずれもFAIL。
    [証跡](evidence/2026-10-09-semantic-real-model-evaluation-top5.md)を参照し、品質受入と配備先の動作確認を別途行う。
 

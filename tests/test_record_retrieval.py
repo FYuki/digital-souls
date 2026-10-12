@@ -450,12 +450,12 @@ def test_record_pool_threshold_band_and_limit() -> None:
     values = entries[:4]
     result = rank_records(
         values,
-        ((1.0, 0.0), vector(0.8), vector(0.7985), vector(0.797), vector(0.5399)),
+        ((1.0, 0.0), vector(0.8), vector(0.7985), vector(0.797), vector(0.5199)),
         EmbeddingSpace("synthetic", "v1", 2),
         RetrievalPolicy(),
     )
     assert result == (values[1], values[0], values[2])
-    boundary = vector(0.54)
+    boundary = vector(0.52)
     assert (
         rank_records(
             values[:1],

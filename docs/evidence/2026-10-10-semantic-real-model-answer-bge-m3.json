@@ -1,0 +1,4115 @@
+{
+  "schema_version": 1,
+  "commit": {
+    "sha": "69e44f58c0bfd3676478851d1ab73dd184bd8eaf",
+    "dirty": false
+  },
+  "mode": "local_model",
+  "quality_evidence": true,
+  "classifier": "synthetic",
+  "answer_model": {
+    "profile_id": "gemma4-12b-1278394b-132",
+    "model": "openai/gemma4-12b",
+    "transport": "llamacpp_chat"
+  },
+  "space": {
+    "model": "bge-m3",
+    "revision": "aa473d51f451a22f0fcf39ba3330c14bed38a385712b1113440f69df4047a173",
+    "dimensions": 1024,
+    "configuration": "{\"adapter\": \"local-openai-embeddings-v1\", \"enabled\": true, \"endpoint\": \"http://127.0.0.1:18082/v1\", \"profile_id\": \"bge-m3-q8-0-132\", \"sdk\": \"2.54.0\", \"timeout_seconds\": 15.0}"
+  },
+  "retrieval": {
+    "max_retrieved_memories": 5,
+    "candidate_pool_size": 20,
+    "relevance_threshold": 0.52,
+    "equivalence_margin": 0.002
+  },
+  "cases_sha256": "44b90af81bdbc9a7c117fd5158d23bde4878571de2584b99bb1973f85a2ecdcf",
+  "fixtures_sha256": null,
+  "characters_sha256": "0cfdd7aec0e6a69ecf601ab0ab16ad3696e53b987cf022a43c73ca09d533726f",
+  "card_sha256": "17093470ae0139424d127bfc3308057b9bcface15dd70d0cf8bc45728c4bf3fa",
+  "case_version": {
+    "schema_version": 1,
+    "expectations_schema_version": 2,
+    "cases_sha256": "44b90af81bdbc9a7c117fd5158d23bde4878571de2584b99bb1973f85a2ecdcf",
+    "expectations_sha256": "0e979d561be09a45faf019baba285c14605f46ebacc6194f86b5298aa981caa4"
+  },
+  "promptfoo_version": "0.117.2",
+  "toolchain": {
+    "node": "24.19.0",
+    "promptfoo_sqlite": "13.0.3"
+  },
+  "runs": [
+    {
+      "cases": [
+        {
+          "id": "synonym-warm-drink-ja",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "tea-preference",
+            "mint-plant"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-weekend-ja",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "weekend-cycle",
+            "evening-read"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-herb",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "garden-sunflower",
+            "windowsill-mint"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-observatory",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "music-only-memory",
+            "tea-only-memory"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "negated-coffee-preference",
+          "category": "negation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "coffee-dislike",
+            "tea-like"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "updated-morning-drink",
+          "category": "update",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "morning-drink"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "multisource-picnic",
+          "category": "multisource",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "picnic-items"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "multisource-partial-revocation",
+          "category": "multisource_revocation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "remaining-food-only"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "private-source",
+          "category": "private",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "private-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "excluded-source",
+          "category": "excluded",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "excluded-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "deleted-source",
+          "category": "deleted_source",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "deleted-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "deleted-memory",
+          "category": "deleted_memory",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "current-notebook"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-character",
+          "category": "binding_character",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-character-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-subject",
+          "category": "binding_subject",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-subject-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-client",
+          "category": "binding_client",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-client-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "long-text-explicit-detail",
+          "category": "long_text",
+          "quality_passed": false,
+          "gates": {
+            "forbidden": true,
+            "dispatch": false,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": false,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "post-search-revocation",
+          "category": "after_search",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": false,
+          "dispatched": false,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "post-answer-revocation",
+          "category": "after_answer",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "post-answer-revocation-memory"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": true,
+          "context_empty": false
+        },
+        {
+          "id": "source-epoch-changed",
+          "category": "epoch_change",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "synonym-02",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-03",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-04",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-05",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-06",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-07",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-08",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-09",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-10",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-02",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-03",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-04",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-05",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-06",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-07",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-08",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-09",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-10",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-02",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-03",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-04",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-05",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-06",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-07",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-08",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-09",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-10",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "distractor",
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-02",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-03",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-04",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-05",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-06",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-07",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-08",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-09",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-10",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "distractor",
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "valid-fact-attachment",
+          "category": "fact_attachment",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "stale-fact-link",
+          "category": "fact_version",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "revoked-fact-source",
+          "category": "fact_revocation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "direct-semantic",
+          "category": "semantic_direct",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "quiet-preference",
+            "quiet-episode-2",
+            "quiet-episode-1"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "derived-semantic",
+          "category": "semantic_derived",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "quiet-preference",
+            "quiet-episode-2",
+            "quiet-episode-1"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "equivalent-band-order",
+          "category": "equivalent_order",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "tie-null",
+            "tie-a",
+            "tie-b",
+            "tie-d",
+            "tie-c"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "below-threshold",
+          "category": "threshold",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "below-threshold-record"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        }
+      ],
+      "categories": {
+        "synonym": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "paraphrase": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "cross_language": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "unrelated": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "negation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "update": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "multisource": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "multisource_revocation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "private": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "excluded": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "deleted_source": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "deleted_memory": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_character": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_subject": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_client": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "long_text": {
+          "total": 1,
+          "passed": 0,
+          "rate": 0
+        },
+        "after_search": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "after_answer": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "epoch_change": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_attachment": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_version": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_revocation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "semantic_direct": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "semantic_derived": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "equivalent_order": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "threshold": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        }
+      },
+      "gates_passed": false,
+      "passed": false
+    },
+    {
+      "cases": [
+        {
+          "id": "synonym-warm-drink-ja",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "tea-preference",
+            "mint-plant"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-herb",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "garden-sunflower",
+            "windowsill-mint"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-observatory",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "music-only-memory",
+            "tea-only-memory"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-weekend-ja",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "weekend-cycle",
+            "evening-read"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "negated-coffee-preference",
+          "category": "negation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "coffee-dislike",
+            "tea-like"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "updated-morning-drink",
+          "category": "update",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "morning-drink"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "multisource-picnic",
+          "category": "multisource",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "picnic-items"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "multisource-partial-revocation",
+          "category": "multisource_revocation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "remaining-food-only"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "private-source",
+          "category": "private",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "private-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "excluded-source",
+          "category": "excluded",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "excluded-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "deleted-source",
+          "category": "deleted_source",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "deleted-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "deleted-memory",
+          "category": "deleted_memory",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "current-notebook"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-character",
+          "category": "binding_character",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-character-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-subject",
+          "category": "binding_subject",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-subject-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-client",
+          "category": "binding_client",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-client-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "long-text-explicit-detail",
+          "category": "long_text",
+          "quality_passed": false,
+          "gates": {
+            "forbidden": true,
+            "dispatch": false,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": false,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "post-search-revocation",
+          "category": "after_search",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": false,
+          "dispatched": false,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "post-answer-revocation",
+          "category": "after_answer",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "post-answer-revocation-memory"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": true,
+          "context_empty": false
+        },
+        {
+          "id": "source-epoch-changed",
+          "category": "epoch_change",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "synonym-02",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-03",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-04",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-05",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-06",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-07",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-08",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-09",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-10",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-02",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-03",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-04",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-05",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-06",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-07",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-08",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-09",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-10",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-02",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-03",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-04",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-05",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-06",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-07",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-08",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-09",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-10",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "distractor",
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-02",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-03",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-04",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-05",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-06",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-07",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-08",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-09",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-10",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "distractor",
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "valid-fact-attachment",
+          "category": "fact_attachment",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "stale-fact-link",
+          "category": "fact_version",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "revoked-fact-source",
+          "category": "fact_revocation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "direct-semantic",
+          "category": "semantic_direct",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "quiet-preference",
+            "quiet-episode-2",
+            "quiet-episode-1"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "derived-semantic",
+          "category": "semantic_derived",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "quiet-preference",
+            "quiet-episode-2",
+            "quiet-episode-1"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "equivalent-band-order",
+          "category": "equivalent_order",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "tie-null",
+            "tie-a",
+            "tie-b",
+            "tie-d",
+            "tie-c"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "below-threshold",
+          "category": "threshold",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "below-threshold-record"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        }
+      ],
+      "categories": {
+        "synonym": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "paraphrase": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "cross_language": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "unrelated": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "negation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "update": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "multisource": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "multisource_revocation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "private": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "excluded": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "deleted_source": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "deleted_memory": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_character": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_subject": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_client": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "long_text": {
+          "total": 1,
+          "passed": 0,
+          "rate": 0
+        },
+        "after_search": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "after_answer": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "epoch_change": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_attachment": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_version": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_revocation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "semantic_direct": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "semantic_derived": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "equivalent_order": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "threshold": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        }
+      },
+      "gates_passed": false,
+      "passed": false
+    },
+    {
+      "cases": [
+        {
+          "id": "cross-language-herb",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "garden-sunflower",
+            "windowsill-mint"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-observatory",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "music-only-memory",
+            "tea-only-memory"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-weekend-ja",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "weekend-cycle",
+            "evening-read"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-warm-drink-ja",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "tea-preference",
+            "mint-plant"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "negated-coffee-preference",
+          "category": "negation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "coffee-dislike",
+            "tea-like"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "updated-morning-drink",
+          "category": "update",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "morning-drink"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "multisource-picnic",
+          "category": "multisource",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "picnic-items"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "multisource-partial-revocation",
+          "category": "multisource_revocation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "remaining-food-only"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "private-source",
+          "category": "private",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "private-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "excluded-source",
+          "category": "excluded",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "excluded-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "deleted-source",
+          "category": "deleted_source",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "deleted-source-visible"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "deleted-memory",
+          "category": "deleted_memory",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "current-notebook"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-character",
+          "category": "binding_character",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-character-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-subject",
+          "category": "binding_subject",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-subject-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "binding-client",
+          "category": "binding_client",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "binding-client-own"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "long-text-explicit-detail",
+          "category": "long_text",
+          "quality_passed": false,
+          "gates": {
+            "forbidden": true,
+            "dispatch": false,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": false,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "post-search-revocation",
+          "category": "after_search",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": false,
+          "dispatched": false,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "post-answer-revocation",
+          "category": "after_answer",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "post-answer-revocation-memory"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": true,
+          "context_empty": false
+        },
+        {
+          "id": "source-epoch-changed",
+          "category": "epoch_change",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "synonym-02",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-03",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-04",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-05",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-06",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-07",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-08",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-09",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "synonym-10",
+          "category": "synonym",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-02",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-03",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-04",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-05",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-06",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-07",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-08",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-09",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "paraphrase-10",
+          "category": "paraphrase",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-02",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-03",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-04",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-05",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-06",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-07",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-08",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-09",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "cross-language-10",
+          "category": "cross_language",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "distractor",
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-02",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-03",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-04",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-05",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-06",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-07",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-08",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": true
+        },
+        {
+          "id": "unrelated-09",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "target",
+            "distractor"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "unrelated-10",
+          "category": "unrelated",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "distractor",
+            "target"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "valid-fact-attachment",
+          "category": "fact_attachment",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "stale-fact-link",
+          "category": "fact_version",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "revoked-fact-source",
+          "category": "fact_revocation",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "trip-episode"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "direct-semantic",
+          "category": "semantic_direct",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "quiet-preference",
+            "quiet-episode-2",
+            "quiet-episode-1"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "derived-semantic",
+          "category": "semantic_derived",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "quiet-preference",
+            "quiet-episode-2",
+            "quiet-episode-1"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "equivalent-band-order",
+          "category": "equivalent_order",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": true
+          },
+          "passed": true,
+          "dispatch_memory_ids": [
+            "tie-null",
+            "tie-a",
+            "tie-b",
+            "tie-d",
+            "tie-c"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        },
+        {
+          "id": "below-threshold",
+          "category": "threshold",
+          "quality_passed": true,
+          "gates": {
+            "forbidden": true,
+            "dispatch": true,
+            "lifecycle": true,
+            "no_memory": false
+          },
+          "passed": false,
+          "dispatch_memory_ids": [
+            "below-threshold-record"
+          ],
+          "dispatch_valid": true,
+          "dispatched": true,
+          "discarded": false,
+          "context_empty": false
+        }
+      ],
+      "categories": {
+        "synonym": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "paraphrase": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "cross_language": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "unrelated": {
+          "total": 10,
+          "passed": 10,
+          "rate": 1
+        },
+        "negation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "update": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "multisource": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "multisource_revocation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "private": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "excluded": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "deleted_source": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "deleted_memory": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_character": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_subject": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "binding_client": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "long_text": {
+          "total": 1,
+          "passed": 0,
+          "rate": 0
+        },
+        "after_search": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "after_answer": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "epoch_change": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_attachment": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_version": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "fact_revocation": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "semantic_direct": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "semantic_derived": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "equivalent_order": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        },
+        "threshold": {
+          "total": 1,
+          "passed": 1,
+          "rate": 1
+        }
+      },
+      "gates_passed": false,
+      "passed": false
+    }
+  ],
+  "passed": false,
+  "executions": [
+    {
+      "run": 1,
+      "attempts": 1,
+      "exit_code": 100,
+      "signal": null,
+      "spawn_error": null,
+      "raw_present": true,
+      "stdout_classes": [
+        "unclassified"
+      ],
+      "stderr_classes": [
+        "empty"
+      ]
+    },
+    {
+      "run": 2,
+      "attempts": 1,
+      "exit_code": 100,
+      "signal": null,
+      "spawn_error": null,
+      "raw_present": true,
+      "stdout_classes": [
+        "unclassified"
+      ],
+      "stderr_classes": [
+        "empty"
+      ]
+    },
+    {
+      "run": 3,
+      "attempts": 1,
+      "exit_code": 100,
+      "signal": null,
+      "spawn_error": null,
+      "raw_present": true,
+      "stdout_classes": [
+        "unclassified"
+      ],
+      "stderr_classes": [
+        "empty"
+      ]
+    }
+  ]
+}

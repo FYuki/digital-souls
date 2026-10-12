@@ -38,6 +38,7 @@ ADR 0026〜0030は、2026-10-11のユーザーの承認を根拠に、同日にA
 - [ADR 0021: SQLiteを廃止しPostgreSQLへ一本化する](0021-postgresql-only-storage.md)
 - [ADR 0022: 記憶の検索を Episode・Fact・Semantic の正本へ切り替える](0022-memory-retrieval-from-records.md)
 - [ADR 0023: 本番の記憶検索経路による意味検索・回答評価](0023-semantic-evaluation-contract.md)
+- [ADR 0024: 記憶検索の embedding を多言語モデル bge-m3 へ切り替え、閾値を0.52にする](0024-multilingual-memory-embedding.md)
 - [ADR 0025: 常駐Coreの共通runtimeと外部インターフェース](0025-shared-runtime-interfaces.md)
 - [ADR 0026: プロンプトの組み立てと領域ごとのtoken予算](0026-prompt-assembly.md)
 - [ADR 0027: 会話中のツール利用と会話外の活動の実行基盤](0027-tool-use-and-activity-runtime.md)

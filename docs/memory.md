@@ -65,7 +65,7 @@ embedding未接続時はstorageを読まず空結果を返します。部分文�
 候補が0件ならembeddingを呼びません。embeddingのawaitは15秒以内で、検索全体の上限時間ではありません。
 
 `memory_ranking.rank_records` は製品の `RetrievalPolicy` で順位付けします。
-単位vector間の二乗L2距離が近い候補20件から、relevance `1 / (1 + sqrt(距離))` が0.54以上を残し、
+単位vector間の二乗L2距離が近い候補20件から、relevance `1 / (1 + sqrt(距離))` が0.52以上を残し、
 先頭との差が0.002以内の同等帯だけで以下の順を適用し、最大5件を返します。
 
 ```text
@@ -115,7 +115,9 @@ query拒否・結果拒否・検索中の出典撤回・設定不正・storage�
 ## ローカルembeddingの明示接続
 
 `local_embedding.LocalEmbeddingProfile` と `LocalEmbedding` を使います。
-[profile例](../examples/embedding.example.json)は `enabled=false` の合成設定です。
+[profile例](../examples/embedding.example.json)は `enabled=false` の bge-m3 Q8_0 設定です。
+[ADR 0024](adr/0024-multilingual-memory-embedding.md) に従い alias `bge-m3`、CLS pooling、1024次元、接頭辞なしを採用します。
+モデルの SHA-256 は [起動スクリプト](../tools/start-llamacpp.sh) で検証します。
 モデルは同梱せず、起動時にprofileを自動で読み込みません。
 
 ```python

@@ -4,8 +4,12 @@
 検索はPython、回答はpromptfoo 0.117.2を使って測定します。
 入力・gold・分類・移行対応・語句判定の限界は [評価README](../evals/semantic/README.md)、
 本番の検索・context契約は [記憶API](memory.md) と [ADR 0022](adr/0022-memory-retrieval-from-records.md) が正本です。
-[実モデル証跡](evidence/2026-10-09-semantic-real-model-evaluation-top5.md) に今回の3回の結果を記録しています。
-品質は未受入です。fixtureの成功をモデル品質の合格にせず、実モデルのFAILも記録します。
+[実モデル証跡](evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md) に採用したbge-m3/0.52での各3回の結果を記録しています。
+各回とも検索品質/全条件53/62、回答品質61/62・全条件53/62で **FAIL**、品質は未受入です。
+日英は検索・回答とも10/10、検索の無関係は3/10、長文は検索・回答とも0/1、検索の閾値は0/1です。
+必須ゲートは検索top_one 1件/no_match 8件、回答dispatch 1件/no_memory 8件の違反が残り、禁止情報/lifecycle違反は0です。
+前回nomic/0.54の検索品質41/62・回答品質52/62からの分類別比較も証跡へ記録しています。
+fixtureの成功をモデル品質の合格にせず、実モデルのFAILも記録します。
 
 ## 評価経路と固定データ
 
@@ -21,7 +25,10 @@ goldの分類・正解ID・禁止ID・期待順序・回答事実をモデルの
 本番 `MemoryRetrieval` / `MemoryContext` を通し、回答は `Inference.prepare` / `Inference.check` とProvider portを使います。
 逐語データや正本IDをモデル向けcontextへ注入する別経路は追加しません。
 
-本番設定は候補20、最大5、relevance閾値0.54、同等帯0.002です。
+本番設定は候補20、最大5、relevance閾値0.52、同等帯0.002です。
+採用モデルは [ADR 0024](adr/0024-multilingual-memory-embedding.md) の bge-m3 Q8_0（alias `bge-m3`、CLS、1024次元、接頭辞なし）です。
+従来のnomicのFAILは[前回証跡](evidence/2026-10-09-semantic-real-model-evaluation-top5.md)に保持し、
+この設定での実モデル再評価は #132 で実施済みです。無関係質問への対処はADR 0024の決定に従い後続Epicで扱います。
 unit vectorの二乗L2距離から `1/(1+sqrt(distance))` を求めます。
 同等帯は `last_user_mentioned_at DESC NULLS LAST → created_at DESC → id ASC` で並べます。
 Factは独立候補ではなく、有効なFactをEpisodeへ添付します。
@@ -66,16 +73,26 @@ bash tools/evaluate-semantic-answer.sh --runs 3 --output /dev/shm/answer-fixture
 
 承認された既存ローカルモデルでの測定:
 
+依存の準備後、文書や証跡を書き始める前のcleanなcommitで実行し、reportのcommit.sha / dirty=falseを確認します。
+
 ```sh
 bash tools/evaluate-semantic-retrieval.sh --runs 3 \
-  --profile /absolute/private/embedding.json --output /absolute/private/retrieval.json
-bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model --runs 3 \
-  --profile /absolute/private/answer.json --output /absolute/private/answer-report.json
+  --profile /absolute/private/embedding.local.json --output /absolute/private/retrieval.json
+# 1回ずつ3コマンドで直列実行し、各回のoutputを分ける
+bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model --runs 1 \
+  --profile /absolute/private/answer.local.json --output /absolute/private/answer-run-1.json
+bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model --runs 1 \
+  --profile /absolute/private/answer.local.json --output /absolute/private/answer-run-2.json
+bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model --runs 1 \
+  --profile /absolute/private/answer.local.json --output /absolute/private/answer-run-3.json
 ```
 
 検索はvector cacheなしで毎回呼び直します。回答はpromptfoo `--no-cache` とcache無効環境を使い、
 結果側でもcached=falseを検証します。各runは再試行なしで別promptfooプロセスを直列実行します。
 全体が品質FAILでも3回の結果を残します。実行error・不完全reportは品質不合格と区別してFAILです。
+長い処理は1コマンド30分以内へ分割します。#132は検索3回を1コマンド、回答を1回ずつ3コマンドで完走し、
+同じmanifestと全ケースを確認した回答reportを既存 `finalizeReport` で3回に統合しました。
+終了値1でも完走した品質FAILなら次の回を実行し、回の欠落をPASSにしません。
 
 ## 私有profileとサーバー
 
@@ -90,13 +107,72 @@ chatは `transport=llamacpp_chat`、`model=openai/gemma4-12b`、loopback api_bas
 external_send_allowed=true、timeoutを設定します。chatのProfileにmodel_digestフィールドはないため、
 回答GGUFのSHA-256は証跡で別に記録します。資格情報を要する経路へfallbackしません。
 
+bge-m3用embedding profileは `model=bge-m3`、
+`model_digest=aa473d51f451a22f0fcf39ba3330c14bed38a385712b1113440f69df4047a173`、
+`dimensions=1024`、`api_base=http://127.0.0.1:18082/v1`、timeout=15秒、接頭辞なしです。
+例を私有 `embedding.local.json` へコピーしてenabled=trueにし、回答例を `answer.local.json` へコピーして
+トップレベルenabled・embedding.enabled・chat.external_send_allowedをtrueにします。
+chatは `api_base=http://127.0.0.1:18081/v1`、timeout=60秒です。既定無効の例をそのまま実行しません。
+
 起動前にGPUのVRAM・他の推論処理を確認し、余裕がなければ起動しません。
 既存コンテナの起動手順・主要設定は [llama.cpp運用](llamacpp-operations.md) を参照します。
 health・`/v1/models` alias・GGUF digest・image digest・build・portを確認します。
-embeddingにはmean等のpoolingが必要です。ubatchは最長入力のtoken数以上とし、
+bge-m3 のpoolingは `cls`、ctx/batch/ubatchは2048、parallelは1です。ubatchは最長入力のtoken数以上とし、
 long_textの失敗があれば設定値と失敗を記録します。運用設定を変えた場合は理由を記録し3回をやり直します。
 モデルの追加DL、他サービスの停止・変更、Ollamaの起動はこの評価手順に含めません。
 評価後は失敗時も起動した評価コンテナを停止し、inspectのexitedを記録します。
+
+### #132で使った既存chatとembeddingだけの起動・停止
+
+この節は、Issue #132の再評価で実際に使った手順の記録です。当時の `tools/start-llamacpp.sh` は
+Ollamaのunitが存在しない（`LoadState=not-found`）環境で起動を拒否したため、ユーザー指定の次の手順で起動しました。
+現在の起動scriptはunitの不存在を許可します（Issue #142）。今後の評価では、
+[llama.cpp運用](llamacpp-operations.md#手動で切り替える)の起動scriptでchatとembeddingを起動できます。
+`MODEL_PATH` / `EMBEDDING_MODEL_PATH` は運用者所有の既存GGUFへ設定します。
+まず `nvidia-smi`（VRAM・process）と `docker ps -a` を確認し、他の重い推論があれば起動せず待機/報告します。
+
+```bash
+export CORE_LLAMACPP_UID=$(id -u) CORE_LLAMACPP_GID=$(id -g)
+export CORE_LLAMACPP_MODEL="${MODEL_PATH:?set verified gemma4 GGUF path}"
+export CORE_LLAMACPP_EMBEDDING_MODEL="${EMBEDDING_MODEL_PATH:?set verified bge-m3 GGUF path}"
+(
+  set -euo pipefail
+  sha256sum "$CORE_LLAMACPP_MODEL" "$CORE_LLAMACPP_EMBEDDING_MODEL"
+  [[ $(sha256sum "$CORE_LLAMACPP_MODEL" | cut -d ' ' -f 1) == 1278394b693672ac2799eadc9a83fd98259a6a88a40acfb1dcaa6c6fc895a606 ]]
+  [[ $(sha256sum "$CORE_LLAMACPP_EMBEDDING_MODEL" | cut -d ' ' -f 1) == aa473d51f451a22f0fcf39ba3330c14bed38a385712b1113440f69df4047a173 ]]
+  [[ $(docker inspect --format '{{.State.Status}}' digital-souls-core-llamacpp-embed) == exited ]]
+  [[ $(docker inspect --format '{{.State.Status}}' digital-souls-core-llamacpp) == exited ]]
+  docker start digital-souls-core-llamacpp
+  docker compose -f compose.llamacpp.yml up -d --no-build --pull never embedding
+  for port in 18081 18082; do
+    curl --noproxy '*' --fail --silent --show-error \
+      --connect-timeout 1 --max-time 2 --retry 60 --retry-delay 2 \
+      --retry-max-time 120 --retry-all-errors "http://127.0.0.1:$port/health"
+    curl --noproxy '*' --fail --silent --show-error "http://127.0.0.1:$port/v1/models"
+  done
+)
+```
+
+aliasは18081がgemma4-12b、18082がbge-m3であることを確認します。chatをComposeで再作成せず、旧nomicを起動しません。
+
+注記：上の手順は#132の再評価で使ったものです。#132のchatは2026-10-06作成の既存コンテナ（`--ctx-size 4096`）で、
+**#132の結果はctx 4096のchatによるもの**です。その後[#147](evidence/2026-10-10-llamacpp-context.md)でComposeのchatはcontext 32768へ変わり、
+Epic #150で既存のchatコンテナもctx 32768（build b11347）で再作成済みです（2026-10-11）。
+コンテナは自動ではCompose定義に追従しないため、今後の実モデル評価でも `docker inspect` でchatの `--ctx-size` を記録し、
+Compose定義と違う場合は運用者が再作成するか、差異を証跡に明記してから実行します。
+評価終了時・失敗時とも、同じ環境変数で次を実行し、exitedの時刻とnvidia-smiのVRAMを記録します。
+起動途中で失敗した場合も、今回起動したコンテナを停止して確認します。
+
+```bash
+docker compose -f compose.llamacpp.yml stop embedding
+docker stop digital-souls-core-llamacpp
+docker ps -a
+docker inspect --format '{{.Name}} {{.State.Status}} {{.State.FinishedAt}}' \
+  digital-souls-core-llamacpp-bge-m3 digital-souls-core-llamacpp
+nvidia-smi
+```
+
+bge-m3コンテナは削除せずexitedで保持します。
 
 ## 採点と合否
 

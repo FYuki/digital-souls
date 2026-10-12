@@ -79,11 +79,11 @@ def _unit_vector(vector: object, dimensions: int) -> tuple[float, ...]:
 
 @dataclass(frozen=True)
 class RetrievalPolicy:
-    """digital-souls PoC `rag_service` values (memory_policy.json, 2026-09-semantic-v1)."""
+    """PoC ranking policy with the bge-m3 threshold adopted in ADR 0024."""
 
     max_retrieved_memories: int = 5
     candidate_pool_size: int = 20
-    relevance_threshold: float = 0.54
+    relevance_threshold: float = 0.52
     equivalence_margin: float = 0.002
 
     def __post_init__(self) -> None:

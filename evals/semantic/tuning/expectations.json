@@ -1,0 +1,2441 @@
+{
+  "schema_version": 2,
+  "cases": [
+    {
+      "id": "tuning-synonym-daily-01",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "Ｌ字型"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-daily-02",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "革製ケース"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-daily-03",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "楕円形"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-daily-04",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "駅前のサロン"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-daily-05",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "観音開き"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-daily-06",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "太陽光"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-07",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "積層鋼板"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-08",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "八立方メートル"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-09",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "タングステン"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-synonym-10",
+      "category": "synonym",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "底面"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-daily-01",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "デンタルフロス"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-daily-02",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "首掛けストラップ"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-daily-03",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "前の晩から水に浸"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-daily-04",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "ビデオ通話"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-daily-05",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "画面を暗く"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-daily-06",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "耳栓"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-07",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "区分トレー"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-08",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "校正日"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-09",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "取水口"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-paraphrase-10",
+      "category": "paraphrase",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "昇降リフト"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-daily-01",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "えび",
+            "shrimp"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-daily-02",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "アイマスク",
+            "eye mask"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-daily-03",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "帆布",
+            "canvas"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-daily-04",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "海綿",
+            "sea sponge"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-daily-05",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "韓国語",
+            "Korean"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-daily-06",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "水曜日",
+            "Wednesday"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-07",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "バネ",
+            "spring"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-08",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "凹面鏡",
+            "concave"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-09",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "コルク",
+            "cork"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-10",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "でんぷん",
+            "starch"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-11",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "三十",
+            "thirty"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-en-query-12",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "樹脂",
+            "resin"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-daily-01",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "チェス",
+            "chess"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-daily-02",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "中庭",
+            "courtyard"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-daily-03",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "充電台",
+            "dock"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-daily-04",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "通路側",
+            "aisle"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-daily-05",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "隣人",
+            "neighbor"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-daily-06",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "首",
+            "neck"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-07",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "方位磁針",
+            "compass"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-08",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "花崗岩",
+            "granite"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-09",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "天秤",
+            "beam balance"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-10",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "穴あき",
+            "perforated"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-11",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "ろう",
+            "wax"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-cross-ja-query-12",
+      "category": "cross_language",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "顕微鏡",
+            "microscope"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-daily-01",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-daily-02",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-daily-03",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-daily-04",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-daily-05",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-tech-01",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-tech-02",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-tech-03",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-tech-04",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-near-tech-05",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-01",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-02",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-03",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-04",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-05",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-06",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-07",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-daily-08",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-tech-01",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-tech-02",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-tech-03",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-unrelated-far-tech-04",
+      "category": "unrelated",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-daily-01",
+      "category": "threshold",
+      "relevant_ids": [
+        "nearby"
+      ],
+      "forbidden_ids": [
+        "adjacent"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "nearby"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "ファスナー"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-daily-02",
+      "category": "threshold",
+      "relevant_ids": [
+        "nearby"
+      ],
+      "forbidden_ids": [
+        "adjacent"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "nearby"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "デンタルフロス"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-daily-03",
+      "category": "threshold",
+      "relevant_ids": [
+        "nearby"
+      ],
+      "forbidden_ids": [
+        "adjacent"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "nearby"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "日曜日"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-tech-04",
+      "category": "threshold",
+      "relevant_ids": [
+        "nearby"
+      ],
+      "forbidden_ids": [
+        "adjacent"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "nearby"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "花崗岩"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-tech-05",
+      "category": "threshold",
+      "relevant_ids": [
+        "nearby"
+      ],
+      "forbidden_ids": [
+        "adjacent"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "nearby"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "スクリュー"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-tech-06",
+      "category": "threshold",
+      "relevant_ids": [
+        "nearby"
+      ],
+      "forbidden_ids": [
+        "adjacent"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "nearby"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "油圧シリンダー"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-daily-07",
+      "category": "threshold",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-daily-08",
+      "category": "threshold",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-daily-09",
+      "category": "threshold",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-tech-10",
+      "category": "threshold",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-tech-11",
+      "category": "threshold",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-threshold-near-tech-12",
+      "category": "threshold",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "nearby",
+        "adjacent"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-private",
+      "category": "private",
+      "relevant_ids": [
+        "visible"
+      ],
+      "forbidden_ids": [
+        "hidden"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "visible"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "位相板"
+          ]
+        ],
+        "forbidden_facts": [
+          [
+            "偏光板"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-excluded",
+      "category": "excluded",
+      "relevant_ids": [
+        "visible"
+      ],
+      "forbidden_ids": [
+        "hidden"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "visible"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "位相板"
+          ]
+        ],
+        "forbidden_facts": [
+          [
+            "偏光板"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-deleted-source",
+      "category": "deleted_source",
+      "relevant_ids": [
+        "visible"
+      ],
+      "forbidden_ids": [
+        "hidden"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "visible"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "位相板"
+          ]
+        ],
+        "forbidden_facts": [
+          [
+            "偏光板"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-deleted-memory",
+      "category": "deleted_memory",
+      "relevant_ids": [
+        "visible"
+      ],
+      "forbidden_ids": [
+        "hidden"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "visible"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "位相板"
+          ]
+        ],
+        "forbidden_facts": [
+          [
+            "偏光板"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-binding-character",
+      "category": "binding_character",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [
+        "hidden"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "キセノン"
+          ]
+        ],
+        "forbidden_facts": [
+          [
+            "水銀管"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-binding-subject",
+      "category": "binding_subject",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [
+        "hidden"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "キセノン"
+          ]
+        ],
+        "forbidden_facts": [
+          [
+            "水銀管"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-binding-client",
+      "category": "binding_client",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [
+        "hidden"
+      ],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "キセノン"
+          ]
+        ],
+        "forbidden_facts": [
+          [
+            "水銀管"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-after-search",
+      "category": "after_search",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": false,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "blocked",
+        "required_facts": [],
+        "forbidden_facts": [],
+        "discarded": true
+      }
+    },
+    {
+      "id": "tuning-after-answer",
+      "category": "after_answer",
+      "relevant_ids": [
+        "target"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "target"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "光学同期"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": true
+      }
+    },
+    {
+      "id": "tuning-epoch-change",
+      "category": "epoch_change",
+      "relevant_ids": [],
+      "forbidden_ids": [
+        "target"
+      ],
+      "no_match": true,
+      "expected_order": null,
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": []
+      },
+      "answer": {
+        "behavior": "no_memory",
+        "required_facts": [],
+        "forbidden_facts": [
+          [
+            "フォトダイオード"
+          ]
+        ],
+        "discarded": false
+      }
+    },
+    {
+      "id": "tuning-equivalent-order",
+      "category": "equivalent_order",
+      "relevant_ids": [
+        "recent",
+        "older",
+        "unknown"
+      ],
+      "forbidden_ids": [],
+      "no_match": false,
+      "expected_order": [
+        "recent",
+        "older",
+        "unknown"
+      ],
+      "required_fact_ids": [],
+      "forbidden_fact_ids": [],
+      "dispatch": {
+        "valid": true,
+        "memory_ids": [
+          "recent",
+          "older",
+          "unknown"
+        ]
+      },
+      "answer": {
+        "behavior": "grounded",
+        "required_facts": [
+          [
+            "同期基板"
+          ],
+          [
+            "配電基板"
+          ],
+          [
+            "監視基板"
+          ]
+        ],
+        "forbidden_facts": [],
+        "discarded": false
+      }
+    }
+  ]
+}

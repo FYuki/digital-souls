@@ -58,3 +58,53 @@ services:
       - http://127.0.0.1:18081
       - --no-webui
       - --no-agent
+  embedding:
+    image: ghcr.io/ggml-org/llama.cpp@sha256:69019445c94c970496c8f6d6447214b837508162dfe1152768942c51237e3ab7
+    container_name: digital-souls-core-llamacpp-bge-m3
+    user: "${CORE_LLAMACPP_UID:?set current uid}:${CORE_LLAMACPP_GID:?set current gid}"
+    restart: "no"
+    gpus: all
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 12g
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    ports: [127.0.0.1:18082:8080]
+    volumes:
+      - type: bind
+        source: ${CORE_LLAMACPP_EMBEDDING_MODEL:?set the verified user-owned bge-m3 GGUF path}
+        target: /models/bge-m3-q8_0.gguf
+        read_only: true
+        bind:
+          create_host_path: false
+    command:
+      - -m
+      - /models/bge-m3-q8_0.gguf
+      - --alias
+      - bge-m3
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --embeddings
+      - --pooling
+      - cls
+      - --ctx-size
+      - "2048"
+      - --batch-size
+      - "2048"
+      - --ubatch-size
+      - "2048"
+      - --parallel
+      - "1"
+      - --gpu-layers
+      - "99"
+      - --threads
+      - "8"
+      - --threads-batch
+      - "8"
+      - --cache-ram
+      - "0"
+      - --no-webui
+      - --log-disable

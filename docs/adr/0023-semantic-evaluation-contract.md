@@ -13,6 +13,10 @@ Accepted日: 2026-10-09
 > 2026-10-09のユーザー決定により「上位5件に1位にあるべき記憶が含まれる」判定へ置き換えました。
 > 詳細は末尾の「合否判定の置換注記」を参照してください。該当箇所の本文は履歴として保持します。
 
+> 置換注記（2026-10-10、[Issue #131](https://github.com/FYuki/digital-souls-core/issues/131)）：
+> 「実行・合否」の本番設定の relevance 閾値0.54は、[ADR 0024](0024-multilingual-memory-embedding.md)（2026-10-10 のユーザー決定）により0.52へ変更しました。
+> 評価も本番設定（候補20、最大5、閾値0.52、同等帯0.002）で行います。該当箇所の本文は履歴として保持します。
+
 ## 背景
 
 [ADR 0022](0022-memory-retrieval-from-records.md)で、検索候補とcontextはEpisode・Semanticの正本と有効なFactへ切り替わりました。

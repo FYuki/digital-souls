@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+置換注記（2026-10-10）: §4 の既定 relevance 閾値0.54は、[ADR 0024](0024-multilingual-memory-embedding.md)（2026-10-10 のユーザー決定）により0.52へ変更しました。0.52 は bge-m3 の relevance 空間での値です。候補20件・同等margin 0.002・最大5件・順位・relevance の式は維持します。
+
 置換注記（2026-10-08）: 逐語記憶の暫定候補元・出典 turn の保存順による最終言及の代用は、[ADR 0022](0022-memory-retrieval-from-records.md) の正本と日時列で置換します。§4 の順位と guard は維持します。
 
 日付: 2026-10-06

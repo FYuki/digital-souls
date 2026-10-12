@@ -112,15 +112,16 @@ Episode・SemanticのIDは版1で登録し、同一IDの内容版追加はFact�
 | 正本のEpisode・Semanticを候補とするembedding意味検索（Episodeに有効なFactを添付） | 実装済み | [ADR 0010](docs/adr/0010-in-process-memory-search.md)、[ADR 0011](docs/adr/0011-local-memory-embedding.md)、ADR 0022 |
 | 検索前のquery判定（機微なqueryで検索しない） | 実装済み | [ADR 0018](docs/adr/0018-memory-retrieval-context.md) |
 | embedding未接続・検索障害時に記憶なしで会話を継続 | 実装済み | ADR 0018、ADR 0022 |
-| PoC互換の順位（候補20、閾値0.54、同等帯、最大5件） | 実装済み（永続した言及日時・作成日時・IDで同等帯を並べる） | ADR 0018、ADR 0022 |
+| 検索順位（候補20、閾値0.52、同等帯0.002、最大5件） | 実装済み（永続した言及日時・作成日時・IDで同等帯を並べる） | ADR 0018、ADR 0022、[ADR 0024](docs/adr/0024-multilingual-memory-embedding.md) |
 | last_user_mentioned_atとTOUCH | 一部（日時の永続化・順位への利用は実装済み、再言及時のTOUCHは未実装） | ADR 0018、ADR 0022 |
 | 期間検索（日時・季節）と一致種別の順位 | 未実装 | ADR 0018 |
 | 語彙による補完、自己申告の現在値補完、矛盾の注意 | 未実装 | ADR 0018 |
 | 有効期限・policy versionの互換による除外 | 未実装 | ADR 0018 |
 | 永続的な派生index | 未実装 | ADR 0015 |
-| 本番検索・contextによる意味検索・回答評価（Python / promptfoo） | ハーネス実装・実モデル各3回実施済み。検索・回答ともFAIL、品質未受入 | [ADR 0023](docs/adr/0023-semantic-evaluation-contract.md)、[実モデル証跡](docs/evidence/2026-10-09-semantic-real-model-evaluation-top5.md) |
+| 本番検索・contextによる意味検索・回答評価（Python / promptfoo） | ハーネス実装・採用したbge-m3/0.52で実モデル各3回再評価済み。検索・回答ともFAIL、品質未受入 | [ADR 0023](docs/adr/0023-semantic-evaluation-contract.md)、[実モデル証跡](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md) |
 | モデル向けcontextの一時参照名、送信直前の再検証 | 実装済み（保存文・部分日時・Factを渡し、逐語引用と保存IDは渡さない） | [ADR 0009](docs/adr/0009-memory-context-references.md)、ADR 0022 |
 
+採用するembeddingは [ADR 0024](docs/adr/0024-multilingual-memory-embedding.md) の bge-m3 Q8_0（CLS、1024次元、接頭辞なし）です。
 embedding未接続時はstorageを読まず空結果を返します。Factは独立のembedding候補にしません。
 同等帯の順位は `last_user_mentioned_at DESC NULLS LAST → created_at DESC → id ASC` です。
 TOUCH・検索・assistantの言及による日時更新は実装されていません。
@@ -176,7 +177,7 @@ Coreの実装Issueへ移して管理します。
 - enum等は決定論的に採点し、自由文の評価に独立したjudgeを使う場合は採点基準とjudgeを固定する。
 - mock・fixtureの成功を実モデル品質の受入とみなさない。合成正本の直接登録と実モデルによる検索・回答評価は、
   [ADR 0023](docs/adr/0023-semantic-evaluation-contract.md)の合成セット品質として区別し、形成〜利用の実接続受入とみなさない。
-- 意味検索の評価は、本番と同じ検索設定（最大5件、relevance閾値0.54、同等帯）で行う。`relevant_ids` の全包含を品質条件として維持し、
+- 意味検索の評価は、本番と同じ検索設定（最大5件、relevance閾値0.52、同等帯）で行う。`relevant_ids` の全包含を品質条件として維持し、
   該当なしのケースでは閾値を超える候補が1件もないことを求める。
 - 検索の必須ゲートはPoCのRAG評価と同じく、privacy・Binding境界の違反0件、閾値未満の混入0件、
   検証できない記憶への代替0件を維持する。実モデルでは、1位にあるべき記憶が返却上位5件に含まれることを求め、
@@ -193,10 +194,11 @@ Coreの実装Issueへ移して管理します。
   利用までを確認する。訂正後の内容を使い、削除・無効化した内容を使わないことも確認する。
   実行commit、モデル・設定、シナリオ、期待値、結果、未検証事項を記録する。
 
-正本へ合成登録したnomic / gemma4-12bの検索・回答評価は、上位5件包含の基準でcacheなし各3回再実施済み、いずれもFAIL。
-検索は日英・無関係・閾値分類の品質未達とtop-1欠落・該当なしゲート違反、
-回答は日英分類の品質未達とdispatch・空contextゲート違反があり、品質は未受入です。
-各回・分類・ケースの結果と制約は[実モデル証跡](docs/evidence/2026-10-09-semantic-real-model-evaluation-top5.md)にあります。
+正本へ合成登録したbge-m3 Q8_0 / gemma4-12bの検索・回答評価は、採用した閾値0.52・上位5件包含の基準で
+cacheなし各3回再実施済み、いずれもFAIL。各回、検索品質/全条件は53/62、回答品質は61/62・全条件は53/62です。
+日英は検索・回答とも10/10ですが、検索は無関係3/10・長文0/1・閾値0/1の品質未達とtop-1欠落1件・該当なし8件のゲート違反、
+回答は長文0/1の品質未達とdispatch 1件・空context 8件のゲート違反があり、品質は未受入です。
+各回・分類・ケースの結果、前回nomic/0.54との比較と制約は[実モデル証跡](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)にあります。
 分類器品質・形成〜利用の実環境IT2/STは未実施です。
 
 ## 4. 決定事項と要決定事項
@@ -227,7 +229,8 @@ Coreの実装Issueへ移して管理します。
 1. 既存の逐語記憶の削除・履歴へのstated_at追加は実装済み。タイムゾーン設定・相対日時解釈は未実装
 2. 検索障害時の会話継続・PoC互換の順位・保存拒否の語の検出と確認の信号・会話往復単位の削除は実装済み
 3. Episode・Fact・SemanticのPostgreSQL正本schema・登録・版・撤回・契約試験と正本検索は実装済み（データ移送は行わない）。
-   本番検索・contextの評価ハーネスと実モデル各3回の測定は実施済み、検索・回答品質はFAILで未受入
+   本番検索・contextの評価ハーネスと採用したbge-m3/0.52での実モデル各3回の再測定は実施済み。
+   [検索・回答品質はFAILで未受入](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)。無関係質問への対処は後続Epicで扱う（ADR 0024）
 4. 型付きの保存判定と、構造化Candidateの抽出・検証
 5. 形成jobの永続予約と非同期形成、同一スレッドのFact照合・更新
 6. TOUCH、期間検索、語彙・自己申告の補完、矛盾の注意（last_user_mentioned_atの保持・順位利用は実装済み）
