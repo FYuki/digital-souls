@@ -10,7 +10,8 @@
 
 - branch: `feature/189-privacy-eval-cases`
 - base: `c731cdcab90f50d1b29ece0042ccef29fc3d1896`（`epic/privacy-classifier-evaluation`）
-- 実装・ケース固定 commit: この証跡を追加した commit（`git log --diff-filter=A --format=%H -- docs/evidence/2026-10-12-privacy-classifier-cases.md` で取得。次の文書commitでSHAを明記）
+- 実装・ケース固定 commit: `ad40185df123ec11b5fc5cb7ea9265692cfc75bb`。全品質ゲートを実行したコード・ケースを含みます。
+- 後続の証跡commitはこのSHAの注記だけを更新し、検証済みのコード・ケース・goldを変更しません。
 - 指定の隔離 worktree 内で実装し、push・PR 作成・merge・GitHub 書き込みは実施していません。
 - 依存、分類器 prompt/挙動、SPEC の状態欄は変更していません。src/tests は既存の品質ゲート対象のため
   pyproject・workflow・CONTRIBUTING の対象一覧への追加は不要です。
