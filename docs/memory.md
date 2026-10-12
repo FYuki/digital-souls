@@ -5,7 +5,8 @@ Episode・Fact・Semanticの正本と、それを利用する検索・会話cont
 [ADR 0016](adr/0016-memory-kinds-and-records.md)と
 [ADR 0022](adr/0022-memory-retrieval-from-records.md)を参照してください。
 旧逐語記憶の抽出・書込・再構成は撤去済みで、schema版6で旧3表を削除します。
-構造化記憶の形成（抽出・保存判定・保存文生成）と形成jobは未実装です。
+型付き保存判定の評価器と分類の段は実装済みです。構造化抽出・保存文生成・形成jobと、
+形成から保存判定への呼出しは未実装です。
 現行の分類・形成・検索・回答の実モデル品質は未受入です。
 合成正本の本番検索・contextによる実モデル評価は上位5件包含の基準で検索・回答各3回再実施済み、いずれもFAILです。
 [証跡](evidence/2026-10-09-semantic-real-model-evaluation-top5.md)と
@@ -43,6 +44,73 @@ inference.memory_context = MemoryContext(retrieval)
 登録port自体はprivacy分類や保存価値の判断を行いません。呼出し側がこれらを済ませた記録だけを渡し、
 portは構造・現在版・Binding・全引用の適格性を検証します。単なる履歴保存の許可で登録を承認しません。
 会話経路に明示接続した場合だけguard付きのcontextを取得します。既存stateless APIは検索しません。
+
+## 型付きの保存判定
+
+[Issue #207](https://github.com/FYuki/digital-souls-core/issues/207)の
+`memory_admission.evaluate` は同期の純粋関数です。`Candidate` の `RecordKind` と
+抽出側が明示する `memory_worthy`、`Scan`、`AssessmentResult` または未分類の `None`、
+trusted 起動側の `AdmissionPolicy`、呼出し側が確認した `SourceState`、分類器の由来を受け取ります。
+候補本文・Binding・保存先は値型に持たず、LLM・DB・embeddingを呼びません。
+値型は frozen で、型変換をせずに検証し、エラーに入力値を含めません。
+
+| 状態（上ほど優先） | 条件 |
+| --- | --- |
+| DENY_SENSITIVE | scannerのsecret、またはcategoryを問わずSENSITIVE |
+| DENY_USER_REQUEST | 指定発話の除外、private、拒否確認の保留、scannerのno_memory/no_history |
+| ABSTAIN_UNKNOWN | scanner失敗、未分類、ABSTAIN、分類器failure、source不明・履歴未保存、価値不明、未知policy版・由来欠落 |
+| NOT_MEMORY_WORTHY | policyの許可型外、または明示された長期的価値なし |
+| ALLOW_STRUCTURED | 上の拒否条件がなく、許可型・privacy・source・価値が確認済み |
+
+結果は状態、全該当理由のコード（厳しい状態順）、分類器failure種別、由来を返します。
+`can_store` は ALLOW_STRUCTURED だけで true です。保存処理は行いません。
+許可型は `frozenset[RecordKind]` として起動側が必ず渡し、既定の許可型を持ちません。
+空の許可集合はすべての型を対象外にします。会話・人格prompt・候補の保存許可flagは拒否を緩和しません。
+価値は評価器が推測しません。sourceの各flagと価値は `None` で不明を表せます。
+
+`memory_admission.admit` は、すでにlocal送信が認可された管理下の分類器を受け取る非同期段です。
+本文を既存scannerで検査し、secretまたはfailedなら分類器もprovenanceも参照せずに評価します。
+分類器なし・未対応policy版も分類せずに判定不能とします。それ以外はkeywordによる意味的な
+事前除外をせず分類し、同期評価器へ渡します。除外・private・型の不許可・価値なしでも、
+SENSITIVEの優先順位を維持するため分類結果を取得します。分類器呼出しは15秒以内とし、
+timeout・例外・不正な結果はABSTAIN_UNKNOWN、キャンセルは伝播します。
+DB・embedding・LLM transportの直接呼出しや保存は行いません。
+
+由来は `scanner_version`、`policy_version`、`classifier_version`、`model_id`、`model_digest`、
+`prompt_version` の独立fieldです。分類器の4 fieldは `LocalClassifier.provenance` の固定設定から
+取得し、未呼出しなら `None` です。本文・モデル応答・自由文理由・例外文字列は結果に保持しません。
+分類器の由来が不正・欠落なら呼び出さずに判定不能とします。endpoint等の既存provenanceを変更しません。
+
+### 絶対禁止と検出の限界
+
+[ADR 0017 §3](adr/0017-memory-formation-admission.md)の絶対禁止は以下の結果で
+DENY_SENSITIVEへ写像します。意味分類のUTは固定した合成Assessmentであり、実モデルの検出保証ではありません。
+
+| 絶対保存禁止 | 現行scannerまたは意味分類の拒否経路 | 検出の穴・未確認 |
+| --- | --- | --- |
+| 認証情報 | 既知prefix・ラベル付きpassword/token等のsecret | 無印opaque値、未知形式、難読化 |
+| 秘密鍵 | PEM private key・ラベル付き秘密鍵のsecret | 無印・未知形式 |
+| 決済・口座情報 | Luhn整合カード・ラベル付き口座のsecret、SENSITIVE/FINANCIAL | 非Luhn番号・無印口座の網羅なし |
+| 政府ID | ssn・マイナンバー等のラベル付き値のsecret | 他国形式・無印IDの網羅なし |
+| health・服薬・生体情報 | SENSITIVE/HEALTH、SENSITIVE/OTHER_SENSITIVE等 | scanner専用検出なし。promptはpersonal healthを扱うが服薬・生体の明示列挙はなく、実検出未検証 |
+| 住所・正確な位置 | 住所・address・現在地等のラベル付き値のsecret、SENSITIVE/OTHER_SENSITIVE等 | 無印住所・自然文の座標はscannerで未検出。分類器promptで明示列挙なし |
+| 私用連絡先 | email・限定した電話形式のsecret、SENSITIVE/OTHER_SENSITIVE等 | 全世界の電話・非email連絡先の網羅なし。分類器promptで明示列挙なし |
+| 第三者の非公開情報 | SENSITIVE/THIRD_PARTY_PRIVATE等 | scanner専用検出なし。意味分類の見逃しは評価器で補えない |
+
+### 仮置きと後続接続
+
+sourceの履歴未保存・不明をABSTAIN_UNKNOWN、scannerの拒否語をDENY_USER_REQUESTへ写像する点、
+明示価値flagの形は今回の実装指針による仮置きです。保存policy版は現行 `POLICY_VERSION` だけを
+対応済みとし、由来欠落でもfail-closedにしています。独自の保存allowlist版を導入するかは要確認です。
+
+[Issue #209](https://github.com/FYuki/digital-souls-core/issues/209)の形成側で、分類前のlocal/memory
+permission、schema・根拠・Binding、sourceの現在版とawait後の失効を確認する必要があります。
+`SourceState` は評価時のsnapshotで、permission付与・DB照合の代替ではありません。
+[ADR 0019 §7](adr/0019-memory-correction-invalidation.md)は現在userの拒否語とassistantの引用を
+区別します。この段は話者を解釈せずscannerのflagを受けるため、形成側で拒否語検査に渡す本文の
+範囲とsource保留を照合する必要があります。scanner・分類器・PrivacyPolicyは変更していません。
+形成経路への接続・保存判定経路の実モデル品質・IT2/STは未検証です。
+合成検証の条件と件数は[Issue #207の証跡](evidence/2026-10-13-memory-admission.md)を参照してください。
 
 ## 検索の候補・認可・順位
 
