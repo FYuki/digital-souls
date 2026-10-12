@@ -124,8 +124,10 @@ long_textの失敗があれば設定値と失敗を記録します。運用設�
 
 ### #132で使った既存chatとembeddingだけの起動・停止
 
-`tools/start-llamacpp.sh` はOllama systemdサービスnot-foundで拒否する既知の問題があるため、
-#132ではユーザー指定の次の手順で起動しました。scriptの修正はこの再評価の範囲外です。
+この節は、Issue #132の再評価で実際に使った手順の記録です。当時の `tools/start-llamacpp.sh` は
+Ollamaのunitが存在しない（`LoadState=not-found`）環境で起動を拒否したため、ユーザー指定の次の手順で起動しました。
+現在の起動scriptはunitの不存在を許可します（Issue #142）。今後の評価では、
+[llama.cpp運用](llamacpp-operations.md#手動で切り替える)の起動scriptでchatとembeddingを起動できます。
 `MODEL_PATH` / `EMBEDDING_MODEL_PATH` は運用者所有の既存GGUFへ設定します。
 まず `nvidia-smi`（VRAM・process）と `docker ps -a` を確認し、他の重い推論があれば起動せず待機/報告します。
 
