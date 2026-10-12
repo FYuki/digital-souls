@@ -11,7 +11,8 @@ Accepted日: 2026-10-12（ユーザーの承認「ADR0032も採用でよい」�
 [SPEC §3.2](../../SPEC.md#32-評価の基準)、
 [ADR 0023](0023-semantic-evaluation-contract.md)、
 [ADR 0029](0029-persona-consistency-evaluation.md)、
-[ADR 0030](0030-injection-resistance-evaluation.md)
+[ADR 0030](0030-injection-resistance-evaluation.md)、
+[PR #202（Accepted の記録）](https://github.com/FYuki/digital-souls-core/pull/202)
 
 ## 背景
 
