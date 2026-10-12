@@ -239,6 +239,13 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 [実モデル証跡](../../docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)と
 [利用手順](../../docs/memory-evaluation.md)を参照してください。
 
+#199では同じbge-m3/0.52でGPT-6 Luna（Codexサブスク、CLI 0.162.1）の回答をcacheなし3回測定しました。
+各回品質61/62・全条件53/62、long_text 0/1のみ90%未達、dispatch違反1件・no_memory違反8件、
+forbidden/lifecycle違反0件で、gemmaと全ケースの観測値・判定が一致し、**FAIL・品質未受入**です。
+事前見込みは61送信/回×3回=183呼び出し、入力202,530 token（byte推定）、サブスク内で従量課金なしでした。
+classifier=synthetic、CLI独自の指示・包装と既存token予算移行の条件差、回答文比較・IT2/ST NOT RUNは
+[Luna実測証跡](../../docs/evidence/2026-10-12-semantic-luna-answer-evaluation.md)を参照してください。
+
 ### 外部モデルでの回答生成（external_model）
 
 #198 は評価経路の実装だけで、**実送信は NOT RUN**。62ケース・期待値・プロンプト・判定は共通です。
@@ -279,7 +286,7 @@ bash tools/evaluate-semantic-answer.sh --mode external_model \
 任意指定し、指定した項目だけ金額を計算します（通貨換算なし・価格の既定値なし）。
 report の `status="DRY RUN"` / `external_send=false` / `quality_evidence=false` は品質合格ではありません。
 
-#199 で実送信する際は `--execute-external-model` と profile を明示した別コマンドを使います。
+実送信する際は `--execute-external-model` と profile を明示した別コマンドを使います。
 `--dry-run` と `--execute-external-model` の同時指定は引数エラー（FAIL、送信なし）。
 dry-run 以外では実行 flag または profile が欠けると NOT RUN（exit 3）。実送信 report は
 provider / model / transport / `external_send=true` / `cache=false` / run_count / commit を記録します。
@@ -316,7 +323,8 @@ multi_agent、plugin_sharing、plugins、remote_plugin、shell_snapshot、shell_
 skill_mcp_dependency_install、skill_search、sleep_tool、tool_call_mcp_elicitation、tool_suggest、
 ultrafast_mode、unified_exec、unified_exec_tty、view_image、workspace_dependencies、worktrees、
 write_stdin_approval。fast_mode / ultrafast_mode も無効化し、サービス tier の差を持ち込まない条件にします。
-無効化の実効確認（実際の CLI が JSONL にツール項目を出さないこと）は #199 の実送信で確認します。
+#199ではtool eventをFAILにするProviderで各回61件が正常応答し、無効化の実効を間接確認しました。
+生JSONLは保持しておらず、tool event不在の直接再監査はNOT RUNです。
 
 Core の messages をそのまま JSON の messages に包んで stdin へ渡します。
 Codex CLI 独自の指示と包装が加わるため、純粋な API 呼び出しとは条件が違います。
@@ -328,7 +336,8 @@ manifest / dry-run は CLI を起動せず版は null、送信を拒否したケ
 stdout/stderr 本文・CODEX_HOME の内容とパス・ケース本文・回答全文を公開 report に含めません。
 
 同じ runner を使い、profile を Codex 用 JSON に替えます。
-dry-run は CLI を起動しません。実送信は #199 で次の形を使います（**#201 では NOT RUN**）。
+dry-run は CLI を起動しません。実送信の例は次のとおりです（**#201ではNOT RUN、#199で実送信済み**）。
+今回の測定は30分単位に収めるため `--runs 1` を3回実行しました。
 
 ```sh
 bash tools/evaluate-semantic-answer.sh --mode external_model \

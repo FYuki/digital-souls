@@ -64,6 +64,9 @@ localhostの単独利用者向けで、公開サービス用の認証・tool実�
 旧逐語記憶・逐語抽出は撤去済みで、schema版6で旧3表を削除します。
 embedding未接続時は記憶なしで会話を続けます。現行形式の実モデル品質は未受入です。
 検索・回答の評価手順と制約は[意味検索・回答評価](docs/memory-evaluation.md)を参照してください。
+bge-m3/0.52での[ローカルgemma4-12b評価](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)に加え、
+[GPT-6 Luna（Codexサブスク）の回答評価](docs/evidence/2026-10-12-semantic-luna-answer-evaluation.md)をcacheなし3回測定済みです。
+回答は両モデルとも各回品質61/62・全条件53/62でFAIL、失敗ケースも一致し、品質は未受入です。
 
 機微情報の明示的な検査・保存と送信の許可境界は[privacyガイド](docs/privacy.md)を参照してください。
 

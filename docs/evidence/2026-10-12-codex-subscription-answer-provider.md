@@ -1,4 +1,4 @@
-# Issue #201: Codex サブスク回答 Provider（実送信 NOT RUN）
+# Issue #201: Codex サブスク回答 Provider（#199実測追記）
 
 正本：[Issue #201](https://github.com/FYuki/digital-souls-core/issues/201)、
 [Epic #126](https://github.com/FYuki/digital-souls-core/issues/126)。2026-10-12 に読み取り照合。
@@ -44,7 +44,7 @@ tool_call_mcp_elicitation、workspace_dependencies、in_app_local_automation、w
 unified_exec_tty、write_stdin_approval、fast_mode、ultrafast_mode。
 CLI 0.162.1 の `codex features list` では追加14機能すべてが stable / true で存在し、除外は0件。
 fast_mode / ultrafast_mode は比較にサービス tier の差を持ち込まないため無効化する。
-無効化の実効確認（実際の CLI が JSONL にツール項目を出さないこと）は #199 の実送信で確認する。
+無効化の実効確認は後続#199で間接確認した（末尾の実測追記）。#201実装時は実送信NOT RUN。
 
 認証は CLI の既存 ChatGPT ログインに委譲する。Core は認証ファイルを開かない。
 CLI 子の環境は PATH/LANG/LC_ALL/TZ と profile の HOME/CODEX_HOME パスだけ。
@@ -97,8 +97,29 @@ evals/semantic の npm ci --no-audit --no-fund、Node required reporter の tool
 node tools/check-docs.mjs、git diff --check。
 新規 Python は src/tests 配下で既存の検査対象に含まれ、workflow の対象追加は不要。
 合成試験の PASS は Luna の品質合格・実モデル IT2/ST の PASS を意味しない。
-実送信と SPEC 同期は #199。
+実送信とSPEC同期は後続#199で実施済み（末尾）。
 
 CLI の flags はローカル 0.162.1 の help と
 [公式非対話実行文書](https://developers.openai.com/codex/noninteractive)を照合した。
 実 exec でのアカウント制限・追加指示・managed config の実効状態はこの Issue では未測定。
+
+## #199の実測追記（2026-10-12）
+
+監督によるcommit `2fe921cc7255e277c19300c0bea6dbd2ffbb076d`、dirty=falseでの実送信を
+[Luna回答評価証跡](2026-10-12-semantic-luna-answer-evaluation.md)と
+[本文なしreport](2026-10-12-semantic-luna-answer-codex.json)に記録した。#201当時のNOT RUNは履歴として上記に残す。
+
+- classifier=synthetic（baseline-parity-no-classifier-export）、同じbge-m3/0.52、cacheなし3回。
+  external_send_allowed → privacy authorize(external) → inference.checkを通った各回61件が正常応答。
+  after_searchは送信直前guardにより不送信でgoldどおり。CLI版は全3回0.162.1で一致。
+- JSONLのtool eventをProviderがFAILにする設計で全送信が正常応答だったため、無効化の実効を間接確認。
+  生JSONLは保持しておらず、tool event不在の直接再監査はNOT RUN。30機能を個別に実機検査した証拠ではない。
+- 各回品質61/62・全条件53/62、long_text 0/1、dispatch違反1件・no_memory違反8件、
+  forbidden/lifecycle違反0件。gemmaと全ケースの観測値・判定が一致し、FAIL・品質未受入。
+- 事前見込みは183呼び出し・入力202,530 token（byte推定、CLI独自指示は除外）。
+  既存ChatGPTサブスク内で従量課金なし・新規有料契約なし。実token使用量は未測定。
+- CLI独自の指示・messages包装と既存token予算移行の条件差をLuna証跡へ記録。
+  回答文比較・実環境IT2/STはNOT RUN、本番採用判断は範囲外。
+
+文書担当は監督の既存reportを再集計しただけで、評価・dry-run・CLI実送信を再実行していない。
+認証情報・私有profile・私的ログは読まず、証跡へ転記していない。
