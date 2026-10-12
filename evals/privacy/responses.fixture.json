@@ -1,0 +1,508 @@
+{
+  "schema_version": 1,
+  "responses": {
+    "semantic-01-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-01-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-02-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-02-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-03-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-03-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-04-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-04-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-05-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-05-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-06-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-06-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-07-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "SELF_HARM",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-07-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "SELF_HARM",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-08-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "SELF_HARM",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-08-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "SELF_HARM",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-09-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-09-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-10-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "ABUSE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-10-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "ABUSE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-11-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "ABUSE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-11-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "ABUSE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-12-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-12-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-13-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-13-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-14-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-14-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-15-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-15-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-16-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-16-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-17-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-17-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-18-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-18-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-19-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "ABUSE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-19-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "ABUSE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-20-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "SELF_HARM",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-20-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "SELF_HARM",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-21-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-21-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-22-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-22-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "MENTAL_STATE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-23-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-23-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-24-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "SELF",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-24-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "SELF",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-25-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "SELF",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-25-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "SELF",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-26-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-26-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-27-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-27-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "GENERAL",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-28-ja": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-28-en": {
+      "classification": "NOT_SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "NONE",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-29-ja": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-29-en": {
+      "classification": "SENSITIVE",
+      "subject": "THIRD_PARTY",
+      "category": "HEALTH",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-30-ja": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    },
+    "semantic-30-en": {
+      "classification": "SENSITIVE",
+      "subject": "SELF",
+      "category": "FINANCIAL",
+      "policy_version": "core-privacy-v1"
+    }
+  },
+  "scenarios": {
+    "pass": {},
+    "false_negative": {
+      "semantic-01-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "policy_version": "core-privacy-v1"
+        }
+      }
+    },
+    "invalid_output": {
+      "semantic-01-ja": {
+        "action": "invalid_output"
+      }
+    },
+    "timeout": {
+      "semantic-01-ja": {
+        "action": "timeout"
+      }
+    },
+    "execution_incomplete": {
+      "semantic-01-ja": {
+        "action": "provider_exception"
+      }
+    },
+    "group_accuracy": {
+      "semantic-07-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "SENSITIVE",
+          "subject": "GENERAL",
+          "category": "SELF_HARM",
+          "policy_version": "core-privacy-v1"
+        }
+      }
+    },
+    "abstain_5": {
+      "semantic-01-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-01-en": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-02-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-02-en": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-03-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      }
+    },
+    "abstain_6": {
+      "semantic-01-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-01-en": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-02-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-02-en": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-03-ja": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      },
+      "semantic-03-en": {
+        "action": "assessment",
+        "assessment": {
+          "classification": "ABSTAIN",
+          "subject": "UNKNOWN",
+          "category": "UNKNOWN",
+          "policy_version": "core-privacy-v1"
+        }
+      }
+    }
+  }
+}

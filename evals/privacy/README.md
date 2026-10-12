@@ -165,3 +165,116 @@ PY
 固定版・schemaの一致・拒否経路を検証します。fixture/mock の成功は実モデル品質の証拠ではありません。
 期待値は実評価前に commit で固定し、FAIL でも結果を記録して期待値を緩めません。
 [移行の証跡](../../docs/evidence/2026-10-12-privacy-classifier-cases.md)に照合方法と品質ゲートを記録します。
+
+## 評価ハーネス（Issue #190）
+
+[CLI](../../tools/evaluate-privacy-classifier.py) は本番 `LocalClassifier.assess()` を呼び、
+scan・policy・prompt・payload・timeout・応答検証を通します。製品の `safe()` は同じ結果に委譲し、
+有効な NOT_SENSITIVE だけを True にします。入力は `case.text` の文字列だけで、gold・group・id は送信しません。
+[fixture](responses.fixture.json) は id ごとの Assessment と違反シナリオを持ち、本文を重複して保存しません。
+ランタイムが text→id を対応づけ、provider だけを差し替えます。fixture provider は通信処理を持たず、
+実 transport を作りません。常に True の SyntheticClassifier や評価用 PrivacyPolicy は使いません。
+
+採点は classification の許容値への包含、ABSTAIN 以外は subject の一致と category の許容値への包含です。
+各回・各 group が90%以上で、false_negative・invalid_output・timeout・execution_incomplete がすべて0件の場合だけ合格です。
+false_negative は sensitive=true → NOT_SENSITIVE、invalid_output は応答形式・JSON・Assessment 不正、
+timeout は時間切れ、execution_incomplete は provider 例外・scan 拒否・policy 不一致・結果の欠落/重複/未知 id・未知回を含みます。
+0件・判定不能も合格にしません。入力・gold の空集合は設定・入力エラーとして拒否します。
+最低3回、指定したすべての回が合格した場合だけ全体 PASS。回や group の平均で相殺せず、8件の group は8/8が必要です。
+
+`--abstain-policy` は **明示必須、既定値なし**。ADR 0032 のユーザー決定待ちを保持します。
+
+| policy | ABSTAIN の正否 | 追加条件 |
+| --- | --- | --- |
+| accept（A） | 許容 classification に含まれれば正解 | なし |
+| reject（B） | 正答率では不正解、必須ゲート違反ではない | なし |
+| separate（C） | 許容 classification に含まれれば正解 | 各回の ABSTAIN / 全件が厳密に0.10未満（60件なら5件まで） |
+
+どの policy でも ABSTAIN の件数・率を必ず記録します。このハーネスの追加は Proposed ADR の採用や品質受入を意味しません。
+
+## fixture 実行（CI、実 LLM・socket・GPU なし）
+
+```sh
+export T=/home/asa/dev/digital-souls-evidence/history-stage1-tools
+export PATH=$T/bin:$T/node/bin:$PATH
+export TMPDIR=/dev/shm
+export UV_OFFLINE=1
+export LITELLM_LOCAL_MODEL_COST_MAP=True
+uv run --no-sync python tools/evaluate-privacy-classifier.py \
+  --abstain-policy accept --runs 3 --output /dev/shm/privacy-fixture-report.json
+```
+
+標準 `--scenario pass` は60件×3回正解、必須ゲート0、PASS/exit 0。
+accept・reject・separate のいずれでも標準シナリオは PASS になります。fixture の成功は **quality_evidence=false** で、
+実モデル品質の証拠ではありません。CLI の IT1 は3回実行し、各違反で FAIL/exit 1 となることを確認します。
+
+| scenario | 結果 |
+| --- | --- |
+| false_negative | 偽陰性の必須ゲート FAIL（group 正答率が90%以上でも FAIL） |
+| invalid_output | 不正応答の必須ゲート FAIL |
+| timeout | 時間切れの必須ゲート FAIL（fixture は合成 TimeoutError） |
+| execution_incomplete | provider 例外の必須ゲート FAIL |
+| group_accuracy | SELF_HARM 7/8、正答率 FAIL（必須ゲートは0） |
+| abstain_5 | separate では5/60で PASS |
+| abstain_6 | accept は PASS、separate は6/60で FAIL、reject は該当 group の正答率 FAIL |
+
+`--scenario` で切り替えます。fixture モードでは characters・character-id・model-digest の指定を拒否し、
+固定した合成 local profile と offline provider を使います。`--runs` の省略時は3、3未満は入力エラーです。
+
+## 実モデル実行（監督担当のみ、Issue #191）
+
+承認済みの監督が本番設定をリポジトリ外へコピーし、送信許可と Card の絶対パスを明示します。
+既存の llama.cpp の起動・変更はこの tool では行いません。履歴・DB は使いません。
+設定の profile を変更・上書きせず、llamacpp_chat・external_send_allowed=true・max_completion_tokens capability が必要です。
+モデルの固定値 `--model-digest` は空不可で、GGUF SHA-256 等を運用者が指定します。
+[llama.cpp 運用手順の SHA 確認](../../docs/llamacpp-operations.md)で算出した実ファイルの値を使い、
+モデル名・可変 tag だけで固定済みとは扱いません。
+
+次の設定コピーだけでは送信しません。最後のコマンドが実モデルへ送信します。
+ABSTAIN 方針はユーザー決定に従って指定してください。未決定時に例の値を既定として採用しません。
+
+```sh
+umask 077
+python3 - <<'PY'
+import json
+from pathlib import Path
+root = Path.cwd()
+settings = json.loads((root / "examples/characters.llamacpp.json").read_text())
+settings[0]["card_path"] = str(root / "characters/miori/miori.card.json")
+settings[0]["profile"]["external_send_allowed"] = True
+Path("/dev/shm/privacy-real.characters.json").write_text(json.dumps(settings))
+PY
+# PRIVACY_MODEL_DIGEST は運用手順で確認した SHA、PRIVACY_ABSTAIN_POLICY は決定した方針。
+uv run --no-sync python tools/evaluate-privacy-classifier.py \
+  --mode real --characters /dev/shm/privacy-real.characters.json --character-id miori \
+  --model-digest "$PRIVACY_MODEL_DIGEST" --abstain-policy "$PRIVACY_ABSTAIN_POLICY" \
+  --runs 3 --output /dev/shm/privacy-real-report.json
+```
+
+real モードは characters・character-id・model-digest・abstain-policy・runs の明示が必須です。
+リポジトリ内の設定、fixture 上書き、違反シナリオを拒否します。固定の入力・gold を既定で読みます。
+本番 LiteLLMProvider を persona_real.UncachedProvider で包み、no-cache/no-store・caching=false・cache_prompt=false にします。
+並列度1、各ケース・各回で新しい LocalClassifier 呼び出し、再試行・応答 cache の再利用なしです。
+prompt、max_completion_tokens=256、timeout=min(profile.timeout_seconds, 15)、版定数は製品と同じです。
+UT/IT1 の real 組み立て試験は fake provider のみで、実モデル品質の証拠ではありません。
+
+## report と exit code
+
+JSON report は本文・応答の生テキスト・endpoint・認証情報・設定パスを出しません。本文を出すオプションもありません。
+
+- 実行条件：mode、quality_evidence、commit.sha/dirty、case_version.input/gold/combined（正規化 JSON の SHA-256）、
+  classifier_version・prompt_version・policy_version、model・model_digest、profile_id/model/transport/token_counter/
+  allowed_parameters/timeout_seconds、cache=false、parallelism=1、runs、abstain_policy、started_at・finished_at（UTC）。
+  real は character_id・config_version、fixture は scenario も記録します。
+- 各回：overall と groups の correct/total/accuracy/status、ABSTAIN count/total/rate、
+  必須ゲートの count/case_ids、各ケースの classification/subject/category/correct/failure/latency_ms、回の status と fail_reasons。
+  欠落・重複は missing_or_duplicate として採点対象の分母に残します。
+- 参考値：language・tag 別の正答率、subject・category 正答率（有効な非 ABSTAIN 出力が分母）、
+  FP 件数、latency の中央値/p95（有効な一意の実行結果、失敗の latency も含む。p95 は nearest rank）。
+  reference.used_for_verdict=false、合否への追加条件にしません。
+- 全体：status、passed、fail_reasons、回を合計した gates。異なる回の同じ id はそれぞれ1件として計上します。
+
+`--output` 指定時は JSON を保存し、標準出力に要約と FAIL 理由を出します。省略時は標準出力に status と集計を含む JSON を出します。
+exit code は PASS=0、評価 FAIL=1、設定・入力・report 保存エラー=2。エラーの本文・パス・raw exception は表示しません。
+[ハーネス証跡](../../docs/evidence/2026-10-12-privacy-classifier-harness.md)に TDD と必須品質ゲートを記録します。
+実モデル評価と ABSTAIN 方針の確定は **NOT RUN / 決定待ち（#191）** です。
