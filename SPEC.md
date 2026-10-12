@@ -229,7 +229,7 @@ ABSTAINは[ADR 0032](docs/adr/0032-privacy-classifier-evaluation.md)の決定C�
 
 ### 4.2 要決定事項
 
-現在、要決定事項はありません。新たな論点はIssueで扱い、決定後にこの文書とADRへ反映します。
+[ADR 0034](docs/adr/0034-memory-sharing-and-name-replacement.md) は Proposed・承認待ちです（記憶の共有範囲、保存時の個人名の置き換え、解釈・具体案の要確認事項）。
 
 ## 5. 実装の順序（案）
 
