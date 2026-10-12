@@ -1,8 +1,10 @@
 # ADR 0032: privacy 分類器の評価と PoC ケースの移行
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-12
+
+Accepted日: 2026-10-12（ユーザーの承認「ADR0032も採用でよい」、2026-10-12。承認対象は main `5919bcfbe3e803e5a6ad3423c4166cdeeeb74158` の本文と、ABSTAIN の決定 C。本文中の「Status は Proposed のまま」は承認前の記録）
 
 関連: [Epic #125](https://github.com/FYuki/digital-souls-core/issues/125)、
 [Issue #189](https://github.com/FYuki/digital-souls-core/issues/189)、

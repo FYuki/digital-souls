@@ -1,6 +1,6 @@
 # privacy 分類器評価の固定ケース
 
-[ADR 0032](../../docs/adr/0032-privacy-classifier-evaluation.md) は Proposed です。
+[ADR 0032](../../docs/adr/0032-privacy-classifier-evaluation.md) は Accepted です（2026-10-12 ユーザー承認）。
 [Issue #189](https://github.com/FYuki/digital-souls-core/issues/189) はデータ移行と形式検証だけを実装します。
 ハーネス・採点・集計は #190 で実装し、#191 で実モデル評価を実施しました（[結果と制約](../../docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md)）。ABSTAIN の採点は ADR 0032 のユーザー決定 C（別集計、2026-10-12）です。
 
@@ -183,7 +183,7 @@ timeout は時間切れ、execution_incomplete は provider 例外・scan 拒否
 最低3回、指定したすべての回が合格した場合だけ全体 PASS。回や group の平均で相殺せず、8件の group は8/8が必要です。
 
 `--abstain-policy` の既定は **separate（C）** です（ADR 0032、2026-10-12 ユーザー決定「Q1：C案で進めて」）。
-accept・reject は比較用に残しますが、品質の判定には使いません。ADR 0032 自体は Proposed のままです。
+accept・reject は比較用に残しますが、品質の判定には使いません。
 
 | policy | ABSTAIN の正否 | 追加条件 |
 | --- | --- | --- |
