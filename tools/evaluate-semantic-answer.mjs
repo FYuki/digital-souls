@@ -25,7 +25,37 @@ export function cleanEnvironment(temp, options, inherited = process.env) {
   }
   if (options.profile) env.DSC_ANSWER_PROFILE = options.profile;
   if (options.variant) env.DSC_ANSWER_VARIANT = options.variant;
+  if (options.mode === 'external_model' && !options.dryRun) {
+    env.DSC_EXECUTE_EXTERNAL_MODEL = '1';
+    const profile = JSON.parse(fs.readFileSync(options.profile,'utf8'));
+    if (profile.answer_provider === 'codex_subscription') return env;
+    const names = [profile.api_key_env, ...(profile.api_base_env ? [profile.api_base_env] : [])];
+    for (const name of names) {
+      if (typeof name !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/.test(name)
+        || /^(PATH|HOME|TMPDIR|LANG|.*PROXY|DOTENV.*|NODE.*|PYTHON.*|DSC_.*|PROMPTFOO_.*|LITELLM_.*|LD_.*|DYLD_.*)$/.test(name)) throw new Error('credential-name');
+      if (typeof inherited[name] !== 'string' || !inherited[name].trim()) throw new Error('credentials-unavailable');
+      env[name] = inherited[name];
+    }
+  }
   return env;
+}
+
+export function dryRunReport(manifest, counts, options) {
+  for (const key of ['cases','calls_per_run','input_tokens_per_run']) {
+    if (!Number.isSafeInteger(counts[key]) || counts[key] < 0) throw new Error('dry-run-count');
+  }
+  if (counts.cases !== 62 || counts.calls_per_run > counts.cases) throw new Error('dry-run-count');
+  const calls = counts.calls_per_run * options.runs;
+  const input = counts.input_tokens_per_run * options.runs;
+  const output = calls * (options.outputTokens ?? 0);
+  const estimate = {calls_per_run:counts.calls_per_run, calls, input_tokens:input,
+    token_estimator:counts.token_estimator, output_tokens_per_call_assumption:options.outputTokens ?? null,
+    output_tokens_assumption:options.outputTokens === undefined ? null : output};
+  if (options.inputPrice !== undefined) estimate.input_cost = input / 1e6 * options.inputPrice;
+  if (options.outputPrice !== undefined) estimate.output_cost = output / 1e6 * options.outputPrice;
+  if (estimate.input_cost !== undefined && estimate.output_cost !== undefined) estimate.total_cost = estimate.input_cost + estimate.output_cost;
+  return {...manifest, status:'DRY RUN', dry_run:true, quality_evidence:false, external_send:false,
+    runs:options.runs, cases:counts.cases, estimate};
 }
 export function classifyLog(log) {
   const patterns = {
@@ -69,28 +99,48 @@ export async function main(argv = process.argv.slice(2)) {
   let toolchain;
   const runs = [];
   const executions = [];
+  const options = {mode:'fixture',runs:3};
   try {
-    const options = {mode:'fixture',runs:3};
     for (let i = 0; i < argv.length; i++) {
       const name = argv[i];
-      if (name === '--execute-local-model') options.execute = true;
+      if (name === '--execute-external-model') options.executeExternal = true;
+      else if (name === '--dry-run') options.dryRun = true;
+      else if (name === '--execute-local-model') options.execute = true;
       else if (name === '--keep-private-artifacts') keepPrivate = true;
       else {
-        if (!['--mode','--runs','--profile','--output','--fixture-variant'].includes(name) || !argv[i+1]) throw new Error('arguments');
+        if (!['--mode','--runs','--profile','--output','--fixture-variant','--input-price-per-million','--output-price-per-million','--output-tokens-per-call'].includes(name) || !argv[i+1]) throw new Error('arguments');
         const value = argv[++i];
         if (name === '--mode') options.mode = value;
         if (name === '--runs') options.runs = Number(value);
-        if (name === '--profile') options.profile = path.resolve(value);
+        if (name === '--profile') options.profile = value;
         if (name === '--output') output = path.resolve(value);
+        if (name === '--input-price-per-million') options.inputPrice = Number(value);
+        if (name === '--output-price-per-million') options.outputPrice = Number(value);
+        if (name === '--output-tokens-per-call') options.outputTokens = Number(value);
         if (name === '--fixture-variant') options.variant = value;
       }
     }
-    if (!['fixture','local_model'].includes(options.mode) || !Number.isSafeInteger(options.runs) || options.runs < 1) throw new Error('arguments');
+    if (!['fixture','local_model','external_model'].includes(options.mode) || !Number.isSafeInteger(options.runs) || options.runs < 1) throw new Error('arguments');
+    if (options.dryRun && options.executeExternal) throw new Error('arguments');
     if (options.mode === 'local_model' && (!options.execute || !options.profile)) {
       process.stdout.write('{"status":"NOT RUN","reason":"explicit execution and profile required"}\n');
       return 3;
     }
-    if (options.mode === 'fixture' && (options.profile || options.execute)) throw new Error('fixture-profile');
+    if (options.mode === 'external_model' && ((!options.dryRun && !options.executeExternal) || !options.profile)) {
+      process.stdout.write('{"status":"NOT RUN","reason":"explicit external execution and profile required"}\n');
+      return 3;
+    }
+    if (options.profile && options.mode === 'external_model' && !path.isAbsolute(options.profile)) throw new Error('profile-path');
+    if (options.profile && options.mode === 'local_model') options.profile = path.resolve(options.profile);
+    if (options.executeExternal && options.mode !== 'external_model') throw new Error('external-mode');
+    if ((options.dryRun || options.inputPrice !== undefined || options.outputPrice !== undefined || options.outputTokens !== undefined)
+      && options.mode !== 'external_model') throw new Error('dry-run-mode');
+    for (const key of ['inputPrice','outputPrice','outputTokens']) {
+      if (options[key] !== undefined && (!Number.isFinite(options[key]) || options[key] < 0)) throw new Error('price-arguments');
+    }
+    if (options.outputTokens !== undefined && !Number.isSafeInteger(options.outputTokens)) throw new Error('price-arguments');
+    if (options.outputPrice !== undefined && options.outputTokens === undefined) throw new Error('output-assumption');
+    if (options.mode === 'fixture'  && (options.profile || options.execute)) throw new Error('fixture-profile');
     if (options.variant && (options.mode !== 'fixture' || !['forbidden','missing','error'].includes(options.variant))) throw new Error('fixture-variant');
     const pkg = require('../evals/semantic/node_modules/promptfoo/package.json');
     if (pkg.version !== '0.117.2') throw new Error('promptfoo-version');
@@ -105,6 +155,15 @@ export async function main(argv = process.argv.slice(2)) {
     fs.chmodSync(temp,0o700);
     fs.writeFileSync(path.join(temp,'empty.env'),'');
     const env = cleanEnvironment(temp,options);
+    if (options.dryRun) {
+      stage = 'dry-run';
+      const counts = python({operation:'dry-run',profile:options.profile},env);
+      const report = dryRunReport(manifest,counts,options);
+      const encoded = JSON.stringify(report,null,2)+'\n';
+      if (output) fs.writeFileSync(output,encoded,{mode:0o600});
+      else process.stdout.write(encoded);
+      return 0;
+    }
     for (let n = 1; n <= options.runs; n++) {
       const raw = path.join(temp,`run-${n}.json`);
       const logs = {stdout:path.join(temp,`run-${n}.stdout`),stderr:path.join(temp,`run-${n}.stderr`)};
@@ -128,16 +187,18 @@ export async function main(argv = process.argv.slice(2)) {
       runs.push(inspectReport(JSON.parse(fs.readFileSync(raw,'utf8')),{mode:options.mode,identity}));
       process.stderr.write(`answer ${options.mode} run ${n}: ${runs.at(-1).passed ? 'PASS' : 'FAIL'} (${runs.at(-1).cases.length} cases)\n`);
     }
-    const report = {...finalizeReport(manifest,runs,options.runs),toolchain,executions};
+    const report = {...finalizeReport(manifest,runs,options.runs),toolchain,executions,...(options.mode === 'external_model' ? {run_count:options.runs} : {})};
     const encoded = JSON.stringify(report,null,2)+'\n';
     if (output) fs.writeFileSync(output,encoded,{mode:0o600});
     else process.stdout.write(encoded);
     return report.passed ? 0 : 1;
   } catch (error) {
     // Reasons are structural identifiers only; never print raw SDK or promptfoo text.
-    const reason = /^[a-z-]+$/.test(error?.message || '') ? error.message : 'inconsistent-data';
+    const safeReasons = new Set(['arguments','fixture-profile','fixture-variant','promptfoo-version','sqlite-version','promptfoo-export','credential-name','credentials-unavailable','profile-path','external-mode','dry-run-mode','price-arguments','output-assumption','dry-run-count','codex-version','export-version','provider-config','vars','assertion-config','components','grading','configured-count','row-count','case-set','prompt','provider','provider-path','provider-drift','row-error','response','critical-count','output','identity-required','observation-id','forged-grading','forged-row','stats','runs','manifest','nonfinite']);
+    const reason = safeReasons.has(error?.message) ? error.message : 'inconsistent-data';
     if (executions.length) process.stderr.write(`promptfoo diagnostic: ${JSON.stringify(executions.at(-1))}\n`);
     if (output && manifest) fs.writeFileSync(output,JSON.stringify({...manifest,toolchain,runs,executions,
+      ...(options.dryRun ? {dry_run:true,external_send:false,quality_evidence:false} : {}),
       passed:false,failure:{stage,reason}},null,2)+'\n',{mode:0o600});
     process.stderr.write(`回答評価 FAIL (${stage}: ${reason})。\n`);
     return 1;

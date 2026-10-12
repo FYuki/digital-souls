@@ -238,3 +238,112 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 分類品質と必須ゲートを分け、前回nomic/0.54との比較も記録した
 [実モデル証跡](../../docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)と
 [利用手順](../../docs/memory-evaluation.md)を参照してください。
+
+#199では同じbge-m3/0.52でGPT-6 Luna（Codexサブスク、CLI 0.162.1）の回答をcacheなし3回測定しました。
+各回品質61/62・全条件53/62、long_text 0/1のみ90%未達、dispatch違反1件・no_memory違反8件、
+forbidden/lifecycle違反0件で、gemmaと全ケースの観測値・判定が一致し、**FAIL・品質未受入**です。
+事前見込みは61送信/回×3回=183呼び出し、入力202,530 token（byte推定）、サブスク内で従量課金なしでした。
+classifier=synthetic、CLI独自の指示・包装と既存token予算移行の条件差、回答文比較・IT2/ST NOT RUNは
+[Luna実測証跡](../../docs/evidence/2026-10-12-semantic-luna-answer-evaluation.md)を参照してください。
+
+### 外部モデルでの回答生成（external_model）
+
+#198 は評価経路の実装だけで、**実送信は NOT RUN**。62ケース・期待値・プロンプト・判定は共通です。
+回答だけを本番 `Inference.prepare` → privacy の external 認可（scanner・ローカル分類器）→
+`inference.check` → 評価用 Provider の `complete` へ渡します。operator grant に external を追加するのは
+この mode だけです。embedding は `LocalEmbedding` の管理 loopback、分類器は既存の
+synthetic 応答と本番 `LocalClassifier` の管理 loopback profile を維持します。
+
+external の manifest/identity には `classifier_reason="baseline-parity-no-classifier-export"` を記録します。
+比較基準の gemma4-12b 評価（[2026-10-10 証跡](../../docs/evidence/2026-10-10-semantic-real-model-answer-bge-m3.json)）も synthetic で条件をそろえるためです。
+分類器は外部モデルへ送らずローカルのまま維持し、実分類器での受入は Issue #128 の範囲です。
+fixture/local_model の report にはこのフィールドを追加しません。
+
+[無効な例](external-answer-profile.example.json)を参考に、git 管理外・リポジトリ外の絶対パスへ
+JSON profile を用意します。トップレベルと embedding の `enabled=true`、chat の
+`transport="sdk"` / `external_send_allowed=true` が必須です。今回対応する LiteLLM provider は
+`openai`。API 方式の `model` は operator が指定します。Luna は下記 Codex サブスク方式を使います。
+例のダミーモデル・endpoint は使えません。embedding には管理 loopback の実設定が必要です。既存 local profile の検査は変更していません。
+
+既存 API 方式では接続先・キーの値は JSON に書かず、`api_key_env` と任意の `api_base_env` に環境変数名だけを
+書きます（大文字英数字と `_`、先頭英字、最大64文字。proxy・プロセス制御名は不可）。
+runner は指名した値だけを子へ転送し、Python provider が `OPENAI_API_KEY` / `OPENAI_BASE_URL`
+へ一時的に写します。指定した値がなければ実送信前に FAIL。その他の資格情報・proxy・dotenv
+は継承しません。Node の network guard と fixture の IP 拒否は維持します。
+
+外部送信なしの見積もり（キー不要。ローカル embedding と使い捨て PostgreSQL は使用）：
+
+```sh
+bash tools/evaluate-semantic-answer.sh --mode external_model \
+  --profile /absolute/private/external-answer.json --dry-run --runs 3 \
+  --output-tokens-per-call 512 --input-price-per-million 1 --output-price-per-million 2 \
+  --output /dev/shm/external-answer-plan.json
+```
+
+本番 prepare・撤回検査まで進め、送信しない計数器で1回分の dispatch 件数・入力 token 推定を
+求めて runs 倍します。入力は既存 UTF-8 byte 推定器で、実 tokenizer の値ではありません。
+出力 token は `--output-tokens-per-call` の明示的な仮定。単価は同じ通貨で100万 token あたりを
+任意指定し、指定した項目だけ金額を計算します（通貨換算なし・価格の既定値なし）。
+report の `status="DRY RUN"` / `external_send=false` / `quality_evidence=false` は品質合格ではありません。
+
+実送信する際は `--execute-external-model` と profile を明示した別コマンドを使います。
+`--dry-run` と `--execute-external-model` の同時指定は引数エラー（FAIL、送信なし）。
+dry-run 以外では実行 flag または profile が欠けると NOT RUN（exit 3）。実送信 report は
+provider / model / transport / `external_send=true` / `cache=false` / run_count / commit を記録します。
+公開 report・stdout・stderr はキー・URL・環境変数値・ケース本文・query・回答全文を含めません。
+本文を含む promptfoo raw export は既存どおり private 一時領域で扱い、通常終了時に削除します。
+
+### Codex サブスク方式（#201）
+
+[証跡](../../docs/evidence/2026-10-12-codex-subscription-answer-provider.md)と
+[無効な profile 例](codex-answer-profile.example.json)を参照してください。git 管理外・リポジトリ外の
+JSON profile で `answer_provider="codex_subscription"`、
+`chat.transport="sdk"`、`chat.model="openai/gpt-6-luna"` を指定します。
+`codex_executable` と `codex_home` は既存 CLI と既存ログインの CODEX_HOME の絶対パスです。
+`api_key_env` / `api_base_env` は指定できません。enabled・embedding.enabled・external_send_allowed
+と external grant、scanner/classifier、送信直前の検証は API 方式と共通です。
+
+認証は CLI の既存 ChatGPT ログインだけを使います。Core は認証ファイルを開かず、複製・記録しません。
+runner は API キー・proxy・ambient CODEX_HOME を継承せず、CLI 子の HOME/CODEX_HOME に
+profile のパスだけを渡します。CLI 子の継承は PATH/LANG/LC_ALL/TZ に限定します。
+
+許可済み dispatch の内側で CLI の `--version` と `exec --help` を検査します。
+PoC 準拠の版下限は 0.152.0。必須 flag 欠落・旧版・非0終了・timeout・不正 JSONL・最終応答欠落は
+本文を含まない FAIL です。stream・tools・未対応パラメーターは起動前に拒否します。
+実行は空の一時ディレクトリを `-C` と cwd に指定し、
+`--ask-for-approval never`、`--ephemeral`、`--sandbox read-only`、
+`--skip-git-repo-check`、`--ignore-user-config`、`--ignore-rules`、
+`--strict-config`、`--json`、`--color never` を渡します。
+config は web_search=disabled、shell_environment_policy.inherit=none、
+shell_environment_policy.experimental_use_profile=false、mcp_servers={}、model_provider=openai です。
+`--disable` は次の30機能を指定します（CLI 0.162.1 の `codex features list` で存在確認済み）。
+apps、browser_use、browser_use_external、browser_use_full_cdp_access、code_mode_host、
+computer_use、fast_mode、goals、hooks、image_generation、in_app_browser、in_app_local_automation、
+multi_agent、plugin_sharing、plugins、remote_plugin、shell_snapshot、shell_tool、
+skill_mcp_dependency_install、skill_search、sleep_tool、tool_call_mcp_elicitation、tool_suggest、
+ultrafast_mode、unified_exec、unified_exec_tty、view_image、workspace_dependencies、worktrees、
+write_stdin_approval。fast_mode / ultrafast_mode も無効化し、サービス tier の差を持ち込まない条件にします。
+#199ではtool eventをFAILにするProviderで各回61件が正常応答し、無効化の実効を間接確認しました。
+生JSONLは保持しておらず、tool event不在の直接再監査はNOT RUNです。
+
+Core の messages をそのまま JSON の messages に包んで stdin へ渡します。
+Codex CLI 独自の指示と包装が加わるため、純粋な API 呼び出しとは条件が違います。
+report に `condition_note="codex-cli-adds-own-instructions-not-pure-api"` を記録します。
+Codex 専用追加項目は provider=codex_subscription、model=gpt-6-luna、codex_cli_version です。
+版は許可済み dispatch から採り、ケース間・run 間の変化は FAIL。
+manifest / dry-run は CLI を起動せず版は null、送信を拒否したケースも版は null です。
+既存の external_send・cache=false（評価キャッシュなし）・runs・commit・classifier_reason を維持します。
+stdout/stderr 本文・CODEX_HOME の内容とパス・ケース本文・回答全文を公開 report に含めません。
+
+同じ runner を使い、profile を Codex 用 JSON に替えます。
+dry-run は CLI を起動しません。実送信の例は次のとおりです（**#201ではNOT RUN、#199で実送信済み**）。
+今回の測定は30分単位に収めるため `--runs 1` を3回実行しました。
+
+```sh
+bash tools/evaluate-semantic-answer.sh --mode external_model \
+  --profile /absolute/private/codex-answer.json --execute-external-model --runs 3 \
+  --output /dev/shm/codex-answer-report.json
+```
+
+実 `codex exec`、Luna 送信、login status、実モデル IT2/ST は #201 では **NOT RUN**。
+既存 fixture/local_model/API 方式の report と判定、Node network_guard、Python のネットワーク方針は維持します。
