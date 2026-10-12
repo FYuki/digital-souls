@@ -94,7 +94,7 @@ Episode・SemanticのIDは版1で登録し、同一IDの内容版追加はFact�
 | 機能 | 状態 | 根拠 |
 | --- | --- | --- |
 | 決定論的scanner、ローカル意味分類器、permission | 実装済み（gemma4-12b の合成60件・cacheなし3回の分類器品質はFAIL。各回51/60、偽陰性は0/0/2件、ABSTAINは各回0件。品質未受入） | [ADR 0005](docs/adr/0005-privacy-boundaries.md)、[ADR 0032](docs/adr/0032-privacy-classifier-evaluation.md)、[実モデル証跡](docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md) |
-| 型付きの保存判定（DENY_* / ABSTAIN / NOT_MEMORY_WORTHY / ALLOW_STRUCTURED） | 未実装 | [ADR 0017](docs/adr/0017-memory-formation-admission.md) |
+| 型付きの保存判定（DENY_* / ABSTAIN_UNKNOWN / NOT_MEMORY_WORTHY / ALLOW_STRUCTURED） | 一部（決定論的評価器・scannerから分類器へ進む段・UTは実装済み。形成からの呼出しは未接続、保存判定経路の実モデル品質は未評価） | [ADR 0017](docs/adr/0017-memory-formation-admission.md) |
 | 明示したsource集合からの有限batch逐語抽出 | 撤去済み | ADR 0007、ADR 0022 |
 | 会話履歴の保存を起点とする形成jobの永続予約・集約・回復 | 未実装 | ADR 0017 |
 | スレッド範囲の抽出、長文分割、冪等な登録 | 一部（正本の冪等登録は実装済み、抽出・長文分割は未実装） | ADR 0017 |
