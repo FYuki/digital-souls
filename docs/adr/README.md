@@ -46,7 +46,7 @@ ADR 0026〜0030は、2026-10-11のユーザーの承認を根拠に、同日にA
 - [ADR 0029: 入口をまたぐ人格の一貫性の評価](0029-persona-consistency-evaluation.md)
 - [ADR 0030: 人格の上書き（インジェクション）への耐性の評価](0030-injection-resistance-evaluation.md)
 - [ADR 0031: 呼び出し側の system を受け取らない](0031-reject-caller-system.md)
-- [ADR 0032: privacy 分類器の評価と PoC ケースの移行](0032-privacy-classifier-evaluation.md)（Proposed、ABSTAIN の扱いは要決定）
+- [ADR 0032: privacy 分類器の評価と PoC ケースの移行](0032-privacy-classifier-evaluation.md)（Proposed、ABSTAIN の扱いは決定 C〈別集計〉、2026-10-12 ユーザー決定）
 
 ADR 0021のSQLite撤去は Epic #79（[Issue #88](https://github.com/FYuki/digital-souls-core/issues/88)）で完了しました。本文は決定時点の履歴を保持します。
 

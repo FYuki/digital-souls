@@ -98,10 +98,8 @@ def aggregate(
     extra_runs = [o for o in observations if o.run > runs]
     if extra_runs:
         fail_reasons.append("execution_incomplete: unknown run")
-        total_gates["execution_incomplete"] = {
-            "count": len(extra_runs),
-            "case_ids": [o.case_id for o in extra_runs],
-        }
+        total_gates["execution_incomplete"]["count"] += len(extra_runs)
+        total_gates["execution_incomplete"]["case_ids"].extend(o.case_id for o in extra_runs)
     for run in range(1, runs + 1):
         rows = [o for o in observations if o.run == run]
         addresses = Counter(o.case_id for o in rows)
