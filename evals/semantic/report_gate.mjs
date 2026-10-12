@@ -102,7 +102,7 @@ export function inspectReport(raw, options) {
 export function finalizeReport(manifest, runs, expectedRuns) {
   demand(Number.isSafeInteger(expectedRuns) && expectedRuns > 0 && runs.length === expectedRuns,'runs');
   demand(manifest.promptfoo_version === '0.117.2'
-    && manifest.quality_evidence === (manifest.mode === 'local_model'),'manifest');
+    && manifest.quality_evidence === (['local_model','external_model'].includes(manifest.mode)),'manifest');
   finite(runs);
   return {...manifest, runs, passed:runs.every(r => r.passed)};
 }

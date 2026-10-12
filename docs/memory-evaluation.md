@@ -224,3 +224,19 @@ server主要設定・起動前と評価中のGPU資源・ケース版・各回�
 コンテナ停止確認・未検証範囲を記録し、安全なreportへリンクします。
 分類器品質、形成〜利用の実接続、実運用DB適用、実環境IT2/ST、私的corpusの検索精度、
 prompt injection耐性、速度・資源上限を、この合成セットの結果だけで合格としません。
+
+## 外部回答評価の準備（#198）
+
+`external_model` は回答生成だけを外部 OpenAI 互換 SDK 経路へ渡す opt-in mode です。
+モデル識別子・接続先は未確定で、**#198 の実送信は NOT RUN**。
+[手順と無効な profile 例](../evals/semantic/README.md#外部モデルでの回答生成external_model)を参照してください。
+profile は git 管理外の絶対パスで、キー・接続先は環境変数名だけを指定します。
+明示実行 flag と profile がなければ NOT RUN（exit 3）。
+
+本番の外部送信許可・privacy 認可・送信直前の検証を通し、embedding は管理 loopback、
+分類器は synthetic 応答＋本番ローカル classifier/scanner/policy を維持します。
+`--dry-run` はローカル embedding・使い捨て PG で prepare し、送信可能件数×runs と
+既存 token 推定器による入力見込みを本文なしで記録します。価格は任意 CLI 単価だけ、
+出力見込みは明示した仮定だけを使います。実送信 report には provider/model/transport、
+external_send、cache 無効、実行回数、commit を残し、認証情報・接続 URL・本文は出しません。
+実測結果と SPEC の同期は #199 で行います。

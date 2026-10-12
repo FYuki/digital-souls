@@ -1,0 +1,20 @@
+{
+  "enabled": false,
+  "chat": {
+    "profile_id": "external-answer-example",
+    "model": "openai/nonexistent-example-model",
+    "transport": "sdk",
+    "external_send_allowed": false,
+    "timeout_seconds": 60
+  },
+  "api_key_env": "DS_EXAMPLE_ANSWER_API_KEY",
+  "api_base_env": "DS_EXAMPLE_ANSWER_API_BASE",
+  "embedding": {
+    "profile_id": "nonexistent-embedding-example",
+    "model": "nonexistent-example-model",
+    "model_digest": "nonexistent-example-digest",
+    "dimensions": 1024,
+    "api_base": "NONEXISTENT_MANAGED_LOOPBACK_ENDPOINT",
+    "enabled": false
+  }
+}

@@ -76,7 +76,9 @@ class SyntheticClassifierProvider:
         yield  # pragma: no cover
 
 
-def synthetic_policy(case: EvaluationCase) -> tuple[PrivacyPolicy, Profile]:
+def synthetic_policy(
+    case: EvaluationCase, *, external: bool = False
+) -> tuple[PrivacyPolicy, Profile]:
     profile = Profile(
         profile_id="synthetic-classifier",
         model="openai/gemma4-12b",
@@ -89,7 +91,16 @@ def synthetic_policy(case: EvaluationCase) -> tuple[PrivacyPolicy, Profile]:
         LocalClassifier(SyntheticClassifierProvider(), profile, model_digest="synthetic-v1")
     )
     bindings = {case.binding.to_domain(), *(c.binding.to_domain() for c in case.conversations)}
-    policy.configure({b: frozenset({"history", "local", "memory"}) for b in bindings})
+    policy.configure(
+        {
+            b: frozenset(
+                {"history", "local", "memory", "external"}
+                if external
+                else {"history", "local", "memory"}
+            )
+            for b in bindings
+        }
+    )
     return policy, profile
 
 
@@ -277,6 +288,8 @@ def prepare_case(
     records: MemoryRecordStore,
     clock: CaseClock,
     embedding: MemoryEmbedding,
+    *,
+    external: bool = False,
 ) -> PreparedCase:
     """Create/append -> remap/register -> rejection probes -> before_search mutations."""
     ids: dict[str, str] = {}
@@ -341,7 +354,7 @@ def prepare_case(
             rejected.append(r.id)
         else:
             raise ValueError("Excluded source registration was accepted")
-    policy, profile = synthetic_policy(case)
+    policy, profile = synthetic_policy(case, external=external)
     recording = RecordingEmbedding(embedding)
     runtime = PreparedCase(
         case,
@@ -369,7 +382,11 @@ def prepare_case(
 
 @contextmanager
 def isolated_case(
-    config: PostgresConfig, case: EvaluationCase, embedding: MemoryEmbedding
+    config: PostgresConfig,
+    case: EvaluationCase,
+    embedding: MemoryEmbedding,
+    *,
+    external: bool = False,
 ) -> Iterator[PreparedCase]:
     """Allocate a fresh schema per case AND run, including overlapping record IDs."""
     config = config.model_copy(update={"schema_name": "dsc_eval_" + uuid4().hex})
@@ -378,7 +395,7 @@ def isolated_case(
     try:
         history = PostgresHistory(database, clock=clock)
         records = PostgresMemoryRecords(database)
-        yield prepare_case(case, history, records, clock, embedding)
+        yield prepare_case(case, history, records, clock, embedding, external=external)
     finally:
         with database._connect() as db:
             db.execute(
