@@ -99,7 +99,7 @@ def test_version_hash_covers_input_and_gold() -> None:
 def test_committed_schema_matches_validator(
     filename: str, model: type[CaseSet | ExpectationSet]
 ) -> None:
-    assert json.loads((DATA / filename).read_text()) == model.model_json_schema()
+    assert json.loads((DATA / filename).read_text(encoding="utf-8")) == model.model_json_schema()
 
 
 def mutate(raw: dict[str, Any], change: str) -> None:
@@ -251,8 +251,8 @@ def test_rejection_paths_hide_body(change: str, tmp_path: Path) -> None:
         EvaluationCases.model_validate(raw)
     assert corpus().cases.cases[0].text not in str(error.value)
     inputs, gold = tmp_path / "cases.json", tmp_path / "expectations.json"
-    inputs.write_text(json.dumps(raw["cases"], ensure_ascii=False))
-    gold.write_text(json.dumps(raw["expectations"], ensure_ascii=False))
+    inputs.write_text(json.dumps(raw["cases"], ensure_ascii=False), encoding="utf-8")
+    gold.write_text(json.dumps(raw["expectations"], ensure_ascii=False), encoding="utf-8")
     with pytest.raises(ValueError, match="^invalid privacy evaluation cases$"):
         load_cases(inputs, gold)
 
@@ -261,11 +261,12 @@ def test_rejection_paths_hide_body(change: str, tmp_path: Path) -> None:
 def test_loader_hides_json_and_filesystem_errors(malformation: str, tmp_path: Path) -> None:
     path = tmp_path / "cases.json"
     if malformation == "invalid-json":
-        path.write_text('{"text":"synthetic private body",')
+        path.write_text('{"text":"synthetic private body",', encoding="utf-8")
     elif malformation == "duplicate-key":
-        raw = (DATA / "cases.json").read_text()
+        raw = (DATA / "cases.json").read_text(encoding="utf-8")
         path.write_text(
-            raw.replace('"schema_version": 1', '"schema_version": 0, "schema_version": 1')
+            raw.replace('"schema_version": 1', '"schema_version": 0, "schema_version": 1'),
+            encoding="utf-8",
         )
     with pytest.raises(ValueError, match="^invalid privacy evaluation cases$") as error:
         load_cases(path, DATA / "expectations.json")

@@ -34,17 +34,19 @@ def test_cli_pass_three_rounds(policy: str, tmp_path: Path) -> None:
     output = tmp_path / "report.json"
     result = run("--abstain-policy", policy, "--runs", "3", "--output", str(output))
     assert result.returncode == 0 and "PASS" in result.stdout and not result.stderr
-    report = json.loads(output.read_text())
+    report = json.loads(output.read_text(encoding="utf-8"))
     assert report["status"] == "PASS" and report["quality_evidence"] is False
     assert report["runs"] == 3 and all(len(r["cases"]) == 60 for r in report["rounds"])
     assert len(report["commit"]["sha"]) == 40 and type(report["commit"]["dirty"]) is bool
     assert report["cache"] is False and report["abstain_policy"] == policy
     assert report["started_at"] <= report["finished_at"]
     assert report["classifier_version"] and report["prompt_version"] and report["policy_version"]
-    raw = output.read_text()
+    raw = output.read_text(encoding="utf-8")
     assert all(
         c["text"] not in raw
-        for c in json.loads((ROOT / "evals/privacy/cases.json").read_text())["cases"]
+        for c in json.loads((ROOT / "evals/privacy/cases.json").read_text(encoding="utf-8"))[
+            "cases"
+        ]
     )
     assert "127.0.0.1" not in raw and "api_base" not in raw and "characters.json" not in raw
 
@@ -190,11 +192,11 @@ def test_real_cli_with_fake_records_execution_conditions(
     cases = load_cases(ROOT / "evals/privacy/cases.json", ROOT / "evals/privacy/expectations.json")
     fake = fixture_provider(cases, ROOT / "evals/privacy/responses.fixture.json", "pass")
     monkeypatch.setattr(cli, "real_provider", lambda: real_provider(fake))
-    config = json.loads((ROOT / "examples/characters.llamacpp.json").read_text())
+    config = json.loads((ROOT / "examples/characters.llamacpp.json").read_text(encoding="utf-8"))
     config[0]["card_path"] = str(ROOT / "characters/miori/miori.card.json")
     config[0]["profile"]["external_send_allowed"] = True
     path = tmp_path / "characters.json"
-    path.write_text(json.dumps(config))
+    path.write_text(json.dumps(config), encoding="utf-8")
     output = tmp_path / "report.json"
     options = [
         "--mode",
@@ -213,7 +215,7 @@ def test_real_cli_with_fake_records_execution_conditions(
         str(output),
     ]
     assert cli.main(options) == 0
-    report = json.loads(output.read_text())
+    report = json.loads(output.read_text(encoding="utf-8"))
     assert report["mode"] == "real" and report["model_digest"] == "synthetic-sha"
     assert report["profile"]["profile_id"] == config[0]["profile"]["profile_id"]
     for flag in ("--characters", "--character-id", "--model-digest", "--runs"):
@@ -222,13 +224,15 @@ def test_real_cli_with_fake_records_execution_conditions(
         assert cli.main(missing) == 2
     pos = options.index("--abstain-policy")
     assert cli.main(options[:pos] + options[pos + 2 :]) == 0
-    assert json.loads(output.read_text())["abstain_policy"] == "separate"
+    assert json.loads(output.read_text(encoding="utf-8"))["abstain_policy"] == "separate"
     assert "synthetic-sha" not in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("fault", ["missing", "extra", "duplicate", "invalid", "bad_scenario"])
 def test_fixture_configuration_errors_do_not_disclose_content(fault: str, tmp_path: Path) -> None:
-    fixture = json.loads((ROOT / "evals/privacy/responses.fixture.json").read_text())
+    fixture = json.loads(
+        (ROOT / "evals/privacy/responses.fixture.json").read_text(encoding="utf-8")
+    )
     first = next(iter(fixture["responses"]))
     if fault == "missing":
         del fixture["responses"][first]
@@ -242,7 +246,7 @@ def test_fixture_configuration_errors_do_not_disclose_content(fault: str, tmp_pa
     raw = json.dumps(fixture)
     if fault == "duplicate":
         raw = raw[:-1] + ',"schema_version":1}'
-    path.write_text(raw)
+    path.write_text(raw, encoding="utf-8")
     result = run("--abstain-policy", "accept", "--fixture", str(path))
     assert result.returncode == 2 and not result.stdout
     assert (
@@ -293,9 +297,9 @@ def test_cli_default_abstain_policy_is_decision_c(tmp_path: Path) -> None:
     output = tmp_path / "default.json"
     result = run("--runs", "3", "--output", str(output))
     assert result.returncode == 0
-    assert json.loads(output.read_text())["abstain_policy"] == "separate"
+    assert json.loads(output.read_text(encoding="utf-8"))["abstain_policy"] == "separate"
     six = tmp_path / "six.json"
     result = run("--runs", "3", "--scenario", "abstain_6", "--output", str(six))
-    report = json.loads(six.read_text())
+    report = json.loads(six.read_text(encoding="utf-8"))
     assert result.returncode == 1 and report["abstain_policy"] == "separate"
     assert all("abstain_rate: requires < 0.10" in r["fail_reasons"] for r in report["rounds"])

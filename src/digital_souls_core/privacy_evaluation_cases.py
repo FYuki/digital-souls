@@ -112,7 +112,8 @@ class Expectation(Strict):
         ):
             raise ValueError("duplicate privacy allowed value")
         definite = "SENSITIVE" if self.sensitive else "NOT_SENSITIVE"
-        # Schema 1 fixes PoC's exact two choices. ABSTAIN scoring remains undecided.
+        # Schema 1 fixes PoC's exact two choices. ABSTAIN is scored by ADR 0032 decision C
+        # (separate count, < 10% per run) in the harness, not by these allowed values.
         if set(self.allowed_classifications) != {definite, "ABSTAIN"}:
             raise ValueError("privacy classifications contradict PoC sensitivity")
         if self.sensitive:
