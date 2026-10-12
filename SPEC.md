@@ -93,7 +93,7 @@ Episode・SemanticのIDは版1で登録し、同一IDの内容版追加はFact�
 
 | 機能 | 状態 | 根拠 |
 | --- | --- | --- |
-| 決定論的scanner、ローカル意味分類器、permission | 実装済み | [ADR 0005](docs/adr/0005-privacy-boundaries.md) |
+| 決定論的scanner、ローカル意味分類器、permission | 実装済み（gemma4-12b の合成60件・cacheなし3回の分類器品質はFAIL。各回51/60、偽陰性は0/0/2件、ABSTAINは各回0件。品質未受入） | [ADR 0005](docs/adr/0005-privacy-boundaries.md)、[ADR 0032](docs/adr/0032-privacy-classifier-evaluation.md)、[実モデル証跡](docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md) |
 | 型付きの保存判定（DENY_* / ABSTAIN / NOT_MEMORY_WORTHY / ALLOW_STRUCTURED） | 未実装 | [ADR 0017](docs/adr/0017-memory-formation-admission.md) |
 | 明示したsource集合からの有限batch逐語抽出 | 撤去済み | ADR 0007、ADR 0022 |
 | 会話履歴の保存を起点とする形成jobの永続予約・集約・回復 | 未実装 | ADR 0017 |
@@ -199,7 +199,12 @@ cacheなし各3回再実施済み、いずれもFAIL。各回、検索品質/全
 日英は検索・回答とも10/10ですが、検索は無関係3/10・長文0/1・閾値0/1の品質未達とtop-1欠落1件・該当なし8件のゲート違反、
 回答は長文0/1の品質未達とdispatch 1件・空context 8件のゲート違反があり、品質は未受入です。
 各回・分類・ケースの結果、前回nomic/0.54との比較と制約は[実モデル証跡](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)にあります。
-分類器品質・形成〜利用の実環境IT2/STは未実施です。
+privacy分類器はgemma4-12b・合成60件をcacheなし3回評価し、各回51/60（85%）でFAILです。
+HEALTHは各回10/12、SELF_HARMは各回4/8、ABUSEは5/8・5/8・6/8で分類別90%に届かず、
+第3回は偽陰性2件の必須ゲート違反もあります。ABSTAIN・不正出力・timeout・実行不完了は各回0件です。
+ABSTAINは[ADR 0032](docs/adr/0032-privacy-classifier-evaluation.md)の決定C（別集計、各回10%未満）で判定しました。
+分類器品質は未受入で、詳細は[実モデル証跡](docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md)にあります。
+形成〜利用の実環境IT2/STは未実施です。
 
 ## 4. 決定事項と要決定事項
 

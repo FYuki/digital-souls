@@ -1,7 +1,11 @@
 # 機微情報の検査を明示的に有効にする
 
 この機能は単一ローカル利用者向けです。通常起動や稼働中のサービスへ自動適用しません。
-既定のPrivacyPolicyは全permissionを拒否します。分類器の実モデル精度は未評価です。
+既定のPrivacyPolicyは全permissionを拒否します。分類器はgemma4-12b・合成60件をcacheなし3回評価済みですが、
+各回51/60（85%）、HEALTH・SELF_HARM・ABUSEの分類別基準未達と第3回の偽陰性2件によりFAILで、品質未受入です。
+ABSTAIN・不正出力・timeout・実行不完了は各回0件です。ABSTAINは[ADR 0032](adr/0032-privacy-classifier-evaluation.md)の決定Cで別集計しました。
+各回・各groupと制約は[実モデル証跡](evidence/2026-10-12-privacy-classifier-real-model-evaluation.md)にあります。
+形成〜利用の実環境IT2/STは未実施です。
 私的会話の取り込み開始を意味しません。[ADR 0005](adr/0005-privacy-boundaries.md)を参照してください。
 
 ## 起動側の接続

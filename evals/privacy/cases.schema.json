@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "Case": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "pair_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "language": {
+          "enum": [
+            "ja",
+            "en"
+          ],
+          "title": "Language",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "$ref": "#/$defs/Identifier"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "pair_id",
+        "language",
+        "text",
+        "tags"
+      ],
+      "title": "Case",
+      "type": "object"
+    },
+    "Identifier": {
+      "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/Case"
+      },
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "cases"
+  ],
+  "title": "CaseSet",
+  "type": "object"
+}

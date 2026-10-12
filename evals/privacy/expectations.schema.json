@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "Category": {
+      "enum": [
+        "HEALTH",
+        "MENTAL_STATE",
+        "SELF_HARM",
+        "ABUSE",
+        "FINANCIAL",
+        "THIRD_PARTY_PRIVATE",
+        "NONE"
+      ],
+      "type": "string"
+    },
+    "Classification": {
+      "enum": [
+        "SENSITIVE",
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "type": "string"
+    },
+    "Expectation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "group": {
+          "$ref": "#/$defs/Group"
+        },
+        "sensitive": {
+          "title": "Sensitive",
+          "type": "boolean"
+        },
+        "allowed_classifications": {
+          "items": {
+            "$ref": "#/$defs/Classification"
+          },
+          "minItems": 1,
+          "title": "Allowed Classifications",
+          "type": "array"
+        },
+        "expected_subject": {
+          "$ref": "#/$defs/Subject"
+        },
+        "allowed_categories": {
+          "items": {
+            "$ref": "#/$defs/Category"
+          },
+          "minItems": 1,
+          "title": "Allowed Categories",
+          "type": "array"
+        },
+        "poc": {
+          "$ref": "#/$defs/PoCReference"
+        }
+      },
+      "required": [
+        "id",
+        "group",
+        "sensitive",
+        "allowed_classifications",
+        "expected_subject",
+        "allowed_categories",
+        "poc"
+      ],
+      "title": "Expectation",
+      "type": "object"
+    },
+    "Group": {
+      "enum": [
+        "HEALTH",
+        "MENTAL_STATE",
+        "SELF_HARM",
+        "ABUSE",
+        "FINANCIAL",
+        "NONE"
+      ],
+      "type": "string"
+    },
+    "Identifier": {
+      "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+      "type": "string"
+    },
+    "PoCReference": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "pair_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "language": {
+          "enum": [
+            "ja",
+            "en"
+          ],
+          "title": "Language",
+          "type": "string"
+        },
+        "topic_category": {
+          "$ref": "#/$defs/PoCTopic"
+        },
+        "synthetic": {
+          "const": true,
+          "title": "Synthetic",
+          "type": "boolean"
+        },
+        "case_kind": {
+          "const": "NORMAL",
+          "title": "Case Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "pair_id",
+        "language",
+        "topic_category",
+        "synthetic",
+        "case_kind"
+      ],
+      "title": "PoCReference",
+      "type": "object"
+    },
+    "PoCTopic": {
+      "enum": [
+        "HEALTH",
+        "MENTAL_STATE",
+        "SELF_HARM",
+        "ABUSE_OR_SEXUAL_VIOLENCE",
+        "FINANCIAL_SITUATION",
+        "NONE"
+      ],
+      "type": "string"
+    },
+    "Subject": {
+      "enum": [
+        "SELF",
+        "THIRD_PARTY",
+        "GENERAL"
+      ],
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "expectations": {
+      "items": {
+        "$ref": "#/$defs/Expectation"
+      },
+      "minItems": 1,
+      "title": "Expectations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "expectations"
+  ],
+  "title": "ExpectationSet",
+  "type": "object"
+}

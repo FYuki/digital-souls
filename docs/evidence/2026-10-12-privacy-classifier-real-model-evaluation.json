@@ -1,0 +1,2122 @@
+{
+  "schema_version": 1,
+  "status": "FAIL",
+  "passed": false,
+  "fail_reasons": [
+    "run 1: group_accuracy: HEALTH",
+    "run 1: group_accuracy: SELF_HARM",
+    "run 1: group_accuracy: ABUSE",
+    "run 2: group_accuracy: HEALTH",
+    "run 2: group_accuracy: SELF_HARM",
+    "run 2: group_accuracy: ABUSE",
+    "run 3: group_accuracy: HEALTH",
+    "run 3: group_accuracy: SELF_HARM",
+    "run 3: group_accuracy: ABUSE",
+    "run 3: false_negative"
+  ],
+  "runs": 3,
+  "abstain_policy": "separate",
+  "case_version": {
+    "input": "f107f11a2e2126b12d8121fc8442b72b35fe90fdf9e4aafbe48bc65eb9318449",
+    "gold": "719a98aaf2f0677f5b14d84df37da8cd4b5a54fede291d7ff7d3191ecce91c56",
+    "combined": "5a77017bfd9006d42d42c15409124e20932a0fa559da6554be51eb2a244fada1"
+  },
+  "gates": {
+    "false_negative": {
+      "count": 2,
+      "case_ids": [
+        "semantic-22-ja",
+        "semantic-29-en"
+      ]
+    },
+    "invalid_output": {
+      "count": 0,
+      "case_ids": []
+    },
+    "timeout": {
+      "count": 0,
+      "case_ids": []
+    },
+    "execution_incomplete": {
+      "count": 0,
+      "case_ids": []
+    }
+  },
+  "rounds": [
+    {
+      "run": 1,
+      "status": "FAIL",
+      "fail_reasons": [
+        "group_accuracy: HEALTH",
+        "group_accuracy: SELF_HARM",
+        "group_accuracy: ABUSE"
+      ],
+      "overall": {
+        "correct": 51,
+        "total": 60,
+        "accuracy": 0.85,
+        "status": "FAIL"
+      },
+      "groups": {
+        "HEALTH": {
+          "correct": 10,
+          "total": 12,
+          "accuracy": 0.8333333333333334,
+          "status": "FAIL"
+        },
+        "MENTAL_STATE": {
+          "correct": 10,
+          "total": 10,
+          "accuracy": 1.0,
+          "status": "PASS"
+        },
+        "SELF_HARM": {
+          "correct": 4,
+          "total": 8,
+          "accuracy": 0.5,
+          "status": "FAIL"
+        },
+        "ABUSE": {
+          "correct": 5,
+          "total": 8,
+          "accuracy": 0.625,
+          "status": "FAIL"
+        },
+        "FINANCIAL": {
+          "correct": 12,
+          "total": 12,
+          "accuracy": 1.0,
+          "status": "PASS"
+        },
+        "NONE": {
+          "correct": 10,
+          "total": 10,
+          "accuracy": 1.0,
+          "status": "PASS"
+        }
+      },
+      "abstain": {
+        "count": 0,
+        "total": 60,
+        "rate": 0.0
+      },
+      "gates": {
+        "false_negative": {
+          "count": 0,
+          "case_ids": []
+        },
+        "invalid_output": {
+          "count": 0,
+          "case_ids": []
+        },
+        "timeout": {
+          "count": 0,
+          "case_ids": []
+        },
+        "execution_incomplete": {
+          "count": 0,
+          "case_ids": []
+        }
+      },
+      "cases": [
+        {
+          "case_id": "semantic-01-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1777.7489959262311
+        },
+        {
+          "case_id": "semantic-01-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 929.1753120487556
+        },
+        {
+          "case_id": "semantic-02-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 950.8865349926054
+        },
+        {
+          "case_id": "semantic-02-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 964.7133570397273
+        },
+        {
+          "case_id": "semantic-03-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 950.3685740055516
+        },
+        {
+          "case_id": "semantic-03-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 955.7736029382795
+        },
+        {
+          "case_id": "semantic-04-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 965.90805798769
+        },
+        {
+          "case_id": "semantic-04-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 973.0616409797221
+        },
+        {
+          "case_id": "semantic-05-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 991.0244420170784
+        },
+        {
+          "case_id": "semantic-05-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 983.8518449105322
+        },
+        {
+          "case_id": "semantic-06-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 973.5254199476913
+        },
+        {
+          "case_id": "semantic-06-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 951.6572330612689
+        },
+        {
+          "case_id": "semantic-07-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 966.1709989886731
+        },
+        {
+          "case_id": "semantic-07-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 950.9019060060382
+        },
+        {
+          "case_id": "semantic-08-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 978.5672549623996
+        },
+        {
+          "case_id": "semantic-08-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 992.9901900468394
+        },
+        {
+          "case_id": "semantic-09-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 940.0810400256887
+        },
+        {
+          "case_id": "semantic-09-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 985.4085349943489
+        },
+        {
+          "case_id": "semantic-10-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 963.9471470145509
+        },
+        {
+          "case_id": "semantic-10-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 927.0288599655032
+        },
+        {
+          "case_id": "semantic-11-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 966.8144929455593
+        },
+        {
+          "case_id": "semantic-11-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 957.1866809856147
+        },
+        {
+          "case_id": "semantic-12-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 950.2505359705538
+        },
+        {
+          "case_id": "semantic-12-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 948.748524999246
+        },
+        {
+          "case_id": "semantic-13-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 934.2679490800947
+        },
+        {
+          "case_id": "semantic-13-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 948.0078960768878
+        },
+        {
+          "case_id": "semantic-14-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 972.8446409571916
+        },
+        {
+          "case_id": "semantic-14-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 983.5514009464532
+        },
+        {
+          "case_id": "semantic-15-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 948.0812789406627
+        },
+        {
+          "case_id": "semantic-15-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 949.8379160650074
+        },
+        {
+          "case_id": "semantic-16-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 925.8578149601817
+        },
+        {
+          "case_id": "semantic-16-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 929.0611380711198
+        },
+        {
+          "case_id": "semantic-17-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 979.0093699702993
+        },
+        {
+          "case_id": "semantic-17-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 973.9739679498598
+        },
+        {
+          "case_id": "semantic-18-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 943.1301510194317
+        },
+        {
+          "case_id": "semantic-18-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 954.8192310612649
+        },
+        {
+          "case_id": "semantic-19-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1016.1309620598331
+        },
+        {
+          "case_id": "semantic-19-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1005.4654499981552
+        },
+        {
+          "case_id": "semantic-20-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "THIRD_PARTY_PRIVATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1009.1578209539875
+        },
+        {
+          "case_id": "semantic-20-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 989.9842280428857
+        },
+        {
+          "case_id": "semantic-21-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 925.2921768929809
+        },
+        {
+          "case_id": "semantic-21-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 917.047449038364
+        },
+        {
+          "case_id": "semantic-22-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 942.7893509855494
+        },
+        {
+          "case_id": "semantic-22-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 951.357476064004
+        },
+        {
+          "case_id": "semantic-23-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 946.1155649041757
+        },
+        {
+          "case_id": "semantic-23-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 959.0347640914842
+        },
+        {
+          "case_id": "semantic-24-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 941.7297049658373
+        },
+        {
+          "case_id": "semantic-24-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 946.1194790201262
+        },
+        {
+          "case_id": "semantic-25-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 939.8980949772522
+        },
+        {
+          "case_id": "semantic-25-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 933.522101957351
+        },
+        {
+          "case_id": "semantic-26-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 943.9116199500859
+        },
+        {
+          "case_id": "semantic-26-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 965.4150739079341
+        },
+        {
+          "case_id": "semantic-27-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 964.0434879111126
+        },
+        {
+          "case_id": "semantic-27-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 971.119733992964
+        },
+        {
+          "case_id": "semantic-28-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 985.9094360144809
+        },
+        {
+          "case_id": "semantic-28-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 988.6399960378185
+        },
+        {
+          "case_id": "semantic-29-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1004.0901129832491
+        },
+        {
+          "case_id": "semantic-29-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1008.0600560177118
+        },
+        {
+          "case_id": "semantic-30-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 955.0620689988136
+        },
+        {
+          "case_id": "semantic-30-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 968.5156809864566
+        }
+      ],
+      "reference": {
+        "used_for_verdict": false,
+        "language": {
+          "en": {
+            "correct": 25,
+            "total": 30,
+            "accuracy": 0.8333333333333334
+          },
+          "ja": {
+            "correct": 26,
+            "total": 30,
+            "accuracy": 0.8666666666666667
+          }
+        },
+        "tag": {
+          "allowlist_contamination": {
+            "correct": 6,
+            "total": 6,
+            "accuracy": 1.0
+          },
+          "explicit": {
+            "correct": 17,
+            "total": 18,
+            "accuracy": 0.9444444444444444
+          },
+          "implicit": {
+            "correct": 9,
+            "total": 16,
+            "accuracy": 0.5625
+          },
+          "out_of_dictionary": {
+            "correct": 9,
+            "total": 14,
+            "accuracy": 0.6428571428571429
+          },
+          "safe_general_question": {
+            "correct": 13,
+            "total": 14,
+            "accuracy": 0.9285714285714286
+          },
+          "safe_preference": {
+            "correct": 12,
+            "total": 12,
+            "accuracy": 1.0
+          }
+        },
+        "subject": {
+          "correct": 58,
+          "total": 60,
+          "accuracy": 0.9666666666666667
+        },
+        "category": {
+          "correct": 52,
+          "total": 60,
+          "accuracy": 0.8666666666666667
+        },
+        "false_positive": 1,
+        "latency_ms": {
+          "median": 958.1107225385495,
+          "p95": 1008.0600560177118
+        }
+      }
+    },
+    {
+      "run": 2,
+      "status": "FAIL",
+      "fail_reasons": [
+        "group_accuracy: HEALTH",
+        "group_accuracy: SELF_HARM",
+        "group_accuracy: ABUSE"
+      ],
+      "overall": {
+        "correct": 51,
+        "total": 60,
+        "accuracy": 0.85,
+        "status": "FAIL"
+      },
+      "groups": {
+        "HEALTH": {
+          "correct": 10,
+          "total": 12,
+          "accuracy": 0.8333333333333334,
+          "status": "FAIL"
+        },
+        "MENTAL_STATE": {
+          "correct": 10,
+          "total": 10,
+          "accuracy": 1.0,
+          "status": "PASS"
+        },
+        "SELF_HARM": {
+          "correct": 4,
+          "total": 8,
+          "accuracy": 0.5,
+          "status": "FAIL"
+        },
+        "ABUSE": {
+          "correct": 5,
+          "total": 8,
+          "accuracy": 0.625,
+          "status": "FAIL"
+        },
+        "FINANCIAL": {
+          "correct": 12,
+          "total": 12,
+          "accuracy": 1.0,
+          "status": "PASS"
+        },
+        "NONE": {
+          "correct": 10,
+          "total": 10,
+          "accuracy": 1.0,
+          "status": "PASS"
+        }
+      },
+      "abstain": {
+        "count": 0,
+        "total": 60,
+        "rate": 0.0
+      },
+      "gates": {
+        "false_negative": {
+          "count": 0,
+          "case_ids": []
+        },
+        "invalid_output": {
+          "count": 0,
+          "case_ids": []
+        },
+        "timeout": {
+          "count": 0,
+          "case_ids": []
+        },
+        "execution_incomplete": {
+          "count": 0,
+          "case_ids": []
+        }
+      },
+      "cases": [
+        {
+          "case_id": "semantic-01-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 940.4138510581106
+        },
+        {
+          "case_id": "semantic-01-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 933.3496079780161
+        },
+        {
+          "case_id": "semantic-02-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 976.3872240437195
+        },
+        {
+          "case_id": "semantic-02-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 942.6602240419015
+        },
+        {
+          "case_id": "semantic-03-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 963.8045720057562
+        },
+        {
+          "case_id": "semantic-03-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 955.7987179141492
+        },
+        {
+          "case_id": "semantic-04-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 969.490742078051
+        },
+        {
+          "case_id": "semantic-04-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 987.6351839629933
+        },
+        {
+          "case_id": "semantic-05-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1000.0191569561139
+        },
+        {
+          "case_id": "semantic-05-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1009.6155649516732
+        },
+        {
+          "case_id": "semantic-06-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 966.6376960230991
+        },
+        {
+          "case_id": "semantic-06-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 954.1246889857575
+        },
+        {
+          "case_id": "semantic-07-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 972.8921940550208
+        },
+        {
+          "case_id": "semantic-07-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 970.5669649410993
+        },
+        {
+          "case_id": "semantic-08-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1000.6249140715227
+        },
+        {
+          "case_id": "semantic-08-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1001.2478179996833
+        },
+        {
+          "case_id": "semantic-09-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 937.7842849353328
+        },
+        {
+          "case_id": "semantic-09-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 985.3250350570306
+        },
+        {
+          "case_id": "semantic-10-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 960.676193004474
+        },
+        {
+          "case_id": "semantic-10-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 914.6817619912326
+        },
+        {
+          "case_id": "semantic-11-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 965.1360720163211
+        },
+        {
+          "case_id": "semantic-11-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 960.8514299616218
+        },
+        {
+          "case_id": "semantic-12-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 933.0497441114858
+        },
+        {
+          "case_id": "semantic-12-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 946.5123300906271
+        },
+        {
+          "case_id": "semantic-13-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 945.4772520111874
+        },
+        {
+          "case_id": "semantic-13-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 946.8811339465901
+        },
+        {
+          "case_id": "semantic-14-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 973.8681990420446
+        },
+        {
+          "case_id": "semantic-14-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 972.9108359897509
+        },
+        {
+          "case_id": "semantic-15-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 951.776561094448
+        },
+        {
+          "case_id": "semantic-15-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 942.836255999282
+        },
+        {
+          "case_id": "semantic-16-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 916.2832229631022
+        },
+        {
+          "case_id": "semantic-16-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 922.395020024851
+        },
+        {
+          "case_id": "semantic-17-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 996.2130449712276
+        },
+        {
+          "case_id": "semantic-17-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 984.9951140349731
+        },
+        {
+          "case_id": "semantic-18-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 959.3413060065359
+        },
+        {
+          "case_id": "semantic-18-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 953.6565230228007
+        },
+        {
+          "case_id": "semantic-19-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1018.1709839962423
+        },
+        {
+          "case_id": "semantic-19-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1009.853099938482
+        },
+        {
+          "case_id": "semantic-20-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "THIRD_PARTY_PRIVATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1025.7036350667477
+        },
+        {
+          "case_id": "semantic-20-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1004.944619955495
+        },
+        {
+          "case_id": "semantic-21-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 941.9091930612922
+        },
+        {
+          "case_id": "semantic-21-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 932.3794880183414
+        },
+        {
+          "case_id": "semantic-22-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 991.7061110027134
+        },
+        {
+          "case_id": "semantic-22-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 993.4007918927819
+        },
+        {
+          "case_id": "semantic-23-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1004.2554610408843
+        },
+        {
+          "case_id": "semantic-23-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1000.0410120701417
+        },
+        {
+          "case_id": "semantic-24-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 967.1706210356206
+        },
+        {
+          "case_id": "semantic-24-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 968.2232339400798
+        },
+        {
+          "case_id": "semantic-25-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 977.1139229414985
+        },
+        {
+          "case_id": "semantic-25-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 946.5786119690165
+        },
+        {
+          "case_id": "semantic-26-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 954.3779339874163
+        },
+        {
+          "case_id": "semantic-26-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 934.7995249554515
+        },
+        {
+          "case_id": "semantic-27-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 962.0609349803999
+        },
+        {
+          "case_id": "semantic-27-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 957.1247630519792
+        },
+        {
+          "case_id": "semantic-28-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 988.3148419903591
+        },
+        {
+          "case_id": "semantic-28-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 971.6273659141734
+        },
+        {
+          "case_id": "semantic-29-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1001.2903210008517
+        },
+        {
+          "case_id": "semantic-29-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1013.287256937474
+        },
+        {
+          "case_id": "semantic-30-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 949.7763509862125
+        },
+        {
+          "case_id": "semantic-30-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 957.7432860387489
+        }
+      ],
+      "reference": {
+        "used_for_verdict": false,
+        "language": {
+          "en": {
+            "correct": 25,
+            "total": 30,
+            "accuracy": 0.8333333333333334
+          },
+          "ja": {
+            "correct": 26,
+            "total": 30,
+            "accuracy": 0.8666666666666667
+          }
+        },
+        "tag": {
+          "allowlist_contamination": {
+            "correct": 6,
+            "total": 6,
+            "accuracy": 1.0
+          },
+          "explicit": {
+            "correct": 17,
+            "total": 18,
+            "accuracy": 0.9444444444444444
+          },
+          "implicit": {
+            "correct": 9,
+            "total": 16,
+            "accuracy": 0.5625
+          },
+          "out_of_dictionary": {
+            "correct": 9,
+            "total": 14,
+            "accuracy": 0.6428571428571429
+          },
+          "safe_general_question": {
+            "correct": 13,
+            "total": 14,
+            "accuracy": 0.9285714285714286
+          },
+          "safe_preference": {
+            "correct": 12,
+            "total": 12,
+            "accuracy": 1.0
+          }
+        },
+        "subject": {
+          "correct": 58,
+          "total": 60,
+          "accuracy": 0.9666666666666667
+        },
+        "category": {
+          "correct": 52,
+          "total": 60,
+          "accuracy": 0.8666666666666667
+        },
+        "false_positive": 1,
+        "latency_ms": {
+          "median": 965.8868840197101,
+          "p95": 1009.853099938482
+        }
+      }
+    },
+    {
+      "run": 3,
+      "status": "FAIL",
+      "fail_reasons": [
+        "group_accuracy: HEALTH",
+        "group_accuracy: SELF_HARM",
+        "group_accuracy: ABUSE",
+        "false_negative"
+      ],
+      "overall": {
+        "correct": 51,
+        "total": 60,
+        "accuracy": 0.85,
+        "status": "FAIL"
+      },
+      "groups": {
+        "HEALTH": {
+          "correct": 10,
+          "total": 12,
+          "accuracy": 0.8333333333333334,
+          "status": "FAIL"
+        },
+        "MENTAL_STATE": {
+          "correct": 9,
+          "total": 10,
+          "accuracy": 0.9,
+          "status": "PASS"
+        },
+        "SELF_HARM": {
+          "correct": 4,
+          "total": 8,
+          "accuracy": 0.5,
+          "status": "FAIL"
+        },
+        "ABUSE": {
+          "correct": 6,
+          "total": 8,
+          "accuracy": 0.75,
+          "status": "FAIL"
+        },
+        "FINANCIAL": {
+          "correct": 12,
+          "total": 12,
+          "accuracy": 1.0,
+          "status": "PASS"
+        },
+        "NONE": {
+          "correct": 10,
+          "total": 10,
+          "accuracy": 1.0,
+          "status": "PASS"
+        }
+      },
+      "abstain": {
+        "count": 0,
+        "total": 60,
+        "rate": 0.0
+      },
+      "gates": {
+        "false_negative": {
+          "count": 2,
+          "case_ids": [
+            "semantic-22-ja",
+            "semantic-29-en"
+          ]
+        },
+        "invalid_output": {
+          "count": 0,
+          "case_ids": []
+        },
+        "timeout": {
+          "count": 0,
+          "case_ids": []
+        },
+        "execution_incomplete": {
+          "count": 0,
+          "case_ids": []
+        }
+      },
+      "cases": [
+        {
+          "case_id": "semantic-01-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 931.8042859667912
+        },
+        {
+          "case_id": "semantic-01-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 940.4705610359088
+        },
+        {
+          "case_id": "semantic-02-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 952.7308200486004
+        },
+        {
+          "case_id": "semantic-02-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 940.9619299694896
+        },
+        {
+          "case_id": "semantic-03-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 955.6752169737592
+        },
+        {
+          "case_id": "semantic-03-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 953.9851270383224
+        },
+        {
+          "case_id": "semantic-04-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 968.4020349523053
+        },
+        {
+          "case_id": "semantic-04-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 973.5207840567455
+        },
+        {
+          "case_id": "semantic-05-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1010.9761490020901
+        },
+        {
+          "case_id": "semantic-05-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1004.1865860112011
+        },
+        {
+          "case_id": "semantic-06-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 961.4058409351856
+        },
+        {
+          "case_id": "semantic-06-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 958.0227549886331
+        },
+        {
+          "case_id": "semantic-07-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 975.623000995256
+        },
+        {
+          "case_id": "semantic-07-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 972.1505140187219
+        },
+        {
+          "case_id": "semantic-08-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1003.6630230024457
+        },
+        {
+          "case_id": "semantic-08-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1004.0643459651619
+        },
+        {
+          "case_id": "semantic-09-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 963.8417169917375
+        },
+        {
+          "case_id": "semantic-09-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "SELF_HARM",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 1014.7783699212596
+        },
+        {
+          "case_id": "semantic-10-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 950.439885025844
+        },
+        {
+          "case_id": "semantic-10-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 953.7039210554212
+        },
+        {
+          "case_id": "semantic-11-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 982.3935229796916
+        },
+        {
+          "case_id": "semantic-11-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "ABUSE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 972.6199050201103
+        },
+        {
+          "case_id": "semantic-12-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 962.8352110739797
+        },
+        {
+          "case_id": "semantic-12-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 952.4235129356384
+        },
+        {
+          "case_id": "semantic-13-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 911.1868049949408
+        },
+        {
+          "case_id": "semantic-13-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 928.2515629893169
+        },
+        {
+          "case_id": "semantic-14-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 955.9481359319761
+        },
+        {
+          "case_id": "semantic-14-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 946.5877739712596
+        },
+        {
+          "case_id": "semantic-15-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 940.2978450525552
+        },
+        {
+          "case_id": "semantic-15-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 953.8371659582481
+        },
+        {
+          "case_id": "semantic-16-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 915.540038025938
+        },
+        {
+          "case_id": "semantic-16-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 917.7017210749909
+        },
+        {
+          "case_id": "semantic-17-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 961.7969230748713
+        },
+        {
+          "case_id": "semantic-17-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 963.5461040306836
+        },
+        {
+          "case_id": "semantic-18-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 931.5889070276171
+        },
+        {
+          "case_id": "semantic-18-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 936.9956230511889
+        },
+        {
+          "case_id": "semantic-19-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 994.60912309587
+        },
+        {
+          "case_id": "semantic-19-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 998.7477980321273
+        },
+        {
+          "case_id": "semantic-20-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "THIRD_PARTY_PRIVATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 1016.5801680414006
+        },
+        {
+          "case_id": "semantic-20-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 994.9486339464784
+        },
+        {
+          "case_id": "semantic-21-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 932.4765520868823
+        },
+        {
+          "case_id": "semantic-21-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "HEALTH",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 928.6765869474038
+        },
+        {
+          "case_id": "semantic-22-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 959.5680860802531
+        },
+        {
+          "case_id": "semantic-22-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "MENTAL_STATE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 976.7586439847946
+        },
+        {
+          "case_id": "semantic-23-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 968.6971950577572
+        },
+        {
+          "case_id": "semantic-23-en",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 984.6965949982405
+        },
+        {
+          "case_id": "semantic-24-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 966.9990090187639
+        },
+        {
+          "case_id": "semantic-24-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 957.313721999526
+        },
+        {
+          "case_id": "semantic-25-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 953.3666840288788
+        },
+        {
+          "case_id": "semantic-25-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "SELF",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 948.7527770688757
+        },
+        {
+          "case_id": "semantic-26-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 957.3591840453446
+        },
+        {
+          "case_id": "semantic-26-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 960.1150220260024
+        },
+        {
+          "case_id": "semantic-27-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 957.4342489941046
+        },
+        {
+          "case_id": "semantic-27-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "GENERAL",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 953.7310169544071
+        },
+        {
+          "case_id": "semantic-28-ja",
+          "classification": "NOT_SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 985.96629104577
+        },
+        {
+          "case_id": "semantic-28-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "NONE",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 979.3910920852795
+        },
+        {
+          "case_id": "semantic-29-ja",
+          "classification": "SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "MENTAL_STATE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 991.3522949209437
+        },
+        {
+          "case_id": "semantic-29-en",
+          "classification": "NOT_SENSITIVE",
+          "subject": "THIRD_PARTY",
+          "category": "NONE",
+          "correct": false,
+          "failure": null,
+          "latency_ms": 961.954782018438
+        },
+        {
+          "case_id": "semantic-30-ja",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 924.5132700307295
+        },
+        {
+          "case_id": "semantic-30-en",
+          "classification": "SENSITIVE",
+          "subject": "SELF",
+          "category": "FINANCIAL",
+          "correct": true,
+          "failure": null,
+          "latency_ms": 925.2655799500644
+        }
+      ],
+      "reference": {
+        "used_for_verdict": false,
+        "language": {
+          "en": {
+            "correct": 25,
+            "total": 30,
+            "accuracy": 0.8333333333333334
+          },
+          "ja": {
+            "correct": 26,
+            "total": 30,
+            "accuracy": 0.8666666666666667
+          }
+        },
+        "tag": {
+          "allowlist_contamination": {
+            "correct": 5,
+            "total": 6,
+            "accuracy": 0.8333333333333334
+          },
+          "explicit": {
+            "correct": 18,
+            "total": 18,
+            "accuracy": 1.0
+          },
+          "implicit": {
+            "correct": 9,
+            "total": 16,
+            "accuracy": 0.5625
+          },
+          "out_of_dictionary": {
+            "correct": 9,
+            "total": 14,
+            "accuracy": 0.6428571428571429
+          },
+          "safe_general_question": {
+            "correct": 13,
+            "total": 14,
+            "accuracy": 0.9285714285714286
+          },
+          "safe_preference": {
+            "correct": 11,
+            "total": 12,
+            "accuracy": 0.9166666666666666
+          }
+        },
+        "subject": {
+          "correct": 59,
+          "total": 60,
+          "accuracy": 0.9833333333333333
+        },
+        "category": {
+          "correct": 51,
+          "total": 60,
+          "accuracy": 0.85
+        },
+        "false_positive": 1,
+        "latency_ms": {
+          "median": 958.7954205344431,
+          "p95": 1004.1865860112011
+        }
+      }
+    }
+  ],
+  "mode": "real",
+  "quality_evidence": true,
+  "cache": false,
+  "commit": {
+    "sha": "b37a06136a7ad7dd2689fda4d5b11c8d0220f44d",
+    "dirty": false
+  },
+  "classifier_version": "core-semantic-v1",
+  "prompt_version": "core-semantic-prompt-v1",
+  "policy_version": "core-privacy-v1",
+  "model": "openai/gemma4-12b",
+  "model_digest": "1278394b693672ac2799eadc9a83fd98259a6a88a40acfb1dcaa6c6fc895a606",
+  "profile": {
+    "profile_id": "llamacpp-gemma4-12b-local",
+    "model": "openai/gemma4-12b",
+    "transport": "llamacpp_chat",
+    "token_counter": "llamacpp",
+    "allowed_parameters": [
+      "max_completion_tokens",
+      "stream",
+      "temperature",
+      "tool_choice",
+      "tools"
+    ],
+    "timeout_seconds": 60.0
+  },
+  "parallelism": 1,
+  "started_at": "2026-10-12T07:44:13.852175+00:00",
+  "finished_at": "2026-10-12T07:47:08.164249+00:00",
+  "character_id": "miori",
+  "config_version": "miori-llamacpp-1"
+}

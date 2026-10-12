@@ -1,0 +1,1283 @@
+{
+  "schema_version": 1,
+  "expectations": [
+    {
+      "id": "semantic-01-ja",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "HEALTH"
+      ],
+      "poc": {
+        "id": "semantic-01-ja",
+        "pair_id": "semantic-01",
+        "language": "ja",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-01-en",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "HEALTH"
+      ],
+      "poc": {
+        "id": "semantic-01-en",
+        "pair_id": "semantic-01",
+        "language": "en",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-02-ja",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "HEALTH",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-02-ja",
+        "pair_id": "semantic-02",
+        "language": "ja",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-02-en",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "HEALTH",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-02-en",
+        "pair_id": "semantic-02",
+        "language": "en",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-03-ja",
+      "group": "HEALTH",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-03-ja",
+        "pair_id": "semantic-03",
+        "language": "ja",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-03-en",
+      "group": "HEALTH",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-03-en",
+        "pair_id": "semantic-03",
+        "language": "en",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-04-ja",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "MENTAL_STATE"
+      ],
+      "poc": {
+        "id": "semantic-04-ja",
+        "pair_id": "semantic-04",
+        "language": "ja",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-04-en",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "MENTAL_STATE"
+      ],
+      "poc": {
+        "id": "semantic-04-en",
+        "pair_id": "semantic-04",
+        "language": "en",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-05-ja",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "MENTAL_STATE",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-05-ja",
+        "pair_id": "semantic-05",
+        "language": "ja",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-05-en",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "MENTAL_STATE",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-05-en",
+        "pair_id": "semantic-05",
+        "language": "en",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-06-ja",
+      "group": "MENTAL_STATE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-06-ja",
+        "pair_id": "semantic-06",
+        "language": "ja",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-06-en",
+      "group": "MENTAL_STATE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-06-en",
+        "pair_id": "semantic-06",
+        "language": "en",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-07-ja",
+      "group": "SELF_HARM",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "SELF_HARM"
+      ],
+      "poc": {
+        "id": "semantic-07-ja",
+        "pair_id": "semantic-07",
+        "language": "ja",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-07-en",
+      "group": "SELF_HARM",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "SELF_HARM"
+      ],
+      "poc": {
+        "id": "semantic-07-en",
+        "pair_id": "semantic-07",
+        "language": "en",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-08-ja",
+      "group": "SELF_HARM",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "SELF_HARM",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-08-ja",
+        "pair_id": "semantic-08",
+        "language": "ja",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-08-en",
+      "group": "SELF_HARM",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "SELF_HARM",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-08-en",
+        "pair_id": "semantic-08",
+        "language": "en",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-09-ja",
+      "group": "SELF_HARM",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-09-ja",
+        "pair_id": "semantic-09",
+        "language": "ja",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-09-en",
+      "group": "SELF_HARM",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-09-en",
+        "pair_id": "semantic-09",
+        "language": "en",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-10-ja",
+      "group": "ABUSE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "ABUSE"
+      ],
+      "poc": {
+        "id": "semantic-10-ja",
+        "pair_id": "semantic-10",
+        "language": "ja",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-10-en",
+      "group": "ABUSE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "ABUSE"
+      ],
+      "poc": {
+        "id": "semantic-10-en",
+        "pair_id": "semantic-10",
+        "language": "en",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-11-ja",
+      "group": "ABUSE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "ABUSE",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-11-ja",
+        "pair_id": "semantic-11",
+        "language": "ja",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-11-en",
+      "group": "ABUSE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "ABUSE",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-11-en",
+        "pair_id": "semantic-11",
+        "language": "en",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-12-ja",
+      "group": "ABUSE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-12-ja",
+        "pair_id": "semantic-12",
+        "language": "ja",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-12-en",
+      "group": "ABUSE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-12-en",
+        "pair_id": "semantic-12",
+        "language": "en",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-13-ja",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "FINANCIAL"
+      ],
+      "poc": {
+        "id": "semantic-13-ja",
+        "pair_id": "semantic-13",
+        "language": "ja",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-13-en",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "FINANCIAL"
+      ],
+      "poc": {
+        "id": "semantic-13-en",
+        "pair_id": "semantic-13",
+        "language": "en",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-14-ja",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "FINANCIAL",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-14-ja",
+        "pair_id": "semantic-14",
+        "language": "ja",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-14-en",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "FINANCIAL",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-14-en",
+        "pair_id": "semantic-14",
+        "language": "en",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-15-ja",
+      "group": "FINANCIAL",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-15-ja",
+        "pair_id": "semantic-15",
+        "language": "ja",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-15-en",
+      "group": "FINANCIAL",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-15-en",
+        "pair_id": "semantic-15",
+        "language": "en",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-16-ja",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "HEALTH"
+      ],
+      "poc": {
+        "id": "semantic-16-ja",
+        "pair_id": "semantic-16",
+        "language": "ja",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-16-en",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "HEALTH"
+      ],
+      "poc": {
+        "id": "semantic-16-en",
+        "pair_id": "semantic-16",
+        "language": "en",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-17-ja",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "MENTAL_STATE"
+      ],
+      "poc": {
+        "id": "semantic-17-ja",
+        "pair_id": "semantic-17",
+        "language": "ja",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-17-en",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "MENTAL_STATE"
+      ],
+      "poc": {
+        "id": "semantic-17-en",
+        "pair_id": "semantic-17",
+        "language": "en",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-18-ja",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "FINANCIAL"
+      ],
+      "poc": {
+        "id": "semantic-18-ja",
+        "pair_id": "semantic-18",
+        "language": "ja",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-18-en",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "FINANCIAL"
+      ],
+      "poc": {
+        "id": "semantic-18-en",
+        "pair_id": "semantic-18",
+        "language": "en",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-19-ja",
+      "group": "ABUSE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "ABUSE",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-19-ja",
+        "pair_id": "semantic-19",
+        "language": "ja",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-19-en",
+      "group": "ABUSE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "ABUSE",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-19-en",
+        "pair_id": "semantic-19",
+        "language": "en",
+        "topic_category": "ABUSE_OR_SEXUAL_VIOLENCE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-20-ja",
+      "group": "SELF_HARM",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "SELF_HARM",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-20-ja",
+        "pair_id": "semantic-20",
+        "language": "ja",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-20-en",
+      "group": "SELF_HARM",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "SELF_HARM",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-20-en",
+        "pair_id": "semantic-20",
+        "language": "en",
+        "topic_category": "SELF_HARM",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-21-ja",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "HEALTH"
+      ],
+      "poc": {
+        "id": "semantic-21-ja",
+        "pair_id": "semantic-21",
+        "language": "ja",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-21-en",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "HEALTH"
+      ],
+      "poc": {
+        "id": "semantic-21-en",
+        "pair_id": "semantic-21",
+        "language": "en",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-22-ja",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "MENTAL_STATE"
+      ],
+      "poc": {
+        "id": "semantic-22-ja",
+        "pair_id": "semantic-22",
+        "language": "ja",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-22-en",
+      "group": "MENTAL_STATE",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "MENTAL_STATE"
+      ],
+      "poc": {
+        "id": "semantic-22-en",
+        "pair_id": "semantic-22",
+        "language": "en",
+        "topic_category": "MENTAL_STATE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-23-ja",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "FINANCIAL",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-23-ja",
+        "pair_id": "semantic-23",
+        "language": "ja",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-23-en",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "FINANCIAL",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-23-en",
+        "pair_id": "semantic-23",
+        "language": "en",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-24-ja",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-24-ja",
+        "pair_id": "semantic-24",
+        "language": "ja",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-24-en",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-24-en",
+        "pair_id": "semantic-24",
+        "language": "en",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-25-ja",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-25-ja",
+        "pair_id": "semantic-25",
+        "language": "ja",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-25-en",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-25-en",
+        "pair_id": "semantic-25",
+        "language": "en",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-26-ja",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-26-ja",
+        "pair_id": "semantic-26",
+        "language": "ja",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-26-en",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-26-en",
+        "pair_id": "semantic-26",
+        "language": "en",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-27-ja",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-27-ja",
+        "pair_id": "semantic-27",
+        "language": "ja",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-27-en",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "GENERAL",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-27-en",
+        "pair_id": "semantic-27",
+        "language": "en",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-28-ja",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-28-ja",
+        "pair_id": "semantic-28",
+        "language": "ja",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-28-en",
+      "group": "NONE",
+      "sensitive": false,
+      "allowed_classifications": [
+        "NOT_SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "NONE"
+      ],
+      "poc": {
+        "id": "semantic-28-en",
+        "pair_id": "semantic-28",
+        "language": "en",
+        "topic_category": "NONE",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-29-ja",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "HEALTH",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-29-ja",
+        "pair_id": "semantic-29",
+        "language": "ja",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-29-en",
+      "group": "HEALTH",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "THIRD_PARTY",
+      "allowed_categories": [
+        "HEALTH",
+        "THIRD_PARTY_PRIVATE"
+      ],
+      "poc": {
+        "id": "semantic-29-en",
+        "pair_id": "semantic-29",
+        "language": "en",
+        "topic_category": "HEALTH",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-30-ja",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "FINANCIAL"
+      ],
+      "poc": {
+        "id": "semantic-30-ja",
+        "pair_id": "semantic-30",
+        "language": "ja",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    },
+    {
+      "id": "semantic-30-en",
+      "group": "FINANCIAL",
+      "sensitive": true,
+      "allowed_classifications": [
+        "SENSITIVE",
+        "ABSTAIN"
+      ],
+      "expected_subject": "SELF",
+      "allowed_categories": [
+        "FINANCIAL"
+      ],
+      "poc": {
+        "id": "semantic-30-en",
+        "pair_id": "semantic-30",
+        "language": "en",
+        "topic_category": "FINANCIAL_SITUATION",
+        "synthetic": true,
+        "case_kind": "NORMAL"
+      }
+    }
+  ]
+}
