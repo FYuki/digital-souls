@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -47,6 +48,43 @@ class Assessment(BaseModel):
         return self
 
 
+type AssessmentFailure = Literal[
+    "scan_refused",
+    "policy_mismatch",
+    "timeout",
+    "provider_exception",
+    "invalid_response",
+    "invalid_json",
+    "invalid_assessment",
+]
+
+
+@dataclass(frozen=True)
+class AssessmentResult:
+    """A validated assessment or a content-free failure; never raw input/output."""
+
+    assessment: Assessment | None = None
+    failure: AssessmentFailure | None = None
+
+    def __post_init__(self) -> None:
+        if (self.assessment is None) == (self.failure is None):
+            raise ValueError("exactly one assessment or failure required")
+        if self.assessment is not None:
+            object.__setattr__(
+                self, "assessment", Assessment.model_validate(self.assessment.model_dump())
+            )
+        elif self.failure not in {
+            "scan_refused",
+            "policy_mismatch",
+            "timeout",
+            "provider_exception",
+            "invalid_response",
+            "invalid_json",
+            "invalid_assessment",
+        }:
+            raise ValueError("unknown assessment failure")
+
+
 def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
@@ -86,10 +124,23 @@ class LocalClassifier:
         }
 
     async def safe(self, value: object, policy_version: str) -> bool:
-        """Reject secrets before any model call; suppress malformed outputs and exceptions."""
-        checked = scan(value)
-        if checked.failed or checked.secret or policy_version != POLICY_VERSION:
+        """Keep the original fail-closed decision, including cancellation propagation."""
+        try:
+            result = await self.assess(value, policy_version)
+            return (
+                result.assessment is not None
+                and result.assessment.classification == "NOT_SENSITIVE"
+            )
+        except Exception:
             return False
+
+    async def assess(self, value: object, policy_version: str) -> AssessmentResult:
+        """Run the same scan, request and validation with content-free failure kinds."""
+        checked = scan(value)
+        if checked.failed or checked.secret:
+            return AssessmentResult(failure="scan_refused")
+        if policy_version != POLICY_VERSION:
+            return AssessmentResult(failure="policy_mismatch")
         try:
             payload = {
                 "response_format": response_format(Assessment, "privacy_assessment"),
@@ -115,20 +166,31 @@ class LocalClassifier:
             }
             async with asyncio.timeout(min(self._profile.timeout_seconds, 15)):
                 response = await self._provider.complete(self._profile, payload)
+        except TimeoutError:
+            return AssessmentResult(failure="timeout")
+        except Exception:
+            return AssessmentResult(failure="provider_exception")
+        try:
             choices = response["choices"]
             if (
                 len(choices) != 1
                 or choices[0]["index"] != 0
                 or choices[0]["finish_reason"] != "stop"
             ):
-                return False
+                return AssessmentResult(failure="invalid_response")
             message = choices[0]["message"]
             if message.get("role") != "assistant" or message.get("tool_calls"):
-                return False
+                return AssessmentResult(failure="invalid_response")
             raw = message["content"]
             if not isinstance(raw, str) or len(raw) > 4096:
-                return False
-            assessment = Assessment.model_validate(json.loads(raw, object_pairs_hook=_unique))
-            return assessment.classification == "NOT_SENSITIVE"
+                return AssessmentResult(failure="invalid_response")
         except Exception:
-            return False
+            return AssessmentResult(failure="invalid_response")
+        try:
+            parsed = json.loads(raw, object_pairs_hook=_unique)
+        except Exception:
+            return AssessmentResult(failure="invalid_json")
+        try:
+            return AssessmentResult(assessment=Assessment.model_validate(parsed))
+        except Exception:
+            return AssessmentResult(failure="invalid_assessment")
