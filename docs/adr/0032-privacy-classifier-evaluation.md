@@ -34,13 +34,13 @@ gemma4-12b を使います。このモデル方針と、以下の AI による�
 - Core の1つの分類器を評価する：本提案。対象は classification・subject・category です。
 - 検索・回答・形成を一括して採点する：各段階の失敗を区別できず、今回の範囲を超えます。
 
-### ABSTAIN の扱い（要決定・ユーザー確認中）
+### ABSTAIN の扱い（2026-10-12 ユーザー決定：C）
 
 | 案 | 分類の正否・必須ゲート | 影響 |
 | --- | --- | --- |
 | A：合格扱い | 許容 classification に含まれるので正解。ゲート違反にしない | 常に ABSTAIN でも合格してしまう |
 | B：不合格扱い | 分類の正答率に不正解として数える | SPEC §3.2「SENSITIVE・ABSTAIN は安全側として許容」と食い違う |
-| C：別集計（AI の推奨） | 分類の正否では許容し、ゲート違反にはしない。ABSTAIN 率を別集計し、各回10%未満を追加の合格条件にする | PoC と同じ厳密な未満。60件中5件までで、6件は不合格 |
+| C：別集計（採用。2026-10-12 ユーザー決定） | 分類の正否では許容し、ゲート違反にはしない。ABSTAIN 率を別集計し、各回10%未満を追加の合格条件にする | PoC と同じ厳密な未満。60件中5件までで、6件は不合格 |
 
 ## 決定
 
@@ -75,16 +75,24 @@ gemma4-12b を使います。このモデル方針と、以下の AI による�
 
 - ケースの正否（AI 案）：classification が許容値に含まれ、ABSTAIN 以外では subject が expected_subject と
   一致し、category が allowed_categories に含まれること。ABSTAIN は Assessment の制約に従って
-  subject=category=UNKNOWN とし、gold の subject/category 照合を適用しません。採点への扱いは下の要決定事項です。
+  subject=category=UNKNOWN とし、gold の subject/category 照合を適用しません。採点への扱いは下の決定（C）のとおりです。
 - 必須ゲート：機微ケース（sensitive=true）を NOT_SENSITIVE と判定した違反が0件であること。
   PoC の偽陰性率5%未満の許容は継承せず、SPEC §3.2 の0件を守ります。他の成績で相殺しません。
 - 不正な出力、Assessment の制約違反、timeout、実行の不完了も必須ゲート違反です。
   欠落・重複・未知 id の結果、0件、SKIP、NOT RUN、判定不能を合格にしません。
   ABSTAIN という有効な出力と、不正・欠落で判断できないことは区別します。
 
-### ABSTAIN の決定（要決定・ユーザー確認中）
+### ABSTAIN の決定（2026-10-12 ユーザー決定）
 
-決定:
+決定: **C（別集計）**。ユーザーの回答「Q1：C案で進めて」（2026-10-12、Epic #125 のメインスレッド経由）。
+
+- ケースの正否では、許容 classification に含まれる ABSTAIN を正解として数えます（subject・category は照合しません）。
+  ABSTAIN は必須ゲートの違反にしません。
+- ABSTAIN の件数を各回で別に集計し、ABSTAIN の件数 / 全件が **0.10 未満**（60件なら5件まで、6件で不合格）であることを
+  各回の合格条件に加えます。回の平均で相殺しません。
+- ハーネスの既定は `--abstain-policy separate` です。accept・reject は比較用に残し、品質の判定には使いません。
+
+この決定は ADR の選択肢への回答であり、この ADR の Accepted 承認ではありません。Status は Proposed のままです。
 
 ### 証跡と固定（案）
 
@@ -96,7 +104,7 @@ gemma4-12b を使います。このモデル方針と、以下の AI による�
 ## 影響
 
 60件の入力と gold と形式検証が後続ハーネスの契約になります。
-ABSTAIN の採点方針はケースの許容値を変えずハーネス側で扱い、ユーザー決定を待ちます。
+ABSTAIN の採点方針はケースの許容値を変えずハーネス側で扱います（決定は C）。
 [Issue #190](https://github.com/FYuki/digital-souls-core/issues/190) がハーネス、
 [Issue #191](https://github.com/FYuki/digital-souls-core/issues/191) が実モデル実行と文書同期を担当します。
 本 Issue の形式検証・UT 成功は品質受入ではありません。
