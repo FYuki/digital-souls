@@ -191,7 +191,7 @@ accept・reject は比較用に残しますが、品質の判定には使いま�
 | reject（B） | 正答率では不正解、必須ゲート違反ではない | なし |
 | separate（C） | 許容 classification に含まれれば正解 | 各回の ABSTAIN / 全件が厳密に0.10未満（60件なら5件まで） |
 
-どの policy でも ABSTAIN の件数・率を必ず記録します。このハーネスの追加は Proposed ADR の採用や品質受入を意味しません。
+どの policy でも ABSTAIN の件数・率を必ず記録します。このハーネスの追加は品質受入を意味しません（ADR 0032 の採用は 2026-10-12 のユーザー承認による）。
 
 ## fixture 実行（CI、実 LLM・socket・GPU なし）
 
