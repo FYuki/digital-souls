@@ -280,3 +280,28 @@ PostgreSQL v4で削除済み印と往復通知表を追加します。PostgreSQL
 検証して移行します。DDL・version更新は原子的で、旧本文・日時（NULLを含む）・確認状態を変更しません。
 削除のrevision更新・印・対象派生本文のNULL化・通知・履歴DELETEも同一transactionです。
 途中失敗は全更新をrollbackし、再試行できます。
+
+
+## 形成drainのlocalhost HTTP入口
+
+[Issue #208](https://github.com/FYuki/digital-souls-core/issues/208)の形成台帳を
+trusted起動コードが `create_app(..., formation=formation)` へ注入した場合だけ、
+`POST /v1/memory/formation/drain` を追加します。未注入ではroute/OpenAPIとも存在せず404です。
+注入するformation・history_store・history_policy・Inference.privacyは同じstore/policyを共有し、
+不一致や履歴未注入は起動時に拒否します。予約の有効化は `open_storage(..., formation_policy=policy)`
+または `PostgresHistory(..., formation_policy=policy)` で明示します。設定ファイルの存在だけで有効になりません。
+
+path・上限入力・件数応答の具体形は#208の**仮置き・要確認**です。
+bodyは `{}` または `{"max_jobs": 5}` です。`max_jobs` は厳密な正の整数で、
+起動時の `FormationConfig.max_jobs` を増やせません。未知field・Binding自己申告・bool・文字列・
+上限超過は本文なしの400です。応答例は
+`{"status":"success","succeeded":1,"failed":0,"excluded":0}` です。
+完了したdrainはHTTP 200で、1件以上の試行失敗は `status:"failure"` にします。
+未接続processorは503 `formation_processor_unavailable`、DB障害は既存の本文なしstorage errorです。
+結果にjob ID・会話本文・prompt・LLM出力・例外文字列を含めません。
+
+既存 `LocalHTTPBoundary` を必ず通り、loopback以外のHostを400、同一Origin以外を403で拒否します。
+Originなしのtimer/CLI clientは利用可能です。Coreはloopbackにbindする単独利用者用で、
+この境界は認証ではありません。今後、別インフラの画面接続用の認証を導入する際は、drainを
+**管理者向けの経路**として扱います。認証・timer同梱・MCPは#208の範囲外です。
+Python API・設定の既定値と仮置き判断は[記憶の形成job](memory.md#形成jobの台帳と有限drainissue-208)を参照してください。

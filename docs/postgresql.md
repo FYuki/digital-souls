@@ -102,7 +102,8 @@ stores = open_storage(config)
 factoryは `PostgresHistory` と `PostgresMemoryRecords` を構成し、別DBに分ける設定は提供しません。
 `open_storage` の明示呼出しには初期化・旧版移行の副作用があります。
 履歴経路へのstore/policy注入、正本の明示登録、embeddingの注入は別操作です。
-構造化抽出・形成jobは未実装で、履歴保存だけで記憶形成を始めません。stateless APIは自動保存しません。
+構造化抽出は未実装です。形成jobは台帳・予約・drainの枠だけを実装し、
+[明示注入](memory.md#形成jobの台帳と有限drainissue-208)した場合だけ予約します。stateless APIは自動保存しません。
 
 ## PostgreSQL設定
 
@@ -133,13 +134,13 @@ schema・password・scopeを指定する機能はありません。DB接続権�
 
 `PostgresDatabase(config).initialize()`は専用schemaを初期化し、PostgresHistory/PostgresMemoryRecords adapterの構築時にも
 同じ処理を使います。schema単位のtransaction advisory lockを取り、存在しなければschemaを作り、
-空schemaへtableとversion 7を原子的に登録します。turnの`stated_at`はnullableな`TIMESTAMPTZ`で、
+空schemaへtableとversion 8を原子的に登録します。turnの`stated_at`はnullableな`TIMESTAMPTZ`で、
 新規turn保存時のUTC日時を保存します。trustedコードで履歴adapterの時計を注入でき、既定は保存時の
 現在時刻です。snapshotは保存値をUTCで復元します（[履歴API](history-api.md)）。
 
 既存Core schemaはtable集合・列名/型/null/default/identity・PK/FK/UNIQUE制約・versionを照合します。不一致や途中のschemaは拒否し、
-不正schemaを自動修復しません。正常なversion 1〜6は各版の定義で厳密検証した後、同じtransactionで
-必要な段階を経てversion 7へ移行し、各段階で新版を検証します。version 1→2で`turns.stated_at`、
+不正schemaを自動修復しません。正常なversion 1〜7は各版の定義で厳密検証した後、同じtransactionで
+必要な段階を経てversion 8へ移行し、各段階で新版を検証します。version 1→2で`turns.stated_at`、
 2→3で`turns.memory_confirmation`（既定値`{}`）、3→4で`turn_tombstones`・`turn_deletions`、
 4→5で下記の正本表を追加します。5→6では `memory_sources` → `memories` → `memory_jobs` の順に
 旧逐語3表を削除し、`memory_source_lookup` も所有表と共に削除します。逐語記憶を正本へ移送しません。
@@ -147,6 +148,7 @@ schema・password・scopeを指定する機能はありません。DB接続権�
 新規completionは、組み立てに使ったCardの生バイト列のSHA-256を保存します。旧turnはNULLの
 まま補完せず、receipt再送で現在のCardを代入しません。列追加とversion更新は原子的で、
 型・null・defaultの不正は拒否します。復元metadataとheaderは[履歴API](history-api.md)を参照してください。
+7→8では下記の形成job台帳を追加します。既存履歴からの予約の補完はしません。
 version 1の旧turnの`stated_at`はNULLのまま補完せず、確認列追加時は既存行に`{}`を設定します。
 履歴・receipt・fingerprint・source epoch・確認保留・往復削除の印と通知・正本・`memory_events` を
 保持します。5→6は保持対象表の全行・全列を変更しません。未知versionは拒否します。
@@ -157,6 +159,8 @@ version 1の旧turnの`stated_at`はNULLのまま補完せず、確認列追加�
 
 各storage操作は接続を作り、transactionでcommit/rollback後にcloseします。read/writeとも
 Binding単位で直列化し、分類器やembeddingのawait中はtransactionを持ち越しません。
+形成drainのlease更新は別の短いtransactionを使い、processor await中は専用接続の
+session advisory lockだけを保持します。Binding lockやtransactionは持ち越しません。
 競合・再試行・source撤回は既存のrevision/epoch/receipt契約を使います。接続・timeout・SQL障害を
 内容なしのstorageエラーとして返し、別backendへ自動切替しません。
 
@@ -185,6 +189,9 @@ LLM、API key、GPU、pgvectorは不要です。
 
 再現するには、Docker と固定 uv を用意して `bash tools/test-postgres.sh` を実行します。
 ネットワークなし・公開ポートなしの一時 DB と専用 socket を作り、終了時に削除します。
+試験用コンテナはCPU 1・メモリ上限1 GiBです。版8追加後の全合成試験で512 MiBの
+OOM停止（autovacuum・復旧プロセスのsignal 9、OOMKilled）を確認したため上限を増やしました。
+試験の件数・期待値・品質閾値は変更しません。
 
 Unix socketを持つ使い捨てserver・専用DBを個別に用意したテスト環境では、次の4変数を明示します。
 以下の値は合成例であり、既存の運用DBへ向けて実行しません。
@@ -205,11 +212,11 @@ PostgreSQLの管理運用、dogfoodへの切替、既存データの移送、私
 backend試験の成功をこれらの完了として扱わず、正確なrevision・環境・結果は日付付き証跡に残します。
 
 
-## 正本記憶のschema（version 7）
+## 正本記憶のschema（version 8）
 
 `MemoryRecordStore` の PostgreSQL 実装は `PostgresMemoryRecords(database)` で明示構築します。
 履歴と同じ `PostgresDatabase` を渡します。`open_storage` はこのadapterを `stores.records` として
-返し、`MemoryRetrieval` が検索に使います。正本表は版5で導入済みで、版6・7でも維持します。domain契約と操作は[記憶の正本](memory.md#記憶の正本の保存port)を参照してください。
+返し、`MemoryRetrieval` が検索に使います。正本表は版5で導入済みで、版6〜8でも維持します。domain契約と操作は[記憶の正本](memory.md#記憶の正本の保存port)を参照してください。
 
 各新表の `seq` は BIGINT identity / UNIQUE、`binding` は NOT NULL TEXT です。
 記録表の共通列は `id`（TEXT）、`version`（INTEGER、1以上）、`state`（active / suspended）、
@@ -244,7 +251,37 @@ backend試験の成功をこれらの完了として扱わず、正確なrevisio
 型付き日時範囲とJSONBの対応はadapterで算出し、契約試験で照合します。期間検索の索引は追加しません。
 
 歴史的な4→5は正本表を追加して既存行を保持する段階です。版6以降では、続く5→6で旧逐語3表を
-削除し、履歴・確認状態・往復削除の印・通知と正本表を保持します。版6・7に旧3表が残る場合は拒否します。
+削除し、履歴・確認状態・往復削除の印・通知と正本表を保持します。版6以降に旧3表が残る場合は拒否します。
 新版の新規作成と、各旧版の厳密検証・段階移行・新版の厳密検証は一つのtransactionです。
 新表も `TABLE_COLUMNS`・型/null/default/identity・PK/UNIQUE/FK/CHECK・relation集合で検証し、
 不正schemaを自動修復しません。途中失敗はDDLとversionをrollbackし、再試行できます。
+
+
+## 形成jobのschema（version 8）
+
+物理設計はIssue #208の**仮置き・要確認**です。Binding＋conversationごとに1行とし、
+PKで未処理・処理中がそれぞれ高々1件であることを保証します。別のpending行を持つ方式に比べ、
+最新のtarget revisionとleased revisionの比較だけで更新の再予約を表せるため推奨します。
+
+| 表 | 列・制約 |
+| --- | --- |
+| `formation_jobs` | `seq`（BIGINT identity / UNIQUE）、`binding`・`conversation`（TEXT、複合PK）、`target_revision`（正のINTEGER）、`state`（pending / leased / done / failed）、`attempts`（非負INTEGER）、`leased_revision`（nullable INTEGER）、`lease_token`（nullable TEXT）、`lease_until`（nullable TIMESTAMPTZ）、`available_at`・`created_at`・`updated_at`（NOT NULL TIMESTAMPTZ）、`last_code`（NOT NULL TEXT） |
+
+本文・prompt・LLM出力・checkpoint・本文hashは持ちません。seq以外の列はdefaultなしで、adapterが値またはNULLを設定します。
+state・revision・attempts・lease欄のNULL対応をCHECKで検証し、leased時だけtoken/期限/対象版を持ちます。
+Binding付きconversation FKはON DELETE CASCADEです。会話削除は履歴・派生本文・台帳を同じtransactionで削除します。
+private化/往復削除は台帳を残して最新revisionを予約し、drain時にsourceを除外します。
+
+予約は既存Binding transaction内のINSERT / ON CONFLICT UPDATE、drainは短い
+`SELECT ... FOR UPDATE SKIP LOCKED` とsession advisory lockで排他します。
+1回の候補走査は `max_jobs` 行以内で、取得できないlive lockは待たずに見送ります。
+処理中はlease owner tokenを保持し、完了はそのtokenに一致する行だけを更新します。
+成功はdone、更新があればpending、失敗はbackoff付きpending（上限到達後はfailedで保持）です。
+中断後は期限切れleaseを回収して最初から実行します。正本の冪等登録は台帳の完了記録とは別に必要です。
+`last_code` はreserved / succeeded / source_excluded / processor_failed / processor_timeout /
+retry_exhaustedだけを記録し、例外本文を保存しません。
+
+新規作成と正常な旧版1〜7からの段階移行で同じ表を追加し、DDL・version更新・各段階検証は原子的です。
+版7のCard列導入と版8の台帳導入は別段階として保持します。移行で旧履歴・receipt・正本・通知を変更せず、
+旧会話を自動予約しません。列・制約・relation集合の厳密検証と途中失敗後の再実行を合成DBで確認します。
+運用DBへの版8適用はNOT RUNです。設定とprocessor契約は[記憶API](memory.md)を参照してください。

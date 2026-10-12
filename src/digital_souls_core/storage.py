@@ -10,6 +10,7 @@ from .memory_record_store import MemoryRecordStore
 from .postgres_db import PostgresConfig, PostgresDatabase
 from .postgres_history import PostgresHistory
 from .postgres_memory_records import PostgresMemoryRecords
+from .privacy import PrivacyPolicy
 
 
 class StorageConfig(BaseModel):
@@ -27,8 +28,15 @@ class StorageStores:
     records: MemoryRecordStore
 
 
-def open_storage(config: StorageConfig) -> StorageStores:
+def open_storage(
+    config: StorageConfig, *, formation_policy: PrivacyPolicy | None = None
+) -> StorageStores:
     """Open stores only on explicit invocation; never import or extract history."""
     config = StorageConfig.model_validate(config.model_dump())
     database = PostgresDatabase(config.postgres)
-    return StorageStores(PostgresHistory(database), PostgresMemoryRecords(database))
+    history = (
+        PostgresHistory(database)
+        if formation_policy is None
+        else PostgresHistory(database, formation_policy=formation_policy)
+    )
+    return StorageStores(history, PostgresMemoryRecords(database))
