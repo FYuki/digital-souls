@@ -7,7 +7,9 @@
 
 - branch `feature/201-codex-luna-provider`、起点 `eb9ab67`（#198 を含む）。対象実装は本証跡を含む commit。
 - Python 3.12.3、uv 0.8.22、Node 24.19.0、promptfoo 0.117.2。依存・lock の変更なし。
-- 実 CLI では `codex --version` / `codex exec --help` だけを実行し、0.162.1 と必須 flag の存在を確認。
+- 第1ラウンドは実 CLI の `codex --version` / `codex exec --help` で 0.162.1 と必須 flag を確認。
+- 第2ラウンドは `dacd64b` から追加変更し、実 CLI の `codex --version` / `codex features list` で
+  0.162.1 と追加14機能の存在を確認。認証やユーザー設定ファイルの中身は参照していない。
 - 実 `codex exec`・Luna 送信・login status・実モデル IT2/ST：**NOT RUN**。
 - 認証ファイルは開いていない・表示していない・複製していない。試験は一時スクリプトと偽 CODEX_HOME だけ。
 - chat/embedding サービスは起動・停止・変更なし。push・PR・merge・Issue/PR コメント・remote CI：**NOT RUN**。
@@ -29,6 +31,21 @@ stream/tools/未知の payload キーを拒否し、messages を同じ JSON 配�
 timeout は chat.timeout_seconds、非0終了・不正 JSONL・応答欠落・tool event・turn.failed も provider_error。
 stdout/stderr を capture し、例外のメッセージは固定値だけにする。
 
+`--disable` の無効化対象は次の30機能です。
+apps、browser_use、browser_use_external、browser_use_full_cdp_access、code_mode_host、
+computer_use、fast_mode、goals、hooks、image_generation、in_app_browser、in_app_local_automation、
+multi_agent、plugin_sharing、plugins、remote_plugin、shell_snapshot、shell_tool、
+skill_mcp_dependency_install、skill_search、sleep_tool、tool_call_mcp_elicitation、tool_suggest、
+ultrafast_mode、unified_exec、unified_exec_tty、view_image、workspace_dependencies、worktrees、
+write_stdin_approval。
+
+第2ラウンドの追加は goals、sleep_tool、remote_plugin、plugin_sharing、skill_mcp_dependency_install、
+tool_call_mcp_elicitation、workspace_dependencies、in_app_local_automation、worktrees、shell_snapshot、
+unified_exec_tty、write_stdin_approval、fast_mode、ultrafast_mode。
+CLI 0.162.1 の `codex features list` では追加14機能すべてが stable / true で存在し、除外は0件。
+fast_mode / ultrafast_mode は比較にサービス tier の差を持ち込まないため無効化する。
+無効化の実効確認（実際の CLI が JSONL にツール項目を出さないこと）は #199 の実送信で確認する。
+
 認証は CLI の既存 ChatGPT ログインに委譲する。Core は認証ファイルを開かない。
 CLI 子の環境は PATH/LANG/LC_ALL/TZ と profile の HOME/CODEX_HOME パスだけ。
 API キー、proxy、ambient Codex/MCP/Node/Python 設定は渡さない。
@@ -48,7 +65,7 @@ manifest/dry-run と送信拒否ケースは版 null、CLI 起動なし。成功
 
 - a/b：test_codex_dispatch_checks_production_policy_before_process の
   permission/grant/scanner/classifier/revoke は CLI 起動0回、None は external authorize → check → CLI。
-- c：test_codex_argv_environment_payload_and_final_text で argv、無効化16機能、空 cwd、stdin、環境を照合。
+- c：test_codex_argv_environment_payload_and_final_text で argv、無効化30機能、空 cwd、stdin、環境を照合。
   JS codex runner forwards no credentials, proxies, ambient Codex home or MCP configuration。
 - d：test_codex_public_provider_wiring_uses_fake_cli_and_redacts_output、
   test_codex_identity_and_dry_run_never_start_or_read_credentials、JS codex report records dispatched CLI
@@ -61,6 +78,9 @@ manifest/dry-run と送信拒否ケースは版 null、CLI 起動なし。成功
   fixture manifest の厳密なフィールド集合、既存 API report の本文非公開を維持。
 
 ## 品質ゲート
+
+第2ラウンドは argv の既存 IT1 を先に30機能へ更新し、旧実装で1件 FAIL を確認。
+無効化一覧を追加した後に偽 CLI の Python 30件で回帰確認し、commit 後に下記ゲートをすべて実行する。
 
 TDD の最初の実行は新規モジュール未追加による collection error（FAIL）。実装後の対象 Python 30件、
 回答 JS 48件は PASS。最終 commit 後に次をすべて実行し、SHA・件数・結果は完了報告に記録する。

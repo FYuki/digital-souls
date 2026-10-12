@@ -309,9 +309,14 @@ PoC 準拠の版下限は 0.152.0。必須 flag 欠落・旧版・非0終了・t
 `--strict-config`、`--json`、`--color never` を渡します。
 config は web_search=disabled、shell_environment_policy.inherit=none、
 shell_environment_policy.experimental_use_profile=false、mcp_servers={}、model_provider=openai です。
-`--disable` は apps、browser_use、browser_use_external、browser_use_full_cdp_access、
-code_mode_host、computer_use、hooks、image_generation、in_app_browser、multi_agent、plugins、
-shell_tool、skill_search、tool_suggest、unified_exec、view_image を指定します。
+`--disable` は次の30機能を指定します（CLI 0.162.1 の `codex features list` で存在確認済み）。
+apps、browser_use、browser_use_external、browser_use_full_cdp_access、code_mode_host、
+computer_use、fast_mode、goals、hooks、image_generation、in_app_browser、in_app_local_automation、
+multi_agent、plugin_sharing、plugins、remote_plugin、shell_snapshot、shell_tool、
+skill_mcp_dependency_install、skill_search、sleep_tool、tool_call_mcp_elicitation、tool_suggest、
+ultrafast_mode、unified_exec、unified_exec_tty、view_image、workspace_dependencies、worktrees、
+write_stdin_approval。fast_mode / ultrafast_mode も無効化し、サービス tier の差を持ち込まない条件にします。
+無効化の実効確認（実際の CLI が JSONL にツール項目を出さないこと）は #199 の実送信で確認します。
 
 Core の messages をそのまま JSON の messages に包んで stdin へ渡します。
 Codex CLI 独自の指示と包装が加わるため、純粋な API 呼び出しとは条件が違います。
