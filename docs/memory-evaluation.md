@@ -11,6 +11,11 @@
 前回nomic/0.54の検索品質41/62・回答品質52/62からの分類別比較も証跡へ記録しています。
 fixtureの成功をモデル品質の合格にせず、実モデルのFAILも記録します。
 
+#199の[GPT-6 Luna（Codexサブスク）回答評価](evidence/2026-10-12-semantic-luna-answer-evaluation.md)も
+同じbge-m3/0.52でcacheなし3回測定済みです。各回品質61/62・全条件53/62、長文0/1、
+dispatch違反1件・no_memory違反8件、forbidden/lifecycle違反0件でgemmaと失敗ケースが一致し、**FAIL・品質未受入**です。
+classifier=syntheticとCLI独自の指示・包装、既存token予算移行の条件差を記録しています。回答文比較・IT2/STはNOT RUNです。
+
 ## 評価経路と固定データ
 
 [cases.json](../evals/semantic/cases.json) は入力schema 1、
@@ -225,11 +230,11 @@ server主要設定・起動前と評価中のGPU資源・ケース版・各回�
 分類器品質、形成〜利用の実接続、実運用DB適用、実環境IT2/ST、私的corpusの検索精度、
 prompt injection耐性、速度・資源上限を、この合成セットの結果だけで合格としません。
 
-## 外部回答評価の準備（#198・#201）
+## 外部回答評価（#198・#201の経路、#199の実測）
 
 `external_model` は回答生成だけを外部 Provider へ渡す opt-in mode です。
 #198 の LiteLLM/API 方式に加え、#201 は Codex CLI の既存 ChatGPT ログインを使います。
-**両 Issue の実送信は NOT RUN**。
+**#198・#201実装時の実送信はNOT RUN、#199でCodex方式の実送信済み**です。
 [手順と無効な profile 例](../evals/semantic/README.md#外部モデルでの回答生成external_model)を参照してください。
 profile は git 管理外の絶対パスです。API 方式のキー・接続先は環境変数名だけを指定します。
 dry-run 以外では明示実行 flag または profile が欠けると NOT RUN（exit 3）。
@@ -248,7 +253,8 @@ fixture/local_model の report にはこのフィールドを追加しません�
 既存 token 推定器による入力見込みを本文なしで記録します。価格は任意 CLI 単価だけ、
 出力見込みは明示した仮定だけを使います。実送信 report には provider/model/transport、
 external_send、cache 無効、実行回数、commit を残し、認証情報・接続 URL・本文は出しません。
-実測結果と SPEC の同期は #199 で行います。
+実測結果とSPECの同期は#199で記録済みです。実送信前の見込みは183呼び出し・入力202,530 token
+（byte推定、CLI独自指示は除外）、サブスク内で従量課金なし・新規有料契約なしでした。
 
 Codex 方式の profile・認証・無効化一覧は
 [手順](../evals/semantic/README.md#codex-サブスク方式201)と
@@ -262,4 +268,6 @@ dry-run は CLI を起動せず、版は null です。実行 report は許可�
 `condition_note="codex-cli-adds-own-instructions-not-pure-api"` を記録します。
 CLI 独自の指示と messages の JSON 包装による条件差です。純粋な API 条件と同一とは扱いません。
 公開出力は本文・認証情報・CODEX_HOME のパスと内容を含めません。
-実 Luna 送信・実 `codex exec`・IT2/ST は **NOT RUN**、実測と SPEC 同期は #199 です。
+#199ではCLI 0.162.1でLunaへ各回61件×3回送信しました。tool eventをFAILにするProviderの正常応答による
+無効化の間接確認済みですが、生JSONLの直接再監査と実環境IT2/STは **NOT RUN** です。
+結果は冒頭の[Luna証跡](evidence/2026-10-12-semantic-luna-answer-evaluation.md)を参照してください。

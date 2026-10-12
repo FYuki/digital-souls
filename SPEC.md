@@ -118,7 +118,7 @@ Episode・SemanticのIDは版1で登録し、同一IDの内容版追加はFact�
 | 語彙による補完、自己申告の現在値補完、矛盾の注意 | 未実装 | ADR 0018 |
 | 有効期限・policy versionの互換による除外 | 未実装 | ADR 0018 |
 | 永続的な派生index | 未実装 | ADR 0015 |
-| 本番検索・contextによる意味検索・回答評価（Python / promptfoo） | ハーネス実装・採用したbge-m3/0.52で実モデル各3回再評価済み。検索・回答ともFAIL、品質未受入 | [ADR 0023](docs/adr/0023-semantic-evaluation-contract.md)、[実モデル証跡](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md) |
+| 本番検索・contextによる意味検索・回答評価（Python / promptfoo） | ハーネス実装・bge-m3/0.52で検索とgemma4-12b回答各3回、GPT-6 Luna（Codexサブスク）回答3回を測定済み。いずれもFAIL、品質未受入 | [ADR 0023](docs/adr/0023-semantic-evaluation-contract.md)、[gemma証跡](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)、[Luna証跡](docs/evidence/2026-10-12-semantic-luna-answer-evaluation.md) |
 | モデル向けcontextの一時参照名、送信直前の再検証 | 実装済み（保存文・部分日時・Factを渡し、逐語引用と保存IDは渡さない） | [ADR 0009](docs/adr/0009-memory-context-references.md)、ADR 0022 |
 
 採用するembeddingは [ADR 0024](docs/adr/0024-multilingual-memory-embedding.md) の bge-m3 Q8_0（CLS、1024次元、接頭辞なし）です。
@@ -199,6 +199,11 @@ cacheなし各3回再実施済み、いずれもFAIL。各回、検索品質/全
 日英は検索・回答とも10/10ですが、検索は無関係3/10・長文0/1・閾値0/1の品質未達とtop-1欠落1件・該当なし8件のゲート違反、
 回答は長文0/1の品質未達とdispatch 1件・空context 8件のゲート違反があり、品質は未受入です。
 各回・分類・ケースの結果、前回nomic/0.54との比較と制約は[実モデル証跡](docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)にあります。
+同じbge-m3/0.52でGPT-6 Luna（Codex CLI 0.162.1、ChatGPTサブスク）回答もcacheなし3回測定済みです。
+各回品質61/62・全条件53/62、長文0/1、dispatch違反1件・no_memory違反8件、forbidden/lifecycle違反0件で
+gemmaと失敗ケースID・件数が一致し、**FAIL・品質未受入**です。分類器は比較用syntheticで、
+CLI独自の指示・messages包装と既存token予算移行による条件差、回答文比較NOT RUNは
+[Luna証跡](docs/evidence/2026-10-12-semantic-luna-answer-evaluation.md)に記録しています。本番採用判断は範囲外です。
 privacy分類器はgemma4-12b・合成60件をcacheなし3回評価し、各回51/60（85%）でFAILです。
 HEALTHは各回10/12、SELF_HARMは各回4/8、ABUSEは5/8・5/8・6/8で分類別90%に届かず、
 第3回は偽陰性2件の必須ゲート違反もあります。ABSTAIN・不正出力・timeout・実行不完了は各回0件です。
