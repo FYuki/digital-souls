@@ -15,6 +15,8 @@ from .privacy_evaluation_cases import EvaluationCases, Expectation
 GATES = ("false_negative", "invalid_output", "timeout", "execution_incomplete")
 GROUPS = ("HEALTH", "MENTAL_STATE", "SELF_HARM", "ABUSE", "FINANCIAL", "NONE")
 type AbstainPolicy = Literal["accept", "reject", "separate"]
+# ADR 0032: user decision C (2026-10-12). accept/reject remain for comparison only.
+DEFAULT_ABSTAIN_POLICY: AbstainPolicy = "separate"
 
 
 def validate_options(runs: int, abstain_policy: str) -> None:

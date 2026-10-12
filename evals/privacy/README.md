@@ -2,7 +2,7 @@
 
 [ADR 0032](../../docs/adr/0032-privacy-classifier-evaluation.md) は Proposed です。
 [Issue #189](https://github.com/FYuki/digital-souls-core/issues/189) はデータ移行と形式検証だけを実装します。
-ハーネス・採点・集計は #190、実モデル評価は #191 です。ABSTAIN の採点は要決定（ユーザー確認中）。
+ハーネス・採点・集計は #190、実モデル評価は #191 です。ABSTAIN の採点は ADR 0032 のユーザー決定 C（別集計、2026-10-12）です。
 
 ## 出典
 
@@ -48,7 +48,7 @@ expected_subject・allowed_categories と、元の id/pair/language/topic_catego
 - allowed_classifications は PoC の配列をそのまま移します。機微は SENSITIVE/ABSTAIN、非機微は NOT_SENSITIVE/ABSTAIN。
   追加・削除や期待値の緩和をしません。schema 1 の validator もこの2値を要求します。
 - ABSTAIN の subject/category は Assessment で UNKNOWN 固定です。
-  gold の subject/category は ABSTAIN 以外の期待値であり、ABSTAIN の採点は ADR の要決定事項です。
+  gold の subject/category は ABSTAIN 以外の期待値であり、ABSTAIN の採点は ADR 0032 の決定 C に従います。
 
 ## 形式検証
 
@@ -182,7 +182,8 @@ timeout は時間切れ、execution_incomplete は provider 例外・scan 拒否
 0件・判定不能も合格にしません。入力・gold の空集合は設定・入力エラーとして拒否します。
 最低3回、指定したすべての回が合格した場合だけ全体 PASS。回や group の平均で相殺せず、8件の group は8/8が必要です。
 
-`--abstain-policy` は **明示必須、既定値なし**。ADR 0032 のユーザー決定待ちを保持します。
+`--abstain-policy` の既定は **separate（C）** です（ADR 0032、2026-10-12 ユーザー決定「Q1：C案で進めて」）。
+accept・reject は比較用に残しますが、品質の判定には使いません。ADR 0032 自体は Proposed のままです。
 
 | policy | ABSTAIN の正否 | 追加条件 |
 | --- | --- | --- |
@@ -201,7 +202,7 @@ export TMPDIR=/dev/shm
 export UV_OFFLINE=1
 export LITELLM_LOCAL_MODEL_COST_MAP=True
 uv run --no-sync python tools/evaluate-privacy-classifier.py \
-  --abstain-policy accept --runs 3 --output /dev/shm/privacy-fixture-report.json
+  --runs 3 --output /dev/shm/privacy-fixture-report.json
 ```
 
 標準 `--scenario pass` は60件×3回正解、必須ゲート0、PASS/exit 0。
@@ -231,7 +232,7 @@ accept・reject・separate のいずれでも標準シナリオは PASS にな�
 モデル名・可変 tag だけで固定済みとは扱いません。
 
 次の設定コピーだけでは送信しません。最後のコマンドが実モデルへ送信します。
-ABSTAIN 方針はユーザー決定に従って指定してください。未決定時に例の値を既定として採用しません。
+ABSTAIN 方針は既定の separate（決定 C）を使います。
 
 ```sh
 umask 077
@@ -244,14 +245,14 @@ settings[0]["card_path"] = str(root / "characters/miori/miori.card.json")
 settings[0]["profile"]["external_send_allowed"] = True
 Path("/dev/shm/privacy-real.characters.json").write_text(json.dumps(settings))
 PY
-# PRIVACY_MODEL_DIGEST は運用手順で確認した SHA、PRIVACY_ABSTAIN_POLICY は決定した方針。
+# PRIVACY_MODEL_DIGEST は運用手順で確認した SHA。
 uv run --no-sync python tools/evaluate-privacy-classifier.py \
   --mode real --characters /dev/shm/privacy-real.characters.json --character-id miori \
-  --model-digest "$PRIVACY_MODEL_DIGEST" --abstain-policy "$PRIVACY_ABSTAIN_POLICY" \
+  --model-digest "$PRIVACY_MODEL_DIGEST" --abstain-policy separate \
   --runs 3 --output /dev/shm/privacy-real-report.json
 ```
 
-real モードは characters・character-id・model-digest・abstain-policy・runs の明示が必須です。
+real モードは characters・character-id・model-digest・runs の明示が必須です（abstain-policy の既定は separate）。
 リポジトリ内の設定、fixture 上書き、違反シナリオを拒否します。固定の入力・gold を既定で読みます。
 本番 LiteLLMProvider を persona_real.UncachedProvider で包み、no-cache/no-store・caching=false・cache_prompt=false にします。
 並列度1、各ケース・各回で新しい LocalClassifier 呼び出し、再試行・応答 cache の再利用なしです。
@@ -277,4 +278,4 @@ JSON report は本文・応答の生テキスト・endpoint・認証情報・設
 `--output` 指定時は JSON を保存し、標準出力に要約と FAIL 理由を出します。省略時は標準出力に status と集計を含む JSON を出します。
 exit code は PASS=0、評価 FAIL=1、設定・入力・report 保存エラー=2。エラーの本文・パス・raw exception は表示しません。
 [ハーネス証跡](../../docs/evidence/2026-10-12-privacy-classifier-harness.md)に TDD と必須品質ゲートを記録します。
-実モデル評価と ABSTAIN 方針の確定は **NOT RUN / 決定待ち（#191）** です。
+ABSTAIN 方針は C に決定済み（2026-10-12）。実モデル評価は **NOT RUN（#191）** です。

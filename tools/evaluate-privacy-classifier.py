@@ -9,7 +9,10 @@ from pathlib import Path
 
 from digital_souls_core.application import Provider
 from digital_souls_core.character import load_characters
-from digital_souls_core.privacy_classifier_evaluation import validate_options
+from digital_souls_core.privacy_classifier_evaluation import (
+    DEFAULT_ABSTAIN_POLICY,
+    validate_options,
+)
 from digital_souls_core.privacy_classifier_runtime import (
     evaluate,
     fixture_profile,
@@ -25,7 +28,12 @@ ROOT = Path(__file__).resolve().parents[1]
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("fixture", "real"), default="fixture")
-    parser.add_argument("--abstain-policy", choices=("accept", "reject", "separate"), required=True)
+    parser.add_argument(
+        "--abstain-policy",
+        choices=("accept", "reject", "separate"),
+        default=DEFAULT_ABSTAIN_POLICY,
+        help="Default separate (ADR 0032 user decision C); others are comparison only",
+    )
     parser.add_argument(
         "--runs", type=int, help="At least 3; fixture default 3, explicit in real mode"
     )

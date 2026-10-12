@@ -104,3 +104,8 @@ npm の既存依存にも非推奨 warning がある。新たな依存・lock �
 - fixture と fake 組み立ての PASS は **quality_evidence=false / 道具の検証** で、実モデル品質の証拠ではない。
   fake で real の metadata を検証する試験の quality_evidence=true はモード記録の確認だけである。
 - SPEC の状態欄、ADR 0032 本文、入力・期待値、分類器 prompt、依存は変更しない。
+
+## 追記（2026-10-12、ABSTAIN の決定）
+
+ユーザーが ADR 0032 の ABSTAIN の扱いを C（別集計）に決定しました（「Q1：C案で進めて」）。
+これに合わせ、`--abstain-policy` の既定を separate にしました（上の「決定待ち」は当時の記録）。ADR 0032 は Proposed のままです。

@@ -85,7 +85,6 @@ def test_cli_abstain_policy_boundary(scenario: str, policy: str, code: int) -> N
 @pytest.mark.parametrize(
     "args",
     [
-        (),
         ("--abstain-policy", "accept", "--runs", "0"),
         ("--abstain-policy", "accept", "--runs", "2"),
         ("--mode", "real", "--abstain-policy", "accept"),
@@ -217,15 +216,13 @@ def test_real_cli_with_fake_records_execution_conditions(
     report = json.loads(output.read_text())
     assert report["mode"] == "real" and report["model_digest"] == "synthetic-sha"
     assert report["profile"]["profile_id"] == config[0]["profile"]["profile_id"]
-    for flag in ("--characters", "--character-id", "--model-digest", "--runs", "--abstain-policy"):
+    for flag in ("--characters", "--character-id", "--model-digest", "--runs"):
         pos = options.index(flag)
         missing = options[:pos] + options[pos + 2 :]
-        if flag == "--abstain-policy":
-            with pytest.raises(SystemExit) as caught:
-                cli.main(missing)
-            assert caught.value.code == 2
-        else:
-            assert cli.main(missing) == 2
+        assert cli.main(missing) == 2
+    pos = options.index("--abstain-policy")
+    assert cli.main(options[:pos] + options[pos + 2 :]) == 0
+    assert json.loads(output.read_text())["abstain_policy"] == "separate"
     assert "synthetic-sha" not in capsys.readouterr().err
 
 
@@ -289,3 +286,16 @@ async def test_real_invalid_configuration_stops_before_provider(fault: str) -> N
             commit="a" * 40,
         )
     assert fake.calls == []
+
+
+def test_cli_default_abstain_policy_is_decision_c(tmp_path: Path) -> None:
+    """ADR 0032 user decision C: separate is the default and 6/60 ABSTAIN fails."""
+    output = tmp_path / "default.json"
+    result = run("--runs", "3", "--output", str(output))
+    assert result.returncode == 0
+    assert json.loads(output.read_text())["abstain_policy"] == "separate"
+    six = tmp_path / "six.json"
+    result = run("--runs", "3", "--scenario", "abstain_6", "--output", str(six))
+    report = json.loads(six.read_text())
+    assert result.returncode == 1 and report["abstain_policy"] == "separate"
+    assert all("abstain_rate: requires < 0.10" in r["fail_reasons"] for r in report["rounds"])
