@@ -19,6 +19,8 @@ from .character import load_characters
 from .contracts import AliasCompletion, CharacterCompletion, CompletionInput
 from .conversation_api import register_conversations
 from .conversations import Conversations
+from .formation import FormationDrain
+from .formation_api import register_formation
 from .history import HistoryPolicy, HistoryStore, Receipt, TurnInput
 from .local_http import LocalHTTPBoundary
 from .provider import LiteLLMProvider
@@ -104,6 +106,7 @@ def create_app(
     *,
     history_store: HistoryStore | None = None,
     history_policy: HistoryPolicy | None = None,
+    formation: FormationDrain | None = None,
 ) -> FastAPI:
     """Load the operator registry once or inject a service for offline integration.
 
@@ -115,6 +118,13 @@ def create_app(
         characters = load_characters(Path(config_path)) if config_path else ()
         inference = Inference(characters, LiteLLMProvider())
     service = inference
+    if formation is not None and (
+        history_store is None
+        or formation.history is not history_store
+        or formation.policy is not history_policy
+        or formation.policy is not service.privacy
+    ):
+        raise ValueError("formation requires shared history and privacy injection")
     app = FastAPI(title="Digital Souls Core", version="0.1.0")
     app.add_middleware(LocalHTTPBoundary)
 
@@ -265,5 +275,8 @@ def create_app(
             )
 
         register_conversations(app, conversations, run_conversation)
+
+    if formation is not None:
+        register_formation(app, formation)
 
     return app

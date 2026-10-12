@@ -15,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from .application import CoreError
 from .history import Binding
+from .postgres_formation_schema import COLUMNS as FORMATION_COLUMNS
+from .postgres_formation_schema import DDL as FORMATION_DDL
 from .postgres_record_schema import COLUMNS, RECORD_DDL
 from .postgres_schema import (
     CONSTRAINTS,
@@ -167,6 +169,7 @@ class PostgresDatabase:
                 [(4,)],
                 [(5,)],
                 [(6,)],
+                [(7,)],
                 [(SCHEMA_VERSION,)],
             ):
                 raise CoreError(503, "storage_schema", "Unsupported PostgreSQL schema")
@@ -219,6 +222,11 @@ class PostgresDatabase:
                 self._validate_schema(db, 6)
             if version <= 6:
                 db.execute("ALTER TABLE turns ADD COLUMN card_sha256 TEXT")
+                db.execute("UPDATE schema_version SET version=7")
+                self._validate_schema(db, 7)
+            if version <= 7:
+                for statement in FORMATION_DDL:
+                    db.execute(statement)
                 db.execute(f"UPDATE schema_version SET version={SCHEMA_VERSION}")
                 self._validate_schema(db, SCHEMA_VERSION)
 
@@ -231,6 +239,7 @@ class PostgresDatabase:
             ).items()
             if (version >= 4 or table not in {"turn_tombstones", "turn_deletions"})
             and (version >= 5 or table not in COLUMNS)
+            and (version >= 8 or table not in FORMATION_COLUMNS)
         }
 
     def _validate_schema(self, db: Connection[tuple[Any, ...]], version: int) -> None:
@@ -279,8 +288,8 @@ class PostgresDatabase:
                     wanted_default = "'[]'::text"
                 elif column == "memory_confirmation":
                     wanted_default = "'{}'::text"
-                if table in COLUMNS:
-                    wanted_type, can_be_null = COLUMNS[table][column]
+                if table in COLUMNS or table in FORMATION_COLUMNS:
+                    wanted_type, can_be_null = (COLUMNS | FORMATION_COLUMNS)[table][column]
                     wanted_default = None
                 else:
                     can_be_null = column in {"body", "revoked_by", "stated_at", "card_sha256"}
@@ -335,5 +344,20 @@ class PostgresDatabase:
             db.execute(
                 "SELECT pg_advisory_xact_lock(%s)",
                 (_lock_key("binding", self.config.schema_name, key(binding)),),
+            )
+            yield db
+
+    @contextmanager
+    def formation_connection(self) -> Iterator[Connection[tuple[Any, ...]]]:
+        """Dedicated ledger connection; session lock survives short transactions.
+
+        No Binding transaction lock crosses processor awaits. The caller commits
+        ledger transitions before awaiting and owns this connection until close.
+        """
+        with self._connect() as db:
+            db.execute(
+                sql.SQL("SET search_path TO {}, pg_temp").format(
+                    sql.Identifier(self.config.schema_name)
+                )
             )
             yield db

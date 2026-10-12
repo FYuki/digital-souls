@@ -30,17 +30,34 @@ from .memory_confirmation import blocked, decode, pending, resolve
 from .postgres_db import PostgresDatabase
 from .postgres_db import key as _key
 from .postgres_schema import revoke, revoke_turns
+from .privacy import PrivacyPolicy
 from .turn_deletion import select_turns
 
 
 class PostgresHistory:
-    def __init__(self, database: PostgresDatabase, *, clock: Clock = current_utc) -> None:
+    def __init__(
+        self,
+        database: PostgresDatabase,
+        *,
+        clock: Clock = current_utc,
+        formation_policy: PrivacyPolicy | None = None,
+    ) -> None:
         self._clock = clock
         self.database = database
+        self.formation_policy = formation_policy
         database.initialize()
 
     def _connection(self, binding: Binding) -> AbstractContextManager[Connection[tuple[Any, ...]]]:
         return self.database.transaction(binding)
+
+    def _reserve(
+        self, db: Connection[tuple[Any, ...]], binding: Binding, conversation: str, revision: int
+    ) -> None:
+        if self.formation_policy is not None and self.formation_policy.permits(binding, "memory"):
+            # Local import avoids the adapter cycle; no processor runs in this transaction.
+            from .postgres_formation import reserve
+
+            reserve(db, binding, conversation, revision)
 
     def create(self, binding: Binding) -> Snapshot:
         identifier = str(uuid4())
@@ -229,6 +246,7 @@ class PostgresHistory:
                     card_sha256,
                 ),
             )
+            self._reserve(db, binding, conversation_id, expected_revision + 1)
             return Receipt(
                 fingerprint,
                 expected_revision + 1,
@@ -301,6 +319,7 @@ class PostgresHistory:
                 "DELETE FROM turns WHERE binding=%s AND conversation=%s AND revision=ANY(%s)",
                 (key, conversation_id, list(revisions)),
             )
+            self._reserve(db, binding, conversation_id, row[0] + 1)
             return TurnDeletionResult(conversation_id, row[0] + 1, revisions)
 
     def turn_deletions(self, binding: Binding) -> tuple[TurnDeletion, ...]:
@@ -346,6 +365,7 @@ class PostgresHistory:
                 raise CoreError(409, "revision_conflict", "Conversation changed or was deleted")
             if changes.private_mode is True and before is not None:
                 self._activate_private(db, binding, conversation_id, before)
+            self._reserve(db, binding, conversation_id, changes.expected_revision + 1)
         return self.read(binding, conversation_id)
 
     def _activate_private(
@@ -393,6 +413,7 @@ class PostgresHistory:
             )
             if answer.accept_private_mode and before is not None:
                 self._activate_private(db, binding, conversation_id, before)
+            self._reserve(db, binding, conversation_id, answer.expected_revision + 1)
         return self.read(binding, conversation_id)
 
     def source_eligible(self, binding: Binding, source: SourceReference) -> bool:

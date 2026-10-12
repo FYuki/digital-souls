@@ -5,8 +5,9 @@ Episode・Fact・Semanticの正本と、それを利用する検索・会話cont
 [ADR 0016](adr/0016-memory-kinds-and-records.md)と
 [ADR 0022](adr/0022-memory-retrieval-from-records.md)を参照してください。
 旧逐語記憶の抽出・書込・再構成は撤去済みで、schema版6で旧3表を削除します。
-型付き保存判定の評価器と分類の段は実装済みです。構造化抽出・保存文生成・形成jobと、
+型付き保存判定の評価器と分類の段は実装済みです。構造化抽出・保存文生成と、
 形成から保存判定への呼出しは未実装です。
+形成jobの台帳・予約・有限drainの枠は実装済みで、processorは未接続です。
 現行の分類・形成・検索・回答の実モデル品質は未受入です。
 合成正本の本番検索・contextによる実モデル評価は上位5件包含の基準で検索・回答各3回再実施済み、いずれもFAILです。
 [証跡](evidence/2026-10-09-semantic-real-model-evaluation-top5.md)と
@@ -229,9 +230,96 @@ schema版6は旧版1〜5から段階的に原子的移行し、`memory_sources`�
 撤回イベントのoutboxは保持しますが、旧消費APIは撤去済みです。再生成のconsumerは未実装です。
 形成ができるまで再生成しない期間を許容し、旧逐語記憶で補いません。
 
+## 形成jobの台帳と有限drain（Issue #208）
+
+[ADR 0017 §4](adr/0017-memory-formation-admission.md#4-会話からの非同期形成)と
+[ADR 0027 §3・§5](adr/0027-tool-use-and-activity-runtime.md)に沿い、timerが有限drainを呼びます。
+2026-10-13のユーザー選択（Q1=A・Q2=A）はPython APIとlocalhost HTTPの両入口、
+trusted起動コードからの明示注入、memory許可付きの同transaction予約です。ADRの追加承認ではありません。
+Coreは常駐worker・scheduler・checkpointを持ちません。
+`MemoryService.extract` は2026-10-08にADR 0022で撤去済みです。
+管理・試験用extract経路は復活させず、形成の実行入口はdrainだけにします。
+
+```python
+from digital_souls_core.formation import FormationConfig
+from digital_souls_core.postgres_formation import PostgresFormation
+from digital_souls_core.storage import open_storage
+
+# policyはinferenceと同じPrivacyPolicy。Bindingごとのmemory許可はtrusted起動側で設定する。
+# storage_config、inference、trusted_processorは起動側が構成する。
+stores = open_storage(storage_config, formation_policy=policy)
+formation = PostgresFormation(stores.history, policy, trusted_processor,
+                              config=FormationConfig())
+# Pythonによる有限実行（timerは結果だけを受け取る）:
+# result = await formation.drain(max_jobs=5)
+# HTTPを提供する場合:
+# app = create_app(inference, history_store=stores.history,
+#                  history_policy=policy, formation=formation)
+```
+
+`formation_policy` の省略時は予約しません。`PrivacyPolicy.permits(binding, "memory")` がtrueの
+履歴append・controls・確認回答・往復削除だけが、履歴保存・revision更新と同じtransactionで予約します。
+空会話の作成や既存履歴の移行では予約せず、既存receiptの再送でも再予約しません。
+同じBinding＋conversationの台帳は1行です。pendingを最新revisionへ集約し、leased中の更新は
+target revisionだけを進めます。旧処理の成功・失敗後も新版があればpendingへ戻し、試行回数を戻します。
+会話経路は予約のSQLだけを待ち、drain・processor・LLM形成を呼びません。
+予約障害で履歴を含むtransactionをrollbackする方式は**仮置き・要確認**です。
+予約を捨てて履歴だけ保存する案に比べ、形成対象の欠落を黙って残さないため推奨します。
+生成済みの応答も保存成功のreceiptとして返らず、形成機能を接続した保存経路の障害として返ります。
+
+`PostgresFormation(history, policy, processor=None, *, config=..., clock=...)` は、
+同じpolicyで形成を有効にしたPostgresHistoryだけを受け付けます。未接続processorは
+503 `formation_processor_unavailable` で拒否し、pendingを消費しません。#208に製品用no-opはありません。
+`FormationProcessor.process(FormationInput)` は後続#209以降の接続portです。
+`FormationInput.origin_*` は予約の起点（Binding・会話・revision・epoch・適格なsource）を表します。
+照合/読取範囲は同一Binding・同一会話に固定せず、processorが注入された認可portで決めます
+（後続#77・#214のキャラクター単位のFact照合・利用者単位の訂正への考慮。#208では認可を拡張しません）。
+private・削除・指定除外・保存拒否の保留/受入・それらに依存するassistant/toolは除きます。
+周囲の除外本文をcontextとして渡しません。archiveは適格性を変えません。
+このsource確認とmemory permissionは保存判定・privacyの内容認可を代行しません。
+processorは現在のprivacyを認可し、各await後・送信前と正本登録直前にsource/epochを再検証し、
+元発言・版・引用範囲と形成versionに基づく冪等書き込みを行う責務を持ちます。本文hashをjobキーにしません。
+processorはtimeout/cancelを尊重し、checkpointを読まず毎回最初から実行します。
+
+`drain(max_jobs=None)` は設定上限以内の件数だけを処理します。同一呼出し中に同じ台帳行を再取得せず、
+処理中の更新やbackoffなしの失敗も次のdrainへ残します。`DrainResult` は
+`succeeded`・`failed`・`excluded` と `status`（success / failure）だけです。
+試行中の失敗が1件でもあればfailure、除外と処理対象0件はsuccessです。未処理全件の完了を意味しません。
+台帳更新のDB障害・cancelは伝播し、source取得の障害は失敗として再試行します。
+本文・prompt・LLM出力・例外文字列を台帳や結果へ保存しません。
+
+以下は運用値の**仮置き・要確認**で、品質閾値ではありません。高負荷でも残る予約を保持します。
+
+| `FormationConfig` | 既定値 | 許容範囲・意味 |
+| --- | --- | --- |
+| `max_jobs` | 10 | 1〜100。1回の処理上限。引数/HTTPはこれを減らすだけ |
+| `lease_seconds` | 300秒 | 1〜3600秒。中断したleaseを回収できる期限 |
+| `processor_timeout_seconds` | 60秒 | 1〜300秒。1 jobのprocessor await上限。DB操作は既存の接続/SQL timeoutを使う |
+| `max_attempts` | 3 | 1〜100。同じ対象revisionの実行回数。中断も数える |
+| `retry_backoff_seconds` | 60秒 | 0〜3600秒。失敗後の固定待機。0でも同じdrain内では再試行しない |
+
+失敗はpending＋backoffに戻し、上限に達した対象revisionはfailedとして台帳を保持します。
+新版の履歴更新で再予約し、旧版の失敗/中断回数を新版に持ち越しません。
+failedを単なるtimer再呼出しで無制限に再試行する方式や手動reset APIは実装しません。
+この停止方針も**仮置き・要確認**です（上限後もbackoff付きで継続する案との比較が必要）。
+lease期限切れは次回drainで最初からやり直します。処理中の専用DB接続が持つsession advisory lockにより、
+まだ生きている処理は期限切れだけで並行実行されません。処理のawait中はBinding lockや
+DB transactionを保持せず、会話更新を進められます。接続が閉じればsession lockは解除されます。
+正本commitと台帳完了の間の中断は再実行となるため、正本の冪等性は別途必要です。
+合成fakeが既存の正本登録portへ書き込む試験でこの境界を検証し、実抽出の冪等性は#209で扱います。
+
+会話削除はFK CASCADEで同transaction内に台帳行も消去します。private化と往復削除では予約を
+最新revisionへ更新し、drain直前に再検証して不適格sourceだけを除きます。sourceが0件ならdone /
+`source_excluded` にします。memory許可の撤回もprocessorを呼ばず除外します。
+削除/private化がprocessor await中に起きる場合は、後続processorの登録直前の出典検証が拒否する境界です。
+台帳を保持してdrain時に除外する方式は**仮置き・要確認**で、private化時の即時取消案との選択です。
+
+[HTTP境界](history-api.md#形成drainのlocalhost-http入口)と
+[schema版8](postgresql.md#形成jobのschemaversion-8)も参照してください。
+
 ## 現在の範囲外
 
-構造化抽出・保存判定・保存文生成・形成job・TOUCH・期間検索・補完・consolidation・Reflection・
+構造化抽出・保存判定・保存文生成・TOUCH・期間検索・補完・consolidation・Reflection・
 永続vector index・共有cache・利用者間共有・私的input import・実DB適用は未実装または未実施です。
 モデル取得・GPU操作・実環境のIT2/STや実モデル品質受入、tombstone自動掃除・WAL/backup/媒体の
 物理消去保証を合成試験の成功と同一視しません。
@@ -269,7 +357,7 @@ Episode・Semanticの新規IDは版1で登録し、同一IDへの内容版追加
 
 storage非依存の `memory_record_store.MemoryRecordStore` は、前節の値型だけで入出力します。
 PostgreSQL実装は `postgres_memory_records.PostgresMemoryRecords`、物理設計は
-[PostgreSQL schema version 6](postgresql.md#正本記憶のschemaversion-6)を参照してください。
+[PostgreSQL schema version 8](postgresql.md#正本記憶のschemaversion-8)を参照してください。
 このportはtrusted callerが形成・保存判定を済ませた記録を保存します。推論・privacy分類・保存文生成や
 HTTP API、Fact照合・統合、Reflection、残る根拠からの再構成は実装しません。
 検索の候補取得・再検証はこのportを使い、順位付けと送信認可は `MemoryRetrieval` が行います。

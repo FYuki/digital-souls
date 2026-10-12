@@ -59,7 +59,8 @@ async def test_v5_removal_preserves_rows_and_reopens(stores: Stores) -> None:
     before = snapshot(stores)
     PostgresDatabase(stores.config).initialize()
     after = snapshot(stores)
-    assert set(after) == set(before) - REMOVED
+    assert set(after) == (set(before) - REMOVED) | {"formation_jobs"}
+    assert after["formation_jobs"] == []
     assert all(row[-1] is None for row in after["turns"])
     assert [row[:-1] for row in after["turns"]] == before["turns"]
     assert all(after[t] == rows for t, rows in before.items() if t not in REMOVED | {"turns"})

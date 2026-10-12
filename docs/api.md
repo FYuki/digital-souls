@@ -256,3 +256,12 @@ CORE_CHARACTER_CONFIG=examples/characters.json uv run --no-sync uvicorn digital_
 環境変数なしならキャラクター0件で起動します。無課金のfake/SDK mock検証は`uv run --no-sync pytest`。
 fakeの定型返答は人格品質や実モデル動作の証明ではありません。
 限定した実モデル試験の範囲は[検証証跡](evidence/2026-10-03-ollama-native-chat.md)を参照してください。
+
+
+## 明示注入した形成drain
+
+trusted起動コードが形成serviceを注入した場合だけ、localhostの
+`POST /v1/memory/formation/drain` を提供します。通常の `create_app()` では404です。
+既存のHost・Origin境界を適用し、入力は処理上限だけ、結果は本文なしの成功/失敗と件数です。
+将来の認証導入時には管理者向けの経路として扱います。詳細は
+[履歴APIの形成入口](history-api.md#形成drainのlocalhost-http入口)と[Python API](memory.md)を参照してください。

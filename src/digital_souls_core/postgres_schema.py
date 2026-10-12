@@ -5,11 +5,14 @@ from uuid import uuid4
 
 from psycopg import Connection
 
+from .postgres_formation_schema import COLUMNS as FORMATION_COLUMNS
+from .postgres_formation_schema import CONSTRAINTS as FORMATION_CONSTRAINTS
+from .postgres_formation_schema import DDL as FORMATION_DDL
 from .postgres_record_revocation import revoke_records
 from .postgres_record_schema import COLUMNS, RECORD_DDL
 from .postgres_record_schema import CONSTRAINTS as RECORD_CONSTRAINTS
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Tables present through version 5, used only to validate historical migration sources.
 LEGACY_VERBATIM_INDEXES = {("memory_source_lookup", "i")}
@@ -109,6 +112,8 @@ CONSTRAINTS.update(
 
 TABLE_COLUMNS.update({table: tuple(columns) for table, columns in COLUMNS.items()})
 CONSTRAINTS.update(RECORD_CONSTRAINTS)
+TABLE_COLUMNS.update({table: tuple(columns) for table, columns in FORMATION_COLUMNS.items()})
+CONSTRAINTS.update(FORMATION_CONSTRAINTS)
 
 TURN_DELETION_DDL = (
     """CREATE TABLE turn_tombstones (
@@ -154,6 +159,7 @@ DDL = (
     )""",
     *TURN_DELETION_DDL,
     *RECORD_DDL,
+    *FORMATION_DDL,
     f"INSERT INTO schema_version(version) VALUES ({SCHEMA_VERSION})",
 )
 
