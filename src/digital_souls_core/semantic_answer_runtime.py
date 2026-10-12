@@ -210,4 +210,16 @@ def runtime_identity(mode: str, profile_path: str | None) -> dict[str, Any]:
             external_send=True,
             cache=False,
         )
+        if (
+            isinstance(profile, ExternalAnswerProfile)
+            and profile.answer_provider == "codex_subscription"
+        ):
+            from .semantic_answer_codex import CONDITION_NOTE
+
+            identity.update(
+                provider="codex_subscription",
+                model=chat.model.split("/", 1)[1],
+                codex_cli_version=None,
+                condition_note=CONDITION_NOTE,
+            )
     return identity

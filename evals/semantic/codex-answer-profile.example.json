@@ -1,0 +1,21 @@
+{
+  "enabled": false,
+  "chat": {
+    "profile_id": "codex-answer-example",
+    "model": "openai/gpt-6-luna",
+    "transport": "sdk",
+    "external_send_allowed": false,
+    "timeout_seconds": 60
+  },
+  "embedding": {
+    "profile_id": "nonexistent-embedding-example",
+    "model": "nonexistent-example-model",
+    "model_digest": "nonexistent-example-digest",
+    "dimensions": 1024,
+    "api_base": "NONEXISTENT_MANAGED_LOOPBACK_ENDPOINT",
+    "enabled": false
+  },
+  "answer_provider": "codex_subscription",
+  "codex_executable": "/NONEXISTENT/codex",
+  "codex_home": "/NONEXISTENT/codex-home"
+}

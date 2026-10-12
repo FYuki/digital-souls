@@ -13,6 +13,7 @@ from digital_souls_core.application import Provider
 from digital_souls_core.local_embedding import LocalEmbedding
 from digital_souls_core.memory_ranking import MemoryEmbedding
 from digital_souls_core.postgres_db import PostgresConfig
+from digital_souls_core.semantic_answer_codex import CodexSubscriptionAnswerProvider
 from digital_souls_core.semantic_answer_external import ExternalAnswerProfile, external_credentials
 from digital_souls_core.semantic_answer_runtime import (
     FixtureAnswerProvider,
@@ -87,7 +88,12 @@ def _call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> 
                 raise ValueError
             from digital_souls_core.provider import LiteLLMProvider
 
-            provider = LiteLLMProvider()
+            provider = (
+                CodexSubscriptionAnswerProvider(profile)
+                if isinstance(profile, ExternalAnswerProfile)
+                and profile.answer_provider == "codex_subscription"
+                else LiteLLMProvider()
+            )
             embedding = LocalEmbedding(profile.embedding)
         database = PostgresConfig(
             host=os.environ["DSC_TEST_POSTGRES_SOCKET"],
@@ -103,6 +109,8 @@ def _call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> 
                     runtime, answer_character(EVAL / "characters.json", case, profile), provider
                 )
             )
+        if isinstance(provider, CodexSubscriptionAnswerProvider):
+            identity["codex_cli_version"] = provider.cli_version
         return {
             "output": json.dumps(
                 {"observation": observation, "identity": identity},
