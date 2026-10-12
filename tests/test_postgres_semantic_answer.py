@@ -35,7 +35,7 @@ async def test_production_inference_dispatch_and_publication(identifier: str) ->
         if provider.payloads:
             messages = provider.payloads[0]["messages"]
             assert messages[0]["role"] == "system"
-            assert "system_prompt:" in messages[0]["content"]
+            assert "## 応答方針" in messages[0]["content"]
             assert messages[-1] == {"role": "user", "content": runtime.case.query}
             assert all(r.id not in str(messages) for r in runtime.case.episodes)
             assert ("retrieved_memory_data" in str(messages)) == (
@@ -87,3 +87,36 @@ def test_promptfoo_provider_reads_no_gold_and_error_fixture_is_not_success(
         "synonym-02", {"config": {"mode": "fixture", "fixture_variant": "error"}}, context
     )
     assert failed == {"error": "answer_evaluation_failed"}
+
+
+@pytest.mark.parametrize("memory_budget", [1, 65536])
+async def test_answer_observation_tracks_only_memory_items_in_final_payload(
+    memory_budget: int,
+) -> None:
+    from dataclasses import replace
+
+    from digital_souls_core.semantic_answer_runtime import (
+        FixtureAnswerProvider,
+        answer_character,
+        complete_answer,
+    )
+
+    provider = FixtureAnswerProvider("記憶に情報がありません。")
+    with isolated_case(config(), case("synonym-02"), FixtureEmbedding(DATA)) as runtime:
+        char = answer_character(ROOT / "evals/semantic/characters.json", runtime.case, None)
+        char = replace(
+            char,
+            config=char.config.model_copy(
+                update={
+                    "prompt_budget": char.config.prompt_budget.model_copy(
+                        update={"memory": memory_budget}
+                    )
+                }
+            ),
+        )
+        observed = await complete_answer(runtime, char, provider)
+        expected = runtime.retrieval.results[0] if memory_budget > 1 else ()
+        assert observed["context_empty"] == (not expected)
+        assert observed["dispatch_memory_ids"] == [item.identifier for item in expected]
+        assert observed["dispatched"]
+        assert ("retrieved_memory_data" in str(provider.payloads[0])) == bool(expected)

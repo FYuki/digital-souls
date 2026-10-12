@@ -25,14 +25,13 @@ def test_openclaw_tool_roundtrip_normalizes_provider_input(
 ) -> None:
     provider = FakeProvider()
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": "Synthetic system"},
         {"role": "user", "content": "Synthetic user"},
         {"role": "assistant", "content": None, "tool_calls": [CALL]},
         {"role": "tool", "content": "Synthetic result", "tool_call_id": CALL["id"]},
         {"role": "user", "content": parts("Synthetic", "next")},
     ]
     if array_roles:
-        for index in (0, 1, 3):
+        for index in (0, 2):
             messages[index]["content"] = parts(messages[index]["content"])
     tools = [
         {"type": "function", "function": {"name": name, "parameters": {}}}
@@ -53,13 +52,12 @@ def test_openclaw_tool_roundtrip_normalizes_provider_input(
     assert response.status_code == 200
     sent = provider.calls[0][1]
     assert [m.get("content") for m in sent["messages"][1:]] == [
-        "Synthetic system",
         "Synthetic user",
         None,
         "Synthetic result",
         "Synthetic\nnext",
     ]
-    assert sent["messages"][3]["tool_calls"] == [CALL]
+    assert sent["messages"][2]["tool_calls"] == [CALL]
     assert sent["tools"] == tools and sent["max_completion_tokens"] == 256
     if stream:
         assert '"content": "こんにちは"' in response.text
@@ -113,10 +111,14 @@ def test_history_saves_restores_and_retries_normalized_text(stream: bool) -> Non
         revision: int,
         messages: tuple[Message, ...],
         finish: str,
+        *,
+        card_sha256: str | None = None,
     ) -> Receipt:
         nonlocal snapshot, receipt
         snapshot = Snapshot(cid, revision + 1, (*snapshot.messages, *messages))
-        receipt = Receipt(fingerprint, snapshot.revision, messages[-1], finish)
+        receipt = Receipt(
+            fingerprint, snapshot.revision, messages[-1], finish, card_sha256=card_sha256
+        )
         return receipt
 
     store.append.side_effect = append

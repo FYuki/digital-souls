@@ -182,7 +182,9 @@ def test_empty_stream_errors_and_capability_metadata() -> None:
     data = http.get("/v1/characters/miori").json()
     assert data["provider_model"] == "openai/miori-test-model"
     assert data["model_context_window_tokens"] is None
-    assert data["context_budget_bytes"] == 16384
+    assert "context_budget_bytes" not in data
+    assert data["prompt_budget"]["total"] == 28672
+    assert data["memory_floor"] == data["history_floor"] == 3
     assert http.get("/v1/models").json()["data"][0]["id"] == "miori-alias"
 
 

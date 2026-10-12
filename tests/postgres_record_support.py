@@ -130,7 +130,9 @@ def setup(
     char = character("synthetic")
     if local:
         char = type(char)(
-            char.config.model_copy(update={"profile": local_profile()}), char.system_prompt
+            char.config.model_copy(update={"profile": local_profile()}),
+            char.card,
+            card_sha256=char.card_sha256,
         )
     provider = FakeProvider()
     inference = Inference((char,), provider, privacy=policy)

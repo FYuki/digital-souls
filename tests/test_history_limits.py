@@ -34,11 +34,15 @@ def test_history_api_accepts_combined_input_above_previous_limit() -> None:
         expected_revision: int,
         messages: tuple[Message, ...],
         finish_reason: str,
+        *,
+        card_sha256: str | None = None,
     ) -> Receipt:
         nonlocal snapshot
         assert cid == snapshot.conversation_id and expected_revision == snapshot.revision
         snapshot = Snapshot(cid, expected_revision + 1, (*snapshot.messages, *messages))
-        return Receipt(fingerprint, snapshot.revision, messages[-1], finish_reason)
+        return Receipt(
+            fingerprint, snapshot.revision, messages[-1], finish_reason, card_sha256=card_sha256
+        )
 
     store.append.side_effect = append
     http = TestClient(

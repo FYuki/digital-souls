@@ -46,7 +46,9 @@ def test_v3_migration_preserves_stored_time_confirmation_and_receipt(
     h = make_harness(PostgresHistory(database), PostgresMemoryRecords(database))
     with h.http:
         with stores.database.transaction(BINDING) as db:
-            assert db.execute("SELECT * FROM turns").fetchall() == original
+            migrated = db.execute("SELECT * FROM turns").fetchall()
+            assert all(row[-1] is None for row in migrated)
+            assert [row[:-1] for row in migrated] == original
             assert db.execute("SELECT version FROM schema_version").fetchall() == [
                 (SCHEMA_VERSION,)
             ]

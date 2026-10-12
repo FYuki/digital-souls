@@ -126,6 +126,24 @@ def create_app(
     async def validation_error_handler(
         request: Request, error: RequestValidationError
     ) -> JSONResponse:
+        # System rejection also takes precedence when another input field is invalid.
+        body = error.body
+        if request.url.path.endswith("/completions") and isinstance(body, dict):
+            messages = body.get("messages")
+            if isinstance(messages, list) and any(
+                isinstance(message, dict) and message.get("role") == "system"
+                for message in messages
+            ):
+                return JSONResponse(
+                    error_body(
+                        CoreError(
+                            400,
+                            "system_message_unsupported",
+                            "Caller system messages are unsupported",
+                        )
+                    ),
+                    status_code=400,
+                )
         # Never echo caller input or Pydantic's input-bearing validation details.
         return JSONResponse(
             error_body(CoreError(400, "invalid_request", "Invalid or unsupported input")),
@@ -223,12 +241,15 @@ def create_app(
         return {
             "character_id": config.character_id,
             "config_version": config.config_version,
+            "card_sha256": character.card_sha256,
             "model_alias": config.alias,
             "inference_profile": config.profile.profile_id,
             "provider_model": config.profile.model,
             "allowed_parameters": sorted(config.profile.allowed_parameters),
             "external_send_allowed": config.profile.external_send_allowed,
-            "context_budget_bytes": config.context_budget_bytes,
+            "prompt_budget": config.prompt_budget.model_dump(),
+            "memory_floor": config.memory_floor,
+            "history_floor": config.history_floor,
             "model_context_window_tokens": None,
             "capability_verification": "operator_configured_not_live_verified",
         }

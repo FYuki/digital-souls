@@ -1,0 +1,9 @@
+{
+  "profile_id": "persona-local-example",
+  "model": "openai/gemma4-12b",
+  "allowed_parameters": ["temperature", "max_completion_tokens"],
+  "external_send_allowed": false,
+  "transport": "llamacpp_chat",
+  "api_base": "http://127.0.0.1:18081/v1",
+  "token_counter": "llamacpp"
+}

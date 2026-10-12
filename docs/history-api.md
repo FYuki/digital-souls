@@ -39,6 +39,9 @@ completion本文の例（合成データ）:
 ```
 
 `messages`には新しいuserまたはtoolのみを1件以上渡します。件数上限はありません。
+systemを含む入力は400 `system_message_unsupported`で拒否します（文字列・text配列、streamとも同じ）。
+それ以外の不正なturnは400 `invalid_turn`、schema不正は400 `invalid_request`です。
+拒否に要求本文を含めず、system拒否はprivacy判定・履歴読み取り・推論より前に行います。
 過去ログを再送しません。保存済み履歴と新規入力の合計にも件数上限はありません。
 入力`content`は文字列、または`[{"type":"text","text":"..."}]`の配列です。
 入口で各textを`\n`で連結し、1要素ならそのtextそのものになります。
@@ -52,6 +55,15 @@ tools/tool_choice/temperature/max_tokens/max_completion_tokensの条件は既存
 request_idは1〜64文字の英数字・`_`・`-`、期待revisionは0以上の整数です。
 成功は`conversation_id`、`request_id`、確定`revision`、公開assistant `message`、
 `finish_reason`（stop/tool_calls）を返します。OpenAIのresponse envelopeとは異なります。
+成功応答（stream・非stream）の `X-Character-Card-SHA256` headerは、その保存済み応答の
+組み立てに使ったCardファイルのSHA-256です。`turns.card_sha256` にassistant応答を含む
+turn単位で保存し、receiptの `card_sha256` へ復元します。会話復元の `turns` 配列はrevision順の
+`{"turn_revision": 1, "card_sha256": "..."}` metadataを返します。会話ID一覧から各会話を
+復元して確認できます。空の会話は `turns: []`、削除したturnのmetadataも同時に消えます。
+このmetadataはproviderのmessagesへ含めません。要求・completion本文・fingerprintは変えません。
+再送と同時要求の後着は、保存済みreceiptのハッシュを返します。再起動後にCardが変わっても
+現在値で上書きしません。旧turnのハッシュは不明なNULL（復元時はJSONのnull）のままとし、
+そのreceiptの再送ではheaderを省略します。現在のCardから補完せず、再推論もしません。
 
 tool_callsを受け取ったら外部Agentが実行し、次のrequest IDで対応する全tool resultを渡します。
 Coreは実行しません。不正な往復は400です。入力・設定が同じrequest IDの再送は同じreceiptを返し、
@@ -73,7 +85,13 @@ stream値も再試行fingerprintに含みます。復旧時に切り替えない
 
 履歴のバイト上限は1 MiBです。入力・推論payload・streamバッファ・保存後の履歴を
 JSONのUTF-8バイト数で検査し、超過は切り捨てず413（`history_limit`）で拒否します。
-注入contextの`context_budget_bytes`と推論先のモデルcontext制限も引き続き適用します。
+[ADR 0026](adr/0026-prompt-assembly.md)の `prompt_budget` を共通のPromptBuilderで適用し、
+送信する古い履歴は往復単位で削減します。tool callと結果を分けず、直前の完了した1往復を保護します。
+固定人格・今回の入力・保護する往復だけで超過する場合は400 `prompt_budget_exceeded`
+（messageは領域名だけ）です。保存済み履歴と1 MiB保存上限は維持します。
+`context_budget_bytes` または `prompt_budget.caller_instructions` が残る運用設定は起動時エラーです。
+組み立て・token推定・既定予算は[推論API](api.md#文脈プライバシー)を参照してください。
+推論先の物理context制限も引き続き適用します。
 会話streamのtool call indexは非負の整数（boolean不可）で、新しいindexは0から連続する必要があります。
 既存indexへの後続deltaは受け付け、tool call数の固定上限は設けません。
 policy欠落・判定不能・拒否は403、不明会話は404、不正上流応答は502です。
@@ -133,9 +151,10 @@ scope違いの通知は取得・ackできません。通知のHTTP ackは公開�
 同じPostgreSQL schemaにある派生memory本文も同一transactionで消去します。再構成の完了とは別です。
 source参照自体は削除直後から無効です。
 
-PostgreSQL schema v1〜v5からv6へ段階的に原子的移行します。schemaとversionを同じtransactionで
+PostgreSQL schema v1〜v6からv7へ段階的に原子的移行します。schemaとversionを同じtransactionで
 更新し、途中失敗はrollbackして再実行できます。履歴・receipt・fingerprintは保持し、旧turnの
 日時はNULLのままです。v5→v6で旧逐語3表を削除し、確認状態・通知・正本表は保持します。
+v6→v7でnullableな `turns.card_sha256` を追加し、既存turnはNULLのまま補完しません。
 [移行の詳細](postgresql.md#初期化と復旧境界)を参照してください。未知versionは引き続き拒否します。
 過去発話への後付け除外変更は未実装で、指定はcompletionの入力配列に対して行います。
 
