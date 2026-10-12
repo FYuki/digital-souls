@@ -225,12 +225,13 @@ server主要設定・起動前と評価中のGPU資源・ケース版・各回�
 分類器品質、形成〜利用の実接続、実運用DB適用、実環境IT2/ST、私的corpusの検索精度、
 prompt injection耐性、速度・資源上限を、この合成セットの結果だけで合格としません。
 
-## 外部回答評価の準備（#198）
+## 外部回答評価の準備（#198・#201）
 
-`external_model` は回答生成だけを外部 OpenAI 互換 SDK 経路へ渡す opt-in mode です。
-モデル識別子・接続先は未確定で、**#198 の実送信は NOT RUN**。
+`external_model` は回答生成だけを外部 Provider へ渡す opt-in mode です。
+#198 の LiteLLM/API 方式に加え、#201 は Codex CLI の既存 ChatGPT ログインを使います。
+**両 Issue の実送信は NOT RUN**。
 [手順と無効な profile 例](../evals/semantic/README.md#外部モデルでの回答生成external_model)を参照してください。
-profile は git 管理外の絶対パスで、キー・接続先は環境変数名だけを指定します。
+profile は git 管理外の絶対パスです。API 方式のキー・接続先は環境変数名だけを指定します。
 dry-run 以外では明示実行 flag または profile が欠けると NOT RUN（exit 3）。
 
 本番の外部送信許可・privacy 認可・送信直前の検証を通し、embedding は管理 loopback、
@@ -248,3 +249,17 @@ fixture/local_model の report にはこのフィールドを追加しません�
 出力見込みは明示した仮定だけを使います。実送信 report には provider/model/transport、
 external_send、cache 無効、実行回数、commit を残し、認証情報・接続 URL・本文は出しません。
 実測結果と SPEC の同期は #199 で行います。
+
+Codex 方式の profile・認証・無効化一覧は
+[手順](../evals/semantic/README.md#codex-サブスク方式201)と
+[#201 証跡](evidence/2026-10-12-codex-subscription-answer-provider.md)を参照してください。
+`answer_provider="codex_subscription"` と CLI/CODEX_HOME の絶対パスを指定し、
+API キー環境変数は不要・転送なしです。認証ファイルを Core が開く・複製する経路はありません。
+本番の external 認可と直前検証を通ってから、空の一時 cwd で CLI を起動します。
+ユーザー設定・rules・hooks・MCP・plugins・web 検索・shell・各種ツールを無効化します。
+dry-run は CLI を起動せず、版は null です。実行 report は許可済み dispatch の CLI 版を照合します。
+`provider="codex_subscription"` / `model="gpt-6-luna"` / `codex_cli_version` に加え、
+`condition_note="codex-cli-adds-own-instructions-not-pure-api"` を記録します。
+CLI 独自の指示と messages の JSON 包装による条件差です。純粋な API 条件と同一とは扱いません。
+公開出力は本文・認証情報・CODEX_HOME のパスと内容を含めません。
+実 Luna 送信・実 `codex exec`・IT2/ST は **NOT RUN**、実測と SPEC 同期は #199 です。

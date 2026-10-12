@@ -6,6 +6,7 @@ import subprocess
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -25,7 +26,10 @@ class ExternalAnswerProfile(BaseModel):
     enabled: StrictBool = False
     chat: Profile
     embedding: LocalEmbeddingProfile
-    api_key_env: str = Field(pattern=ENV_NAME)
+    answer_provider: Literal["litellm", "codex_subscription"] = "litellm"
+    codex_executable: str | None = None
+    codex_home: str | None = None
+    api_key_env: str | None = Field(default=None, pattern=ENV_NAME)
     api_base_env: str | None = Field(default=None, pattern=ENV_NAME)
 
     def require_enabled(self) -> None:
@@ -37,10 +41,26 @@ class ExternalAnswerProfile(BaseModel):
             or not re.fullmatch(r"openai/[A-Za-z0-9_.-]{1,128}", self.chat.model)
             or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", self.embedding.model)
             or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", self.embedding.model_digest)
-            or self.api_key_env == self.api_base_env
             or any(RESERVED.fullmatch(n) for n in (self.api_key_env, self.api_base_env) if n)
         ):
             raise ValueError("Enabled external OpenAI SDK answer profile required")
+        if self.answer_provider == "codex_subscription":
+            if (
+                self.api_key_env is not None
+                or self.api_base_env is not None
+                or not self.codex_executable
+                or not Path(self.codex_executable).is_absolute()
+                or not self.codex_home
+                or not Path(self.codex_home).is_absolute()
+            ):
+                raise ValueError("Absolute Codex paths without API credentials required")
+        elif (
+            not self.api_key_env
+            or self.api_key_env == self.api_base_env
+            or self.codex_executable is not None
+            or self.codex_home is not None
+        ):
+            raise ValueError("External API credentials required")
 
 
 def load_external_profile(path: str | None) -> ExternalAnswerProfile:
@@ -71,6 +91,9 @@ def credential_environment(
     profile: ExternalAnswerProfile, inherited: Mapping[str, str]
 ) -> dict[str, str]:
     profile.require_enabled()
+    if profile.answer_provider == "codex_subscription":
+        return {}
+    assert profile.api_key_env is not None
     mapped = {"OPENAI_API_KEY": profile.api_key_env}
     if profile.api_base_env:
         mapped["OPENAI_BASE_URL"] = profile.api_base_env
@@ -81,6 +104,11 @@ def credential_environment(
 
 @contextmanager
 def external_credentials(profile: ExternalAnswerProfile) -> Iterator[None]:
+    profile.require_enabled()
+    if profile.answer_provider == "codex_subscription":
+        yield
+        return
+    assert profile.api_key_env is not None
     values = credential_environment(profile, os.environ)
     # Clear even optional SDK names so ambient alternate credentials cannot be used.
     names = {"OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_API_BASE", profile.api_key_env}

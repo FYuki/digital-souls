@@ -364,3 +364,88 @@ test('external missing credential fails before execution with secret-free stdout
     for(const secret of ['url-sentinel','key-sentinel','user:','/private?',...cases.map(c=>c.query)]) assert(!publicOutput.includes(secret));
   } finally {fs.rmSync(temp,{recursive:true,force:true});}
 });
+
+test('codex runner forwards no credentials, proxies, ambient Codex home or MCP configuration', async () => {
+  const {cleanEnvironment}=await import('./evaluate-semantic-answer.mjs');
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'codex-env-'));
+  try {
+    const profile=path.join(temp,'profile.json');
+    fs.writeFileSync(profile,JSON.stringify({answer_provider:'codex_subscription',codex_executable:'/synthetic/codex',codex_home:'/synthetic/home'}));
+    const inherited={PATH:process.env.PATH,OPENAI_API_KEY:'key-sentinel',HTTPS_PROXY:'proxy-sentinel',CODEX_HOME:'/ambient/home',T3_ACP_MCP_NODE:'/ambient/mcp',SYNTHETIC_KEY:'key-sentinel'};
+    const env=cleanEnvironment(temp,{mode:'external_model',profile},inherited);
+    assert.equal(env.DSC_EXECUTE_EXTERNAL_MODEL,'1');
+    for(const key of ['OPENAI_API_KEY','HTTPS_PROXY','CODEX_HOME','T3_ACP_MCP_NODE','SYNTHETIC_KEY']) assert(!Object.hasOwn(env,key));
+    const dry=cleanEnvironment(temp,{mode:'external_model',profile,dryRun:true},inherited);
+    assert(!Object.hasOwn(dry,'DSC_EXECUTE_EXTERNAL_MODEL'));
+  } finally {fs.rmSync(temp,{recursive:true,force:true});}
+});
+
+function codexExport() {
+  const external={...manifest,mode:'external_model',classifier_reason:'baseline-parity-no-classifier-export',
+    quality_evidence:true,provider:'codex_subscription',model:'gpt-6-luna',transport:'sdk',external_send:true,
+    cache:false,codex_cli_version:null,condition_note:'codex-cli-adds-own-instructions-not-pure-api'};
+  const expected=Object.fromEntries(Object.entries(external).filter(([k])=>!['schema_version','commit','case_version','promptfoo_version'].includes(k)));
+  const raw=structuredClone(baseline);
+  raw.config.providers[0].config.mode='external_model';
+  for(const row of raw.results.results) {
+    const parsed=JSON.parse(row.response.output);
+    parsed.identity={...expected,codex_cli_version:parsed.observation.dispatched ? '0.162.1' : null};
+    if (parsed.observation.answer !== null) parsed.observation.answer += ' stdout-sentinel stderr-sentinel credential-file-sentinel';
+    row.response.output=JSON.stringify(parsed);
+  }
+  return {external,expected,raw};
+}
+
+test('codex report records dispatched CLI version and condition difference without private output', async () => {
+  const {inspectReport,finalizeReport}=await import('../evals/semantic/report_gate.mjs');
+  const {external,expected,raw}=codexExport();
+  const run=inspectReport(raw,{mode:'external_model',identity:expected});
+  const report=finalizeReport(external,[run,run,run],3);
+  assert.equal(report.codex_cli_version,'0.162.1');
+  assert.equal(report.provider,'codex_subscription');
+  assert.equal(report.model,'gpt-6-luna');
+  assert.equal(report.external_send,true);
+  assert.equal(report.cache,false);
+  assert.equal(report.condition_note,'codex-cli-adds-own-instructions-not-pure-api');
+  assert.equal(report.classifier_reason,'baseline-parity-no-classifier-export');
+  assert.equal(report.runs.length,3);
+  assert.deepEqual(report.commit,manifest.commit);
+  const encoded=JSON.stringify(report);
+  for(const secret of ['stdout-sentinel','stderr-sentinel','credential-file-sentinel',...cases.map(c=>c.query)]) assert(!encoded.includes(secret));
+  const dry=(await import('./evaluate-semantic-answer.mjs')).dryRunReport(external,
+    {cases:62,calls_per_run:60,input_tokens_per_run:10000,token_estimator:'utf8-byte-estimate'},{runs:3});
+  assert.equal(dry.codex_cli_version,null);
+  assert.equal(dry.external_send,false);
+});
+
+for(const fault of ['missing','old','private-text','drift','denied-version','missing-dispatched-version']) {
+  test(`codex report rejects invalid or drifting runtime version: ${fault}`, async () => {
+    const {inspectReport}=await import('../evals/semantic/report_gate.mjs');
+    const {expected,raw}=codexExport();
+    let altered=false;
+    for(const row of raw.results.results) {
+      const parsed=JSON.parse(row.response.output);
+      if(fault === 'denied-version' && !parsed.observation.dispatched) {
+        parsed.identity.codex_cli_version='0.162.1';
+        altered=true;
+      } else if(parsed.observation.dispatched) {
+        if(fault === 'missing') delete parsed.identity.codex_cli_version;
+        if(fault === 'old') parsed.identity.codex_cli_version='0.151.9';
+        if(fault === 'private-text') parsed.identity.codex_cli_version='credential-file-sentinel';
+        if(fault === 'drift' && !altered) parsed.identity.codex_cli_version='0.162.2';
+        if(fault === 'missing-dispatched-version') parsed.identity.codex_cli_version=null;
+        altered=true;
+      }
+      row.response.output=JSON.stringify(parsed);
+    }
+    assert(altered);
+    assert.throws(()=>inspectReport(raw,{mode:'external_model',identity:expected}));
+  });
+}
+
+test('codex report rejects version changes between runs', async () => {
+  const {inspectReport,finalizeReport}=await import('../evals/semantic/report_gate.mjs');
+  const {external,expected,raw}=codexExport();
+  const run=inspectReport(raw,{mode:'external_model',identity:expected});
+  assert.throws(()=>finalizeReport(external,[run,{...run,codex_cli_version:'0.162.2'}],2));
+});

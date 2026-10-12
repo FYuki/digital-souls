@@ -53,6 +53,7 @@ export function inspectReport(raw, options) {
   const observations = [];
   const grades = [];
   let actualProvider;
+  let codexVersion = null;
   for (const r of rows) {
     const id = vars(r.vars);
     demand(ids.includes(id) && !seen.has(id) && vars(r.testCase?.vars) === id,'case-set');
@@ -77,7 +78,18 @@ export function inspectReport(raw, options) {
     const parsed = typeof r.response.output === 'string' ? JSON.parse(r.response.output) : r.response.output;
     demand(parsed && Object.keys(parsed).sort().join() === 'identity,observation','output');
     demand(options.identity,'identity-required');
-    assert.deepEqual(parsed.identity,options.identity);
+    if (options.mode === 'external_model' && options.identity.provider === 'codex_subscription') {
+      const version = parsed.identity?.codex_cli_version;
+      demand(version === null || (typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version)), 'codex-version');
+      demand(parsed.observation?.dispatched === (version !== null), 'codex-version');
+      if (version !== null) {
+        const parts = version.split('.').map(Number);
+        demand(parts[0] > 0 || parts[1] > 152 || (parts[1] === 152 && parts[2] >= 0), 'codex-version');
+        codexVersion ??= version;
+        demand(codexVersion === version, 'codex-version');
+      }
+      assert.deepEqual({...parsed.identity,codex_cli_version:null},options.identity);
+    } else assert.deepEqual(parsed.identity,options.identity);
     demand(parsed.observation?.id === id,'observation-id');
     observations.push(parsed.observation);
     grades.push([r, results[0]]);
@@ -96,6 +108,10 @@ export function inspectReport(raw, options) {
   const stats = raw.results.stats;
   demand(stats && stats.errors === 0 && stats.successes === rows.filter(r => r.success).length
     && stats.failures === rows.filter(r => !r.success).length,'stats');
+  if (options.mode === 'external_model' && options.identity.provider === 'codex_subscription') {
+    demand(codexVersion !== null, 'codex-version');
+    return {...run,codex_cli_version:codexVersion};
+  }
   return run;
 }
 
@@ -104,5 +120,11 @@ export function finalizeReport(manifest, runs, expectedRuns) {
   demand(manifest.promptfoo_version === '0.117.2'
     && manifest.quality_evidence === (['local_model','external_model'].includes(manifest.mode)),'manifest');
   finite(runs);
+  if (manifest.mode === 'external_model' && manifest.provider === 'codex_subscription') {
+    const version = runs[0]?.codex_cli_version;
+    demand(typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version)
+      && runs.every(r => r.codex_cli_version === version), 'codex-version');
+    return {...manifest,codex_cli_version:version,runs,passed:runs.every(r => r.passed)};
+  }
   return {...manifest, runs, passed:runs.every(r => r.passed)};
 }

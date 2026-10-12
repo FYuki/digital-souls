@@ -243,7 +243,7 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 
 #198 は評価経路の実装だけで、**実送信は NOT RUN**。62ケース・期待値・プロンプト・判定は共通です。
 回答だけを本番 `Inference.prepare` → privacy の external 認可（scanner・ローカル分類器）→
-`inference.check` → `LiteLLMProvider.complete` へ渡します。operator grant に external を追加するのは
+`inference.check` → 評価用 Provider の `complete` へ渡します。operator grant に external を追加するのは
 この mode だけです。embedding は `LocalEmbedding` の管理 loopback、分類器は既存の
 synthetic 応答と本番 `LocalClassifier` の管理 loopback profile を維持します。
 
@@ -255,10 +255,10 @@ fixture/local_model の report にはこのフィールドを追加しません�
 [無効な例](external-answer-profile.example.json)を参考に、git 管理外・リポジトリ外の絶対パスへ
 JSON profile を用意します。トップレベルと embedding の `enabled=true`、chat の
 `transport="sdk"` / `external_send_allowed=true` が必須です。今回対応する LiteLLM provider は
-`openai`。`model` は operator が指定し、Luna のモデル識別子・接続先は未確定です。
+`openai`。API 方式の `model` は operator が指定します。Luna は下記 Codex サブスク方式を使います。
 例のダミーモデル・endpoint は使えません。embedding には管理 loopback の実設定が必要です。既存 local profile の検査は変更していません。
 
-接続先・キーの値は JSON に書かず、`api_key_env` と任意の `api_base_env` に環境変数名だけを
+既存 API 方式では接続先・キーの値は JSON に書かず、`api_key_env` と任意の `api_base_env` に環境変数名だけを
 書きます（大文字英数字と `_`、先頭英字、最大64文字。proxy・プロセス制御名は不可）。
 runner は指名した値だけを子へ転送し、Python provider が `OPENAI_API_KEY` / `OPENAI_BASE_URL`
 へ一時的に写します。指定した値がなければ実送信前に FAIL。その他の資格情報・proxy・dotenv
@@ -285,3 +285,51 @@ dry-run 以外では実行 flag または profile が欠けると NOT RUN（exit
 provider / model / transport / `external_send=true` / `cache=false` / run_count / commit を記録します。
 公開 report・stdout・stderr はキー・URL・環境変数値・ケース本文・query・回答全文を含めません。
 本文を含む promptfoo raw export は既存どおり private 一時領域で扱い、通常終了時に削除します。
+
+### Codex サブスク方式（#201）
+
+[証跡](../../docs/evidence/2026-10-12-codex-subscription-answer-provider.md)と
+[無効な profile 例](codex-answer-profile.example.json)を参照してください。git 管理外・リポジトリ外の
+JSON profile で `answer_provider="codex_subscription"`、
+`chat.transport="sdk"`、`chat.model="openai/gpt-6-luna"` を指定します。
+`codex_executable` と `codex_home` は既存 CLI と既存ログインの CODEX_HOME の絶対パスです。
+`api_key_env` / `api_base_env` は指定できません。enabled・embedding.enabled・external_send_allowed
+と external grant、scanner/classifier、送信直前の検証は API 方式と共通です。
+
+認証は CLI の既存 ChatGPT ログインだけを使います。Core は認証ファイルを開かず、複製・記録しません。
+runner は API キー・proxy・ambient CODEX_HOME を継承せず、CLI 子の HOME/CODEX_HOME に
+profile のパスだけを渡します。CLI 子の継承は PATH/LANG/LC_ALL/TZ に限定します。
+
+許可済み dispatch の内側で CLI の `--version` と `exec --help` を検査します。
+PoC 準拠の版下限は 0.152.0。必須 flag 欠落・旧版・非0終了・timeout・不正 JSONL・最終応答欠落は
+本文を含まない FAIL です。stream・tools・未対応パラメーターは起動前に拒否します。
+実行は空の一時ディレクトリを `-C` と cwd に指定し、
+`--ask-for-approval never`、`--ephemeral`、`--sandbox read-only`、
+`--skip-git-repo-check`、`--ignore-user-config`、`--ignore-rules`、
+`--strict-config`、`--json`、`--color never` を渡します。
+config は web_search=disabled、shell_environment_policy.inherit=none、
+shell_environment_policy.experimental_use_profile=false、mcp_servers={}、model_provider=openai です。
+`--disable` は apps、browser_use、browser_use_external、browser_use_full_cdp_access、
+code_mode_host、computer_use、hooks、image_generation、in_app_browser、multi_agent、plugins、
+shell_tool、skill_search、tool_suggest、unified_exec、view_image を指定します。
+
+Core の messages をそのまま JSON の messages に包んで stdin へ渡します。
+Codex CLI 独自の指示と包装が加わるため、純粋な API 呼び出しとは条件が違います。
+report に `condition_note="codex-cli-adds-own-instructions-not-pure-api"` を記録します。
+Codex 専用追加項目は provider=codex_subscription、model=gpt-6-luna、codex_cli_version です。
+版は許可済み dispatch から採り、ケース間・run 間の変化は FAIL。
+manifest / dry-run は CLI を起動せず版は null、送信を拒否したケースも版は null です。
+既存の external_send・cache=false（評価キャッシュなし）・runs・commit・classifier_reason を維持します。
+stdout/stderr 本文・CODEX_HOME の内容とパス・ケース本文・回答全文を公開 report に含めません。
+
+同じ runner を使い、profile を Codex 用 JSON に替えます。
+dry-run は CLI を起動しません。実送信は #199 で次の形を使います（**#201 では NOT RUN**）。
+
+```sh
+bash tools/evaluate-semantic-answer.sh --mode external_model \
+  --profile /absolute/private/codex-answer.json --execute-external-model --runs 3 \
+  --output /dev/shm/codex-answer-report.json
+```
+
+実 `codex exec`、Luna 送信、login status、実モデル IT2/ST は #201 では **NOT RUN**。
+既存 fixture/local_model/API 方式の report と判定、Node network_guard、Python のネットワーク方針は維持します。

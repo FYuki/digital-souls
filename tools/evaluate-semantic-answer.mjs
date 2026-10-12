@@ -28,6 +28,7 @@ export function cleanEnvironment(temp, options, inherited = process.env) {
   if (options.mode === 'external_model' && !options.dryRun) {
     env.DSC_EXECUTE_EXTERNAL_MODEL = '1';
     const profile = JSON.parse(fs.readFileSync(options.profile,'utf8'));
+    if (profile.answer_provider === 'codex_subscription') return env;
     const names = [profile.api_key_env, ...(profile.api_base_env ? [profile.api_base_env] : [])];
     for (const name of names) {
       if (typeof name !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/.test(name)
@@ -193,7 +194,7 @@ export async function main(argv = process.argv.slice(2)) {
     return report.passed ? 0 : 1;
   } catch (error) {
     // Reasons are structural identifiers only; never print raw SDK or promptfoo text.
-    const safeReasons = new Set(['arguments','fixture-profile','fixture-variant','promptfoo-version','sqlite-version','promptfoo-export','credential-name','credentials-unavailable','profile-path','external-mode','dry-run-mode','price-arguments','output-assumption','dry-run-count','export-version','provider-config','vars','assertion-config','components','grading','configured-count','row-count','case-set','prompt','provider','provider-path','provider-drift','row-error','response','critical-count','output','identity-required','observation-id','forged-grading','forged-row','stats','runs','manifest','nonfinite']);
+    const safeReasons = new Set(['arguments','fixture-profile','fixture-variant','promptfoo-version','sqlite-version','promptfoo-export','credential-name','credentials-unavailable','profile-path','external-mode','dry-run-mode','price-arguments','output-assumption','dry-run-count','codex-version','export-version','provider-config','vars','assertion-config','components','grading','configured-count','row-count','case-set','prompt','provider','provider-path','provider-drift','row-error','response','critical-count','output','identity-required','observation-id','forged-grading','forged-row','stats','runs','manifest','nonfinite']);
     const reason = safeReasons.has(error?.message) ? error.message : 'inconsistent-data';
     if (executions.length) process.stderr.write(`promptfoo diagnostic: ${JSON.stringify(executions.at(-1))}\n`);
     if (output && manifest) fs.writeFileSync(output,JSON.stringify({...manifest,toolchain,runs,executions,
