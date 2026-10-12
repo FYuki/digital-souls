@@ -1,10 +1,14 @@
 """Verbatim erasure must preserve all non-verbatim rows and canonical retrieval."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import pytest
 from psycopg import sql
 
 from digital_souls_core.history import TurnDeletionInput
 from digital_souls_core.postgres_db import PostgresDatabase, key
+from digital_souls_core.postgres_schema import SCHEMA_VERSION
 
 from . import test_postgres_stores
 from .postgres_record_support import register_sources
@@ -34,15 +38,31 @@ def install_v5(stores: Stores) -> None:
             db.execute(statement)
 
 
+@contextmanager
+def writable_v5(stores: Stores) -> Iterator[None]:
+    # Seed legacy rows through the current port, then remove its new nullable
+    # column before snapshots/migration. The migration source remains frozen v5.
+    with stores.database.transaction(BINDING) as db:
+        db.execute("ALTER TABLE turns ADD COLUMN card_sha256 TEXT")
+    try:
+        yield
+    finally:
+        with stores.database.transaction(BINDING) as db:
+            db.execute("ALTER TABLE turns DROP COLUMN card_sha256")
+
+
 async def test_v5_removal_preserves_rows_and_reopens(stores: Stores) -> None:
     install_v5(stores)
-    port, expected = records(stores, stores.records)
-    seed_preserved_state(stores)
+    with writable_v5(stores):
+        port, expected = records(stores, stores.records)
+        seed_preserved_state(stores)
     before = snapshot(stores)
     PostgresDatabase(stores.config).initialize()
     after = snapshot(stores)
     assert set(after) == set(before) - REMOVED
-    assert all(after[t] == rows for t, rows in before.items() if t not in REMOVED)
+    assert all(row[-1] is None for row in after["turns"])
+    assert [row[:-1] for row in after["turns"]] == before["turns"]
+    assert all(after[t] == rows for t, rows in before.items() if t not in REMOVED | {"turns"})
     assert all(
         before[t]
         for t in (
@@ -59,7 +79,7 @@ async def test_v5_removal_preserves_rows_and_reopens(stores: Stores) -> None:
         )
     )
     with stores.database.transaction(BINDING) as db:
-        assert db.execute("SELECT version FROM schema_version").fetchall() == [(6,)]
+        assert db.execute("SELECT version FROM schema_version").fetchall() == [(SCHEMA_VERSION,)]
     PostgresDatabase(stores.config).initialize()
     assert port.retrievable(BINDING) == expected
     service, _, _ = setup()
@@ -112,7 +132,7 @@ def test_current_schema_rejects_leftover_verbatim_table(stores: Stores, table: s
     from digital_souls_core.application import CoreError
 
     with stores.database.transaction(BINDING) as db:
-        db.execute("UPDATE schema_version SET version=6")
+        db.execute("UPDATE schema_version SET version=%s", (SCHEMA_VERSION,))
         db.execute(
             sql.SQL("CREATE TABLE IF NOT EXISTS {} (value text)").format(sql.Identifier(table))
         )
@@ -130,7 +150,8 @@ def test_v5_removal_rolls_back_every_drop_and_retries(
     from psycopg import Connection
 
     install_v5(stores)
-    seed_preserved_state(stores)
+    with writable_v5(stores):
+        seed_preserved_state(stores)
     before = snapshot(stores)
     original = Connection.execute
     target = {
@@ -157,11 +178,11 @@ def test_v5_removal_rolls_back_every_drop_and_retries(
     assert not REMOVED & set(snapshot(stores))
 
 
-def test_v6_new_schema_has_no_verbatim_relations_and_reopens(stores: Stores) -> None:
+def test_current_schema_has_no_verbatim_relations_and_reopens(stores: Stores) -> None:
     before = snapshot(stores)
     assert not REMOVED & set(before)
     with stores.database.transaction(BINDING) as db:
-        assert db.execute("SELECT version FROM schema_version").fetchall() == [(6,)]
+        assert db.execute("SELECT version FROM schema_version").fetchall() == [(SCHEMA_VERSION,)]
         assert (
             db.execute(
                 "SELECT 1 FROM pg_indexes WHERE schemaname=%s AND indexname='memory_source_lookup'",
@@ -185,7 +206,8 @@ def test_malformed_v5_is_rejected_before_any_verbatim_drop(stores: Stores, alter
     from digital_souls_core.application import CoreError
 
     install_v5(stores)
-    seed_preserved_state(stores)
+    with writable_v5(stores):
+        seed_preserved_state(stores)
     with stores.database.transaction(BINDING) as db:
         db.execute(alteration)
     before = snapshot(stores)

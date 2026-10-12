@@ -37,7 +37,7 @@ def test_invalid_contract(update: dict[str, Any]) -> None:
         CompletionInput.model_validate({"messages": [{"role": "user", "content": "hi"}], **update})
 
 
-async def test_context_lore_and_byte_budget() -> None:
+async def test_context_lore_and_token_budget() -> None:
     char = character()
     inference = Inference((char,), FakeProvider())
     request = CompletionInput.model_validate(
@@ -48,8 +48,13 @@ async def test_context_lore_and_byte_budget() -> None:
     assert "光織として" in prompt and "柔らかな丁寧語" in prompt
     assert "太陽の光、薄明光線" in prompt
     assert "光織の外見:" not in prompt
-    tiny = replace(char, config=char.config.model_copy(update={"context_budget_bytes": 1}))
-    with pytest.raises(CoreError, match="byte budget"):
+    tiny = replace(
+        char,
+        config=char.config.model_copy(
+            update={"prompt_budget": char.config.prompt_budget.model_copy(update={"character": 1})}
+        ),
+    )
+    with pytest.raises(CoreError, match="^character$"):
         await Inference((tiny,), FakeProvider()).prepare("miori", request, alias=False)
 
 

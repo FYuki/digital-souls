@@ -44,6 +44,9 @@ def request_fingerprint(body: TurnInput, config: CharacterConfig) -> str:
         # Preserve pre-llamacpp receipts: newly added defaults do not change routing.
         profile.pop("transport")
         profile.pop("api_base")
+    if config.profile.token_counter == "estimate":
+        # The existing estimate is unchanged; only a new counting mode changes identity.
+        profile.pop("token_counter")
     profile["allowed_parameters"] = sorted(config.profile.allowed_parameters)
     request_body = body.model_dump()
     if not body.memory_excluded_indices:
@@ -149,6 +152,10 @@ class Conversations:
         """Return an authorized retry receipt or atomically save a completed turn."""
         binding = self.binding(character_id)
         incoming = tuple(body.messages)
+        if any(message.role == "system" for message in incoming):
+            raise CoreError(
+                400, "system_message_unsupported", "Caller system messages are unsupported"
+            )
         if any(message.role not in ("user", "tool") for message in incoming):
             raise CoreError(400, "invalid_turn", "Only new user or tool messages are accepted")
         bounded(body.model_dump())
@@ -226,6 +233,7 @@ class Conversations:
             snapshot.revision,
             stored,
             finish,
+            card_sha256=prepared.character.card_sha256,
             **(
                 {"memory_confirmation_indices": tuple(confirmation_indices)}
                 if confirmation_indices

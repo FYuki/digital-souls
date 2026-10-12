@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from .conversations import Conversations
 from .history import (
@@ -37,6 +38,10 @@ def snapshot_body(snapshot: Snapshot) -> dict[str, Any]:
             for state in snapshot.memory_sources
         ],
         "messages": [m.model_dump(exclude_none=True) for m in snapshot.messages],
+        "turns": [
+            {"turn_revision": turn.turn_revision, "card_sha256": turn.card_sha256}
+            for turn in snapshot.turns
+        ],
     }
 
 
@@ -119,12 +124,17 @@ def register_conversations(
                     "scopes": ["selected", "following"],
                 },
             }
+        headers = (
+            {"X-Character-Card-SHA256": receipt.card_sha256}
+            if receipt.card_sha256 is not None
+            else {}
+        )
         if not body.stream:
-            return data
+            return JSONResponse(data, headers=headers)
         return Response(
             "event: completed\ndata: "
             + json.dumps(data, ensure_ascii=False)
             + "\n\ndata: [DONE]\n\n",
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache"},
+            headers={**headers, "Cache-Control": "no-cache"},
         )

@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。§6 のうち、会話外の活動を PrivateAgent が実行し、Autonomy Target・High Impact の確認・実行結果の状態を PrivateAgent が持つ記述と、§7 の orchestration・queue・scheduling・checkpoint を PrivateAgent へ委譲する記述。判断と状態は Core が持ち、実行基盤（Core の MCP だけを使える汎用 Agent）だけを外に出す。checkpoint は持たない。流出防止ゲート、インジェクション対策、優先順位は維持）。
+
 日付: 2026-10-06
 
 Accepted日: 2026-10-07

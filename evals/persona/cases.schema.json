@@ -1,0 +1,153 @@
+{
+  "$defs": {
+    "Case": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "category": {
+          "$ref": "#/$defs/Category"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/ProbeMessage"
+          },
+          "minItems": 1,
+          "title": "Messages",
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Text"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "minItems": 1,
+          "title": "Required",
+          "type": "array"
+        },
+        "forbidden": {
+          "items": {
+            "$ref": "#/$defs/Forbidden"
+          },
+          "title": "Forbidden",
+          "type": "array"
+        },
+        "card_fields": {
+          "items": {
+            "$ref": "#/$defs/Text"
+          },
+          "minItems": 1,
+          "title": "Card Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "messages",
+        "required",
+        "forbidden",
+        "card_fields"
+      ],
+      "title": "Case",
+      "type": "object"
+    },
+    "Category": {
+      "enum": [
+        "self_intro",
+        "preferences",
+        "world_lore"
+      ],
+      "type": "string"
+    },
+    "Forbidden": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/Text"
+        },
+        "gate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "Forbidden",
+      "type": "object"
+    },
+    "Gate": {
+      "const": "persona_break",
+      "type": "string"
+    },
+    "Identifier": {
+      "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+      "type": "string"
+    },
+    "ProbeMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "$ref": "#/$defs/Text"
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "title": "ProbeMessage",
+      "type": "object"
+    },
+    "Text": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "draft": {
+      "default": false,
+      "title": "Draft",
+      "type": "boolean"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/Case"
+      },
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "cases"
+  ],
+  "title": "CaseSet",
+  "type": "object"
+}

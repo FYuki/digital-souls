@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "responses": {
+    "intro": "Lumaです。わたしは観測係です。",
+    "likes": "青い石が好きです。",
+    "garden": "庭には青い石があります。"
+  },
+  "scenarios": {
+    "pass": {},
+    "fail": {
+      "chat": {
+        "intro": "名前は不明です。"
+      },
+      "history": {
+        "intro": "名前は不明です。"
+      }
+    },
+    "persona_break": {
+      "chat": {
+        "intro": "Luma わたし 汎用アシスタント"
+      }
+    },
+    "mismatch": {
+      "chat": {
+        "intro": "名前は不明です。"
+      }
+    },
+    "card_hash_mismatch": {},
+    "card_hash_missing": {},
+    "execution_incomplete": {}
+  }
+}

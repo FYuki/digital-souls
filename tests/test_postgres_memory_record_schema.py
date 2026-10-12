@@ -100,10 +100,12 @@ def test_v4_migration_preserves_all_rows_and_reopens(stores: Stores) -> None:
     before = snapshot(stores)
     PostgresDatabase(stores.config).initialize()
     after = snapshot(stores)
+    assert all(row[-1] is None for row in after["turns"])
+    assert [row[:-1] for row in after["turns"]] == before["turns"]
     assert all(
         after[t] == rows
         for t, rows in before.items()
-        if t not in {"memories", "memory_sources", "memory_jobs"}
+        if t not in {"memories", "memory_sources", "memory_jobs", "turns"}
     )
     with stores.database.transaction(BINDING) as db:
         assert db.execute("SELECT version FROM schema_version").fetchall() == [(SCHEMA_VERSION,)]
@@ -135,10 +137,13 @@ def test_v4_migration_rolls_back_and_retries(
     with stores.database.transaction(BINDING) as db:
         assert db.execute("SELECT version FROM schema_version").fetchall() == [(4,)]
     PostgresDatabase(stores.config).initialize()
+    migrated = snapshot(stores)
+    assert all(row[-1] is None for row in migrated["turns"])
+    assert [row[:-1] for row in migrated["turns"]] == before["turns"]
     assert all(
-        snapshot(stores)[t] == rows
+        migrated[t] == rows
         for t, rows in before.items()
-        if t not in {"memories", "memory_sources", "memory_jobs"}
+        if t not in {"memories", "memory_sources", "memory_jobs", "turns"}
     )
 
 

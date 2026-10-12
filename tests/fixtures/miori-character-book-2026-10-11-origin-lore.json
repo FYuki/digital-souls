@@ -1,0 +1,85 @@
+[
+  {
+    "question": "自己紹介して",
+    "source_indices": [
+      0
+    ],
+    "estimate_tokens": 387
+  },
+  {
+    "question": "あなたと黄昏の関係",
+    "source_indices": [
+      1
+    ],
+    "estimate_tokens": 420
+  },
+  {
+    "question": "光の断片について教えて",
+    "source_indices": [
+      2
+    ],
+    "estimate_tokens": 402
+  },
+  {
+    "question": "光のかけらについて教えて",
+    "source_indices": [
+      3
+    ],
+    "estimate_tokens": 399
+  },
+  {
+    "question": "光の層について教えて",
+    "source_indices": [
+      4
+    ],
+    "estimate_tokens": 264
+  },
+  {
+    "question": "あなたの見た目を教えて",
+    "source_indices": [
+      5
+    ],
+    "estimate_tokens": 288
+  },
+  {
+    "question": "配信モードについて教えて",
+    "source_indices": [
+      6
+    ],
+    "estimate_tokens": 372
+  },
+  {
+    "question": "計算して",
+    "source_indices": [],
+    "estimate_tokens": 0
+  },
+  {
+    "question": "光の層とあなたの見た目について教えて",
+    "source_indices": [
+      4,
+      5
+    ],
+    "estimate_tokens": 536
+  },
+  {
+    "question": "光の断片と光の層について教えて",
+    "source_indices": [
+      2,
+      4
+    ],
+    "estimate_tokens": 650
+  },
+  {
+    "question": "自己紹介して。あなたと黄昏、光の断片、光のかけら、光の層、あなたの見た目、配信モードについて教えて",
+    "source_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "estimate_tokens": 2436
+  }
+]

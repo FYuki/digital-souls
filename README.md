@@ -27,9 +27,10 @@ Coreの範囲は次のとおりです。
 - 経験からの内省・人格・関係の更新（[ADR 0020](docs/adr/0020-reflection-personality-relationship.md)）。
 - プロバイダーのadapterを交換できるLLM port。
 
-音声・STT・TTS、LiveKit、UIはCoreの対象外です。Coreは外部Agentのtool実行ループを持たず、
-通常チャットUIからも呼べます（[推論API](docs/api.md)）。記憶の形成jobの起動や会話外の活動は
-PrivateAgentが実行し、キャラクターによる判断が必要な処理ではCoreのLLMをAPIとして呼びます。
+音声・STT・TTS、LiveKit、UIはCoreの対象外です。通常チャットUIからも呼べます（[推論API](docs/api.md)）。
+会話中のツール利用（ツール一覧・Execution Gate・流出防止・承認）と、会話外の活動の判断と状態はCoreが持ちます。
+会話外の活動の実行基盤だけを外に出し、その汎用Agentが使えるツールはCoreのMCPだけに限定します。
+決まった定期処理（記憶の形成など）は、timerがCoreのAPIを呼びます（[ADR 0027](docs/adr/0027-tool-use-and-activity-runtime.md)。いずれも実装前）。
 Coreは記憶の正本と検証、機微情報の流出防止ゲート、インジェクション対策を所有します。
 
 記憶モデルはPoC（公開`FYuki/digital-souls`）で採用済みの決定を移設したものです

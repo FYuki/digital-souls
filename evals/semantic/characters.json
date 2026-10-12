@@ -4,13 +4,23 @@
     "alias": "semantic-evaluator",
     "config_version": "synthetic-answer-v1",
     "card_path": "evaluation.card.json",
-    "context_budget_bytes": 65536,
     "profile": {
       "profile_id": "fixture-answer",
       "model": "openai/gemma4-12b",
       "external_send_allowed": true,
       "transport": "llamacpp_chat",
       "api_base": "http://127.0.0.1:18080/v1"
-    }
+    },
+    "prompt_budget": {
+      "total": 28672,
+      "character": 65536,
+      "lore": 65536,
+      "memory": 65536,
+      "history": 65536,
+      "current_input": 65536,
+      "post_history": 65536
+    },
+    "memory_floor": 3,
+    "history_floor": 3
   }
 ]
