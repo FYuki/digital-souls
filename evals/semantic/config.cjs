@@ -2,8 +2,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 function configuration(mode, options = {}) {
-  if (!['fixture','local_model'].includes(mode)) throw new Error('Unknown mode');
-  if (mode === 'local_model' && (!options.profile || !path.isAbsolute(options.profile))) {
+  if (!['fixture','local_model','external_model'].includes(mode)) throw new Error('Unknown mode');
+  if (['local_model','external_model'].includes(mode) && (!options.profile || !path.isAbsolute(options.profile))) {
     throw new Error('NOT RUN: explicit profile required');
   }
   if (mode === 'fixture' && options.profile) throw new Error('Fixture rejects profile');

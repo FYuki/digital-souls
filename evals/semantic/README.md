@@ -238,3 +238,50 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 分類品質と必須ゲートを分け、前回nomic/0.54との比較も記録した
 [実モデル証跡](../../docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)と
 [利用手順](../../docs/memory-evaluation.md)を参照してください。
+
+### 外部モデルでの回答生成（external_model）
+
+#198 は評価経路の実装だけで、**実送信は NOT RUN**。62ケース・期待値・プロンプト・判定は共通です。
+回答だけを本番 `Inference.prepare` → privacy の external 認可（scanner・ローカル分類器）→
+`inference.check` → `LiteLLMProvider.complete` へ渡します。operator grant に external を追加するのは
+この mode だけです。embedding は `LocalEmbedding` の管理 loopback、分類器は既存の
+synthetic 応答と本番 `LocalClassifier` の管理 loopback profile を維持します。
+
+external の manifest/identity には `classifier_reason="baseline-parity-no-classifier-export"` を記録します。
+比較基準の gemma4-12b 評価（[2026-10-10 証跡](../../docs/evidence/2026-10-10-semantic-real-model-answer-bge-m3.json)）も synthetic で条件をそろえるためです。
+分類器は外部モデルへ送らずローカルのまま維持し、実分類器での受入は Issue #128 の範囲です。
+fixture/local_model の report にはこのフィールドを追加しません。
+
+[無効な例](external-answer-profile.example.json)を参考に、git 管理外・リポジトリ外の絶対パスへ
+JSON profile を用意します。トップレベルと embedding の `enabled=true`、chat の
+`transport="sdk"` / `external_send_allowed=true` が必須です。今回対応する LiteLLM provider は
+`openai`。`model` は operator が指定し、Luna のモデル識別子・接続先は未確定です。
+例のダミーモデル・endpoint は使えません。embedding には管理 loopback の実設定が必要です。既存 local profile の検査は変更していません。
+
+接続先・キーの値は JSON に書かず、`api_key_env` と任意の `api_base_env` に環境変数名だけを
+書きます（大文字英数字と `_`、先頭英字、最大64文字。proxy・プロセス制御名は不可）。
+runner は指名した値だけを子へ転送し、Python provider が `OPENAI_API_KEY` / `OPENAI_BASE_URL`
+へ一時的に写します。指定した値がなければ実送信前に FAIL。その他の資格情報・proxy・dotenv
+は継承しません。Node の network guard と fixture の IP 拒否は維持します。
+
+外部送信なしの見積もり（キー不要。ローカル embedding と使い捨て PostgreSQL は使用）：
+
+```sh
+bash tools/evaluate-semantic-answer.sh --mode external_model \
+  --profile /absolute/private/external-answer.json --dry-run --runs 3 \
+  --output-tokens-per-call 512 --input-price-per-million 1 --output-price-per-million 2 \
+  --output /dev/shm/external-answer-plan.json
+```
+
+本番 prepare・撤回検査まで進め、送信しない計数器で1回分の dispatch 件数・入力 token 推定を
+求めて runs 倍します。入力は既存 UTF-8 byte 推定器で、実 tokenizer の値ではありません。
+出力 token は `--output-tokens-per-call` の明示的な仮定。単価は同じ通貨で100万 token あたりを
+任意指定し、指定した項目だけ金額を計算します（通貨換算なし・価格の既定値なし）。
+report の `status="DRY RUN"` / `external_send=false` / `quality_evidence=false` は品質合格ではありません。
+
+#199 で実送信する際は `--execute-external-model` と profile を明示した別コマンドを使います。
+`--dry-run` と `--execute-external-model` の同時指定は引数エラー（FAIL、送信なし）。
+dry-run 以外では実行 flag または profile が欠けると NOT RUN（exit 3）。実送信 report は
+provider / model / transport / `external_send=true` / `cache=false` / run_count / commit を記録します。
+公開 report・stdout・stderr はキー・URL・環境変数値・ケース本文・query・回答全文を含めません。
+本文を含む promptfoo raw export は既存どおり private 一時領域で扱い、通常終了時に削除します。

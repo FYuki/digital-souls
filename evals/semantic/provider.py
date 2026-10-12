@@ -1,9 +1,11 @@
 """promptfoo 0.117.2 Python provider. The model input side never opens gold."""
 
 import asyncio
+import io
 import json
 import os
 import socket
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,7 @@ from digital_souls_core.application import Provider
 from digital_souls_core.local_embedding import LocalEmbedding
 from digital_souls_core.memory_ranking import MemoryEmbedding
 from digital_souls_core.postgres_db import PostgresConfig
+from digital_souls_core.semantic_answer_external import ExternalAnswerProfile, external_credentials
 from digital_souls_core.semantic_answer_runtime import (
     FixtureAnswerProvider,
     answer_character,
@@ -35,7 +38,7 @@ def deny_fixture_network() -> None:
     socket.socket.connect = connect  # type: ignore[method-assign, assignment]
 
 
-def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+def _call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     try:
         config = options.get("config", {})
         if set(config) - {
@@ -54,7 +57,7 @@ def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> d
         identity = runtime_identity(mode, profile_path)
         inputs = parse_evaluation_inputs((EVAL / "cases.json").read_text(encoding="utf-8"))
         case = next(c for c in inputs.cases if c.id == prompt)
-        profile = load_profile(profile_path)
+        profile = load_profile(profile_path, mode)
         provider: Provider
         embedding: MemoryEmbedding
         if mode == "fixture":
@@ -94,7 +97,7 @@ def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> d
         )
         if not database.host.startswith("/"):
             raise ValueError
-        with isolated_case(database, case, embedding) as runtime:
+        with isolated_case(database, case, embedding, external=mode == "external_model") as runtime:
             observation = asyncio.run(
                 complete_answer(
                     runtime, answer_character(EVAL / "characters.json", case, profile), provider
@@ -109,3 +112,19 @@ def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> d
         }
     except Exception:
         return {"error": "answer_evaluation_failed"}
+
+
+def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if options.get("config", {}).get("mode") != "external_model":
+        return _call_api(prompt, options, context)
+    # Third-party SDK output is private even when it prints before raising.
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+        try:
+            if os.environ.get("DSC_EXECUTE_EXTERNAL_MODEL") != "1":
+                raise ValueError
+            profile = load_profile(options["config"].get("profile_path"), "external_model")
+            assert isinstance(profile, ExternalAnswerProfile)
+            with external_credentials(profile):
+                return _call_api(prompt, options, context)
+        except Exception:
+            return {"error": "answer_evaluation_failed"}

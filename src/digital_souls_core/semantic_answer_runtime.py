@@ -10,10 +10,12 @@ from pydantic import BaseModel, ConfigDict
 
 from .application import CoreError, Inference, Provider
 from .character import Character, Profile, load_characters
-from .contracts import CompletionInput, Message
+from .contracts import CompletionInput, Message, Tool
 from .local_embedding import LocalEmbedding, LocalEmbeddingProfile
 from .memory import MemoryContext
 from .memory_ranking import RetrievalPolicy
+from .prompt_builder import ByteTokenCounter
+from .semantic_answer_external import ExternalAnswerProfile, load_external_profile
 from .semantic_evaluation_cases import EvaluationCase, parse_evaluation_inputs
 from .semantic_evaluation_runtime import FixtureEmbedding, PreparedCase
 
@@ -32,7 +34,9 @@ class AnswerProfile(BaseModel):
             raise ValueError("Managed local answer profile required")
 
 
-def answer_character(path: Path, case: EvaluationCase, profile: AnswerProfile | None) -> Character:
+def answer_character(
+    path: Path, case: EvaluationCase, profile: AnswerProfile | ExternalAnswerProfile | None
+) -> Character:
     characters = load_characters(path)
     if len(characters) != 1:
         raise ValueError("One synthetic evaluation character required")
@@ -65,6 +69,23 @@ class FixtureAnswerProvider:
     ) -> AsyncGenerator[dict[str, Any]]:
         raise ValueError("Answer evaluation does not stream")
         yield  # pragma: no cover
+
+
+class CountingAnswerProvider(FixtureAnswerProvider):
+    """Count authorized dispatches without retaining payloads or using transport."""
+
+    def __init__(self) -> None:
+        super().__init__("")
+        self.calls = 0
+        self.input_tokens = 0
+
+    async def complete(self, profile: Profile, payload: dict[str, Any]) -> dict[str, Any]:
+        self.calls += 1
+        self.input_tokens += ByteTokenCounter()(
+            tuple(Message.model_validate(m) for m in payload["messages"]),
+            tools=tuple(Tool.model_validate(t) for t in payload.get("tools", ())),
+        )
+        return {"choices": [{"message": {"role": "assistant", "content": ""}}]}
 
 
 async def complete_answer(
@@ -130,7 +151,11 @@ async def complete_answer(
 EVAL = Path(__file__).resolve().parents[2] / "evals/semantic"
 
 
-def load_profile(path: str | None) -> AnswerProfile | None:
+def load_profile(
+    path: str | None, mode: str = "local_model"
+) -> AnswerProfile | ExternalAnswerProfile | None:
+    if mode == "external_model":
+        return load_external_profile(path)
     if path is None:
         return None
     try:
@@ -148,17 +173,19 @@ def digest(path: Path) -> str:
 
 
 def runtime_identity(mode: str, profile_path: str | None) -> dict[str, Any]:
-    if mode not in {"fixture", "local_model"} or (mode == "fixture" and profile_path is not None):
+    if mode not in {"fixture", "local_model", "external_model"} or (
+        mode == "fixture" and profile_path is not None
+    ):
         raise ValueError("Invalid answer mode")
-    profile = load_profile(profile_path)
+    profile = load_profile(profile_path, mode)
     if mode == "local_model" and profile is None:
         raise ValueError("Explicit answer profile required")
     inputs = parse_evaluation_inputs((EVAL / "cases.json").read_text(encoding="utf-8"))
     embedding = FixtureEmbedding(inputs) if profile is None else LocalEmbedding(profile.embedding)
     chat = profile.chat if profile else None
-    return {
+    identity = {
         "mode": mode,
-        "quality_evidence": mode == "local_model",
+        "quality_evidence": mode in {"local_model", "external_model"},
         "classifier": "synthetic",
         "answer_model": {
             "profile_id": chat.profile_id if chat else "fixture-answer",
@@ -172,3 +199,15 @@ def runtime_identity(mode: str, profile_path: str | None) -> dict[str, Any]:
         "characters_sha256": digest(EVAL / "characters.json"),
         "card_sha256": digest(EVAL / "evaluation.card.json"),
     }
+
+    if mode == "external_model":
+        assert chat is not None
+        identity.update(
+            classifier_reason="baseline-parity-no-classifier-export",
+            provider=chat.model.split("/", 1)[0],
+            model=chat.model,
+            transport=chat.transport,
+            external_send=True,
+            cache=False,
+        )
+    return identity
