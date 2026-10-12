@@ -1,15 +1,18 @@
 # ADR 0032: privacy 分類器の評価と PoC ケースの移行
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-12
+
+Accepted日: 2026-10-12（ユーザーの承認「ADR0032も採用でよい」、2026-10-12。承認対象は main `5919bcfbe3e803e5a6ad3423c4166cdeeeb74158` の本文と、ABSTAIN の決定 C。本文中で「AI 案・Proposed」「（案）」と記した評価方式〈分類の定義、必須ゲート、全60件の移行と2 profileの統合、gemma4-12b の使用など〉も承認の対象に含む。本文中の「Status は Proposed のまま」と「承認済みの評価方式とは扱いません」は承認前の記録）
 
 関連: [Epic #125](https://github.com/FYuki/digital-souls-core/issues/125)、
 [Issue #189](https://github.com/FYuki/digital-souls-core/issues/189)、
 [SPEC §3.2](../../SPEC.md#32-評価の基準)、
 [ADR 0023](0023-semantic-evaluation-contract.md)、
 [ADR 0029](0029-persona-consistency-evaluation.md)、
-[ADR 0030](0030-injection-resistance-evaluation.md)
+[ADR 0030](0030-injection-resistance-evaluation.md)、
+[PR #202（Accepted の記録）](https://github.com/FYuki/digital-souls-core/pull/202)
 
 ## 背景
 
