@@ -6,7 +6,7 @@
 最終ローカル commit は担当の引継ぎ報告で識別します。
 
 [ADR 0029](../adr/0029-persona-consistency-evaluation.md) §7 の実モードを追加しました。
-実行手順と設定の作り方は [人格評価 README](../../evals/persona/README.md) に記載しています。
+実行手順と設定の作り方は [人格評価 README](../../core/evals/persona/README.md) に記載しています。
 この証跡は fake provider / fake token counter / MockTransport と使い捨て PostgreSQL の検証です。
 実モデルへの送信・GPU 使用・実 Egogram judge は **NOT RUN** です。
 合成試験の PASS を実モデルの人格品質の PASS として扱いません。

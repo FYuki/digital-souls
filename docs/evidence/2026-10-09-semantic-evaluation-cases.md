@@ -9,8 +9,8 @@
 ## 変更と範囲
 
 [ADR 0023](../adr/0023-semantic-evaluation-contract.md)でV1〜V7・旧評価の置換を記録しました。
-[評価データREADME](../../evals/semantic/README.md)に62ケースの分類件数・旧19件の対応と公開操作への読み替えを示しました。
-[検証モジュール](../../src/digital_souls_core/semantic_evaluation_cases.py)はstrict/extra forbidの入力とgoldを別型で読み、参照・citation・vector・初期登録構造を純粋に検証・変換します。
+[評価データREADME](../../core/evals/semantic/README.md)に62ケースの分類件数・旧19件の対応と公開操作への読み替えを示しました。
+[検証モジュール](../../core/src/digital_souls_core/semantic_evaluation_cases.py)はstrict/extra forbidの入力とgoldを別型で読み、参照・citation・vector・初期登録構造を純粋に検証・変換します。
 
 先にUTを書き、モジュール未作成の `ModuleNotFoundError`（collection error）でREDを確認しました。
 追加UTのREDで、除外Episodeを根拠にするSemanticが登録batchに残る検証漏れを確認し、修正しました。
@@ -22,7 +22,7 @@
 
 ## 第2ラウンドの回答gold修正
 
-監督の指摘に従い、全62ケースのrequired/forbiddenを見直しました。非空のgoldを持つ51ケースはany-ofグループへ変換、11ケースは両側の空配列を維持しています。意味・許容表記を修正した22ケースと理由の一覧は[評価データREADMEの監査表](../../evals/semantic/README.md#第2ラウンドの全件gold監査)に記録しました。残る40ケースの確認結果、短い色名の誤一致、否定関係の検出限界も同じ箇所に記載しました。
+監督の指摘に従い、全62ケースのrequired/forbiddenを見直しました。非空のgoldを持つ51ケースはany-ofグループへ変換、11ケースは両側の空配列を維持しています。意味・許容表記を修正した22ケースと理由の一覧は[評価データREADMEの監査表](../../core/evals/semantic/README.md#第2ラウンドの全件gold監査)に記録しました。残る40ケースの確認結果、短い色名の誤一致、否定関係の検出限界も同じ箇所に記載しました。
 
 第1ラウンドのgoldは未公開・回答評価未実行です。prompt・設定調整と評価結果を見る前の基準修正であり、結果に合わせた緩和ではありません。`cases.json` は変更せず、goldのschemaのみ2に更新し、旧schema 1 / 平坦配列を拒否します。候補は合成記憶・会話の事実と自然な訳・表記揺れに限定しました。
 

@@ -1,8 +1,8 @@
 # privacy 分類器評価の固定ケース
 
-[ADR 0032](../../docs/adr/0032-privacy-classifier-evaluation.md) は Accepted です（2026-10-12 ユーザー承認）。
+[ADR 0032](../../../docs/adr/0032-privacy-classifier-evaluation.md) は Accepted です（2026-10-12 ユーザー承認）。
 [Issue #189](https://github.com/FYuki/digital-souls-core/issues/189) はデータ移行と形式検証だけを実装します。
-ハーネス・採点・集計は #190 で実装し、#191 で実モデル評価を実施しました（[結果と制約](../../docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md)）。ABSTAIN の採点は ADR 0032 のユーザー決定 C（別集計、2026-10-12）です。
+ハーネス・採点・集計は #190 で実装し、#191 で実モデル評価を実施しました（[結果と制約](../../../docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md)）。ABSTAIN の採点は ADR 0032 のユーザー決定 C（別集計、2026-10-12）です。
 
 ## 出典
 
@@ -164,7 +164,7 @@ PY
 [UT](../../tests/test_privacy_evaluation_cases.py) は件数・group・日英pair・gold分離・secret/failedにならないこと・
 固定版・schemaの一致・拒否経路を検証します。fixture/mock の成功は実モデル品質の証拠ではありません。
 期待値は実評価前に commit で固定し、FAIL でも結果を記録して期待値を緩めません。
-[移行の証跡](../../docs/evidence/2026-10-12-privacy-classifier-cases.md)に照合方法と品質ゲートを記録します。
+[移行の証跡](../../../docs/evidence/2026-10-12-privacy-classifier-cases.md)に照合方法と品質ゲートを記録します。
 
 ## 評価ハーネス（Issue #190）
 
@@ -228,7 +228,7 @@ accept・reject・separate のいずれでも標準シナリオは PASS にな�
 既存の llama.cpp の起動・変更はこの tool では行いません。履歴・DB は使いません。
 設定の profile を変更・上書きせず、llamacpp_chat・external_send_allowed=true・max_completion_tokens capability が必要です。
 モデルの固定値 `--model-digest` は空不可で、GGUF SHA-256 等を運用者が指定します。
-[llama.cpp 運用手順の SHA 確認](../../docs/llamacpp-operations.md)で算出した実ファイルの値を使い、
+[llama.cpp 運用手順の SHA 確認](../../../docs/llamacpp-operations.md)で算出した実ファイルの値を使い、
 モデル名・可変 tag だけで固定済みとは扱いません。
 
 次の設定コピーだけでは送信しません。最後のコマンドが実モデルへ送信します。
@@ -277,9 +277,9 @@ JSON report は本文・応答の生テキスト・endpoint・認証情報・設
 
 `--output` 指定時は JSON を保存し、標準出力に要約と FAIL 理由を出します。省略時は標準出力に status と集計を含む JSON を出します。
 exit code は PASS=0、評価 FAIL=1、設定・入力・report 保存エラー=2。エラーの本文・パス・raw exception は表示しません。
-[ハーネス証跡](../../docs/evidence/2026-10-12-privacy-classifier-harness.md)に TDD と必須品質ゲートを記録します。
+[ハーネス証跡](../../../docs/evidence/2026-10-12-privacy-classifier-harness.md)に TDD と必須品質ゲートを記録します。
 ABSTAIN 方針は C に決定済み（2026-10-12）。gemma4-12b・合成60件・cacheなし3回の実モデル評価は
 **FAIL**（各回51/60、HEALTH・SELF_HARM・ABUSEが基準未達、第3回は偽陰性2件）。ABSTAINは各回0/60、
 不正出力・timeout・実行不完了は各回0件です。分類器品質は未受入で、形成〜利用の実環境IT2/STは **NOT RUN** です。
-[本文を含まないreport](../../docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.json)と
-[各回・各group・環境・制約の証跡](../../docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md)を参照してください。
+[本文を含まないreport](../../../docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.json)と
+[各回・各group・環境・制約の証跡](../../../docs/evidence/2026-10-12-privacy-classifier-real-model-evaluation.md)を参照してください。

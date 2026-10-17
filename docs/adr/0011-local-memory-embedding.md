@@ -92,7 +92,7 @@ NOT RUNです。PostgreSQL等へのDB変更、永続vector index、常駐処理�
 
 - [既存lockと同じOpenAI Python SDK v2.54.0](https://github.com/openai/openai-python/tree/v2.54.0)
 - [記憶APIと接続例](../memory.md)
-- [無効が既定の合成profile例](../../examples/embedding.example.json)
+- [無効が既定の合成profile例](../../core/examples/embedding.example.json)
 
 
 共有clientを使う既存chatでも、LiteLLM側の`OPENAI_ORGANIZATION`またはglobal `organization`が

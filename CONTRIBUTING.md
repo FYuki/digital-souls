@@ -52,7 +52,7 @@ schema・contracts・domainの振る舞いは、プロバイダーSDK、通信�
 `.node-version`と一致するNode **24.19.0**を用意してください。
 検証にパッケージのインストール、LLM認証情報、外部通信、GPUは不要です。
 Nodeは文書検証ツールの実行環境であり、製品の実装言語を選定したものではありません。
-検証ツールは組み込みモジュールのみを使うため、文書検証は追加パッケージを使いません。回答評価のみ、`evals/semantic/package-lock.json` の固定依存を使います。
+検証ツールは組み込みモジュールのみを使うため、文書検証は追加パッケージを使いません。回答評価のみ、`core/evals/semantic/package-lock.json` の固定依存を使います。
 
 ```sh
 node --test --test-reporter=./tools/required-tests-reporter.mjs tools/check-docs.test.mjs tools/required-tests-reporter.test.mjs
@@ -80,10 +80,11 @@ CIの権限はcontentsの読み取りのみです。公式ActionsをSHAで固定
 製品コードを受け入れる前に、言語・toolchainをADRで合意し、開発依存の正確なバージョン、
 コミットされたlockfile、lockを変更しないインストール手順を追加します。
 lint、format-check、静的型検査、UT、IT1、パッケージのbuild・install確認を行う
-実際のコマンドを整備します。[推論API契約](docs/api.md)と[ADR 0001](docs/adr/0001-character-inference-api.md)に
+実際のコマンドを整備します。Coreのコマンドは`core/`で実行します。[推論API契約](docs/api.md)と[ADR 0001](docs/adr/0001-character-inference-api.md)に
 初期Python実装の境界を記載しています。固定したuv 0.8.22で以下を実行します。
 
 ```sh
+cd core
 uv sync --frozen
 uv run --no-sync ruff check src tests tools/evaluate-semantic-retrieval.py tools/prepare-semantic-tuning-supplements.py tools/evaluate-semantic-embedding-candidates.py evals/semantic/provider.py tools/evaluate-persona-consistency.py tools/evaluate-injection-resistance.py tools/evaluate-privacy-classifier.py
 uv run --no-sync ruff format --check src tests tools/evaluate-semantic-retrieval.py tools/prepare-semantic-tuning-supplements.py tools/evaluate-semantic-embedding-candidates.py evals/semantic/provider.py tools/evaluate-persona-consistency.py tools/evaluate-injection-resistance.py tools/evaluate-privacy-classifier.py
@@ -123,7 +124,7 @@ bypass権限とforkでの挙動を確認します。今回、これらの設定�
 保存backendはPostgreSQLへ一本化します（[ADR 0021](docs/adr/0021-postgresql-only-storage.md)）。
 SQLiteは撤去済みです。保存を使う試験はPostgreSQLの合成試験で検証します。
 
-PostgreSQL を変更する場合は `bash tools/test-postgres.sh` も実行します。専用の
+PostgreSQL を変更する場合は `core/` で `bash tools/test-postgres.sh` も実行します。専用の
 `postgres` marker は実 DB プロセスを使うため、プロセス内の UT / IT1 と分離します。
 公式 PostgreSQL 18 イメージを digest 固定し、ネットワークなし・公開ポートなしの
 使い捨てコンテナへ Unix socket で接続します。取得時のみネットワークが必要です。
@@ -136,15 +137,16 @@ CI の `postgres-storage` は全 PR と main / epic push で必須試験を実�
 
 ## 回答評価の固定開発依存
 
-[回答評価](evals/semantic/README.md)は `evals/semantic` 内の promptfoo **0.117.2** だけを
+[回答評価](core/evals/semantic/README.md)は `evals/semantic` 内の promptfoo **0.117.2** だけを
 直接追加依存とし、製品のPython依存へ含めません。`npm ci --no-audit --no-fund`
 でlock通りに取得します（取得にはネットワークが必要）。取得後のfixture評価は外部通信・実モデルを使いません。
 promptfooの内部DB依存はNode 24のGCクラッシュを避けるため `better-sqlite3 13.0.3` に固定overrideします。
 同梱N-API bindingを使い、`evals/semantic/.npmrc` の `ignore-scripts=true` で依存のinstall scriptを無効にします。
 
 ```sh
+cd core
 (cd evals/semantic && npm ci --no-audit --no-fund)
-node --test --test-reporter=./tools/required-tests-reporter.mjs tools/*.test.mjs
+node --test --test-reporter=../tools/required-tests-reporter.mjs tools/semantic-answer.test.mjs
 bash tools/evaluate-semantic-answer.sh --runs 3 --output /dev/shm/semantic-answer-report.json
 ```
 

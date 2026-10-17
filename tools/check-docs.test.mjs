@@ -76,14 +76,14 @@ test('CLI checks tracked files and returns a failing exit code for broken links'
 });
 
 function localPostgresCompose() {
-  return JSON.parse(readFileSync(new URL('../compose.postgresql.json', import.meta.url), 'utf8'));
+  return JSON.parse(readFileSync(new URL('../core/compose.postgresql.json', import.meta.url), 'utf8'));
 }
 
 test('local PostgreSQL uses the isolated fixture image and digest', () => {
   const compose = localPostgresCompose();
-  const fixtureScript = readFileSync(new URL('./with-test-postgres.sh', import.meta.url), 'utf8');
+  const fixtureScript = readFileSync(new URL('../core/tools/with-test-postgres.sh', import.meta.url), 'utf8');
   for (const wrapper of ['test-postgres.sh', 'evaluate-semantic-retrieval.sh']) {
-    const script = readFileSync(new URL(`./${wrapper}`, import.meta.url), 'utf8');
+    const script = readFileSync(new URL(`../core/tools/${wrapper}`, import.meta.url), 'utf8');
     assert.match(script, /with-test-postgres\.sh/);
   }
   const image = fixtureScript.match(/image='([^']+)'/)[1];
@@ -114,7 +114,7 @@ test('local PostgreSQL requires explicit credentials and ignores the local env f
     POSTGRES_USER: '${DSC_POSTGRES_USER:?Set DSC_POSTGRES_USER}',
     POSTGRES_PASSWORD: '${DSC_POSTGRES_PASSWORD:?Set DSC_POSTGRES_PASSWORD}'
   });
-  const example = readFileSync(new URL('../examples/postgresql.env.example', import.meta.url), 'utf8');
+  const example = readFileSync(new URL('../core/examples/postgresql.env.example', import.meta.url), 'utf8');
   assert.equal(example, 'DSC_POSTGRES_DATABASE=\nDSC_POSTGRES_USER=\nDSC_POSTGRES_PASSWORD=\n');
   const root = fileURLToPath(new URL('../', import.meta.url));
   const ignored = spawnSync('git', ['check-ignore', '.env.postgresql.local'], { cwd: root });

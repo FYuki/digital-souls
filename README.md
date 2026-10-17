@@ -1,11 +1,25 @@
-# Digital Souls Core
+# Digital Souls
 
-プロバイダーに依存しない最小限のCoreを開発する公開リポジトリです。
+キャラクターとの継続的な会話のための、プロバイダーに依存しない最小限のCoreと、そのクライアントを開発する公開リポジトリです。
+2026-10-18に`FYuki/digital-souls-core`から`FYuki/digital-souls`へ改名しました。
+
+## リポジトリ構成
+
+| パス | 内容 |
+| --- | --- |
+| `core/` | Core（Python、FastAPI）。`src`・`tests`・`evals`・`examples`・`characters`・Coreの`tools`、`pyproject.toml`・`uv.lock` |
+| `client/` | クライアント（WebのFEとネイティブの包装）。[client](client/README.md)を参照 |
+| `docs/` | Coreの文書・ADR・証跡（リポジトリ全体の決定を含む） |
+| `tools/` | リポジトリ全体の文書検査と必須テスト用reporter |
+
+Coreのコマンド（`uv`、`core/tools`、評価、Compose）は`core/`で実行します。`docs/`などの文書で
+`src/…`・`tests/…`・`evals/…`・`tools/evaluate-…`等と書いたパスは、`core/`からの相対パスです。
+証跡（`docs/evidence`）のコマンドとパスは記録時点の構成（リポジトリ直下）のままです。
 
 開発・検証は[CONTRIBUTING](CONTRIBUTING.md)、用語は[CONTEXT](CONTEXT.md)、
 記憶・人格の仕様と実装状況は[SPEC](SPEC.md)を参照してください。エージェント向けの入口は
 [AGENTS](AGENTS.md)です。決定は[ADR](docs/adr/README.md)、進捗は
-[Issue](https://github.com/FYuki/digital-souls-core/issues)、検証結果は
+[Issue](https://github.com/FYuki/digital-souls/issues)、検証結果は
 [日付付き証跡](docs/evidence/2026-10-02-bootstrap.md)で管理します。
 
 ## 製品の範囲
@@ -53,7 +67,7 @@ localhostの単独利用者向けで、公開サービス用の認証・tool実�
 ローカルGemma 4を使う場合は[llama.cppの起動・切替・rollback](docs/llamacpp-operations.md)を参照してください。
 固定Dockerと運用者profileを使用し、Ollamaや他クライアントの設定を自動変更しません。
 
-[光織 / Miori](characters/miori/README.md)をサンプルキャラクターとして格納しています。
+[光織 / Miori](core/characters/miori/README.md)をサンプルキャラクターとして格納しています。
 素材固有の利用条件と、保留・省略した項目のmanifestを確認してください。
 
 ## 明示的な会話履歴と記憶

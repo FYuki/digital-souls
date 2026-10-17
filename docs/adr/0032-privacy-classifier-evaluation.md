@@ -19,7 +19,7 @@ Accepted日: 2026-10-12（ユーザーの承認「ADR0032も採用でよい」�
 Core の LocalClassifier は、記憶の検索時に query の文字列をそのまま受け取り、Assessment の
 classification・subject・category を検証します。現在はその実モデル品質を未評価です。
 PoC の日英30 pair・合成60ケースを本文と許容 classification を変えず移し、入力と gold を分けて
-評価前に commit で固定します。出典と全件の対応表は[評価データ](../../evals/privacy/README.md)に置きます。
+評価前に commit で固定します。出典と全件の対応表は[評価データ](../../core/evals/privacy/README.md)に置きます。
 
 PoC は ADMISSION / QUERY_GATE の2 profileを独立して各3回測定し、各回に ABSTAIN 率10%未満、
 偽陰性率5%未満、偽陽性率20%未満を要求していました。旧モデル・prompt の合格結果は Core の品質の証拠にしません。
@@ -55,7 +55,7 @@ gemma4-12b を使います。このモデル方針と、以下の AI による�
 - 入力は本番 memory 検索の query gate と同じ本文の文字列（`case.text`）だけです。
   `vars`、期待値、group、sensitive、許容値を入力に包んだ object を渡しません。
   本番分類器内部の JSON シリアライズは維持します。gold は provider に渡しません。
-- [入力](../../evals/privacy/cases.json)と[gold](../../evals/privacy/expectations.json)を分離します。
+- [入力](../../core/evals/privacy/cases.json)と[gold](../../core/evals/privacy/expectations.json)を分離します。
   topic_category を Core 名に対応づけた group は、非機微な一般質問でも元の話題区分を保ちます。
   category の許容値は非機微なら NONE、機微なら話題区分、機微な第三者情報ならそれに THIRD_PARTY_PRIVATE を併記します。
   許容 classification は PoC のまま ABSTAIN を含めます。

@@ -408,7 +408,7 @@ far/nearはunrelated該当なし、T+はthreshold答えあり、T−はthreshold
 
 ## ローカル補助: NoMIRACL ja / MKQA ja-en
 
-[取得・版・ライセンス](../../evals/semantic/tuning/README.md#ローカル限定の外部補助データ)の既存ローカル変換を利用しました。再取得はNOT RUN（存在・hash確認済み）。
+[取得・版・ライセンス](../../core/evals/semantic/tuning/README.md#ローカル限定の外部補助データ)の既存ローカル変換を利用しました。再取得はNOT RUN（存在・hash確認済み）。
 NoMIRACL: fixed devの関連50問+非関連50問、976 passage judgments（関連87、非関連889）。
 title + 改行 + textの先頭200 Unicode文字、query先頭128文字を全候補へ同じ制限で使用。
 長文モデルと512-tokenモデルを比較するための明示的な補助前処理で、本番や元ファイルの変更ではありません。

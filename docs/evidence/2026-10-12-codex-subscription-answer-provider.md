@@ -17,9 +17,9 @@
 
 ## 設計と条件差
 
-評価専用 [CodexSubscriptionAnswerProvider](../../src/digital_souls_core/semantic_answer_codex.py) が
+評価専用 [CodexSubscriptionAnswerProvider](../../core/src/digital_souls_core/semantic_answer_codex.py) が
 Provider port を実装する。本番 LiteLLMProvider・Profile・privacy は変更しない。
-[profile 例と操作手順](../../evals/semantic/README.md#codex-サブスク方式201)に完全な argv と無効化一覧を記載。
+[profile 例と操作手順](../../core/evals/semantic/README.md#codex-サブスク方式201)に完全な argv と無効化一覧を記載。
 external_model に answer_provider=codex_subscription、codex_executable/codex_home の絶対パスを追加。
 chat は sdk / openai/gpt-6-luna、CLI の model は接頭辞を除いた gpt-6-luna。
 api_key_env/api_base_env は Codex 方式では不可、API 方式の既定は従来どおり LiteLLM。
@@ -60,8 +60,8 @@ manifest/dry-run と送信拒否ケースは版 null、CLI 起動なし。成功
 
 ## 受入条件と試験
 
-[Python](../../tests/test_semantic_answer_codex.py)、[偽 CLI](../../tests/codex_answer_support.py)、
-[JS](../../tools/semantic-answer.test.mjs)で外部通信なしに検証する。
+[Python](../../core/tests/test_semantic_answer_codex.py)、[偽 CLI](../../core/tests/codex_answer_support.py)、
+[JS](../../core/tools/semantic-answer.test.mjs)で外部通信なしに検証する。
 
 - a/b：test_codex_dispatch_checks_production_policy_before_process の
   permission/grant/scanner/classifier/revoke は CLI 起動0回、None は external authorize → check → CLI。

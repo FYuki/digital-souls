@@ -45,7 +45,7 @@ report は実行 commit/dirty、入力/gold/結合 hash、分類器/prompt/polic
 cache=false、parallelism=1、開始・終了 UTC、各回/各 group の採点とゲート、ケースごとの構造化結果・失敗・latency、
 参考の言語/tag/subject/category/FP/median/p95、status と FAIL 理由を持つ。
 本文・応答の生テキスト・endpoint・認証情報・設定パスは出さない。
-実行と report の詳細は [評価 README](../../evals/privacy/README.md) を参照。
+実行と report の詳細は [評価 README](../../core/evals/privacy/README.md) を参照。
 
 real の IT1 は fake provider だけで180呼び出しを検証し、case.text の文字列だけを送ること、
 profile を保持すること、no-cache/no-store・caching=false・cache_prompt=false、実行条件の記録を確認した。

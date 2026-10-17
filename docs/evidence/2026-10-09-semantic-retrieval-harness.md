@@ -23,7 +23,7 @@ export TMPDIR=/dev/shm
 
 ## 実装と設計判断
 
-[semantic_evaluation_runtime.py](../../src/digital_souls_core/semantic_evaluation_runtime.py) を #114 用の共通 API としました。
+[semantic_evaluation_runtime.py](../../core/src/digital_souls_core/semantic_evaluation_runtime.py) を #114 用の共通 API としました。
 `prepare_case` は `HistoryStore` / `MemoryRecordStore` の port、trusted `CaseClock`、embedding を受け取ります。
 `isolated_case` はその PostgreSQL 構成を作り、各ケース・各回に新しい UUID schema を割り当て、終了時に当該 schema だけを削除します。
 同じ Binding・`target` ID を持つ異なるケースを同時に開き、本文が独立し、他方の候補に `current` が false、
@@ -46,7 +46,7 @@ privacy は本番の LocalClassifier・scanner・PrivacyPolicy・MemoryRetrieval
 分類器 provider の応答だけが合成の NOT_SENSITIVE です。report は `classifier=synthetic`。
 **分類器品質はこの検索評価の対象外**で、SPEC §3.2 の記憶判断評価で扱います。
 
-[semantic_retrieval_evaluation.py](../../src/digital_souls_core/semantic_retrieval_evaluation.py) で採点・集計・report 検証を行います。
+[semantic_retrieval_evaluation.py](../../core/src/digital_souls_core/semantic_retrieval_evaluation.py) で採点・集計・report 検証を行います。
 relevant ID の全包含、no_match の空結果、relevant 候補への必須 Fact 添付を品質として判定します。
 禁止 ID・禁止 Fact、未検証正本、閾値未満、期待順序の不一致、dispatch guard、context 不一致は必須ゲートです。
 各分類の品質率と必須ゲートは別に集計し、全回・全ケースの必須ゲートを平均で相殺しません。

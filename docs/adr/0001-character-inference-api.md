@@ -24,7 +24,7 @@ Responses先行は現時点で必須client/modelが特定されていないた�
 ## 決定案
 
 Python 3.12.3、FastAPI、Pydanticによる厳密な入力contractとLiteLLM SDKで小さい構成を作ります。
-依存は[pyproject](../../pyproject.toml)と[uv.lock](../../uv.lock)で固定します。
+依存は[pyproject](../../core/pyproject.toml)と[uv.lock](../../core/uv.lock)で固定します。
 HTTP/SDKから独立したapplicationのProvider portを、通常入口とalias入口で共用します。
 schema/applicationはSDKやHTTPへ依存しません。実行中のCharacter/Profileはimmutable snapshotです。
 明示的な送信policyとparameter allowlistがない能力は拒否し、fallbackとsilent dropを禁止します。
