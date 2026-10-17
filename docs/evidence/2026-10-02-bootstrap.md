@@ -35,13 +35,13 @@ Branch protections, rulesets and GitHub Apps were not changed.
   export. Included card and PNG match their source SHA-256 and size.
 - PNG visually inspected; PNG chunks are IHDR, caBX, IDAT and IEND. C2PA metadata
   describes OpenAI generated media; provenance metadata was preserved unchanged.
-- [Miori manifest](../../characters/miori/manifest.json) inventories eight source
+- [Miori manifest](../../core/characters/miori/manifest.json) inventories eight source
   files. Two included; voice-related files held pending distribution terms;
   three companion documents omitted from the minimal sample.
 
 The public PoC revision is pinned in the asset manifest. No private-repository
 content was transferred. Audio distribution terms remain unresolved; no WAV or
-voice metadata is included. See [asset terms](../../characters/miori/TERMS.md).
+voice metadata is included. See [asset terms](../../core/characters/miori/TERMS.md).
 
 ## Required-test guard follow-up — 2026-10-02
 

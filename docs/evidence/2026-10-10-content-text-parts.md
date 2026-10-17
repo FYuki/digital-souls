@@ -7,14 +7,14 @@
 
 ## 入力境界と影響範囲
 
-[contracts.py](../../src/digital_souls_core/contracts.py)の `InputMessage` は `Message` の
+[contracts.py](../../core/src/digital_souls_core/contracts.py)の `InputMessage` は `Message` の
 検証前に入力dictのcontentだけを正規化する。空でないtext部分配列を厳密検証し、
 textを改変せず `\n` で連結する。1要素ではそのtextをそのまま使う。
 `TextPart` は `type: "text"` と文字列の `text` だけを許可し、未知キーや他形式を拒否する。
 呼出元dictは変更しない。文字列とassistant tool callのnullは従来の検証へそのまま渡す。
 
 適用箇所は `CompletionInput.messages`（chat/characterが継承）と
-[history.py](../../src/digital_souls_core/history.py)の `TurnInput.messages` のみ。
+[history.py](../../core/src/digital_souls_core/history.py)の `TurnInput.messages` のみ。
 実行時のmessageは従来どおり `Message` で、contentは文字列または許可されたnullになる。
 validation JSON Schemaにも受理する配列を記載するため、schema専用の動的モデルを使う。
 これは入力の記述だけで、実行時の正規化・検証後の型を広げない。
@@ -38,13 +38,13 @@ textを変えれば409。stream等の他項目は従来どおりfingerprintに�
 
 追加した試験は次のとおり（すべて合成入力）。
 
-- [test_content_parts.py](../../tests/test_content_parts.py)：UT 53件。
+- [test_content_parts.py](../../core/tests/test_content_parts.py)：UT 53件。
   単一/複数/空文字を含む部分の連結、全役割、4入力契約、null+tool_calls、18拒否形式、
   fingerprint、共有モデル/provider応答の配列拒否、入力JSON Schema。
-- [test_content_parts_api.py](../../tests/test_content_parts_api.py)：IT1 64件。
+- [test_content_parts_api.py](../../core/tests/test_content_parts_api.py)：IT1 64件。
   chat/character×stream有無のOpenClaw形のtool往復、12 tools、tool_choice、max_completion_tokens、
   system/user/tool配列のprovider送信、HTTP 400（3経路×18形式）、mock storeの保存・復元・再送。
-- [test_postgres_content_parts.py](../../tests/test_postgres_content_parts.py)：PostgreSQL 10件。
+- [test_postgres_content_parts.py](../../core/tests/test_postgres_content_parts.py)：PostgreSQL 10件。
   stream有無の保存・再open・tool配列往復・文字列再送、保存/記憶拒否の3指示×文字列/配列の同一判定、
   秘密の文字列/配列についてHTTP 403、provider/classifier未送信、DB本文とreceiptが未保存。
 
@@ -58,7 +58,7 @@ PostgreSQL追加試験も実装前に **6 FAIL・4 PASS**。
 配列の保存・拒否指示は検証/400で失敗し、秘密配列は期待403に対し400だった。
 文字列の対照ケースはPASS。実装後は追加UT/IT1 117件・PostgreSQL 10件がPASSした。
 
-既存 [test_contracts.py](../../tests/test_contracts.py)の `test_invalid_contract` から
+既存 [test_contracts.py](../../core/tests/test_contracts.py)の `test_invalid_contract` から
 正しいtext配列を拒否するparameterを1件除いた。新仕様で受理するためであり、
 受理・正規化の試験と不正配列18形式の拒否試験へ置き換えた。他の既存試験は削除していない。
 

@@ -78,8 +78,8 @@ JS 試験内の合成計数による出力例（実モデル見積もりでは�
 
 ## 受入条件と試験
 
-試験名は [Python](../../tests/test_semantic_answer_external.py)、
-[PG](../../tests/test_postgres_semantic_answer.py)、[JS](../../tools/semantic-answer.test.mjs) を参照。
+試験名は [Python](../../core/tests/test_semantic_answer_external.py)、
+[PG](../../core/tests/test_postgres_semantic_answer.py)、[JS](../../core/tools/semantic-answer.test.mjs) を参照。
 
 - a：`test_external_dispatch_checks_production_policy_before_provider[permission/grant]`。
 - b：同試験の `[None/scanner/classifier/revoke]`。authorize/check の呼出順と Provider 0回を観測。

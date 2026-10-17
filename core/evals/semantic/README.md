@@ -1,6 +1,6 @@
 # 意味検索・回答評価の固定ケース
 
-合成のみ。実会話・私的ログ・認証情報は含めません。決定は [ADR 0023](../../docs/adr/0023-semantic-evaluation-contract.md)、本番契約は [ADR 0022](../../docs/adr/0022-memory-retrieval-from-records.md)です。
+合成のみ。実会話・私的ログ・認証情報は含めません。決定は [ADR 0023](../../../docs/adr/0023-semantic-evaluation-contract.md)、本番契約は [ADR 0022](../../../docs/adr/0022-memory-retrieval-from-records.md)です。
 
 [調整専用の独立した合成ケースとローカル補助データ](tuning/README.md)は、合否判定用の62ケースと分けて使います。
 
@@ -87,7 +87,7 @@
 
 queryと全normalized_text（Fact各版を含む）には共通4次元の有限・非ゼロvectorがあります。同一本文は全ケースで同じvectorです。queryと候補をunit vectorにし、二乗L2距離から `relevance = 1/(1+sqrt(distance))` を計算します。本番の候補20・閾値0.52・同等帯0.002・最大5を使います。Factのvectorは本文対応の完全性用で、Factを独立候補にしません。
 
-[ADR 0024](../../docs/adr/0024-multilingual-memory-embedding.md) のユーザー承認済み Q3 例外として、
+[ADR 0024](../../../docs/adr/0024-multilingual-memory-embedding.md) のユーザー承認済み Q3 例外として、
 `below-threshold` の `below-threshold-record` の偽vectorだけを
 `[0.63, 0.7765951326141569, 0.0, 0.0]`（relevance約0.53757）から
 `[0.5565557545480253, 0.8308102623821387, 0.0, 0.0]`（relevance 0.515）へ変更しました。
@@ -162,7 +162,7 @@ Statement GC時に `RemoveEnvironmentCleanupHook` assertionでSIGABRTが再現�
 ```sh
 uv sync --locked
 (cd evals/semantic && npm ci --no-audit --no-fund)
-node --test --test-reporter=./tools/required-tests-reporter.mjs tools/*.test.mjs
+node --test --test-reporter=../tools/required-tests-reporter.mjs tools/semantic-answer.test.mjs
 bash tools/evaluate-semantic-answer.sh --runs 3 --output /dev/shm/semantic-answer-report.json
 ```
 
@@ -236,15 +236,15 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 日英は検索・回答とも10/10ですが、検索は無関係3/10・長文0/1・閾値0/1、回答は長文0/1が品質未達です。
 必須ゲートは検索top_one 1件/no_match 8件、回答dispatch 1件/no_memory 8件の違反が残ります。
 分類品質と必須ゲートを分け、前回nomic/0.54との比較も記録した
-[実モデル証跡](../../docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)と
-[利用手順](../../docs/memory-evaluation.md)を参照してください。
+[実モデル証跡](../../../docs/evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md)と
+[利用手順](../../../docs/memory-evaluation.md)を参照してください。
 
 #199では同じbge-m3/0.52でGPT-6 Luna（Codexサブスク、CLI 0.162.1）の回答をcacheなし3回測定しました。
 各回品質61/62・全条件53/62、long_text 0/1のみ90%未達、dispatch違反1件・no_memory違反8件、
 forbidden/lifecycle違反0件で、gemmaと全ケースの観測値・判定が一致し、**FAIL・品質未受入**です。
 事前見込みは61送信/回×3回=183呼び出し、入力202,530 token（byte推定）、サブスク内で従量課金なしでした。
 classifier=synthetic、CLI独自の指示・包装と既存token予算移行の条件差、回答文比較・IT2/ST NOT RUNは
-[Luna実測証跡](../../docs/evidence/2026-10-12-semantic-luna-answer-evaluation.md)を参照してください。
+[Luna実測証跡](../../../docs/evidence/2026-10-12-semantic-luna-answer-evaluation.md)を参照してください。
 
 ### 外部モデルでの回答生成（external_model）
 
@@ -255,7 +255,7 @@ classifier=synthetic、CLI独自の指示・包装と既存token予算移行の�
 synthetic 応答と本番 `LocalClassifier` の管理 loopback profile を維持します。
 
 external の manifest/identity には `classifier_reason="baseline-parity-no-classifier-export"` を記録します。
-比較基準の gemma4-12b 評価（[2026-10-10 証跡](../../docs/evidence/2026-10-10-semantic-real-model-answer-bge-m3.json)）も synthetic で条件をそろえるためです。
+比較基準の gemma4-12b 評価（[2026-10-10 証跡](../../../docs/evidence/2026-10-10-semantic-real-model-answer-bge-m3.json)）も synthetic で条件をそろえるためです。
 分類器は外部モデルへ送らずローカルのまま維持し、実分類器での受入は Issue #128 の範囲です。
 fixture/local_model の report にはこのフィールドを追加しません。
 
@@ -295,7 +295,7 @@ provider / model / transport / `external_send=true` / `cache=false` / run_count 
 
 ### Codex サブスク方式（#201）
 
-[証跡](../../docs/evidence/2026-10-12-codex-subscription-answer-provider.md)と
+[証跡](../../../docs/evidence/2026-10-12-codex-subscription-answer-provider.md)と
 [無効な profile 例](codex-answer-profile.example.json)を参照してください。git 管理外・リポジトリ外の
 JSON profile で `answer_provider="codex_subscription"`、
 `chat.transport="sdk"`、`chat.model="openai/gpt-6-luna"` を指定します。

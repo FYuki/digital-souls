@@ -50,8 +50,8 @@ PostgreSQL 18 の固定 digest イメージはローカルに存在すること�
 
 ## fixture とテスト境界
 
-[合成 UT](../../tests/test_character_book.py)、[両 HTTP API の IT1](../../tests/test_character_book_api.py)、
-[PromptBuilder UT](../../tests/test_prompt_builder.py) で次を確認した。
+[合成 UT](../../core/tests/test_character_book.py)、[両 HTTP API の IT1](../../core/tests/test_character_book_api.py)、
+[PromptBuilder UT](../../core/tests/test_prompt_builder.py) で次を確認した。
 
 | 境界 | 確認内容 |
 | --- | --- |
@@ -68,7 +68,7 @@ PoC の WebSocket 境界は、Core の現在の2つの HTTP API と共通 Infere
 ## Miori の起点回帰
 
 カード自体は変更していない。起点 `c4f142b` の loader/Lore.matches で期待値を求め、
-[固定 fixture](../../tests/fixtures/miori-character-book-c4f142b.json) に質問・source index・推定costを保存した。
+[固定 fixture](../../core/tests/fixtures/miori-character-book-c4f142b.json) に質問・source index・推定costを保存した。
 最初の9問は実装変更前に採取し、複数一致で予算内になる2問は `git show c4f142b:src/digital_souls_core/character.py`
 で取り出した同じ起点実装を隔離した Python module として実行して採取した。
 旧選択に Book 上限はなかった。cost は旧選択集合を新しい規定の Lore message に render した

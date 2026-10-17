@@ -61,7 +61,11 @@ export function checkRepository(root) {
       ['.node-version', '.gitattributes', '.gitignore'].includes(file));
   if (files.length === 0) throw new Error('No tracked documentation/config files');
   const errors = files.flatMap(file => checkText(root, file, readFileSync(resolve(root, file), 'utf8')));
-  for (const file of files.filter(file => file.startsWith('characters/') && file.endsWith('/manifest.json'))) {
+  const manifests = files.filter(file => file.startsWith('core/characters/') && file.endsWith('/manifest.json'));
+  if (manifests.length === 0 && files.some(file => file.startsWith('core/characters/'))) {
+    errors.push('core/characters: no sample manifest found');
+  }
+  for (const file of manifests) {
     try {
       errors.push(...checkManifest(resolve(root, dirname(file)), JSON.parse(readFileSync(resolve(root, file), 'utf8'))));
     } catch (error) { errors.push(`${file}: invalid manifest: ${error.message}`); }

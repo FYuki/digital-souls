@@ -6,7 +6,7 @@ WSL内のloopback到達性は環境ごとに確認する。LAN公開や共有ユ
 
 ## 構成と事前確認
 
-- [固定Compose](../compose.llamacpp.yml): b11347の公式CUDA imageをdigest固定。
+- [固定Compose](../core/compose.llamacpp.yml): b11347の公式CUDA imageをdigest固定。
 - model GGUFだけをread-onlyマウント。chatのSHAは[ADR 0003](adr/0003-local-llamacpp-provider.md)、embeddingのSHAは[ADR 0024](adr/0024-multilingual-memory-embedding.md)の値と照合する。
 - chatのaliasはgemma4-12b。GGUF chat template、thinking無効、context 32768、GPU layers 99要求、
   f16 KV、Flash Attention on、8 threads、slot 1。自動fitや他モデルfallbackは使わない。
@@ -104,7 +104,7 @@ health確認はcold load中の503や接続待ちを再試行する。再試行�
 最後の試行を含め最大約122秒で失敗する。失敗時はCoreを起動せず、containerの状態を確認する。
 Coreのローカル専用HTTPクライアントも環境proxyを無視し、redirectを追跡しない。
 
-Coreの[サンプルprofile](../examples/characters.llamacpp.json)を同じexamples内の
+Coreの[サンプルprofile](../core/examples/characters.llamacpp.json)を同じexamples内の
 `characters.llamacpp.local.json`へコピーし、運用者がexternal_send_allowedだけをtrueにする。
 サンプルのままでは送信しない。旧profileは別ファイルのまま保持する。
 

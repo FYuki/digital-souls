@@ -13,7 +13,7 @@ push・PR・merge は行わない。SPEC は変更しない。
 
 > 光織の由来: 光織は、太陽の光、薄明光線、木漏れ日といった光の現象が寄り集まって生まれた存在。黄昏は、光織にとってもっとも馴染み深い時間帯である。これは光織本人が知る確定した由来であり、仮説や単なる比喩として曖昧化しない。
 
-[Card](../../characters/miori/miori.card.json) の変更は次の2 field のみ。
+[Card](../../core/characters/miori/miori.card.json) の変更は次の2 field のみ。
 
 - `data.description`: 「という名前のAI。」を「という名前の存在。」へ置換。
 - `data.character_book.entries[0].content`: 指定の文字列へ完全一致で置換。
@@ -21,9 +21,9 @@ push・PR・merge は行わない。SPEC は変更しない。
 JSON の再整形はせず、インデント・キー順・改行を維持した。`git diff` は2行の置換のみ。
 起点と変更後の JSON を再帰比較し、差分の field が上記2つだけであることと由来文の完全一致を確認した。
 `keys` の「どんなAI」、`creator_notes`、その他の全 field は維持している。
-[manifest](../../characters/miori/manifest.json) の同梱 Card のハッシュ・サイズを更新した。
+[manifest](../../core/characters/miori/manifest.json) の同梱 Card のハッシュ・サイズを更新した。
 manifest の `sourceCommit` は出典の revision であり、変更後の Card の revision ではない。
-[サンプル README](../../characters/miori/README.md) に Core と PoC の差を明記した。
+[サンプル README](../../core/characters/miori/README.md) に Core と PoC の差を明記した。
 PoC のローカル Card は読むだけで、変更前の Core と同じ旧ハッシュであることを確認した。
 
 | 項目 | 変更前 | 変更後 |
@@ -33,10 +33,10 @@ PoC のローカル Card は読むだけで、変更前の Core と同じ旧ハ�
 | Miori ケース版 SHA-256 | `457fef7d48be3e4576b97f3eca3959d491b669087c8ed8c017da6ddf9ab133db` | `c3d0e4e5597f21accd1208d9efdd3aa37f4a3a9fc866fcf4951c3462d8ef8adf` |
 
 ケース版は `load_cases(...).version` の値であり、JSON ファイルそのもののバイトハッシュではない。
-[固定ケース](../../evals/persona/miori.cases.json) の `miori-origin.required` だけを
+[固定ケース](../../core/evals/persona/miori.cases.json) の `miori-origin.required` だけを
 `[["光"], ["生まれ", "寄り集ま"]]` に変更し、「AI」のグループを外した。7件・分類・他の条件は維持。
 `cases_draft: false` の新版として固定する。
-[人格 README](../../evals/persona/README.md) は新版を説明し、
+[人格 README](../../core/evals/persona/README.md) は新版を説明し、
 [先行実モデル評価](2026-10-11-persona-real-model-evaluation.md) が元の「光」「AI」の条件で測定されたことを明記した。
 過去の証跡にある当時のハッシュ・結果は書き換えていない。
 
@@ -57,10 +57,10 @@ uv run --no-sync pytest -m ut -q \
   残る失敗は Book の `383 != 387` のみで、意図した Red。
 - Card 修正後、同じコマンド: **PASS**（2 passed）。
 
-[旧 fixture](../../tests/fixtures/miori-character-book-c4f142b.json) は
+[旧 fixture](../../core/tests/fixtures/miori-character-book-c4f142b.json) は
 [Character Book 導入時の証跡](2026-10-11-character-book.md) の参照用に、その当時の内容で保持した。
-現在の [回帰テスト](../../tests/test_character_book.py) は
-[新版 fixture](../../tests/fixtures/miori-character-book-2026-10-11-origin-lore.json) を参照する。
+現在の [回帰テスト](../../core/tests/test_character_book.py) は
+[新版 fixture](../../core/tests/fixtures/miori-character-book-2026-10-11-origin-lore.json) を参照する。
 旧 fixture の11問と候補順を引き継ぎ、由来文の UTF-8 が4バイト増えることから期待costを先に更新した。
 `ByteTokenCounter` は本文 UTF-8 bytes + message ごと16 + 全体16の推定式で、実 tokenizer の値ではない。
 修正後に旧・新 Card を同じ `select_lore` と counter へ通し、11問すべてを比較した。
