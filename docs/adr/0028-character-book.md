@@ -13,8 +13,8 @@ Accepted日: 2026-10-11（ユーザーの承認「承認する」も同日。承
 
 ## 背景
 
-2026-10-11 にユーザーは、Character Book の扱いを PoC（公開 `FYuki/digital-souls`、revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）の決定
-[CCV3 Character Book の runtime 解釈契約](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-book-runtime-2026-08.md)
+2026-10-11 にユーザーは、Character Book の扱いを PoC（公開 `FYuki/digital-souls-poc`、revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）の決定
+[CCV3 Character Book の runtime 解釈契約](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-book-runtime-2026-08.md)
 （以下「PoC の Book ADR」）を正として直すと決めました（Epic #150 R1）。
 
 決定時点（epic `2b1f936`）の Core は、Lore を最新の user 発言との単純な key 一致だけで選び、`insertion_order` の順に人格の system へ連結していました。

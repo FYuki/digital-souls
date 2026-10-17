@@ -18,7 +18,7 @@
 
 ## 出典と移行結果
 
-PoC: 公開 `FYuki/digital-souls` の `fce7382884d981c42be7fbd3ddaffe7469e27588`。
+PoC: 公開 `FYuki/digital-souls-poc` の `fce7382884d981c42be7fbd3ddaffe7469e27588`。
 元の `backend/evals/privacy_classifier/cases.jsonl` の bytes SHA-256 は
 `0b52ea880fb811bda8c2bf393fc79aae6916055d8fb75c26b4e5d1331c397a83`。
 60件を移行し、移さなかったケースは **なし（0件）**。全件が合成で、実在人物・実ユーザーの会話を含みません。

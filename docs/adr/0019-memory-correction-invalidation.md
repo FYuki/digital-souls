@@ -17,8 +17,8 @@ Accepted日: 2026-10-07
 （[ADR 0006](0006-conversation-memory-controls.md)、[ADR 0007](0007-memory-provenance-and-revocation.md)）。
 一方、知識の訂正と時間変化の区別、矛盾の保留、管理操作による訂正・削除、依存する派生結果の失効は
 ありません。[ADR 0015](0015-memory-model-reorganization.md)に従い、PoCの
-[意味記憶の訂正・時間変化・矛盾](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/semantic-memory-lifecycle-2026-09.md)と
-[Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md)第9節を採用します。
+[意味記憶の訂正・時間変化・矛盾](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/semantic-memory-lifecycle-2026-09.md)と
+[Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md)第9節を採用します。
 
 ## 決定
 

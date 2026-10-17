@@ -21,20 +21,20 @@ Coreの記憶実装（[ADR 0007](0007-memory-provenance-and-revocation.md)、
 内省・人格との接続などがPoCから欠落しています。ユーザーは2026-10-06に、これらの差の大半を
 移植対象とし、まずADRを再編してから分解・実装する順序を指示しました。
 
-移設元は公開`FYuki/digital-souls`の固定commit `fce7382884d981c42be7fbd3ddaffe7469e27588`の
+移設元は公開`FYuki/digital-souls-poc`の固定commit `fce7382884d981c42be7fbd3ddaffe7469e27588`の
 次の決定です。いずれもPoCで`ACTIVE`（採用済み設計）であり、PoC側でも実装完了を意味しません。
 
 | PoCの決定 | 主な内容 | Coreでの移設先 |
 | --- | --- | --- |
-| [RAG privacy方針](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/rag-memory-privacy-policy-2026-07.md) | 絶対保存禁止、正本と派生index、取得時の再検証、metadata-only log | [ADR 0017](0017-memory-formation-admission.md)、[ADR 0018](0018-memory-retrieval-context.md) |
-| [Wave 2記憶形成・検索](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md) | 履歴・記憶・記録の分離、保存判定、非同期形成、検索順位 | ADR 0016〜0018 |
-| [Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md) | 正本と形成責務、5W、日時、Fact照合・更新、参照失効 | [ADR 0016](0016-memory-kinds-and-records.md)、ADR 0017、[ADR 0019](0019-memory-correction-invalidation.md) |
-| [意味記憶の訂正・時間変化・矛盾](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/semantic-memory-lifecycle-2026-09.md) | 訂正と時間変化、矛盾保留、自己申告優先、削除と再処理防止 | ADR 0019 |
-| [記憶・人格の用語契約](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/memory-personality-terminology-2026-09.md) | 用語と概念境界、会話時の参照契約 | [CONTEXT](../../CONTEXT.md)、ADR 0016、ADR 0018 |
-| [Character Life共通契約](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md) | Reflection、Life State、人格、関係、自律活動との接続 | [ADR 0020](0020-reflection-personality-relationship.md) |
+| [RAG privacy方針](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/rag-memory-privacy-policy-2026-07.md) | 絶対保存禁止、正本と派生index、取得時の再検証、metadata-only log | [ADR 0017](0017-memory-formation-admission.md)、[ADR 0018](0018-memory-retrieval-context.md) |
+| [Wave 2記憶形成・検索](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md) | 履歴・記憶・記録の分離、保存判定、非同期形成、検索順位 | ADR 0016〜0018 |
+| [Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md) | 正本と形成責務、5W、日時、Fact照合・更新、参照失効 | [ADR 0016](0016-memory-kinds-and-records.md)、ADR 0017、[ADR 0019](0019-memory-correction-invalidation.md) |
+| [意味記憶の訂正・時間変化・矛盾](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/semantic-memory-lifecycle-2026-09.md) | 訂正と時間変化、矛盾保留、自己申告優先、削除と再処理防止 | ADR 0019 |
+| [記憶・人格の用語契約](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/memory-personality-terminology-2026-09.md) | 用語と概念境界、会話時の参照契約 | [CONTEXT](../../CONTEXT.md)、ADR 0016、ADR 0018 |
+| [Character Life共通契約](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md) | Reflection、Life State、人格、関係、自律活動との接続 | [ADR 0020](0020-reflection-personality-relationship.md) |
 
-PoCの要件書（[#340 Episodic Memory](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-340-episodic-memory-requirements.md)、
-[#341 意味記憶](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-341-semantic-memory-requirements.md)）の
+PoCの要件書（[#340 Episodic Memory](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-340-episodic-memory-requirements.md)、
+[#341 意味記憶](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-341-semantic-memory-requirements.md)）の
 受入条件は[SPEC](../../SPEC.md)へ整理します。
 
 ## 決定

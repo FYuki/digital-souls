@@ -15,12 +15,12 @@ Accepted日: 2026-10-11（ユーザーの承認「ADR 0026・0027・0029を承�
 
 ## 背景
 
-2026-10-11 にユーザーは、プロンプトの組み立てを PoC（公開 `FYuki/digital-souls`、
+2026-10-11 にユーザーは、プロンプトの組み立てを PoC（公開 `FYuki/digital-souls-poc`、
 revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）の決定を正として直すと決めました（Epic #150 R1）。
 正とする PoC の決定は次の2件です。
 
-- [Character Card V3 と prompt 合成境界](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-card-v3-prompt-builder-2026-07.md)
-- [CCV3 Character Book の runtime 解釈契約](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-book-runtime-2026-08.md)（順序と削減順の部分。Book の解釈は別の ADR）
+- [Character Card V3 と prompt 合成境界](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-card-v3-prompt-builder-2026-07.md)
+- [CCV3 Character Book の runtime 解釈契約](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-book-runtime-2026-08.md)（順序と削減順の部分。Book の解釈は別の ADR）
 
 決定時点（epic `731bf9b`）の Core は、次のように組み立てていました。
 

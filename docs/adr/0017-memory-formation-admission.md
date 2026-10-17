@@ -18,9 +18,9 @@ Accepted日: 2026-10-07
 現行Coreの記憶形成は、trusted callerが明示したsource集合だけを有限batchで抽出する方式です
 （[ADR 0007](0007-memory-provenance-and-revocation.md)）。PoCは保存済み会話を起点に非同期で
 Episode・Fact・Semanticを形成し、保存判定を型付きの状態で行います。[ADR 0015](0015-memory-model-reorganization.md)
-に従い、PoCの[RAG privacy方針](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/rag-memory-privacy-policy-2026-07.md)、
-[Wave 2](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)第5〜9・12・16節、
-[Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md)第5〜7節を採用します。
+に従い、PoCの[RAG privacy方針](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/rag-memory-privacy-policy-2026-07.md)、
+[Wave 2](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)第5〜9・12・16節、
+[Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md)第5〜7節を採用します。
 
 ## 決定
 
@@ -95,7 +95,7 @@ policyのversionを独立して記録します。既存の[ADR 0005](0005-privac
 - 推論は会話を優先します。高負荷時は未処理を保持して形成を遅らせ、品質基準を下げません。
 
 形成jobの実行は、PoCの
-[Character Life §13](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md)
+[Character Life §13](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md)
 に従い外部の実行基盤へ委譲します。ユーザーの決定（2026-10-06）により、実行基盤はPrivateAgentとし、
 Coreに常駐workerを含めません。
 

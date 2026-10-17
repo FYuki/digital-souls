@@ -15,7 +15,7 @@ Accepted日: 2026-10-07
 
 Coreは人格の文脈付き推論を提供しますが（[ADR 0001](0001-character-inference-api.md)）、経験から人格・関心・
 関係が変化する仕組みは持ちません。[ADR 0015](0015-memory-model-reorganization.md)に従い、PoCの
-[Character Life共通契約](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md)
+[Character Life共通契約](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md)
 の記憶・人格に関する部分を採用します。会話外の自律活動の実行（第8〜11節）は、Core外の実行基盤との
 境界として扱います。
 
