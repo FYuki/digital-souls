@@ -104,4 +104,4 @@ APIの詳細は[会話履歴API](../history-api.md)を参照してください�
 - [epic PR #20](https://github.com/FYuki/digital-souls-core/pull/20)
 - [履歴保存・レビュー修正の検証証跡](../evidence/2026-10-03-conversation-history.md)
 - [llama.cpp統合の検証証跡](../evidence/2026-10-03-history-llamacpp-integration.md)
-- [PoC履歴sanitizer](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/history_sanitizer.py)
+- [PoC履歴sanitizer](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/history_sanitizer.py)

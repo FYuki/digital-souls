@@ -51,9 +51,9 @@ queryは1〜256文字、limitは1〜16件とし、1 Bindingのactive memoryは�
 ### PoC互換の順位付け（2026-10-06改訂）
 
 当初は正のcosine降順・最新作成順としていましたが、PoCの検索順位から移植漏れがあったため改訂します。
-参照元は公開`FYuki/digital-souls`の固定commitの
-[ranking.py](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/memory/ranking.py)と
-[memory_policy.json](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/memory/memory_policy.json#L42-L48)です。
+参照元は公開`FYuki/digital-souls-poc`の固定commitの
+[ranking.py](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/memory/ranking.py)と
+[memory_policy.json](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/memory/memory_policy.json#L42-L48)です。
 
 - `RetrievalPolicy`の既定値はPoCと同じ最大取得5件、候補20件、relevance閾値0.54、同等margin 0.002です。
 - 単位vector間の二乗L2距離（PoCのChroma既定空間）が近い順に候補20件へ絞ります。

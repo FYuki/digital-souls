@@ -150,8 +150,8 @@ TOUCH・検索・assistantの言及による日時更新は実装されていま
 ### 3.1 観測可能な振る舞い
 
 各機能の受入では、少なくとも次を確認します。詳細なシナリオはPoCの要件書
-（[#340](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-340-episodic-memory-requirements.md)、
-[#341](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-341-semantic-memory-requirements.md)）を
+（[#340](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-340-episodic-memory-requirements.md)、
+[#341](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/epic-341-semantic-memory-requirements.md)）を
 Coreの実装Issueへ移して管理します。
 
 - 述語だけのEpisodeを保存でき、不明な5W・日時を補完しない。

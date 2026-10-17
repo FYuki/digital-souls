@@ -19,10 +19,10 @@ Accepted日: 2026-10-07
 順位付けは[Issue #52](https://github.com/FYuki/digital-souls-core/issues/52)で先行して修正中ですが、
 期間検索、語彙による補完、自己申告の現在値補完、矛盾の注意、最終言及日時の更新、障害時の会話継続は
 未移植です。[ADR 0015](0015-memory-model-reorganization.md)に従い、PoCの
-[Wave 2](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)第9〜11節、
-[RAG privacy方針](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/rag-memory-privacy-policy-2026-07.md)第11節、
-[用語契約](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/memory-personality-terminology-2026-09.md)第6節、
-PoCの[検索実装](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/memory/rag_service.py)を採用します。
+[Wave 2](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)第9〜11節、
+[RAG privacy方針](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/rag-memory-privacy-policy-2026-07.md)第11節、
+[用語契約](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/memory-personality-terminology-2026-09.md)第6節、
+PoCの[検索実装](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/memory/rag_service.py)を採用します。
 
 ## 決定
 

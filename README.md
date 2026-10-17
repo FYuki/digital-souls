@@ -33,7 +33,7 @@ Coreの範囲は次のとおりです。
 決まった定期処理（記憶の形成など）は、timerがCoreのAPIを呼びます（[ADR 0027](docs/adr/0027-tool-use-and-activity-runtime.md)。いずれも実装前）。
 Coreは記憶の正本と検証、機微情報の流出防止ゲート、インジェクション対策を所有します。
 
-記憶モデルはPoC（公開`FYuki/digital-souls`）で採用済みの決定を移設したものです
+記憶モデルはPoC（公開`FYuki/digital-souls-poc`）で採用済みの決定を移設したものです
 （[ADR 0015](docs/adr/0015-memory-model-reorganization.md)）。機能の実装状況と受入条件は[SPEC](SPEC.md)、
 現行の記憶APIは[記憶API](docs/memory.md)、開発規約は[CONTRIBUTING](CONTRIBUTING.md)で管理します。
 保存は既定拒否・明示注入のままで、私的な実会話を自動で取り込みません。

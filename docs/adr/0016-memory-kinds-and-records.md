@@ -16,9 +16,9 @@ Accepted日: 2026-10-07
 ## 背景
 
 [ADR 0015](0015-memory-model-reorganization.md)の移設方針に基づき、PoCの
-[Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md)、
-[用語契約](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/memory-personality-terminology-2026-09.md)、
-[Wave 2](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)第1〜4節を
+[Episode・Fact・Semantic境界](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/episode-fact-semantic-boundaries-2026-09.md)、
+[用語契約](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/memory-personality-terminology-2026-09.md)、
+[Wave 2](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)第1〜4節を
 Coreの記憶の種別と正本として採用します。現行Coreは`episode`/`semantic`の分類ラベルと
 選択したuser発話の逐語本文だけを保存しており、以下の構造を持ちません。
 

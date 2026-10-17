@@ -54,11 +54,11 @@ model digestはoperatorが固定する実行構成の識別情報であり、実
 
 PoC参照revision: `fce7382884d981c42be7fbd3ddaffe7469e27588`。
 
-- [privacy scanner](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/scanner.py)
-- [normalization](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/normalization.py)
-- [history sanitizer](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/history_sanitizer.py)
-- [semantic classifier](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/semantic/classifier.py)
-- [後続ADR](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)
+- [privacy scanner](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/scanner.py)
+- [normalization](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/normalization.py)
+- [history sanitizer](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/history_sanitizer.py)
+- [semantic classifier](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/app/privacy/semantic/classifier.py)
+- [後続ADR](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/wave2-memory-formation-retrieval-2026-08.md)
   を優先し、廃止済みの候補ごとの確認方式を再導入しません。
 
 利用手順は[privacyガイド](../privacy.md)を参照してください。
