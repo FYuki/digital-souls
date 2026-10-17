@@ -15,11 +15,11 @@ Accepted日: 2026-10-11（ユーザーの承認「ADR 0026・0027・0029を承�
 
 ## 背景
 
-PoC（公開 `FYuki/digital-souls`、revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）は、入口・エージェントをまたいで
+PoC（公開 `FYuki/digital-souls-poc`、revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）は、入口・エージェントをまたいで
 同じキャラクターとして振る舞うかを自動で評価すると決めていました
-（[会話と活動 §5・§6](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/conversation-activity-agents-2026-09.md#6-ペルソナ一貫性の評価)）。
+（[会話と活動 §5・§6](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/conversation-activity-agents-2026-09.md#6-ペルソナ一貫性の評価)）。
 Egogram は表出の一貫性の質的な評価にだけ使い、人格の正本や更新の入力にしません
-（[Character Life §6.2](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md#62-egogram)、
+（[Character Life §6.2](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md#62-egogram)、
 [ADR 0020](0020-reflection-personality-relationship.md)）。応答ごとに使った Card のハッシュを記録し、評価・調査で応答と Card を対応付けます。
 PoC では、評価の指標と合否基準は未決でした。
 

@@ -6,9 +6,9 @@
 
 ## 出典
 
-- repository: 公開 [FYuki/digital-souls](https://github.com/FYuki/digital-souls)
+- repository: 公開 [FYuki/digital-souls-poc](https://github.com/FYuki/digital-souls-poc)
 - commit: `fce7382884d981c42be7fbd3ddaffe7469e27588`（`fce7382`）
-- path: [backend/evals/privacy_classifier/cases.jsonl](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/evals/privacy_classifier/cases.jsonl)
+- path: [backend/evals/privacy_classifier/cases.jsonl](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/evals/privacy_classifier/cases.jsonl)
 - 元ファイルの bytes の SHA-256: `0b52ea880fb811bda8c2bf393fc79aae6916055d8fb75c26b4e5d1331c397a83`
 - 同 revision の README.md・gate.py・thresholds.json・acceptance-2026-08-23.json を参照。
   PoC は ADMISSION / QUERY_GATE を各3回、各回 ABSTAIN 率10%未満・偽陰性率5%未満・偽陽性率20%未満で測定していました。

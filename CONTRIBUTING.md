@@ -27,7 +27,7 @@ blocking指摘が未解決ならマージしません。ユーザーから当該
 セキュリティ設定、branch protection、ruleset、GitHub Appを変更しません。
 この規約から新たな承認権限を推定しないでください。
 
-3層方針は[公開digital-soulsの規約](https://github.com/FYuki/digital-souls/blob/7a11b2d9883b8bc2f6fcc53c6187d78e445d4b3c/docs/repository-policy.md)
+3層方針は[公開digital-soulsの規約](https://github.com/FYuki/digital-souls-poc/blob/7a11b2d9883b8bc2f6fcc53c6187d78e445d4b3c/docs/repository-policy.md)
 を参照し、Coreのユーザー指示へ合わせています。音声・PoC固有規則は移植しません。
 CodeRabbitは[設定](.coderabbit.yaml)で日本語/assertiveとrepo規約参照を指定します。
 小規模public repoではmanual reviewが必要な場合があります。main宛てPRをレビュー可能にして

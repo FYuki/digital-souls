@@ -2,7 +2,7 @@
 
 対象: [ADR 0028](../adr/0028-character-book.md)、[ADR 0026](../adr/0026-prompt-assembly.md)。
 正本の PoC 文書は公開 revision `fce7382884d981c42be7fbd3ddaffe7469e27588` の
-[Character Book runtime 決定](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-book-runtime-2026-08.md)
+[Character Book runtime 決定](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-book-runtime-2026-08.md)
 全文を読み取った。
 
 作業 branch: `feature/153-character-book`。起点: `c4f142b549fae0352592376da4700e6d355e064b`。

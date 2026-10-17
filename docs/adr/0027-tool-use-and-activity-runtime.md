@@ -11,13 +11,13 @@ Accepted日: 2026-10-11（ユーザーの承認「ADR 0026・0027・0029を承�
 
 ## 背景
 
-PoC（公開 `FYuki/digital-souls`、revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）では、会話中のツールの判断・
-ツール一覧・Execution Gate を Core が持ち（[Tool 利用](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/tool-use-foundation-2026-09.md)）、
-推論の部分を Pydantic AI へ差し替える予定でした（[複数入口 §1](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/multi-entry-character-core-2026-09.md#1-最終構成)、PoC #422）。
+PoC（公開 `FYuki/digital-souls-poc`、revision `fce7382884d981c42be7fbd3ddaffe7469e27588`）では、会話中のツールの判断・
+ツール一覧・Execution Gate を Core が持ち（[Tool 利用](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/tool-use-foundation-2026-09.md)）、
+推論の部分を Pydantic AI へ差し替える予定でした（[複数入口 §1](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/multi-entry-character-core-2026-09.md#1-最終構成)、PoC #422）。
 会話外の活動は、DBOS を Core に組み込み、判断・状態・安全の契約も Core が持っていました
-（[Character Life §8〜§13](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md)、
-[Life runtime 選定](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-runtime-2026-09.md)、
-[会話と活動](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/conversation-activity-agents-2026-09.md)）。
+（[Character Life §8〜§13](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-memory-personality-autonomy-2026-09.md)、
+[Life runtime 選定](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/character-life-runtime-2026-09.md)、
+[会話と活動](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/conversation-activity-agents-2026-09.md)）。
 
 決定時点（epic `731bf9b`）の Core は、次のとおりでした。
 
@@ -142,7 +142,7 @@ T3 経由では 1 を満たせない見込みです（T3 アプリ経由の確�
 ### 4. Core に MCP の入口を置く
 
 PoC は「Core 側に MCP サーバー等の汎用の受け口は置かない」としていました
-（[目標構成 §5](https://github.com/FYuki/digital-souls/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/companion-target-architecture-2026-09.md#5-外部から呼ばれる入口)）。
+（[目標構成 §5](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/docs/decisions/companion-target-architecture-2026-09.md#5-外部から呼ばれる入口)）。
 これを変え、会話外の活動の Agent が使う MCP の入口を Core に置きます。理由は、R5 の条件
 （Agent のツールを Core の MCP だけに限定し、Gate を必ず通す）を満たすには、Agent が使う操作を Core が MCP として提供する必要があるためです。
 
