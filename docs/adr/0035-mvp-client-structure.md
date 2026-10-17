@@ -64,8 +64,10 @@ MVP の画面は次に限ります。
 
 音声、アバターの動き、記憶の管理画面、ツール、通知は MVP の範囲外です。
 
-FE は Core とは別の新しいリポジトリに置き、Svelte＋Vite＋TypeScript で作ります（2026-10-17 のユーザー回答「提案内容で良い」）。
-リポジトリ名と公開範囲は、リポジトリの作成時にユーザーが決めます。Core の範囲（README の「UI は Core の対象外」）は変えません。
+FE は Svelte＋Vite＋TypeScript で作ります（2026-10-17 のユーザー回答「提案内容で良い」）。
+置き場所は、同日のユーザー決定により、このリポジトリを `digital-souls` へ改名したうえで、同じリポジトリの `client/` とします。
+Core（Python）は `core/` へ移します。Python のパッケージ名 `digital_souls_core`（配布名 `digital-souls-core`）は変えません。
+Core の範囲（README の「UI は Core の対象外」）は変えず、FE は Core の外の構成要素として `client/` で管理します。
 Core は、ビルド済みの FE を静的ファイルとして同じオリジンから配信するだけにします。
 
 ### 3. ネイティブは同じ FE を Tauri で包む
