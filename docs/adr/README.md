@@ -27,6 +27,8 @@ ADR 0026〜0030は、2026-10-11のユーザーの承認を根拠に、同日にA
 - [ADR 0012: 明示選択するPostgreSQL履歴・記憶backend](0012-postgresql-storage.md)
 
 記憶モデルはPoCの採用済み決定を移設して再編しました（ADR 0015〜0020）。
+PoCは2026-10-17に`FYuki/digital-souls`から`FYuki/digital-souls-poc`へ改名し、非公開にしました。
+ADR・証跡にある「公開」のPoCという記述は記録した時点の状態です。外部の読者はPoCへのリンク先を参照できません。
 機能の実装状況と受入条件は[SPEC](../../SPEC.md)、用語は[CONTEXT](../../CONTEXT.md)を参照してください。
 
 - [ADR 0015: PoCの記憶モデル決定の移設と再編](0015-memory-model-reorganization.md)

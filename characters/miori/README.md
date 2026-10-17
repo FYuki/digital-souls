@@ -8,7 +8,7 @@ Character Card v3（キャラクターバージョン1.2.0）と立ち絵を格�
 - [出典一覧とSHA-256のmanifest](manifest.json)
 - [素材の利用条件](TERMS.md)
 
-出典は公開リポジトリ`FYuki/digital-souls-poc`のrevision
+出典はリポジトリ`FYuki/digital-souls-poc`（2026-10-17に非公開化）のrevision
 `7a11b2d9883b8bc2f6fcc53c6187d78e445d4b3c`、`characters/miori/`です。
 立ち絵はバイト単位で元データと一致します。2026-10-02にカードの名前・
 バージョンを確認し、立ち絵を目視確認しました。

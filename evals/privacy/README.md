@@ -6,7 +6,7 @@
 
 ## 出典
 
-- repository: 公開 [FYuki/digital-souls-poc](https://github.com/FYuki/digital-souls-poc)
+- repository: [FYuki/digital-souls-poc](https://github.com/FYuki/digital-souls-poc)（2026-10-17に非公開化）
 - commit: `fce7382884d981c42be7fbd3ddaffe7469e27588`（`fce7382`）
 - path: [backend/evals/privacy_classifier/cases.jsonl](https://github.com/FYuki/digital-souls-poc/blob/fce7382884d981c42be7fbd3ddaffe7469e27588/backend/evals/privacy_classifier/cases.jsonl)
 - 元ファイルの bytes の SHA-256: `0b52ea880fb811bda8c2bf393fc79aae6916055d8fb75c26b4e5d1331c397a83`
