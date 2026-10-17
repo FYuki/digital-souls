@@ -229,7 +229,7 @@ ABSTAINは[ADR 0032](docs/adr/0032-privacy-classifier-evaluation.md)の決定C�
 
 ### 4.2 要決定事項
 
-[ADR 0034](docs/adr/0034-memory-sharing-and-name-replacement.md) は Proposed・承認待ちです（記憶の共有範囲、保存時の個人名の置き換え、解釈・具体案の要確認事項）。
+[ADR 0034](docs/adr/0034-memory-sharing-and-name-replacement.md) は Proposed・承認待ちです（記憶の共有範囲、保存時の個人名の置き換え）。要確認 Q1〜Q10 は 2026-10-17 にユーザーが選択肢を決め、公開の場の追加制限は未決定です。
 
 ## 5. 実装の順序（案）
 
