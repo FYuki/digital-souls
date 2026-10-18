@@ -2,6 +2,8 @@
 
 Status: Proposed
 
+一部を[ADR 0037](0037-message-level-conversation-history.md)で置き換えます（2026-10-18 ユーザー承認。指定発話の記憶除外、プライベートモード、アーカイブ。会話の削除はユーザーの操作で行う）。
+
 一部を[ADR 0021](0021-postgresql-only-storage.md)のPostgreSQL一本化で置き換えます（SQLite transactionとSQLite schema v1→v2の記述。削除と通知を原子的に確定する契約と操作仕様は維持）。
 
 日付: 2026-10-03

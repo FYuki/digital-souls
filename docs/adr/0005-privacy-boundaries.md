@@ -2,6 +2,10 @@
 
 Status: Proposed
 
+一部を[ADR 0037](0037-message-level-conversation-history.md)で置き換えます（2026-10-18 ユーザー承認。会話履歴の保存の前の判定。送信と記憶形成の境界は維持）。
+
+一部を[ADR 0038](0038-mvp-prompt-window-and-input-scan.md)で置き換えます（2026-10-18 ユーザー承認。推論への送信の前の意味分類器による判定。応答の経路では決定論的な scanner だけにする）。
+
 一部を[ADR 0015](0015-memory-model-reorganization.md)の記憶モデル再編で置き換えます（「PoC全体の移植は行わない」の判断）。
 
 一部を[ADR 0021](0021-postgresql-only-storage.md)のPostgreSQL一本化で置き換えます（SQLite transactionの記述。保存transaction中にclassifierを待たない原則は維持）。

@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+一部を[ADR 0037](0037-message-level-conversation-history.md)で置き換えます（2026-10-18 ユーザー承認。保存拒否の語の検出と確認、往復単位の削除。削除は会話単位のユーザー操作にする）。
+
 一部を[ADR 0021](0021-postgresql-only-storage.md)のPostgreSQL一本化で置き換えます（往復削除をSQLiteでも物理削除する記述。PostgreSQLでの物理削除と往復削除の規則は維持）。
 
 日付: 2026-10-06

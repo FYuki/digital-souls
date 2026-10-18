@@ -1,5 +1,8 @@
 # 会話履歴API
 
+[ADR 0037](adr/0037-message-level-conversation-history.md)（2026-10-18 Accepted）で、会話履歴を発言単位の保存へ置き換えます。
+この文書は現在の実装（往復単位）を記載しています。新しい API の具体的な形は実装の Issue（#232）で決め、この文書に記載します。
+
 通常の`create_app()`と既存`/v1/chat/completions`、`/v1/character/completions`はstatelessです。
 履歴保存・復元は[ADR 0004](adr/0004-conversation-history.md)の明示的な別経路です。
 
