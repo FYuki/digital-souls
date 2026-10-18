@@ -10,6 +10,9 @@ Coreで共有するドメインの語彙と概念モデルです。製品の範�
 
 ## 境界と会話
 
+[ADR 0036](docs/adr/0036-mvp-api-keys-and-users.md)・[ADR 0037](docs/adr/0037-message-level-conversation-history.md)（2026-10-18 Accepted）で、Bindingを「利用者 × キャラクター」に、会話履歴を発言単位に置き換え、
+プライベートモード・指定発話の除外・アーカイブ・保存拒否の語を外します。下の表は現在の実装の状態で、置き換えは未実装です。
+
 | 用語 | 意味・区別 | 状態・参照 |
 | --- | --- | --- |
 | Binding | subject・client・audience・characterの組。履歴・記憶・人格の所有境界で、別Bindingの情報を混ぜない | 実装済み：[ADR 0004](docs/adr/0004-conversation-history.md) |

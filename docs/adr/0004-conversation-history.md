@@ -2,6 +2,10 @@
 
 Status: Proposed
 
+一部を[ADR 0036](0036-mvp-api-keys-and-users.md)で置き換えます（2026-10-18 ユーザー承認。localhost の単一利用者に限り認証を持たない記述。Core が発行する key で利用者を決める）。
+
+一部を[ADR 0037](0037-message-level-conversation-history.md)で置き換えます（2026-10-18 ユーザー承認。入力と応答を往復としてまとめる保存、request ID と revision による排他、保存の policy の既定拒否。発言単位で順序だけを持ち、判定せずに保存する。実装は後続の Issue）。
+
 一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。Core に tool 実行ループを追加しない記述。履歴の保存契約は維持）。
 
 一部を[ADR 0021](0021-postgresql-only-storage.md)のPostgreSQL一本化で置き換えます（SQLite adapter、既定保存先（`history.sqlite3`）、ファイル権限、journal/secure_deleteの設定。保存・復元・削除・scope・revision・policyの契約は維持）。

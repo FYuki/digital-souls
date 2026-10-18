@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+一部を[ADR 0038](0038-mvp-prompt-window-and-input-scan.md)で置き換えます（2026-10-18 ユーザー承認。履歴の直近 N 往復を下限だけとする扱い。直近 N 件の user の発言とその応答を上限にし、token 予算と併用する）。
+
 一部を[ADR 0031](0031-reject-caller-system.md)で置き換えます（2026-10-12 ユーザー承認。呼び出し側の system を「呼び出し側の指示」として受け取る扱い〔J1〕と、入力の型・順序・予算・削減順の「呼び出し側の指示」の領域。stateless の Chat API でも system を 400 `system_message_unsupported` で拒否し、`prompt_budget.caller_instructions` は廃止する。他の決定は維持）。
 
 補足（2026-10-11 実測）：推定式は、同梱の Miori（日本語）で実測の約4.6〜4.7倍に数えました。本文の「2〜3倍」は過小です（[IT2 の証跡](../evidence/2026-10-11-prompt-assembly-it2.md)）。決定は変えません。
