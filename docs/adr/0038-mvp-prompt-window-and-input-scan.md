@@ -1,8 +1,10 @@
 # ADR 0038: MVP の履歴の上限と入力の秘密情報スキャン
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-17
+
+Accepted日: 2026-10-18（ユーザーの承認「pr222は問題ないので進めて」、2026-10-18。承認対象は PR #222 の本文〔rebase 前の head `2eb9a41`〕）
 
 関連: [ADR 0026](0026-prompt-assembly.md)、[ADR 0037](0037-message-level-conversation-history.md)、
 [ADR 0005](0005-privacy-boundaries.md)、[ADR 0032](0032-privacy-classifier-evaluation.md)、[privacy ガイド](../privacy.md)
@@ -43,7 +45,7 @@ privacy は、保存・推論への送信・記憶形成の各境界で、決定
 | スキャナーとローカルの意味分類器 | 不採用（MVP）。分類器は品質 FAIL で、往復ごとの推論が増える |
 | 応答の判定 | 不採用。SSE の逐次表示と両立しない |
 
-## 決定（提案）
+## 決定
 
 ### 1. 履歴の上限
 

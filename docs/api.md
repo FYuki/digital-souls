@@ -237,6 +237,7 @@ completion成功応答の形は変えません。物理モデルcontext上限の
 初期実装は空で保存・検索・技能学習をしません。既存の信頼済みmemory/skill拡張文字列は
 Cardの応答方針へ追加し、character予算に含めます。Runtime Contextの状態snapshotには使いません。scopeはサーバー固定のlocal-operator/local/
 local-privateであり、callerによるsubject/client/audienceの指定は拒否します。
+[ADR 0036](adr/0036-mvp-api-keys-and-users.md)（2026-10-18 Accepted）で、Coreが発行するkeyから利用者を決める方式へ置き換えます（未実装）。
 将来、公開配信や複数利用者の記憶を扱うには、認証済みsubjectと信頼できるclient用途・audienceを
 確立し、検索と外部送信の両境界で認可する実装が必要です。同じキャラクターIDだけで記憶を共有しません。
 

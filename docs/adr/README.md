@@ -50,13 +50,13 @@ ADR・証跡にある「公開」のPoCという記述は記録した時点の�
 - [ADR 0031: 呼び出し側の system を受け取らない](0031-reject-caller-system.md)
 - [ADR 0032: privacy 分類器の評価と PoC ケースの移行](0032-privacy-classifier-evaluation.md)（Accepted、ABSTAIN の扱いは決定 C〈別集計〉、2026-10-12 ユーザー決定）
 
-MVP（Web・ネイティブ・CLI から1つの Core を使う）の構成は次の提案で扱います。いずれも Proposed です。
+MVP（Web・ネイティブ・CLI から1つの Core を使う）の構成は次の ADR で扱います。2026-10-18 のユーザーの承認を根拠に、同日に Accepted としました。
 番号 0033・0034 は記憶の形成の Epic（#127）の Proposed ADR が使っています。
 
-- [ADR 0035: MVP のクライアント構成（Web・ネイティブ・CLI）](0035-mvp-client-structure.md)（Proposed）
-- [ADR 0036: MVP の認証（Core が発行する key）と利用者](0036-mvp-api-keys-and-users.md)（Proposed）
-- [ADR 0037: 会話履歴を発言単位で保存する](0037-message-level-conversation-history.md)（Proposed）
-- [ADR 0038: MVP の履歴の上限と入力の秘密情報スキャン](0038-mvp-prompt-window-and-input-scan.md)（Proposed）
+- [ADR 0035: MVP のクライアント構成（Web・ネイティブ・CLI）](0035-mvp-client-structure.md)（Accepted）
+- [ADR 0036: MVP の認証（Core が発行する key）と利用者](0036-mvp-api-keys-and-users.md)（Accepted）
+- [ADR 0037: 会話履歴を発言単位で保存する](0037-message-level-conversation-history.md)（Accepted）
+- [ADR 0038: MVP の履歴の上限と入力の秘密情報スキャン](0038-mvp-prompt-window-and-input-scan.md)（Accepted）
 
 ADR 0021のSQLite撤去は Epic #79（[Issue #88](https://github.com/FYuki/digital-souls-core/issues/88)）で完了しました。本文は決定時点の履歴を保持します。
 

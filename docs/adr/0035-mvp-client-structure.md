@@ -1,8 +1,10 @@
 # ADR 0035: MVP のクライアント構成（Web・ネイティブ・CLI）
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-17
+
+Accepted日: 2026-10-18（ユーザーの承認「pr222は問題ないので進めて」、2026-10-18。承認対象は PR #222 の本文〔rebase 前の head `2eb9a41`〕）
 
 関連: [ADR 0025](0025-shared-runtime-interfaces.md)、[ADR 0036](0036-mvp-api-keys-and-users.md)、
 [ADR 0037](0037-message-level-conversation-history.md)、[ADR 0038](0038-mvp-prompt-window-and-input-scan.md)
@@ -43,7 +45,7 @@ Status: Proposed
 | Core を BE にし、FE は作り直す。ネイティブは同じ FE を Tauri で包む | 採用を提案 |
 | ネイティブを別の UI 技術で作る | 不採用。画面のコードが2つになる |
 
-## 決定（提案）
+## 決定
 
 ### 1. バックエンドは常駐する Core の1つ
 
@@ -65,7 +67,7 @@ MVP の画面は次に限ります。
 音声、アバターの動き、記憶の管理画面、ツール、通知は MVP の範囲外です。
 
 FE は Svelte＋Vite＋TypeScript で作ります（2026-10-17 のユーザー回答「提案内容で良い」）。
-置き場所は、同日のユーザー決定により、このリポジトリを `digital-souls` へ改名したうえで、同じリポジトリの `client/` とします。
+置き場所は、同日のユーザー決定により、このリポジトリを `digital-souls` へ改名したうえで、同じリポジトリの `client/` とします（[client](../../client/README.md)）。
 Core（Python）は `core/` へ移します。Python のパッケージ名 `digital_souls_core`（配布名 `digital-souls-core`）は変えません。
 Core の範囲（README の「UI は Core の対象外」）は変えず、FE は Core の外の構成要素として `client/` で管理します。
 Core は、ビルド済みの FE を静的ファイルとして同じオリジンから配信するだけにします。

@@ -1,8 +1,10 @@
 # ADR 0037: 会話履歴を発言単位で保存する
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-17
+
+Accepted日: 2026-10-18（ユーザーの承認「pr222は問題ないので進めて」、2026-10-18。承認対象は PR #222 の本文〔rebase 前の head `2eb9a41`〕）
 
 関連: [ADR 0035](0035-mvp-client-structure.md)、[ADR 0036](0036-mvp-api-keys-and-users.md)、
 [ADR 0038](0038-mvp-prompt-window-and-input-scan.md)、[ADR 0004](0004-conversation-history.md)、
@@ -32,7 +34,7 @@ request ID と期待 revision で排他し、保存の policy が許可しない
 | 往復単位の保存（現状）を拡張する | 不採用。連投を往復にまとめられず、判定しない保存と既定拒否の policy が両立しない |
 | 発言単位で、会話内の連番と一緒に保存する | 採用を提案 |
 
-## 決定（提案）
+## 決定
 
 ### 1. 保存の単位
 

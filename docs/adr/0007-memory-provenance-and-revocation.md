@@ -2,6 +2,8 @@
 
 Status: Proposed
 
+一部を[ADR 0037](0037-message-level-conversation-history.md)で置き換えます（2026-10-18 ユーザー承認。出典の形式。turn revision と message index から、会話 ID と発言の seq へ変える）。
+
 一部を[ADR 0027](0027-tool-use-and-activity-runtime.md)のツール利用と実行基盤の決定で置き換えます（2026-10-11 ユーザー承認。常駐 worker・scheduler・Core 内 tool 実行ループを追加しない記述。定期処理は timer が Core の drain API を呼び、重複の防止と再試行は Core の job の台帳が持つ。出典 epoch と撤回は維持）。
 
 置換注記（2026-10-08）: [ADR 0022](0022-memory-retrieval-from-records.md) の正本検索への切替と、[逐語記憶撤去の実施](../evidence/2026-10-08-verbatim-memory-removal.md)により、逐語記憶・明示抽出・再構成job・消費APIは撤去済みです。出典epoch、原子的な本文消去、撤回outboxは維持し、構造化形成ができるまで再生成しない期間を許容します。

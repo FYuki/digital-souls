@@ -1,8 +1,10 @@
 # ADR 0036: MVP の認証（Core が発行する key）と利用者
 
-Status: Proposed
+Status: Accepted
 
 日付: 2026-10-17
+
+Accepted日: 2026-10-18（ユーザーの承認「pr222は問題ないので進めて」、2026-10-18。承認対象は PR #222 の本文〔rebase 前の head `2eb9a41`〕）
 
 関連: [ADR 0035](0035-mvp-client-structure.md)、[ADR 0004](0004-conversation-history.md)、
 [Epic #217](https://github.com/FYuki/digital-souls-core/issues/217)、[Issue #77](https://github.com/FYuki/digital-souls-core/issues/77)
@@ -28,7 +30,7 @@ Epic #217 は、役割（管理者・配信・ジョブ）ごとの権限を含�
 | Core が発行する key（Bearer）で利用者を決める | 採用を提案 |
 | 利用者の登録・ログイン・OAuth | 不採用。単独の利用者には過大（Epic #217 でも作らない） |
 
-## 決定（提案）
+## 決定
 
 ### 1. key の発行と保存
 
