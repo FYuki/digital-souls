@@ -243,13 +243,14 @@ local-privateであり、callerによるsubject/client/audienceの指定は拒�
 ## 起動
 
 Python 3.12.3、uv 0.8.22で`uv sync --frozen`を実行してください。
-サンプル[設定](../examples/characters.json)は実モデル候補の書式例であり、利用資格や能力は未確認です。
+サンプル[設定](../core/examples/characters.json)は実モデル候補の書式例であり、利用資格や能力は未確認です。
 `external_send_allowed=false`・許可parameterなしなので、そのままでは送信しません。
 管理者が正当な利用経路・既存認証・対応モデルを確認した後だけ、git管理外の`*.local.json`で
 profile/model/送信policy/能力を設定し、providerが規定する環境変数で認証を渡してください。
 APIキーをJSON、prompt、リポジトリへ保存しないでください。サブスク契約をAPI資格と推測しません。
 
 ```sh
+cd core
 CORE_CHARACTER_CONFIG=examples/characters.json uv run --no-sync uvicorn digital_souls_core.api:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log
 ```
 

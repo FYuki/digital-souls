@@ -8,7 +8,7 @@
 
 ## 環境
 
-- llama.cpp：main（`5b9ea26`）の [compose.llamacpp.yml](../../compose.llamacpp.yml) から `digital-souls-core-llamacpp` だけを `--force-recreate` で作り直した。
+- llama.cpp：main（`5b9ea26`）の [compose.llamacpp.yml](../../core/compose.llamacpp.yml) から `digital-souls-core-llamacpp` だけを `--force-recreate` で作り直した。
   起動前に Ollama の停止とモデルの SHA-256（ADR 0003 の値）を確認。起動後の `/props`：`n_ctx` 32768、slot 1、build `b11347-5fc4f3c8c`。
   VRAM（RTX 4070 Ti SUPER 16 GiB）：起動前 4922 MiB 使用 → 起動後 13329 MiB 使用（空き 2732 MiB。他の GPU プロセス分を含む）。
 - Core：Python 3.12、固定 uv 0.8.22。Card は同梱の Miori。`post_history_instructions` の確認だけ、Miori のカードに合成の一文を足した複製（`/dev/shm`）を使った。

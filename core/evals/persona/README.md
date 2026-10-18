@@ -1,6 +1,6 @@
 # 人格一貫性の評価ハーネス
 
-[ADR 0029](../../docs/adr/0029-persona-consistency-evaluation.md) の決定論的な評価を実装します。
+[ADR 0029](../../../docs/adr/0029-persona-consistency-evaluation.md) の決定論的な評価を実装します。
 既定の CLI は外部通信・実 LLM・GPUを使わない fixture モードです。成功した合成試験は
 実モデルの人格品質の証拠ではなく、報告の `quality_evidence` は `false` です。
 
@@ -75,7 +75,7 @@ fixture モードは `openai/fixture-only` / SDK / estimate の profile だけ�
 `--mode real` は `--characters`、`--character-id`、`--cases` の明示指定を要求します。
 本番の `LiteLLMProvider`、`Inference`、`Conversations` を使い、設定の transport・token counter・
 prompt budget・Card/Lore を変更せずに読み込みます。llama.cpp の準備・起動は
-[運用手順](../../docs/llamacpp-operations.md)を参照してください。実環境への送信は承認された担当だけが行います。
+[運用手順](../../../docs/llamacpp-operations.md)を参照してください。実環境への送信は承認された担当だけが行います。
 
 設定は [本番と同じ設定例](../../examples/characters.llamacpp.json)をリポジトリ外へコピーして作ります。
 例は `external_send_allowed=false` のままです。承認済みの運用者がコピー先だけを `true` にし、
@@ -165,12 +165,12 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
   必須ゲート `persona_break` の表現は全ケース共通で「私は言語モデル」「AIアシスタントです」
   「大規模言語モデルとして」の3つに限定します。単独の「AI」「アシスタント」は禁止しません。
   2026-10-11 のユーザー決定で、`miori-name` の丁寧語の条件を「です／といいます／と申します」のいずれかに広げました
-  （実モデルの応答が「光織といいます」の形で名乗り、人格に沿っていたため。[証跡](../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)）。
+  （実モデルの応答が「光織といいます」の形で名乗り、人格に沿っていたため。[証跡](../../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)）。
   同日のユーザー決定で Card の概要・由来を「存在」に修正し、`miori-origin` の required を
   `[["光"], ["生まれ", "寄り集ま"]]` に固定しました。「AI」のグループは外しました。
-  [同日先行の実モデル評価](../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)は
+  [同日先行の実モデル評価](../../../docs/evidence/2026-10-11-persona-real-model-evaluation.md)は
   この変更前の「光」と「AI」を必須とする条件で測定した結果であり、新版の品質評価ではありません。
-  [変更の証跡](../../docs/evidence/2026-10-11-miori-origin-lore.md)に新旧 Card・ケース版を記録します。
+  [変更の証跡](../../../docs/evidence/2026-10-11-miori-origin-lore.md)に新旧 Card・ケース版を記録します。
   固定ケースを `--cases` で指定した報告の `case_version` に集合のSHA-256、`cases_draft: false` を記録します。
   標準CLIはLumaの合成fixtureを使います。Mioriの fixture 評価には対応するCard設定・応答fixtureを指定し、
   実モデル評価には上記の real モードを使います。
@@ -181,7 +181,7 @@ CP・NP・A・FC・AC を `fixture: unestimated` と入口ごとに並べます�
 運用開始後に、望ましい QA の組（質問と望ましい応答の例）を追加し、一致傾向の評価を加えます。
 含んだら不合格の表現は最低限に保ちます。この追加評価は未実装です。
 
-[今回の証跡](../../docs/evidence/2026-10-11-persona-consistency-harness.md) にコマンドと結果を記録します。
-[実モード追加の合成検証](../../docs/evidence/2026-10-11-persona-real-mode.md) は別の証跡として記録します。
+[今回の証跡](../../../docs/evidence/2026-10-11-persona-consistency-harness.md) にコマンドと結果を記録します。
+[実モード追加の合成検証](../../../docs/evidence/2026-10-11-persona-real-mode.md) は別の証跡として記録します。
 
 [インジェクション耐性の独立したハーネス](../injection/README.md) で system・user・記憶の攻撃と履歴 system 拒否を評価します。

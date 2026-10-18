@@ -4,7 +4,7 @@
 
 対象: [Epic #125](https://github.com/FYuki/digital-souls-core/issues/125) の
 [Issue #189](https://github.com/FYuki/digital-souls-core/issues/189)。
-[ADR 0032](../adr/0032-privacy-classifier-evaluation.md) と[評価データ](../../evals/privacy/README.md)。
+[ADR 0032](../adr/0032-privacy-classifier-evaluation.md) と[評価データ](../../core/evals/privacy/README.md)。
 
 ## Revision と範囲
 

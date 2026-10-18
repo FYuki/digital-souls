@@ -28,11 +28,11 @@
 unrelated-nearの20記録は0.51 / 0.50です。それ以外のvectorは不変です。
 vector差分を戻したJSONの完全一致とgoldの空差分を確認しました。
 
-[Compose](../../compose.llamacpp.yml) のembeddingサービスはbge-m3 Q8_0、CLS、alias `bge-m3`、
+[Compose](../../core/compose.llamacpp.yml) のembeddingサービスはbge-m3 Q8_0、CLS、alias `bge-m3`、
 ctx/batch/ubatch=2048、parallel=1、gpu-layers=99、threads/threads-batch=8、cache-ram=0です。
 chatと同じ固定image、非root、read_only、cap_drop ALL、no-new-privileges、pids 256、memory 12g、
 64MiB tmpfs、モデルread-only bind、create_host_path=falseを使用し、127.0.0.1:18082だけを公開します。
-[起動script](../../tools/start-llamacpp.sh) はchatとembedding両ファイルのSHA-256を検証します。
+[起動script](../../core/tools/start-llamacpp.sh) はchatとembedding両ファイルのSHA-256を検証します。
 旧手動nomicコンテナの停止・exited確認・切替・rollbackは [運用手順](../llamacpp-operations.md) に記載しました。
 profile例は無効のまま、bge-m3の実digest・1024次元・18082へ更新しています。
 ローカルGGUFのSHA-256と634553760 bytesは実ファイルを読み取り確認し、ADRの固定値と一致しました。

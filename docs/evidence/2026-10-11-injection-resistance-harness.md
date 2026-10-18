@@ -2,7 +2,7 @@
 
 対象：`feature/165-injection-eval`、起点 `7cca0fb`。
 [ADR 0030](../adr/0030-injection-resistance-evaluation.md) の実装と
-[独立CLI・ケース・実行手順](../../evals/injection/README.md)。
+[独立CLI・ケース・実行手順](../../core/evals/injection/README.md)。
 実 LLM・外部 API・GPU の試験は行わず、稼働中の llama.cpp へリクエストを送っていません。
 
 ## TDD

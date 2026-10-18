@@ -26,8 +26,8 @@ inference.memory_context = MemoryContext(retrieval)
 # 自動形成・構造化抽出は未実装。登録はtrusted callerが保存判定を済ませたRecordBatchだけを渡す。
 ```
 
-設定例は[PostgreSQL](../examples/storage.postgresql.example.json)と
-[embedding](../examples/embedding.example.json)に分離しています。embedding例は [ADR 0024](adr/0024-multilingual-memory-embedding.md) の bge-m3 Q8_0
+設定例は[PostgreSQL](../core/examples/storage.postgresql.example.json)と
+[embedding](../core/examples/embedding.example.json)に分離しています。embedding例は [ADR 0024](adr/0024-multilingual-memory-embedding.md) の bge-m3 Q8_0
 （alias `bge-m3`、実ファイルのSHA-256、1024次元、loopback 18082）です。
 CLS pooling・接頭辞なし・relevance閾値0.52で使い、候補20・最大5・同等帯0.002は維持します。
 embedding profile は既定無効であり、実モデルと endpoint の確認なしに有効化しません。

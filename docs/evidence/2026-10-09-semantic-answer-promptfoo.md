@@ -6,7 +6,7 @@
 
 正本: [Issue #114](https://github.com/FYuki/digital-souls-core/issues/114)、
 [Epic #111](https://github.com/FYuki/digital-souls-core/issues/111)、[ADR 0023](../adr/0023-semantic-evaluation-contract.md)。
-利用方法: [評価README](../../evals/semantic/README.md)。
+利用方法: [評価README](../../core/evals/semantic/README.md)。
 
 ## 実装と設計判断
 

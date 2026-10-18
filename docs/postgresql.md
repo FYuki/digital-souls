@@ -11,10 +11,10 @@ PostgreSQLは空の専用schemaを初期化して使います。データを移�
 ## ローカルDockerでの起動
 
 Docker Engine と Docker Compose v2以降を用意します。
-[Compose定義](../compose.postgresql.json)は合成試験と同じ公式PostgreSQL 18 imageをdigest固定で使い、
+[Compose定義](../core/compose.postgresql.json)は合成試験と同じ公式PostgreSQL 18 imageをdigest固定で使い、
 公開先を`127.0.0.1`に限定します。データはnamed volumeの`/var/lib/postgresql`へ永続化します。
 
-リポジトリのルートで、[空の環境変数例](../examples/postgresql.env.example)をコピーします。
+リポジトリのルートで、[空の環境変数例](../core/examples/postgresql.env.example)をコピーします。
 
 ```sh
 cp examples/postgresql.env.example .env.postgresql.local
@@ -75,7 +75,7 @@ CIでは既存`postgres-storage`で`config --no-interpolate --quiet`による構
 
 ## 明示接続
 
-[設定例](../examples/storage.postgresql.example.json)は秘密を含まない合成設定です。
+[設定例](../core/examples/storage.postgresql.example.json)は秘密を含まない合成設定です。
 database・user・portは例であり、稼働サービスに対応する確認済み値ではありません。
 DBと利用roleは運用者が事前に用意します。CoreがDB・role・PostgreSQLサービスを作成することはありません。
 

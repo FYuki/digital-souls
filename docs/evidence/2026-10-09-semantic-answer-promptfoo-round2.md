@@ -7,7 +7,7 @@
 
 [Issue #114](https://github.com/FYuki/digital-souls-core/issues/114)、
 [第1ラウンド](2026-10-09-semantic-answer-promptfoo.md)、
-[評価README](../../evals/semantic/README.md)、
+[評価README](../../core/evals/semantic/README.md)、
 [本文を含まない機械可読証跡](2026-10-09-semantic-answer-promptfoo-round2.json)。
 
 ## 原因と根拠

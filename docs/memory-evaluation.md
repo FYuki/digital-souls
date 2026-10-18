@@ -2,7 +2,7 @@
 
 [ADR 0023](adr/0023-semantic-evaluation-contract.md) の固定した合成62ケースで、
 検索はPython、回答はpromptfoo 0.117.2を使って測定します。
-入力・gold・分類・移行対応・語句判定の限界は [評価README](../evals/semantic/README.md)、
+入力・gold・分類・移行対応・語句判定の限界は [評価README](../core/evals/semantic/README.md)、
 本番の検索・context契約は [記憶API](memory.md) と [ADR 0022](adr/0022-memory-retrieval-from-records.md) が正本です。
 [実モデル証跡](evidence/2026-10-10-semantic-real-model-evaluation-bge-m3.md) に採用したbge-m3/0.52での各3回の結果を記録しています。
 各回とも検索品質/全条件53/62、回答品質61/62・全条件53/62で **FAIL**、品質は未受入です。
@@ -18,8 +18,8 @@ classifier=syntheticとCLI独自の指示・包装、既存token予算移行の�
 
 ## 評価経路と固定データ
 
-[cases.json](../evals/semantic/cases.json) は入力schema 1、
-[expectations.json](../evals/semantic/expectations.json) はgold schema 2です。
+[cases.json](../core/evals/semantic/cases.json) は入力schema 1、
+[expectations.json](../core/evals/semantic/expectations.json) はgold schema 2です。
 goldの分類・正解ID・禁止ID・期待順序・回答事実をモデルの入力へ含めません。
 モデル依存の synonym / paraphrase / cross_language / unrelated は各10件、全26分類62件です。
 評価結果を見る前に固定したケース・期待値・カード・プロンプトを使い、結果に合わせて変更しません。
@@ -102,8 +102,8 @@ bash tools/evaluate-semantic-answer.sh --mode local_model --execute-local-model 
 ## 私有profileとサーバー
 
 profileはgit管理外の絶対パス（0700の私有ディレクトリ、0600のファイル）へ置きます。
-[embedding例](../examples/embedding.example.json) と
-[回答例](../evals/semantic/answer-profile.example.json) は無効な例であり、実サービスの設定ではありません。
+[embedding例](../core/examples/embedding.example.json) と
+[回答例](../core/evals/semantic/answer-profile.example.json) は無効な例であり、実サービスの設定ではありません。
 
 `LocalEmbeddingProfile` はprofile_id・alias・GGUF SHA-256のmodel_digest・実dimensions・
 loopbackのapi_base・timeout（最大15秒）・enabled=trueを明示します。
@@ -235,7 +235,7 @@ prompt injection耐性、速度・資源上限を、この合成セットの結�
 `external_model` は回答生成だけを外部 Provider へ渡す opt-in mode です。
 #198 の LiteLLM/API 方式に加え、#201 は Codex CLI の既存 ChatGPT ログインを使います。
 **#198・#201実装時の実送信はNOT RUN、#199でCodex方式の実送信済み**です。
-[手順と無効な profile 例](../evals/semantic/README.md#外部モデルでの回答生成external_model)を参照してください。
+[手順と無効な profile 例](../core/evals/semantic/README.md#外部モデルでの回答生成external_model)を参照してください。
 profile は git 管理外の絶対パスです。API 方式のキー・接続先は環境変数名だけを指定します。
 dry-run 以外では明示実行 flag または profile が欠けると NOT RUN（exit 3）。
 
@@ -257,7 +257,7 @@ external_send、cache 無効、実行回数、commit を残し、認証情報・
 （byte推定、CLI独自指示は除外）、サブスク内で従量課金なし・新規有料契約なしでした。
 
 Codex 方式の profile・認証・無効化一覧は
-[手順](../evals/semantic/README.md#codex-サブスク方式201)と
+[手順](../core/evals/semantic/README.md#codex-サブスク方式201)と
 [#201 証跡](evidence/2026-10-12-codex-subscription-answer-provider.md)を参照してください。
 `answer_provider="codex_subscription"` と CLI/CODEX_HOME の絶対パスを指定し、
 API キー環境変数は不要・転送なしです。認証ファイルを Core が開く・複製する経路はありません。

@@ -30,8 +30,8 @@ stream所有権、エラー分類、切断処理に、呼出側が必要とす�
 他のファイルをreview対象から外す設定ではありません。適用されたことは次のbot報告でも確認します。
 出典: [CodeRabbit Path Filters](https://docs.coderabbit.ai/reference/glossary#path-filters)。
 
-実体はコミット済み[uv.lock](../../uv.lock)で、runtime/dev依存の正確なversionと配布artifact hashを保持します。
-[pyproject.toml](../../pyproject.toml)でも直接依存を正確なversionに固定しています。
+実体はコミット済み[uv.lock](../../core/uv.lock)で、runtime/dev依存の正確なversionと配布artifact hashを保持します。
+[pyproject.toml](../../core/pyproject.toml)でも直接依存を正確なversionに固定しています。
 [API CI](../../.github/workflows/api.yml)で次を実行します。
 
 1. `uv lock --check`でmanifestとlockの一致を確認。

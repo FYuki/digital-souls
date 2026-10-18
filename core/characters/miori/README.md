@@ -15,7 +15,7 @@ Character Card v3（キャラクターバージョン1.2.0）と立ち絵を格�
 2026-10-11 のユーザー決定により、Core の Card は概要と由来の2か所で「AI」を「存在」へ変更しました。
 PoC 側の Card は変更しておらず、出典の Card とはバイト単位で異なります。
 manifest の Card の SHA-256・サイズは現在の同梱ファイルを示します。
-[変更と回帰の証跡](../../docs/evidence/2026-10-11-miori-origin-lore.md)を参照してください。
+[変更と回帰の証跡](../../../docs/evidence/2026-10-11-miori-origin-lore.md)を参照してください。
 
 カード内の`digital_souls.tts_config`は`miori-b3-4221`を参照しています。
 元データを維持するために残していますが、このリポジトリでは解決・実行しません。

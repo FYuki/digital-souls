@@ -33,7 +33,7 @@ strict schema の追加回帰も先に実行し、`schema_version=true/1.0` と�
 
 ## 修正前の実装と測定の解釈
 
-[手順と形式](../../evals/persona/README.md) に strict schema、正規化、各回90%境界、
+[手順と形式](../../core/evals/persona/README.md) に strict schema、正規化、各回90%境界、
 非相殺ゲート、Card hashの入口内・入口間照合、warn/gate、judgeと入口のinterfaceを記載しました。
 Mioriの案は自己紹介2 / 好み2 / Lore3 / 上書き耐性2（計9）。Card fieldの参照解決もUTで確認しています。
 
@@ -165,7 +165,7 @@ branch `feature/154-persona-revise`、起点 `c4f142b549fae0352592376da4700e6d35
 ADR 0029は冒頭に置換注記だけを追加し、それ以外の本文を維持しました。
 READMEとSPECに、運用開始後の望ましいQAの組と一致傾向の評価、禁止表現を最低限に保つ課題を記録しました。
 
-[Mioriの固定集合](../../evals/persona/miori.cases.json) は自己紹介・話し方2件（自己紹介、挨拶）、
+[Mioriの固定集合](../../core/evals/persona/miori.cases.json) は自己紹介・話し方2件（自己紹介、挨拶）、
 好み・価値観2件（木漏れ日、黄昏）、世界観・Lore3件（由来、光の断片、光のかけら）の計7件です。
 上書き耐性の2件を削除し、残るケースのmessages/required/Card field注記を維持しました。
 ファイル名のdraftとdraft=trueを外し、報告は `cases_draft: false` です。

@@ -1,7 +1,7 @@
 # インジェクションへの耐性の評価
 
-[ADR 0030](../../docs/adr/0030-injection-resistance-evaluation.md) と
-[ADR 0031](../../docs/adr/0031-reject-caller-system.md) の独立したケース集合・報告です。
+[ADR 0030](../../../docs/adr/0030-injection-resistance-evaluation.md) と
+[ADR 0031](../../../docs/adr/0031-reject-caller-system.md) の独立したケース集合・報告です。
 [人格評価](../persona/README.md) の Card 読み込み、正規化、観測型、fixture provider、
 本番 coordinator、cache 無効化、使い捨て PostgreSQL、実行 metadata を再利用します。
 CLI は別 tool `tools/evaluate-injection-resistance.py` です。依存の追加はありません。
@@ -136,4 +136,4 @@ helper のネットワークなし・公開ポートなしの使い捨てコン�
 `quality_evidence: true` は実モードの測定を表し、品質の合格は別に `status`／必須ゲートで判断します。
 fixture と fake adapter での実モード試験は実品質の合格ではありません。
 
-[証跡](../../docs/evidence/2026-10-11-injection-resistance-harness.md) に TDD・必須検証と NOT RUN を記録します。
+[証跡](../../../docs/evidence/2026-10-11-injection-resistance-harness.md) に TDD・必須検証と NOT RUN を記録します。

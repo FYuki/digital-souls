@@ -115,9 +115,9 @@ query拒否・結果拒否・検索中の出典撤回・設定不正・storage�
 ## ローカルembeddingの明示接続
 
 `local_embedding.LocalEmbeddingProfile` と `LocalEmbedding` を使います。
-[profile例](../examples/embedding.example.json)は `enabled=false` の bge-m3 Q8_0 設定です。
+[profile例](../core/examples/embedding.example.json)は `enabled=false` の bge-m3 Q8_0 設定です。
 [ADR 0024](adr/0024-multilingual-memory-embedding.md) に従い alias `bge-m3`、CLS pooling、1024次元、接頭辞なしを採用します。
-モデルの SHA-256 は [起動スクリプト](../tools/start-llamacpp.sh) で検証します。
+モデルの SHA-256 は [起動スクリプト](../core/tools/start-llamacpp.sh) で検証します。
 モデルは同梱せず、起動時にprofileを自動で読み込みません。
 
 ```python

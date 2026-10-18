@@ -8,7 +8,7 @@
 正本: [Issue #115](https://github.com/FYuki/digital-souls-core/issues/115)、
 [Epic #111 V1〜V7](https://github.com/FYuki/digital-souls-core/issues/111)、
 [ADR 0023](../adr/0023-semantic-evaluation-contract.md)。
-利用手順: [評価ガイド](../memory-evaluation.md)、[ケースREADME](../../evals/semantic/README.md)。
+利用手順: [評価ガイド](../memory-evaluation.md)、[ケースREADME](../../core/evals/semantic/README.md)。
 公開report: [検索](2026-10-09-semantic-real-model-retrieval.json)、
 [回答](2026-10-09-semantic-real-model-answer.json)。
 
