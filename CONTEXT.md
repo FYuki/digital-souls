@@ -46,6 +46,11 @@ Coreで共有するドメインの語彙と概念モデルです。製品の範�
 | Consolidation / 記憶整理 | 同種の既存記憶をKEEP・MERGE・SUPERSEDE等の型付き計画で整理する処理。一般化やFact統合とは別 | 未実装：ADR 0017 |
 | Invalidation / 失効 | 根拠の訂正・削除・撤回で、依存する記憶・派生結果を即時に利用停止し、残る根拠から再評価する処理 | 一部（正本・依存結果の撤回、本文消去・参照版検証は実装済み、再評価・再生成は未実装）：[ADR 0019](docs/adr/0019-memory-correction-invalidation.md) |
 | Forgetting / 忘却 | 記憶内容の削除ではなく、想起しにくくなること。必要性が確認できた段階で詳細化する | 概念のみ |
+| 出典情報（provenance） | 記憶の根拠の話者・場・発言時点の公開度・出典アドレス。発言時点で固定する | 提案：[ADR 0039](docs/adr/0039-memory-provenance-disclosure-separation.md) |
+| 場の公開度 / broadcast | ONE_TO_ONE・CLOSED_GROUP・PUBLICの3段階／不特定の相手に届き記録が残る配信の場の属性 | 提案：ADR 0039 |
+| 開示区分 | 記憶の内容が誰を特定し得るか。CHARACTER_SELF・GENERAL・ABOUT_SPEAKER・ABOUT_THIRD_PARTY・ABOUT_CONVERSATION。判定不能はABOUT_SPEAKER扱い | 提案：ADR 0039 |
+| キャラクター視点への射影 | 人・場・具体的な日時を省いたキャラクター視点の文。再判定で安全な場合だけ配信等で使う | 提案：ADR 0039 |
+| 参照可否の判定 | 出典情報・開示区分・参照の文脈から、参照のたびにALLOW_FULL・ALLOW_PROJECTED・DENYを決める | 提案：ADR 0039 |
 
 ## 人格と状態
 
